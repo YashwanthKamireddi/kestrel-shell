@@ -1,0 +1,78 @@
+//! kestrel: a native desktop shell for Hyprland.
+
+mod app;
+mod config;
+mod ipc;
+mod motion;
+mod panels;
+mod services;
+mod shell;
+mod theme;
+mod ui;
+
+use iced::{KeyboardInteractivity, Layer, LayerShellSettings};
+
+fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        if args[0] == "--help" || args[0] == "-h" {
+            println!("kestrel                 run the shell");
+            println!(
+                "kestrel toggle <panel>  launcher | control | media | calendar | notifications | power"
+            );
+            println!("kestrel close           close the open panel");
+            return Ok(());
+        }
+        if !ipc::send(&args.join(" ")) {
+            eprintln!("kestrel is not running");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+    if std::env::var_os("RUST_LOG").is_none() {
+        // Safety: single-threaded at this point.
+        unsafe { std::env::set_var("RUST_LOG", "kestrel=info,warn") };
+    }
+    env_logger();
+    iced::application(app::boot, app::update, app::view)
+        .subscription(app::subscription)
+        .theme(app::theme)
+        .default_font(theme::FONT)
+        .antialiasing(true)
+        // The first surface is a 1 px placeholder; real surfaces are made per monitor.
+        .layer_shell(LayerShellSettings {
+            layer: Layer::Background,
+            size: Some((1, 1)),
+            anchor: iced::Anchor::TOP | iced::Anchor::LEFT,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            namespace: "kestrel-root".into(),
+            ..LayerShellSettings::default()
+        })
+        .run()?;
+    Ok(())
+}
+
+/// Minimal stderr logger honouring RUST_LOG's level for kestrel.
+fn env_logger() {
+    struct L(log::LevelFilter);
+    impl log::Log for L {
+        fn enabled(&self, m: &log::Metadata) -> bool {
+            m.level() <= self.0
+        }
+        fn log(&self, r: &log::Record) {
+            if self.enabled(r.metadata()) && r.target().starts_with("kestrel") {
+                eprintln!("{} {}: {}", r.level(), r.target(), r.args());
+            } else if r.level() <= log::Level::Warn {
+                eprintln!("{} {}: {}", r.level(), r.target(), r.args());
+            }
+        }
+        fn flush(&self) {}
+    }
+    let level = if std::env::var("RUST_LOG").is_ok_and(|v| v.contains("debug")) {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    };
+    let _ = log::set_boxed_logger(Box::new(L(level)));
+    log::set_max_level(level);
+}

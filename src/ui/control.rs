@@ -1,0 +1,421 @@
+//! `Control`: the one interactive element. Every clickable thing in kestrel (bar buttons, tiles,
+//! rows, menu items) is a `Control` around some content, so they all respond the same way:
+//! the background fades in on hover, the whole control dips to 0.96 on press and springs back.
+
+use crate::motion::Spring;
+use iced::advanced::layout::{self, Layout};
+use iced::advanced::renderer;
+use iced::advanced::widget::{Tree, Widget, tree};
+use iced::advanced::{Clipboard, Shell, mouse};
+use iced::event::Event;
+use iced::{Border, Color, Element, Length, Padding, Rectangle, Size, Transformation, window};
+use std::time::Instant;
+
+const HOVER_SECS: f32 = 0.11;
+const PRESSED_SCALE: f32 = 0.96;
+
+pub struct Control<'a, M> {
+    content: Element<'a, M>,
+    on_press: Option<M>,
+    on_press_at: Option<Box<dyn Fn(Rectangle) -> M + 'a>>,
+    on_right_press: Option<M>,
+    on_scroll: Option<Box<dyn Fn(f32) -> M + 'a>>,
+    padding: Padding,
+    width: Length,
+    height: Length,
+    radius: f32,
+    rest: Color,
+    hover: Color,
+    press: Color,
+    border: Option<Color>,
+    press_scale: bool,
+    center_x: bool,
+}
+
+pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
+    Control {
+        content: content.into(),
+        on_press: None,
+        on_press_at: None,
+        on_right_press: None,
+        on_scroll: None,
+        padding: Padding::ZERO,
+        width: Length::Shrink,
+        height: Length::Shrink,
+        radius: crate::theme::size::CONTROL_RADIUS,
+        rest: Color::TRANSPARENT,
+        hover: Color::TRANSPARENT,
+        press: Color::TRANSPARENT,
+        border: None,
+        press_scale: true,
+        center_x: false,
+    }
+}
+
+impl<'a, M> Control<'a, M> {
+    pub fn on_press(mut self, m: M) -> Self {
+        self.on_press = Some(m);
+        self
+    }
+    pub fn on_press_maybe(mut self, m: Option<M>) -> Self {
+        self.on_press = m;
+        self
+    }
+    /// Press handler that receives the control's bounds (to place a panel under it).
+    pub fn on_press_at(mut self, f: impl Fn(Rectangle) -> M + 'a) -> Self {
+        self.on_press_at = Some(Box::new(f));
+        self
+    }
+    pub fn on_right_press(mut self, m: M) -> Self {
+        self.on_right_press = Some(m);
+        self
+    }
+    /// Scroll handler: receives lines scrolled, positive = up.
+    pub fn on_scroll(mut self, f: impl Fn(f32) -> M + 'a) -> Self {
+        self.on_scroll = Some(Box::new(f));
+        self
+    }
+    pub fn padding(mut self, p: impl Into<Padding>) -> Self {
+        self.padding = p.into();
+        self
+    }
+    pub fn width(mut self, w: impl Into<Length>) -> Self {
+        self.width = w.into();
+        self
+    }
+    pub fn height(mut self, h: impl Into<Length>) -> Self {
+        self.height = h.into();
+        self
+    }
+    pub fn radius(mut self, r: f32) -> Self {
+        self.radius = r;
+        self
+    }
+    /// Background at rest, on hover and while pressed.
+    pub fn colors(mut self, rest: Color, hover: Color, press: Color) -> Self {
+        self.rest = rest;
+        self.hover = hover;
+        self.press = press;
+        self
+    }
+    pub fn border(mut self, c: Color) -> Self {
+        self.border = Some(c);
+        self
+    }
+    pub fn center_x(mut self) -> Self {
+        self.center_x = true;
+        self
+    }
+    /// Large surfaces (rows in a list) should not shrink on press.
+    pub fn no_press_scale(mut self) -> Self {
+        self.press_scale = false;
+        self
+    }
+}
+
+struct State {
+    hovered: bool,
+    pressed: bool,
+    right_pressed: bool,
+    /// 0 = rest, 1 = hovered.
+    hover_t: f32,
+    scale: Spring,
+    last: Option<Instant>,
+}
+
+impl State {
+    fn animating(&self) -> bool {
+        let want = if self.hovered { 1.0 } else { 0.0 };
+        (self.hover_t - want).abs() > 1e-3 || !self.scale.settled()
+    }
+}
+
+fn mix(a: Color, b: Color, t: f32) -> Color {
+    Color {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: a.a + (b.a - a.a) * t,
+    }
+}
+
+/// A transparent colour takes the other colour's RGB so fades don't pass through black.
+fn fade_pair(a: Color, b: Color) -> (Color, Color) {
+    match (a.a == 0.0, b.a == 0.0) {
+        (true, false) => (Color { a: 0.0, ..b }, b),
+        (false, true) => (a, Color { a: 0.0, ..a }),
+        _ => (a, b),
+    }
+}
+
+impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State {
+            hovered: false,
+            pressed: false,
+            right_pressed: false,
+            hover_t: 0.0,
+            scale: Spring::new(1.0),
+            last: None,
+        })
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        vec![Tree::new(&self.content)]
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_ref(&self.content));
+    }
+
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width, self.height)
+    }
+
+    fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let node = layout::padded(limits, self.width, self.height, self.padding, |l| {
+            self.content
+                .as_widget_mut()
+                .layout(&mut tree.children[0], renderer, l)
+        });
+        // Content is centred vertically (and horizontally when asked) inside the padding.
+        let size = node.size();
+        let child = node.children()[0].clone();
+        let inner_h = size.height - self.padding.top - self.padding.bottom;
+        let inner_w = size.width - self.padding.left - self.padding.right;
+        let x = if self.center_x {
+            self.padding.left + (inner_w - child.size().width) / 2.0
+        } else {
+            self.padding.left
+        };
+        let y = self.padding.top + (inner_h - child.size().height) / 2.0;
+        layout::Node::with_children(size, vec![child.move_to((x.max(0.0), y.max(0.0)))])
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout.children().next().unwrap(),
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
+        let bounds = layout.bounds();
+        let pressable = self.on_press.is_some() || self.on_press_at.is_some();
+        let interactive = pressable || self.on_right_press.is_some() || self.on_scroll.is_some();
+        let state = tree.state.downcast_mut::<State>();
+        let over = interactive && cursor.is_over(bounds);
+
+        if !shell.is_event_captured() {
+            match event {
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if over => {
+                    if pressable {
+                        state.pressed = true;
+                        if self.press_scale {
+                            state.scale.to(PRESSED_SCALE, Spring::CLOSE);
+                        }
+                        shell.capture_event();
+                    }
+                }
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                    if state.pressed {
+                        state.pressed = false;
+                        state.scale.to(1.0, (20.0, 0.5));
+                        if over {
+                            if let Some(f) = &self.on_press_at {
+                                shell.publish(f(bounds));
+                            } else if let Some(m) = &self.on_press {
+                                shell.publish(m.clone());
+                            }
+                        }
+                        shell.capture_event();
+                    }
+                }
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if over => {
+                    if self.on_right_press.is_some() {
+                        state.right_pressed = true;
+                        shell.capture_event();
+                    }
+                }
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)) => {
+                    if state.right_pressed {
+                        state.right_pressed = false;
+                        if over && let Some(m) = &self.on_right_press {
+                            shell.publish(m.clone());
+                        }
+                        shell.capture_event();
+                    }
+                }
+                Event::Mouse(mouse::Event::WheelScrolled { delta }) if over => {
+                    if let Some(f) = &self.on_scroll {
+                        let lines = match delta {
+                            mouse::ScrollDelta::Lines { y, .. } => *y,
+                            mouse::ScrollDelta::Pixels { y, .. } => *y / 40.0,
+                        };
+                        if lines != 0.0 {
+                            shell.publish(f(lines));
+                            shell.capture_event();
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if state.hovered != over {
+            state.hovered = over;
+            if !over && state.pressed {
+                state.scale.to(1.0, Spring::SNAP);
+            }
+            shell.request_redraw();
+        }
+
+        if let Event::Window(window::Event::RedrawRequested(now)) = event {
+            let dt = state.last.map_or(1.0 / 60.0, |t| {
+                now.saturating_duration_since(t).as_secs_f32()
+            });
+            state.last = Some(*now);
+            let want = if state.hovered { 1.0 } else { 0.0 };
+            let step = dt / HOVER_SECS;
+            state.hover_t = if state.hover_t < want {
+                (state.hover_t + step).min(want)
+            } else {
+                (state.hover_t - step).max(want)
+            };
+            state.scale.step(dt);
+            if state.animating() {
+                shell.request_redraw();
+            } else {
+                state.last = None;
+            }
+        }
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut iced::Renderer,
+        theme: &iced::Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        use iced::advanced::Renderer as _;
+        let state = tree.state.downcast_ref::<State>();
+        let bounds = layout.bounds();
+        let (rest, hover) = fade_pair(self.rest, self.hover);
+        let mut bg = mix(rest, hover, ease(state.hover_t));
+        if state.pressed {
+            bg = self.press;
+        }
+        let s = state.scale.value;
+        let center = bounds.center();
+        let draw_all = |renderer: &mut iced::Renderer| {
+            if bg.a > 0.0 || self.border.is_some() {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds,
+                        border: Border {
+                            radius: self.radius.min(bounds.height / 2.0).into(),
+                            width: if self.border.is_some() { 1.0 } else { 0.0 },
+                            color: self.border.unwrap_or(Color::TRANSPARENT),
+                        },
+                        ..renderer::Quad::default()
+                    },
+                    bg,
+                );
+            }
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                layout.children().next().unwrap(),
+                cursor,
+                viewport,
+            );
+        };
+        if (s - 1.0).abs() > 1e-3 {
+            let t = Transformation::translate(center.x, center.y)
+                * Transformation::scale(s)
+                * Transformation::translate(-center.x, -center.y);
+            renderer.with_transformation(t, draw_all);
+        } else {
+            draw_all(renderer);
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &iced::Renderer,
+    ) -> mouse::Interaction {
+        let inner = self.content.as_widget().mouse_interaction(
+            &tree.children[0],
+            layout.children().next().unwrap(),
+            cursor,
+            viewport,
+            renderer,
+        );
+        if inner != mouse::Interaction::default() {
+            inner
+        } else if (self.on_press.is_some() || self.on_press_at.is_some())
+            && cursor.is_over(layout.bounds())
+        {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn iced::advanced::widget::Operation,
+    ) {
+        self.content.as_widget_mut().operate(
+            &mut tree.children[0],
+            layout.children().next().unwrap(),
+            renderer,
+            operation,
+        );
+    }
+}
+
+fn ease(t: f32) -> f32 {
+    crate::motion::ease_out_cubic(t)
+}
+
+impl<'a, M: Clone + 'a> From<Control<'a, M>> for Element<'a, M> {
+    fn from(c: Control<'a, M>) -> Self {
+        Element::new(c)
+    }
+}
