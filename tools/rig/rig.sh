@@ -9,6 +9,7 @@
 #   tools/rig/rig.sh shot [file]    capture the output
 #   tools/rig/rig.sh hypr ARGS      hyprctl against the nested compositor
 #   tools/rig/rig.sh msg ARGS       send an IPC command to the rig's kestrel
+#   tools/rig/rig.sh bus CMD...     run CMD on the rig's private session bus
 #   tools/rig/rig.sh stop
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -21,7 +22,7 @@ display() { cat "$WORK/display"; }
 nested() { HYPRLAND_INSTANCE_SIGNATURE=$(sig) timeout 5 hyprctl "$@"; }
 kill_kestrel() {
     for p in $(pgrep -x kestrel || true); do
-        if tr '\0' ' ' </proc/$p/environ 2>/dev/null | grep -q "HOME=$WORK/home "; then kill "$p"; fi
+        if tr '\0' '\n' </proc/$p/environ 2>/dev/null | grep -q "^HOME=$WORK/home$"; then kill "$p"; fi
     done
 }
 
@@ -54,6 +55,11 @@ shot)
     echo "$out"
     ;;
 hypr) shift; nested "$@" ;;
+bus) # run a command on kestrel's private session bus (e.g. notify-send)
+    shift
+    pid=$(for p in $(pgrep -x kestrel); do tr '\0' '\n' </proc/$p/environ | grep -q "^HOME=$WORK/home$" && echo $p; done | head -1)
+    addr=$(tr '\0' '\n' </proc/$pid/environ | grep ^DBUS_SESSION_BUS_ADDRESS= | cut -d= -f2-)
+    DBUS_SESSION_BUS_ADDRESS="$addr" "$@" ;;
 msg) shift; KESTREL_SOCKET="$WORK/kestrel.sock" "$BIN" "$@" ;;
 stop)
     kill_kestrel

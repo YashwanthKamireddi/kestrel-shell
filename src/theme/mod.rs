@@ -55,7 +55,7 @@ impl Scheme {
         let c = if has_colour { seed.chroma } else { 0.0 };
         let tint = (c / 0.1).min(1.0) * (seed.coverage / 0.03).clamp(0.0, 1.0);
         let n = |l: f32, k: f32| Oklch::new(l, k * tint, h).to_color();
-        let accent_c = if has_colour { c.clamp(0.08, 0.14) } else { 0.0 };
+        let accent_c = if has_colour { c.clamp(0.09, 0.16) } else { 0.0 };
         Self {
             base: n(0.16, 0.010),
             raised: n(0.215, 0.013),
@@ -65,7 +65,7 @@ impl Scheme {
             ink: n(0.95, 0.006),
             ink_dim: n(0.74, 0.010),
             ink_faint: n(0.54, 0.010),
-            accent: Oklch::new(if has_colour { 0.80 } else { 0.90 }, accent_c, h).to_color(),
+            accent: Oklch::new(if has_colour { 0.76 } else { 0.90 }, accent_c, h).to_color(),
             on_accent: Oklch::new(0.20, accent_c * 0.3, h).to_color(),
             accent_soft: Oklch::new(0.30, accent_c * 0.4, h).to_color(),
             good: Oklch::new(0.80, 0.13, 150.0).to_color(),

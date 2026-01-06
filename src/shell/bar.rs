@@ -1,6 +1,6 @@
 //! The bar: the top edge of the kestrel surface, and the panels hanging from it.
 
-use crate::app::{App, Message, Output};
+use crate::app::{App, Message, OSD_WIDTH, Output, TOAST_WIDTH};
 use crate::panels::{self, PanelKind};
 use crate::services::hyprland;
 use crate::theme::{self, Scheme, size, text};
@@ -26,24 +26,37 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let s = app.scheme;
     let t = app.config.frame.thickness;
     let panel = app.panel.as_ref().filter(|p| p.output == o.id);
+    let focused = app.focused_output() == Some(o.id) && panel.is_none();
+    let drop = |x: f32, w: f32, h: f32| Drop {
+        x,
+        width: w,
+        height: h,
+        radius: size::PANEL_RADIUS,
+        join: size::JOIN,
+        flush_left: x <= t + 0.5,
+        flush_right: x + w >= o.size.width - t - 0.5,
+    };
+    let toast_x = o.size.width - t - TOAST_WIDTH;
+    let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
+    let mut drops = Vec::new();
+    if let Some(p) = panel {
+        drops.push(drop(p.x.value, p.w.value, p.h.value));
+    }
+    let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
+    let show_osd = focused && app.osd.is_some();
+    if show_toasts {
+        drops.push(drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value));
+    }
+    if show_osd {
+        drops.push(drop(osd_x, OSD_WIDTH, app.osd_sheet.h.value));
+    }
 
     let shape = canvas(BarShape {
         color: s.base,
         bar: size::BAR,
         frame: t,
         corner: app.config.frame.radius,
-        drops: panel
-            .map(|p| Drop {
-                x: p.x.value,
-                width: p.w.value,
-                height: p.h.value,
-                radius: size::PANEL_RADIUS,
-                join: size::JOIN,
-                flush_left: p.x.value <= t + 0.5,
-                flush_right: p.x.value + p.w.value >= o.size.width - t - 0.5,
-            })
-            .into_iter()
-            .collect(),
+        drops,
     })
     .width(Length::Fill)
     .height(Length::Fill);
@@ -93,10 +106,82 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             .into(),
         );
     }
+    if show_toasts {
+        let a = app.toast_sheet.alpha();
+        let fs = s.faded(a);
+        let cards = iced::widget::column(app.toasts.iter().rev().filter_map(|t| {
+            app.notifications
+                .iter()
+                .find(|n| n.id == t.id)
+                .map(|n| panels::notifications::card(fs, n))
+        }))
+        .spacing(8)
+        .padding(10);
+        layers.push(
+            pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
+                .offset((1.0 - a) * 6.0)
+                .on_measure(Message::MeasuredToasts))
+            .position(Point::new(toast_x, size::BAR))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        );
+    }
+    if show_osd && let Some(osd) = &app.osd {
+        let a = app.osd_sheet.alpha();
+        let fs = s.faded(a);
+        layers.push(
+            pin(
+                ui::reveal(osd_view(fs, osd), OSD_WIDTH, app.osd_sheet.h.value)
+                    .offset((1.0 - a) * 4.0)
+                    .on_measure(Message::MeasuredOsd),
+            )
+            .position(Point::new(osd_x, size::BAR))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        );
+    }
     stack(layers)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+/// Icon, level bar, value.
+fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
+    const PAD: f32 = 16.0;
+    const VALUE_W: f32 = 30.0;
+    let track_w = OSD_WIDTH - 2.0 * PAD - 18.0 - VALUE_W - 2.0 * 12.0;
+    let bar = |w: f32, c: iced::Color| {
+        container(Space::new())
+            .width(w)
+            .height(6)
+            .style(move |_| container::Style {
+                background: Some(c.into()),
+                border: iced::Border::default().rounded(3),
+                ..container::Style::default()
+            })
+    };
+    let track = stack![
+        bar(track_w, s.raised_hi),
+        bar((track_w * osd.value).max(6.0), s.accent),
+    ];
+    row![
+        ui::icon(osd.icon, 18.0, s.ink),
+        container(track).center_y(18),
+        container(label(
+            format!("{:.0}", osd.value * 100.0),
+            text::SMALL,
+            s.ink_dim
+        ))
+        .width(VALUE_W)
+        .align_x(Alignment::End),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center)
+    .padding([14.0, PAD])
+    .into()
 }
 
 fn left<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {

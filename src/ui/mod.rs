@@ -119,3 +119,181 @@ pub fn divider<'a, M: 'a>(s: Scheme) -> Element<'a, M> {
 pub fn gap<'a, M: 'a>(n: f32) -> Element<'a, M> {
     Space::new().width(n).height(n).into()
 }
+
+/// A quick-settings tile: icon, title and status. Accent-filled when on. An optional chevron
+/// opens the tile's details.
+pub fn tile<'a, M: Clone + 'static>(
+    s: Scheme,
+    i: Icon,
+    title: impl text::IntoFragment<'a>,
+    status: impl text::IntoFragment<'a>,
+    on: bool,
+    on_press: M,
+    details: Option<M>,
+) -> Element<'a, M> {
+    let (bg, hover, fg, dim) = if on {
+        (s.accent, s.accent, s.on_accent, s.on_accent)
+    } else {
+        (s.raised, s.raised_hi, s.ink, s.ink_dim)
+    };
+    let mut content = row![
+        icon(i, size::ICON_TILE, fg),
+        iced::widget::column![
+            label_w(title, theme::text::BODY, fg, theme::MEDIUM),
+            label(status, theme::text::CAPTION, dim),
+        ]
+        .spacing(1)
+        .width(Length::Fill),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center);
+    if let Some(d) = details {
+        let press = if on {
+            s.on_accent.scale_alpha(0.12)
+        } else {
+            s.raised_press
+        };
+        content = content.push(
+            control(container(icon(Icon::ChevronRight, size::ICON, dim)).center(28))
+                .radius(14.0)
+                .colors(Color::TRANSPARENT, press, press)
+                .on_press(d),
+        );
+    }
+    control(content)
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 8.0,
+            bottom: 0.0,
+            left: 14.0,
+        })
+        .height(56)
+        .width(Length::Fill)
+        .radius(size::CARD_RADIUS)
+        .colors(bg, hover, if on { bg } else { s.raised_press })
+        .on_press(on_press)
+        .into()
+}
+
+/// An on/off switch.
+pub fn switch<'a, M: Clone + 'static>(s: Scheme, on: bool, on_press: M) -> Element<'a, M> {
+    let knob = container(Space::new())
+        .width(14)
+        .height(14)
+        .style(move |_| container::Style {
+            background: Some(if on { s.on_accent } else { s.ink_dim }.into()),
+            border: iced::Border::default().rounded(7),
+            ..container::Style::default()
+        });
+    let track = container(knob)
+        .width(36)
+        .height(20)
+        .padding(3)
+        .align_x(if on { Alignment::End } else { Alignment::Start })
+        .align_y(Alignment::Center);
+    control(track)
+        .radius(10.0)
+        .colors(
+            if on { s.accent } else { s.raised_hi },
+            if on { s.accent } else { s.raised_press },
+            if on { s.accent } else { s.raised_press },
+        )
+        .on_press(on_press)
+        .into()
+}
+
+/// A list row: leading icon, title, optional subtitle, trailing element.
+pub fn list_row<'a, M: Clone + 'static>(
+    s: Scheme,
+    leading: Element<'a, M>,
+    title: impl text::IntoFragment<'a>,
+    subtitle: Option<String>,
+    trailing: Element<'a, M>,
+    selected: bool,
+    on_press: Option<M>,
+) -> Element<'a, M> {
+    let mut texts = iced::widget::column![label_w(
+        title,
+        theme::text::BODY,
+        s.ink,
+        if selected {
+            theme::MEDIUM
+        } else {
+            font::Weight::Normal
+        }
+    )]
+    .spacing(1)
+    .width(Length::Fill);
+    if let Some(sub) = subtitle {
+        texts = texts.push(label(sub, theme::text::CAPTION, s.ink_dim));
+    }
+    control(
+        row![leading, texts, trailing]
+            .spacing(12)
+            .align_y(Alignment::Center),
+    )
+    .padding([0, 12])
+    .height(44)
+    .width(Length::Fill)
+    .radius(size::ROW_RADIUS)
+    .colors(
+        if selected {
+            s.accent_soft
+        } else {
+            Color::TRANSPARENT
+        },
+        if selected { s.accent_soft } else { s.raised_hi },
+        s.raised_press,
+    )
+    .no_press_scale()
+    .on_press_maybe(on_press)
+    .into()
+}
+
+/// A sub-page header: back button, title, optional trailing control.
+pub fn subpage_header<'a, M: Clone + 'static>(
+    s: Scheme,
+    title: impl text::IntoFragment<'a>,
+    back: M,
+    trailing: Element<'a, M>,
+) -> Element<'a, M> {
+    row![
+        icon_button(s, Icon::ArrowLeft, back, false),
+        label_w(title, theme::text::TITLE, s.ink, theme::MEDIUM).width(Length::Fill),
+        trailing,
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center)
+    .height(size::CONTROL + 4.0)
+    .into()
+}
+
+/// Muted centred message for empty lists.
+pub fn empty<'a, M: 'a>(s: Scheme, i: Icon, msg: impl text::IntoFragment<'a>) -> Element<'a, M> {
+    container(
+        iced::widget::column![
+            icon(i, 22.0, s.ink_faint),
+            label(msg, theme::text::SMALL, s.ink_dim)
+        ]
+        .spacing(8)
+        .align_x(Alignment::Center),
+    )
+    .center_x(Length::Fill)
+    .padding([24, 0])
+    .into()
+}
+
+/// An image file (SVG or raster) at a square size.
+pub fn image_file<'a, M: 'a>(path: &std::path::Path, size: f32) -> Element<'a, M> {
+    if path.extension().is_some_and(|e| e == "svg") {
+        iced::widget::svg(iced::widget::svg::Handle::from_path(path))
+            .width(size)
+            .height(size)
+            .into()
+    } else {
+        iced::widget::image(iced::widget::image::Handle::from_path(path))
+            .width(size)
+            .height(size)
+            .into()
+    }
+}

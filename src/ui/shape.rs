@@ -57,6 +57,21 @@ impl<M> canvas::Program<M> for BarShape {
         frame.fill(&path, self.color);
         // Each panel is its own fill, so only the area it covers is redrawn while it moves.
         for d in &self.drops {
+            if d.height < 0.5 {
+                continue;
+            }
+            // The renderer redraws only the bounds of what changed, and a path's bounds leave
+            // out its anti-aliased edge; a near-invisible box 2 px larger makes sure the edge
+            // pixels of the previous frame are repainted too.
+            let pad = 2.0;
+            frame.fill_rectangle(
+                Point::new(d.x - d.join - pad, self.bar - pad),
+                iced::Size::new(
+                    d.width + 2.0 * (d.join + pad),
+                    d.height + d.join + 2.0 * pad,
+                ),
+                Color::from_rgba8(0, 0, 0, 1.0 / 255.0),
+            );
             frame.fill(&Path::new(|b| drop_path(b, self.bar, d)), self.color);
         }
         vec![frame.into_geometry()]

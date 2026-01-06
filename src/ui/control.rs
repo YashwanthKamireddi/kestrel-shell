@@ -182,10 +182,13 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         renderer: &iced::Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
+        // Content is laid out at its natural height (rows and columns would otherwise
+        // stretch to a fixed control height and pin their children to the top).
         let node = layout::padded(limits, self.width, self.height, self.padding, |l| {
+            let natural = layout::Limits::new(Size::ZERO, Size::new(l.max().width, f32::INFINITY));
             self.content
                 .as_widget_mut()
-                .layout(&mut tree.children[0], renderer, l)
+                .layout(&mut tree.children[0], renderer, &natural)
         });
         // Content is centred vertically (and horizontally when asked) inside the padding.
         let size = node.size();
