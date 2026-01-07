@@ -1,0 +1,40 @@
+# Local package for kestrel, built from this repository.
+pkgname=kestrel
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A native desktop shell for Hyprland"
+arch=('x86_64')
+license=('GPL-3.0-or-later')
+depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-geist-variable')
+optdepends=('hyprsunset: night light'
+            'cliphist: clipboard history in the launcher'
+            'wl-clipboard: copying from clipboard history'
+            'hyprlock: lock screen'
+            'polkit-kde-agent: authentication dialogs')
+makedepends=('cargo' 'clang')
+options=('!lto' '!debug')
+
+_repo="$(realpath "$startdir/../..")"
+
+pkgver() {
+    cd "$_repo"
+    printf "0.1.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "$_repo"
+    export CARGO_TARGET_DIR="$_repo/target"
+    cargo build --release --locked
+}
+
+check() {
+    cd "$_repo"
+    export CARGO_TARGET_DIR="$_repo/target"
+    cargo test --release --locked
+}
+
+package() {
+    install -Dm755 "$_repo/target/release/kestrel" "$pkgdir/usr/bin/kestrel"
+    install -Dm644 "$startdir/kestrel.service" "$pkgdir/usr/lib/systemd/user/kestrel.service"
+    install -Dm644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

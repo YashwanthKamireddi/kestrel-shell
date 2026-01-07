@@ -1,0 +1,17 @@
+[Unit]
+Description=kestrel desktop shell
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+# The shell has no authentication dialog of its own; this agent provides it.
+Wants=plasma-polkit-agent.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/kestrel
+Restart=on-failure
+RestartSec=1
+Slice=session.slice
+
+[Install]
+WantedBy=graphical-session.target
