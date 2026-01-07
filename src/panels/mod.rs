@@ -7,6 +7,7 @@ pub mod media;
 pub mod notifications;
 pub mod power;
 pub mod tray;
+pub mod wallpaper;
 
 use crate::app::{App, Message as AppMessage, Output};
 use crate::services::{icons, tray as tray_service};
@@ -24,6 +25,7 @@ pub enum PanelKind {
     Power,
     Tray,
     Launcher,
+    Wallpaper,
 }
 
 impl PanelKind {
@@ -35,6 +37,7 @@ impl PanelKind {
             "notifications" => Self::Notifications,
             "power" => Self::Power,
             "launcher" => Self::Launcher,
+            "wallpaper" => Self::Wallpaper,
             _ => return None,
         })
     }
@@ -48,6 +51,7 @@ impl PanelKind {
             Self::Power => 232.0,
             Self::Tray => 248.0,
             Self::Launcher => 560.0,
+            Self::Wallpaper => 560.0,
         }
     }
 }
@@ -61,6 +65,7 @@ pub struct State {
     pub media: media::State,
     pub tray: tray::State,
     pub launcher: launcher::State,
+    pub wallpaper: wallpaper::State,
 }
 
 #[derive(Clone, Debug)]
@@ -72,6 +77,7 @@ pub enum Message {
     Notifications(notifications::Message),
     Tray(tray::Message),
     Launcher(launcher::Message),
+    Wallpaper(wallpaper::Message),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
 }
@@ -90,6 +96,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             return Task::done(AppMessage::Panel(Message::Media(media::Message::Poll)));
         }
         PanelKind::Launcher => return launcher::open(app),
+        PanelKind::Wallpaper => return wallpaper::open(app),
         PanelKind::Notifications | PanelKind::Tray => {}
     }
     Task::none()
@@ -107,6 +114,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Notifications(m) => notifications::update(app, m),
         Message::Tray(m) => tray::update(app, m),
         Message::Launcher(m) => launcher::update(app, m),
+        Message::Wallpaper(m) => wallpaper::update(app, m),
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
@@ -152,6 +160,7 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
+        PanelKind::Wallpaper => wallpaper::view(app, s),
     }
 }
 

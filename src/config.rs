@@ -8,6 +8,8 @@ use std::path::PathBuf;
 #[serde(default)]
 pub struct Config {
     pub wallpaper: Option<String>,
+    /// Folder the wallpaper picker shows (default: the current wallpaper's folder).
+    pub wallpaper_dir: Option<String>,
     pub frame: Frame,
     /// Workspaces always shown, even when empty.
     pub workspaces: u32,
@@ -33,6 +35,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             wallpaper: None,
+            wallpaper_dir: None,
             frame: Frame::default(),
             workspaces: 5,
         }
@@ -56,6 +59,38 @@ pub fn load() -> Config {
         }),
         Err(_) => Config::default(),
     }
+}
+
+/// Saves the wallpaper choice, keeping the rest of the file (and its comments) as it is.
+pub fn set_wallpaper(path: &str) {
+    let p = self::path();
+    let text = std::fs::read_to_string(&p).unwrap_or_default();
+    let line = format!("wallpaper = {}", toml::Value::String(path.to_string()));
+    let mut found = false;
+    let mut out: Vec<String> = text
+        .lines()
+        .map(|l| {
+            let key = l.trim_start();
+            if !found && (key.starts_with("wallpaper ") || key.starts_with("wallpaper=")) {
+                found = true;
+                line.clone()
+            } else {
+                l.to_string()
+            }
+        })
+        .collect();
+    if !found {
+        // Top-level keys must come before the first [table].
+        let at = out
+            .iter()
+            .position(|l| l.trim_start().starts_with('['))
+            .unwrap_or(out.len());
+        out.insert(at, line);
+    }
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(&p, out.join("\n") + "\n");
 }
 
 pub fn expand(p: &str) -> PathBuf {
