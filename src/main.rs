@@ -37,6 +37,7 @@ fn main() -> anyhow::Result<()> {
     iced::application(app::boot, app::update, app::view)
         .subscription(app::subscription)
         .theme(app::theme)
+        .redraw_key(app::redraw_key)
         .default_font(theme::FONT)
         .antialiasing(true)
         // The first surface is a 1 px placeholder; real surfaces are made per monitor.
