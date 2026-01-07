@@ -162,18 +162,9 @@ fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, AppMessage
             Some(p) => ui::image_file(&p, px),
             None => icon(Icon::AppWindow, px, s.ink_dim).into(),
         },
-        Some(tray_service::TrayIcon::Rgba {
-            width,
-            height,
-            pixels,
-        }) => image(image::Handle::from_rgba(
-            *width,
-            *height,
-            pixels.as_ref().clone(),
-        ))
-        .width(px)
-        .height(px)
-        .into(),
+        Some(tray_service::TrayIcon::Rgba(p)) => {
+            image(p.handle.clone()).width(px).height(px).into()
+        }
         None => icon(Icon::AppWindow, px, s.ink_dim).into(),
     }
 }

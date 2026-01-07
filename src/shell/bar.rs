@@ -203,7 +203,11 @@ fn left<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let dots = workspaces(
         s,
         slots,
-        (o.pill_x.value, o.pill_w.value),
+        (
+            o.pill_x.value,
+            // The pill stretches with its speed while it travels, like a drop of ink.
+            o.pill_w.value + (o.pill_x.velocity.abs() * 0.02).min(14.0),
+        ),
         |i| Message::Dispatch(hyprland::focus_workspace(i as i32 + 1)),
         |dir| Message::Dispatch(hyprland::cycle_workspace(dir)),
     );

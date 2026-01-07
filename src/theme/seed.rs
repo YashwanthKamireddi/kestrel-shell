@@ -3,12 +3,11 @@
 
 use super::Seed;
 use super::color::Oklch;
-use std::path::Path;
 
 const BUCKETS: usize = 36;
 
-pub fn seed_from_image(path: &Path) -> Option<Seed> {
-    let img = image::open(path).ok()?.thumbnail(96, 96).to_rgb8();
+pub fn seed_from_image(img: &image::DynamicImage) -> Option<Seed> {
+    let img = img.thumbnail(96, 96).to_rgb8();
     let mut weight = [0f32; BUCKETS];
     let mut hue_x = [0f32; BUCKETS];
     let mut hue_y = [0f32; BUCKETS];

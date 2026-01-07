@@ -70,11 +70,7 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
 fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
     let handle = match n.image.as_ref()? {
         Image::Path(p) if std::path::Path::new(p).is_file() => image::Handle::from_path(p),
-        Image::Rgba {
-            width,
-            height,
-            pixels,
-        } => image::Handle::from_rgba(*width, *height, pixels.as_ref().clone()),
+        Image::Rgba(p) => p.handle.clone(),
         Image::Path(_) => return None,
     };
     Some(

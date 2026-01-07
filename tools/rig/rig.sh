@@ -8,6 +8,8 @@
 #   tools/rig/rig.sh run            (re)start kestrel in it
 #   tools/rig/rig.sh shot [file]    capture the output
 #   tools/rig/rig.sh hypr ARGS      hyprctl against the nested compositor
+#   tools/rig/rig.sh pointer move|click|scroll X Y [right|LINES]   virtual pointer
+#   tools/rig/rig.sh type TEXT|-k KEY   type into the focused surface (wtype)
 #   tools/rig/rig.sh msg ARGS       send an IPC command to the rig's kestrel
 #   tools/rig/rig.sh bus CMD...     run CMD on the rig's private session bus
 #   tools/rig/rig.sh stop
@@ -55,6 +57,8 @@ shot)
     echo "$out"
     ;;
 hypr) shift; nested "$@" ;;
+pointer) shift; WAYLAND_DISPLAY=$(display) "$HERE/../../target/rig-pointer/release/rig-pointer" "$@" ;;
+type) shift; WAYLAND_DISPLAY=$(display) wtype "$@" ;;
 bus) # run a command on kestrel's private session bus (e.g. notify-send)
     shift
     pid=$(for p in $(pgrep -x kestrel); do tr '\0' '\n' </proc/$p/environ | grep -q "^HOME=$WORK/home$" && echo $p; done | head -1)
