@@ -278,6 +278,29 @@ pub fn bar_items<'a>(
         );
     }
 
+    // Pending updates: click to run them in a terminal.
+    if app.updates.total() > 0 {
+        let u = app.updates;
+        items.push(
+            ui::control(
+                row![
+                    icon(Icon::ArrowDownToLine, 14.0, s.ink),
+                    label(u.total().to_string(), text::SMALL, s.ink),
+                ]
+                .spacing(5)
+                .align_y(Alignment::Center),
+            )
+            .padding([0, 10])
+            .height(size::CONTROL)
+            .radius(size::CONTROL / 2.0)
+            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+            .on_press(AppMessage::Dispatch(crate::services::apps::launch_lua(
+                "kitty --title Updates sh -c 'yay -Syu; echo; read -p \"Done. Press Enter to close.\" _'",
+            )))
+            .into(),
+        );
+    }
+
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
         let who = app.audio.recording.join(", ");

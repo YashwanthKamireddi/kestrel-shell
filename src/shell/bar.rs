@@ -151,6 +151,19 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
 /// Icon, level bar, value.
 fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
     const PAD: f32 = 16.0;
+    if let Some(t) = &osd.text {
+        return container(
+            row![
+                ui::icon(osd.icon, 18.0, s.ink),
+                label(t.clone(), text::BODY, s.ink),
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center),
+        )
+        .center_x(Length::Fill)
+        .padding([14.0, PAD])
+        .into();
+    }
     const VALUE_W: f32 = 30.0;
     let track_w = OSD_WIDTH - 2.0 * PAD - 18.0 - VALUE_W - 2.0 * 12.0;
     let bar = |w: f32, c: iced::Color| {
