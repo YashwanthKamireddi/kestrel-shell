@@ -248,6 +248,36 @@ pub fn bar_items<'a>(
         items.push(ctl.into());
     }
 
+    // System load: CPU, memory, temperature. Click for the full monitor.
+    {
+        let sys = app.system;
+        let warn = |hot: bool| if hot { s.warn } else { s.ink_dim };
+        let mut r = row![
+            icon(Icon::Cpu, 14.0, warn(sys.cpu >= 85)),
+            label(format!("{}%", sys.cpu), text::SMALL, warn(sys.cpu >= 85)),
+            icon(Icon::MemoryStick, 14.0, warn(sys.mem >= 85)),
+            label(format!("{}%", sys.mem), text::SMALL, warn(sys.mem >= 85)),
+        ]
+        .spacing(5)
+        .align_y(Alignment::Center);
+        if let Some(t) = sys.temp {
+            r = r
+                .push(icon(Icon::Thermometer, 14.0, warn(t >= 85)))
+                .push(label(format!("{t}°"), text::SMALL, warn(t >= 85)));
+        }
+        items.push(
+            ui::control(r)
+                .padding([0, 10])
+                .height(size::CONTROL)
+                .radius(size::CONTROL / 2.0)
+                .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+                .on_press(AppMessage::Dispatch(crate::services::apps::launch_lua(
+                    "kitty -e btop",
+                )))
+                .into(),
+        );
+    }
+
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
         let who = app.audio.recording.join(", ");
