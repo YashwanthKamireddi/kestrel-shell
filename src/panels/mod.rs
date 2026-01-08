@@ -2,6 +2,7 @@
 
 pub mod calendar;
 pub mod control;
+pub mod keys;
 pub mod launcher;
 pub mod media;
 pub mod notifications;
@@ -26,6 +27,7 @@ pub enum PanelKind {
     Tray,
     Launcher,
     Wallpaper,
+    Keys,
 }
 
 impl PanelKind {
@@ -38,6 +40,7 @@ impl PanelKind {
             "power" => Self::Power,
             "launcher" => Self::Launcher,
             "wallpaper" => Self::Wallpaper,
+            "keys" | "cheatsheet" => Self::Keys,
             _ => return None,
         })
     }
@@ -52,6 +55,7 @@ impl PanelKind {
             Self::Tray => 248.0,
             Self::Launcher => 560.0,
             Self::Wallpaper => 560.0,
+            Self::Keys => 720.0,
         }
     }
 }
@@ -66,6 +70,7 @@ pub struct State {
     pub tray: tray::State,
     pub launcher: launcher::State,
     pub wallpaper: wallpaper::State,
+    pub keys: keys::State,
 }
 
 #[derive(Clone, Debug)]
@@ -78,6 +83,7 @@ pub enum Message {
     Tray(tray::Message),
     Launcher(launcher::Message),
     Wallpaper(wallpaper::Message),
+    Keys(keys::Message),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
 }
@@ -97,6 +103,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         }
         PanelKind::Launcher => return launcher::open(app),
         PanelKind::Wallpaper => return wallpaper::open(app),
+        PanelKind::Keys => return keys::open(app),
         PanelKind::Notifications | PanelKind::Tray => {}
     }
     Task::none()
@@ -115,6 +122,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Tray(m) => tray::update(app, m),
         Message::Launcher(m) => launcher::update(app, m),
         Message::Wallpaper(m) => wallpaper::update(app, m),
+        Message::Keys(m) => keys::update(app, m),
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
@@ -161,6 +169,7 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
+        PanelKind::Keys => keys::view(app, s),
     }
 }
 
