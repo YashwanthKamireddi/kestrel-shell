@@ -248,6 +248,35 @@ pub fn bar_items<'a>(
         items.push(ctl.into());
     }
 
+    // Privacy: something is recording from a microphone.
+    if !app.audio.recording.is_empty() {
+        let who = app.audio.recording.join(", ");
+        items.push(
+            iced::widget::tooltip(
+                iced::widget::container(icon(Icon::Mic, 14.0, s.base))
+                    .center(22)
+                    .style(move |_| iced::widget::container::Style {
+                        background: Some(s.warn.into()),
+                        border: iced::Border::default().rounded(11),
+                        ..iced::widget::container::Style::default()
+                    }),
+                iced::widget::container(label(
+                    format!("Microphone in use: {who}"),
+                    text::SMALL,
+                    s.ink,
+                ))
+                .padding([6, 10])
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.raised.into()),
+                    border: iced::Border::default().rounded(size::CONTROL_RADIUS),
+                    ..iced::widget::container::Style::default()
+                }),
+                iced::widget::tooltip::Position::Left,
+            )
+            .into(),
+        );
+    }
+
     // Status cluster → control centre.
     let active = open == Some(PanelKind::Control);
     let fg = if active { s.accent } else { s.ink };
