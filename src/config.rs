@@ -13,6 +13,8 @@ pub struct Config {
     pub frame: Frame,
     /// Workspaces always shown, even when empty.
     pub workspaces: u32,
+    /// Theme GTK, Qt, kitty, Hyprland borders and hyprlock with the shell's colours.
+    pub theme_apps: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -38,6 +40,7 @@ impl Default for Config {
             wallpaper_dir: None,
             frame: Frame::default(),
             workspaces: 5,
+            theme_apps: true,
         }
     }
 }

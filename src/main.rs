@@ -1,6 +1,7 @@
 //! kestrel: a native desktop shell for Hyprland.
 
 mod app;
+mod apptheme;
 mod config;
 mod ipc;
 mod motion;

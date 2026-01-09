@@ -278,6 +278,57 @@ pub fn bar_items<'a>(
         );
     }
 
+    // Claude plan usage: the window nearest its limit; all windows on hover.
+    if let Some(w) = app.claude.worst() {
+        let hot = w.used >= 80.0;
+        let fg = if hot { s.warn } else { s.ink_dim };
+        let details = app
+            .claude
+            .windows
+            .iter()
+            .map(|w| {
+                let reset = chrono::DateTime::from_timestamp(w.resets_at, 0)
+                    .map(|t| {
+                        t.with_timezone(&chrono::Local)
+                            .format("%a %H:%M")
+                            .to_string()
+                    })
+                    .unwrap_or_default();
+                format!("{} limit: {:.0}% used, resets {reset}", w.label, w.used)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        items.push(
+            iced::widget::tooltip(
+                iced::widget::container(
+                    row![
+                        icon(Icon::Sparkles, 14.0, fg),
+                        label(format!("{:.0}%", w.used), text::SMALL, fg),
+                    ]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+                )
+                .padding([0, 8])
+                .height(size::CONTROL)
+                .center_y(size::CONTROL),
+                iced::widget::container(
+                    iced::widget::text(format!("Claude\n{details}"))
+                        .size(text::SMALL)
+                        .color(s.ink)
+                        .font(crate::theme::FONT),
+                )
+                .padding([6, 10])
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.raised.into()),
+                    border: iced::Border::default().rounded(size::CONTROL_RADIUS),
+                    ..iced::widget::container::Style::default()
+                }),
+                iced::widget::tooltip::Position::Left,
+            )
+            .into(),
+        );
+    }
+
     // Pending updates: click to run them in a terminal.
     if app.updates.total() > 0 {
         let u = app.updates;
