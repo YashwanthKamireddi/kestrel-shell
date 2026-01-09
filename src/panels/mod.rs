@@ -248,6 +248,57 @@ pub fn bar_items<'a>(
         items.push(ctl.into());
     }
 
+    // A live NBA game.
+    if let Some(g) = app
+        .nba
+        .iter()
+        .find(|g| g.phase == crate::services::web::Phase::Live)
+    {
+        items.push(
+            ui::control(
+                row![
+                    icon(Icon::Trophy, 14.0, s.ink_dim),
+                    label(
+                        format!(
+                            "{} {}–{} {}  {}",
+                            g.away, g.away_score, g.home_score, g.home, g.detail
+                        ),
+                        text::SMALL,
+                        s.ink
+                    ),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .padding([0, 10])
+            .height(size::CONTROL)
+            .radius(size::CONTROL / 2.0)
+            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+            .on_press_at(move |r| AppMessage::Toggle(PanelKind::Calendar, id, r))
+            .into(),
+        );
+    }
+
+    // Weather now; the forecast is in the calendar.
+    if let Some(w) = &app.weather {
+        items.push(
+            ui::control(
+                row![
+                    icon(w.icon(), 14.0, s.ink_dim),
+                    label(format!("{:.0}°", w.temp), text::SMALL, s.ink_dim),
+                ]
+                .spacing(5)
+                .align_y(Alignment::Center),
+            )
+            .padding([0, 10])
+            .height(size::CONTROL)
+            .radius(size::CONTROL / 2.0)
+            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+            .on_press_at(move |r| AppMessage::Toggle(PanelKind::Calendar, id, r))
+            .into(),
+        );
+    }
+
     // System load: CPU, memory, temperature. Click for the full monitor.
     {
         let sys = app.system;

@@ -272,8 +272,9 @@ fn hyprlock(s: &Scheme, wallpaper: Option<&str>, old: &str) -> String {
 pub fn border_lua(s: &Scheme) -> String {
     format!(
         "hl.config({{ general = {{ col = {{ active_border = \"{}\", inactive_border = \"{}\" }} }} }})",
-        hypr(s.accent, 0xaa),
-        hypr(s.line, 0x66)
+        // Quiet borders: the accent stays for "on" states, not window outlines.
+        hypr(s.line, 0x77),
+        hypr(s.base, 0x33)
     )
 }
 

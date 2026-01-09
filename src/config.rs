@@ -15,6 +15,10 @@ pub struct Config {
     pub workspaces: u32,
     /// Theme GTK, Qt, kitty, Hyprland borders and hyprlock with the shell's colours.
     pub theme_apps: bool,
+    /// City for the weather (looked up with Open-Meteo). No city, no weather.
+    pub weather_city: Option<String>,
+    /// NBA scores: a bar chip while a game is live, today's games in the calendar.
+    pub nba: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -41,6 +45,8 @@ impl Default for Config {
             frame: Frame::default(),
             workspaces: 5,
             theme_apps: true,
+            weather_city: None,
+            nba: true,
         }
     }
 }

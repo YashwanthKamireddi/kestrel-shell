@@ -28,6 +28,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 libpulse-binding = { version = "2.30", features = ["pa_v15"] }
 inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 
 [patch.crates-io]
 # wl_shm Argb8888 so the CPU renderer keeps alpha on Wayland.

@@ -98,7 +98,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         weeks = weeks.push(week);
     }
 
-    column![
+    let mut col = column![
         header,
         Space::new().height(16),
         nav,
@@ -106,8 +106,60 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         weekdays,
         Space::new().height(6),
         weeks,
-    ]
-    .padding(iced::Padding {
+    ];
+    if let Some(w) = &app.weather {
+        col = col.push(Space::new().height(12)).push(crate::ui::card(
+            s,
+            row![
+                crate::ui::icon(w.icon(), 22.0, s.ink),
+                column![
+                    label_w(
+                        format!("{:.0}°  {}", w.temp, w.describe()),
+                        text::BODY,
+                        s.ink,
+                        theme::MEDIUM
+                    ),
+                    label(
+                        format!("{} · H {:.0}°  L {:.0}°", w.place, w.high, w.low),
+                        text::CAPTION,
+                        s.ink_dim
+                    ),
+                ]
+                .spacing(2),
+            ]
+            .spacing(12)
+            .align_y(Alignment::Center),
+        ));
+    }
+    if !app.nba.is_empty() {
+        use crate::services::web::Phase;
+        let mut games = column![label_w("NBA", text::SMALL, s.ink_dim, theme::MEDIUM)].spacing(6);
+        for g in app.nba.iter().take(8) {
+            let live = g.phase == Phase::Live;
+            let score = if g.phase == Phase::Upcoming {
+                String::new()
+            } else {
+                format!("{} – {}", g.away_score, g.home_score)
+            };
+            games = games.push(
+                row![
+                    label(format!("{} @ {}", g.away, g.home), text::SMALL, s.ink)
+                        .width(Length::Fixed(96.0)),
+                    label(score, text::SMALL, s.ink).width(Length::Fill),
+                    label(
+                        g.detail.clone(),
+                        text::CAPTION,
+                        if live { s.accent } else { s.ink_faint }
+                    ),
+                ]
+                .align_y(Alignment::Center),
+            );
+        }
+        col = col
+            .push(Space::new().height(8))
+            .push(crate::ui::card(s, games));
+    }
+    col.padding(iced::Padding {
         top: 14.0,
         right: 14.0,
         bottom: 16.0,
