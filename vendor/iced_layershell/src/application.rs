@@ -729,6 +729,15 @@ where
                     continue;
                 }
 
+                // kestrel patch: a frame cannot be presented before the compositor's frame
+                // callback; don't rasterise it now. The callback triggers the redraw.
+                if let Some(d) = wl_state.surfaces.get_mut(&wl_surface)
+                    && d.frame_pending
+                {
+                    d.needs_rerender = true;
+                    continue;
+                }
+
                 let Some(ui) = user_interfaces.get_mut(surface_id) else {
                     continue;
                 };
@@ -737,6 +746,13 @@ where
                 let redraw_event = [iced_core::Event::Window(
                     iced_core::window::Event::RedrawRequested(std::time::Instant::now()),
                 )];
+                // kestrel patch: subscriptions see frames too, so `iced::window::frames()`
+                // ticks in step with the compositor's frame callbacks.
+                runtime.broadcast(iced_futures::subscription::Event::Interaction {
+                    window: (*surface_id).into(),
+                    event: redraw_event[0].clone(),
+                    status: iced_core::event::Status::Ignored,
+                });
                 let (ui_state, _statuses) = ui.update(
                     &redraw_event,
                     cursor,
