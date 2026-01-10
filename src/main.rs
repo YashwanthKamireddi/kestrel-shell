@@ -24,10 +24,6 @@ fn main() -> anyhow::Result<()> {
             println!("kestrel close           close the open panel");
             return Ok(());
         }
-        if args[0] == "statusline" {
-            claude_statusline();
-            return Ok(());
-        }
         if !ipc::send(&args.join(" ")) {
             eprintln!("kestrel is not running");
             std::process::exit(1);
@@ -81,41 +77,4 @@ fn env_logger() {
     };
     let _ = log::set_boxed_logger(Box::new(L(level)));
     log::set_max_level(level);
-}
-
-/// `kestrel statusline`: Claude Code's status line command. It prints the status text and
-/// keeps the plan usage Claude Code passes in (`rate_limits`) where the bar can show it.
-fn claude_statusline() {
-    use std::io::Read;
-    let mut input = String::new();
-    let _ = std::io::stdin().read_to_string(&mut input);
-    let v: serde_json::Value = serde_json::from_str(&input).unwrap_or_default();
-    if let Some(limits) = v.get("rate_limits") {
-        let dir = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir)
-            .join("kestrel");
-        let _ = std::fs::create_dir_all(&dir);
-        let record = serde_json::json!({ "rate_limits": limits });
-        let tmp = dir.join(".claude-usage.json.tmp");
-        if std::fs::write(&tmp, record.to_string()).is_ok() {
-            let _ = std::fs::rename(&tmp, dir.join("claude-usage.json"));
-        }
-    }
-    let cwd = v
-        .pointer("/workspace/current_dir")
-        .and_then(|d| d.as_str())
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_default();
-    let user = std::env::var("USER").unwrap_or_default();
-    let host = std::fs::read_to_string("/etc/hostname").unwrap_or_default();
-    print!(
-        "[{}@{} {}]",
-        user,
-        host.trim().split('.').next().unwrap_or(""),
-        cwd.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    );
 }

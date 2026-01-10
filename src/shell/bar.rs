@@ -224,15 +224,12 @@ fn left<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
         |i| Message::Dispatch(hyprland::focus_workspace(i as i32 + 1)),
         |dir| Message::Dispatch(hyprland::cycle_workspace(dir)),
     );
-    let id = o.id;
-    let launcher = icon_button(s, Icon::LayoutGrid, Message::Close, false)
-        .on_press_at(move |b| Message::Toggle(PanelKind::Launcher, id, b));
     let title = if app.hypr.focused_monitor == o.name {
-        ui::ellipsize(&app.hypr.window_title, 64)
+        crate::services::apps::name_for_class(&app.hypr.window_class)
     } else {
         String::new()
     };
-    row![launcher, dots, label(title, text::SMALL, s.ink_dim),]
+    row![dots, label(title, text::SMALL, s.ink_dim),]
         .spacing(6)
         .align_y(Alignment::Center)
         .into()

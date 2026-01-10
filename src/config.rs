@@ -17,6 +17,10 @@ pub struct Config {
     pub theme_apps: bool,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
+    /// Exact place for the weather (a neighbourhood the city search can't find); the city
+    /// name is then only the label.
+    pub weather_latitude: Option<f64>,
+    pub weather_longitude: Option<f64>,
     /// NBA scores: a bar chip while a game is live, today's games in the calendar.
     pub nba: bool,
 }
@@ -46,6 +50,8 @@ impl Default for Config {
             workspaces: 5,
             theme_apps: true,
             weather_city: None,
+            weather_latitude: None,
+            weather_longitude: None,
             nba: true,
         }
     }
