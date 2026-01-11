@@ -73,14 +73,7 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
         Image::Rgba(p) => p.handle.clone(),
         Image::Path(_) => return None,
     };
-    Some(
-        image(handle)
-            .width(40)
-            .height(40)
-            .content_fit(iced::ContentFit::Cover)
-            .border_radius(8)
-            .into(),
-    )
+    Some(ui::cover(handle, 40.0, 40.0, 8.0))
 }
 
 /// One notification. `toast` cards show a close button always; centre cards on hover would

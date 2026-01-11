@@ -1,8 +1,7 @@
 //! App theming: the same colours as the shell, written into the apps' own theme files.
 //!
 //! GTK 3/4 (libadwaita and adw-gtk3 named colours in gtk.css), Qt through KDE's kdeglobals
-//! (the platform theme here is `kde`), kitty (a colours file, reloaded live), Hyprland window
-//! borders (set at runtime) and hyprlock (colours and the wallpaper). Everything is generated
+//! (the platform theme here is `kde`), kitty (a colours file, reloaded live), and hyprlock (colours and the wallpaper). Everything is generated
 //! from the scheme, so a new wallpaper re-themes every app at once.
 
 use crate::theme::Scheme;
@@ -271,16 +270,6 @@ fn hyprlock(s: &Scheme, wallpaper: Option<&str>, old: &str) -> String {
         }
     }
     out
-}
-
-/// Lua for Hyprland's window borders.
-pub fn border_lua(s: &Scheme) -> String {
-    format!(
-        "hl.config({{ general = {{ col = {{ active_border = \"{}\", inactive_border = \"{}\" }} }} }})",
-        // Quiet borders: the accent stays for "on" states, not window outlines.
-        hypr(s.line, 0x77),
-        hypr(s.base, 0x33)
-    )
 }
 
 /// Writes every app theme for `s`. Blocking (file I/O); run off the UI thread.

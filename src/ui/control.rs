@@ -351,15 +351,20 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                     bg,
                 );
             }
-            self.content.as_widget().draw(
-                &tree.children[0],
-                renderer,
-                theme,
-                style,
-                layout.children().next().unwrap(),
-                cursor,
-                viewport,
-            );
+            // Content never paints outside the control: long text or a big image is cut at
+            // the control's edge instead of spilling over its neighbours.
+            let clip = bounds.intersection(viewport).unwrap_or(bounds);
+            renderer.with_layer(clip, |renderer| {
+                self.content.as_widget().draw(
+                    &tree.children[0],
+                    renderer,
+                    theme,
+                    style,
+                    layout.children().next().unwrap(),
+                    cursor,
+                    &clip,
+                );
+            });
         };
         if (s - 1.0).abs() > 1e-3 {
             let t = Transformation::translate(center.x, center.y)

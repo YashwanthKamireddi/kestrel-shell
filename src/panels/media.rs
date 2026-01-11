@@ -91,14 +91,9 @@ fn clock(us: i64) -> String {
 
 pub fn art<'a, M: 'static>(s: Scheme, p: &Player, size: f32, radius: f32) -> Element<'a, M> {
     match &p.art {
-        Some(path) if std::path::Path::new(path).is_file() => container(
-            image(image::Handle::from_path(path))
-                .width(size)
-                .height(size)
-                .content_fit(iced::ContentFit::Cover)
-                .border_radius(radius),
-        )
-        .into(),
+        Some(path) if std::path::Path::new(path).is_file() => {
+            crate::ui::cover(image::Handle::from_path(path), size, size, radius)
+        }
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))
             .center(size)
             .style(move |_| container::Style {

@@ -33,6 +33,33 @@ pub fn label_w<'a>(
     label(s, size, color).font(theme::font(weight))
 }
 
+/// Shortens `s` to fit `width` px at `size` px text (Geist averages ~0.55 em per character),
+/// ending with an ellipsis.
+pub fn fit(s: &str, size: f32, width: f32) -> String {
+    let chars = (width / (size * 0.55)).floor().max(4.0) as usize;
+    ellipsize(s, chars)
+}
+
+/// An image that fills a `w` × `h` frame (cropping as needed), clipped to the frame.
+pub fn cover<'a, M: 'a>(
+    handle: iced::widget::image::Handle,
+    w: f32,
+    h: f32,
+    radius: f32,
+) -> Element<'a, M> {
+    container(
+        iced::widget::image(handle)
+            .width(w)
+            .height(h)
+            .content_fit(iced::ContentFit::Cover)
+            .border_radius(radius),
+    )
+    .width(w)
+    .height(h)
+    .clip(true)
+    .into()
+}
+
 /// Shortens `s` to at most `max` characters, ending with an ellipsis.
 pub fn ellipsize(s: &str, max: usize) -> String {
     if s.chars().count() <= max {

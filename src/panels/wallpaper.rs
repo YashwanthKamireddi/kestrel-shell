@@ -165,13 +165,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 for (path, thumb) in chunk {
                     let on = current.as_deref() == Some(path.as_path());
                     r = r.push(
-                        control(
-                            image(thumb.clone())
-                                .width(THUMB_W)
-                                .height(THUMB_H)
-                                .content_fit(iced::ContentFit::Cover)
-                                .border_radius(size::ROW_RADIUS - 2.0),
-                        )
+                        control(ui::cover(
+                            thumb.clone(),
+                            THUMB_W,
+                            THUMB_H,
+                            size::ROW_RADIUS - 2.0,
+                        ))
                         .padding(2)
                         .radius(size::ROW_RADIUS)
                         .colors(
