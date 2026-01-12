@@ -622,8 +622,10 @@ where
             }
 
             // Rebuild all UIs with new state
-            let pending: HashMap<SurfaceId, bool> =
-                iced_surfaces.iter().map(|(id, s)| (*id, s.needs_redraw)).collect();
+            let pending: HashMap<SurfaceId, bool> = iced_surfaces
+                .iter()
+                .map(|(id, s)| (*id, s.needs_redraw))
+                .collect();
             user_interfaces = ManuallyDrop::new(build_user_interfaces(
                 &app.view,
                 &user_state,

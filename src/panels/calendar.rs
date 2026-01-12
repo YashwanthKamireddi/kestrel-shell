@@ -111,7 +111,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         col = col.push(Space::new().height(12)).push(crate::ui::card(
             s,
             row![
-                crate::ui::icon(w.icon(), 22.0, s.ink),
+                crate::ui::icon(crate::ui::weather_icon(w), 22.0, s.ink),
                 column![
                     label_w(
                         format!("{:.0}°  {}", w.temp, w.describe()),

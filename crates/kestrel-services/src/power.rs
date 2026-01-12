@@ -1,0 +1,199 @@
+//! Battery (UPower) and power mode (power-profiles-daemon) on the system bus, and screen
+//! brightness (sysfs to read, logind to write — no root, no helper).
+
+use super::dbus;
+use futures::{SinkExt, Stream, StreamExt};
+use std::path::PathBuf;
+use zbus::Connection;
+
+const UPOWER: &str = "org.freedesktop.UPower";
+const DISPLAY: &str = "/org/freedesktop/UPower/devices/DisplayDevice";
+const DEVICE: &str = "org.freedesktop.UPower.Device";
+const PPD: &str = "org.freedesktop.UPower.PowerProfiles";
+const PPD_PATH: &str = "/org/freedesktop/UPower/PowerProfiles";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Profile {
+    PowerSaver,
+    #[default]
+    Balanced,
+    Performance,
+}
+
+impl Profile {
+    fn from_str(s: &str) -> Self {
+        match s {
+            "power-saver" => Self::PowerSaver,
+            "performance" => Self::Performance,
+            _ => Self::Balanced,
+        }
+    }
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::PowerSaver => "power-saver",
+            Self::Balanced => "balanced",
+            Self::Performance => "performance",
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::PowerSaver => "Power saver",
+            Self::Balanced => "Balanced",
+            Self::Performance => "Performance",
+        }
+    }
+    pub fn next(self) -> Self {
+        match self {
+            Self::PowerSaver => Self::Balanced,
+            Self::Balanced => Self::Performance,
+            Self::Performance => Self::PowerSaver,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct State {
+    pub has_battery: bool,
+    /// Running on battery (no charger).
+    pub on_battery: bool,
+    pub percent: f32,
+    pub charging: bool,
+    pub full: bool,
+    /// Seconds until empty (discharging) or full (charging); 0 when unknown.
+    pub time_left: i64,
+    pub profile: Option<Profile>,
+}
+
+async fn read(c: &Connection) -> State {
+    let present: bool = dbus::get(c, UPOWER, DISPLAY, DEVICE, "IsPresent")
+        .await
+        .unwrap_or(false);
+    let percent: f64 = dbus::get(c, UPOWER, DISPLAY, DEVICE, "Percentage")
+        .await
+        .unwrap_or(0.0);
+    let state: u32 = dbus::get(c, UPOWER, DISPLAY, DEVICE, "State")
+        .await
+        .unwrap_or(0);
+    let charging = state == 1 || state == 5;
+    let time_left: i64 = dbus::get(
+        c,
+        UPOWER,
+        DISPLAY,
+        DEVICE,
+        if charging {
+            "TimeToFull"
+        } else {
+            "TimeToEmpty"
+        },
+    )
+    .await
+    .unwrap_or(0);
+    let profile = dbus::get::<String>(c, PPD, PPD_PATH, PPD, "ActiveProfile")
+        .await
+        .ok()
+        .map(|s| Profile::from_str(&s));
+    let on_battery: bool = dbus::get(c, UPOWER, "/org/freedesktop/UPower", UPOWER, "OnBattery")
+        .await
+        .unwrap_or(false);
+    State {
+        has_battery: present,
+        on_battery,
+        percent: percent as f32,
+        charging,
+        full: state == 4,
+        time_left,
+        profile,
+    }
+}
+
+pub async fn set_profile(p: Profile) {
+    let r = async {
+        let c = Connection::system().await?;
+        dbus::set(&c, PPD, PPD_PATH, PPD, "ActiveProfile", p.as_str()).await
+    }
+    .await;
+    if let Err(e) = r {
+        log::warn!("power profile: {e}");
+    }
+}
+
+/// The service's state stream: a snapshot on start and after every change.
+pub fn stream() -> impl Stream<Item = State> {
+    crate::stream::channel(4, async |mut out| {
+        let Ok(c) = Connection::system().await else {
+            return;
+        };
+        let (Ok(a), Ok(b)) = (
+            dbus::changes(&c, UPOWER).await,
+            dbus::changes(&c, PPD).await,
+        ) else {
+            return;
+        };
+        let mut changes = futures::stream::select(a, b);
+        let mut last = None;
+        loop {
+            let s = read(&c).await;
+            if last.as_ref() != Some(&s) {
+                last = Some(s.clone());
+                let _ = out.send(s).await;
+            }
+            if changes.next().await.is_none() {
+                return;
+            }
+        }
+    })
+}
+
+// --- Brightness ---------------------------------------------------------------------------
+
+fn backlight() -> Option<PathBuf> {
+    let dir = std::fs::read_dir("/sys/class/backlight").ok()?;
+    let mut all: Vec<PathBuf> = dir.flatten().map(|e| e.path()).collect();
+    // Prefer the vendor/firmware device over generic ACPI ones.
+    all.sort_by_key(|p| {
+        p.file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("acpi"))
+    });
+    all.into_iter().next()
+}
+
+fn read_num(p: &std::path::Path) -> Option<f32> {
+    std::fs::read_to_string(p).ok()?.trim().parse().ok()
+}
+
+/// Current brightness 0..1, if there is a backlight.
+pub fn brightness() -> Option<f32> {
+    let b = backlight()?;
+    let max = read_num(&b.join("max_brightness"))?;
+    let cur = read_num(&b.join("brightness"))?;
+    (max > 0.0).then(|| cur / max)
+}
+
+pub async fn set_brightness(v: f32) {
+    let r = async {
+        let b = backlight().ok_or_else(|| zbus::Error::Failure("no backlight".into()))?;
+        let name = b
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let max = read_num(&b.join("max_brightness")).unwrap_or(1.0);
+        // Never fully dark: 1 % is the floor.
+        let raw = (v.clamp(0.01, 1.0) * max).round() as u32;
+        let c = Connection::system().await?;
+        let _: () = dbus::proxy(
+            &c,
+            "org.freedesktop.login1",
+            "/org/freedesktop/login1/session/auto",
+            "org.freedesktop.login1.Session",
+        )
+        .await?
+        .call("SetBrightness", &("backlight", name.as_str(), raw))
+        .await?;
+        zbus::Result::Ok(())
+    }
+    .await;
+    if let Err(e) = r {
+        log::warn!("brightness: {e}");
+    }
+}

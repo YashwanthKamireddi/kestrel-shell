@@ -9,11 +9,7 @@ use crate::ui::{Icon, empty, label, label_w};
 use iced::widget::{column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Task};
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Bind {
-    pub keys: Vec<String>,
-    pub what: String,
-}
+pub use crate::services::hyprland::Bind;
 
 #[derive(Default)]
 pub struct State {

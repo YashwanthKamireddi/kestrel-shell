@@ -181,7 +181,7 @@ fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, AppMessage
             None => icon(Icon::AppWindow, px, s.ink_dim).into(),
         },
         Some(tray_service::TrayIcon::Rgba(p)) => {
-            image(p.handle.clone()).width(px).height(px).into()
+            image(crate::ui::pixels(p)).width(px).height(px).into()
         }
         None => icon(Icon::AppWindow, px, s.ink_dim).into(),
     }
@@ -284,7 +284,7 @@ pub fn bar_items<'a>(
         items.push(
             ui::control(
                 row![
-                    icon(w.icon(), 14.0, s.ink_dim),
+                    icon(crate::ui::weather_icon(w), 14.0, s.ink_dim),
                     label(format!("{:.0}°", w.temp), text::SMALL, s.ink_dim),
                 ]
                 .spacing(5)

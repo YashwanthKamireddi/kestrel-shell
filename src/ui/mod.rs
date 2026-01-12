@@ -324,3 +324,38 @@ pub fn image_file<'a, M: 'a>(path: &std::path::Path, size: f32) -> Element<'a, M
             .into()
     }
 }
+
+/// One renderer handle per distinct image (by content id), so pixels re-read by a service are
+/// not uploaded again.
+pub fn pixels(p: &crate::services::notifications::Pixels) -> iced::widget::image::Handle {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<u64, iced::widget::image::Handle>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    let Ok(mut map) = cache.lock() else {
+        return iced::widget::image::Handle::from_rgba(p.width, p.height, p.data.as_ref().clone());
+    };
+    if map.len() > 256 {
+        map.clear();
+    }
+    map.entry(p.id)
+        .or_insert_with(|| {
+            iced::widget::image::Handle::from_rgba(p.width, p.height, p.data.as_ref().clone())
+        })
+        .clone()
+}
+
+/// The icon for a weather condition (WMO code).
+pub fn weather_icon(w: &crate::services::web::Weather) -> Icon {
+    match w.code {
+        0 | 1 if w.is_day => Icon::Sun,
+        0 | 1 => Icon::Moon,
+        2 => Icon::CloudSun,
+        3 => Icon::Cloud,
+        45 | 48 => Icon::CloudFog,
+        51..=67 | 80..=82 => Icon::CloudRain,
+        71..=77 | 85 | 86 => Icon::Snowflake,
+        95..=99 => Icon::CloudLightning,
+        _ => Icon::Cloud,
+    }
+}

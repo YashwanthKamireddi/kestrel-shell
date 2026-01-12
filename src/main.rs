@@ -6,7 +6,9 @@ mod config;
 mod ipc;
 mod motion;
 mod panels;
-mod services;
+mod subs;
+// The system-integration crate, under its short name.
+pub(crate) use kestrel_services as services;
 mod shell;
 mod theme;
 mod ui;
