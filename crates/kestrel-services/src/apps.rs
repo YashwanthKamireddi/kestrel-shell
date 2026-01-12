@@ -113,32 +113,42 @@ pub fn load() -> Vec<App> {
     apps
 }
 
-/// The human name of the app a window belongs to, from its window class: matched against
-/// each entry's StartupWMClass, then its desktop file name. Falls back to the class itself.
-pub fn name_for_class(class: &str) -> String {
+/// (name, icon) of the desktop entry a window class belongs to: matched against each entry's
+/// StartupWMClass, then its desktop file name (also its last dotted part).
+fn entry_for_class(class: &str) -> Option<(String, String)> {
     use std::sync::OnceLock;
-    static NAMES: OnceLock<HashMap<String, String>> = OnceLock::new();
-    if class.is_empty() {
-        return String::new();
-    }
-    let names = NAMES.get_or_init(|| {
+    static ENTRIES: OnceLock<HashMap<String, (String, String)>> = OnceLock::new();
+    let entries = ENTRIES.get_or_init(|| {
         let mut m = HashMap::new();
         for a in load() {
+            let v = (a.name.clone(), a.icon.clone());
             let id = a.id.trim_end_matches(".desktop").to_lowercase();
             // org.kde.dolphin -> dolphin, too.
             if let Some(last) = id.rsplit('.').next() {
-                m.entry(last.to_string()).or_insert_with(|| a.name.clone());
+                m.entry(last.to_string()).or_insert_with(|| v.clone());
             }
-            m.insert(id, a.name.clone());
+            m.insert(id, v.clone());
             if !a.wm_class.is_empty() {
-                m.insert(a.wm_class.to_lowercase(), a.name.clone());
+                m.insert(a.wm_class.to_lowercase(), v);
             }
         }
         m
     });
-    let key = class.to_lowercase();
-    if let Some(n) = names.get(&key) {
-        return n.clone();
+    entries.get(&class.to_lowercase()).cloned()
+}
+
+/// Icon name for a window class (the class itself when no entry matches).
+pub fn icon_for_class(class: &str) -> String {
+    entry_for_class(class).map_or_else(|| class.to_lowercase(), |(_, icon)| icon)
+}
+
+/// The human name of the app a window belongs to. Falls back to the class itself.
+pub fn name_for_class(class: &str) -> String {
+    if class.is_empty() {
+        return String::new();
+    }
+    if let Some((n, _)) = entry_for_class(class) {
+        return n;
     }
     // Fallback: "org.gnome.Nautilus" -> "Nautilus", "kitty" -> "Kitty".
     let last = class.rsplit('.').next().unwrap_or(class);

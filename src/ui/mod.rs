@@ -5,7 +5,6 @@ pub mod icon;
 pub mod reveal;
 pub mod shape;
 pub mod slider;
-pub mod workspaces;
 
 use crate::theme::{self, Scheme, size};
 use iced::widget::{Space, Svg, Text, container, row, svg, text};
@@ -40,14 +39,16 @@ pub fn fit(s: &str, size: f32, width: f32) -> String {
     ellipsize(s, chars)
 }
 
-/// An image that fills a `w` × `h` frame (cropping as needed), clipped to the frame.
-pub fn cover<'a, M: 'a>(
+/// An image that fills a `w` × `h` frame (cropping as needed). Wrapped in a `Control`
+/// because that is what clips: iced's image draws a covering image past its own bounds, and a
+/// container's `clip` only narrows the viewport, it does not cut the drawing.
+pub fn cover<'a, M: Clone + 'a>(
     handle: iced::widget::image::Handle,
     w: f32,
     h: f32,
     radius: f32,
 ) -> Element<'a, M> {
-    container(
+    control(
         iced::widget::image(handle)
             .width(w)
             .height(h)
@@ -56,7 +57,6 @@ pub fn cover<'a, M: 'a>(
     )
     .width(w)
     .height(h)
-    .clip(true)
     .into()
 }
 

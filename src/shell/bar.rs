@@ -5,16 +5,17 @@ use crate::panels::{self, PanelKind};
 use crate::services::hyprland;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::shape::{BarShape, Drop};
-use crate::ui::workspaces::{self, Slot, workspaces};
 use crate::ui::{self, Icon, control, icon_button, label, label_w};
 use iced::widget::{Space, canvas, container, mouse_area, pin, row, stack};
 use iced::{Alignment, Element, Length, Point};
 
-/// Pill centre and width for the active workspace, relative to the dots widget.
-pub fn pill_geometry(h: &hyprland::State, _monitor: &str, active: i32, min: u32) -> (f32, f32) {
-    let _ = slot_count(h, min);
-    let i = (active.max(1) - 1) as usize;
-    (workspaces::slot_x(i), workspaces::PILL_W)
+/// Workspace slot size and spacing in the bar.
+pub const SLOT: f32 = 28.0;
+const SLOT_GAP: f32 = 2.0;
+
+/// Left edge and width of the highlight behind the active workspace.
+pub fn pill_geometry(_h: &hyprland::State, _monitor: &str, active: i32, _min: u32) -> (f32, f32) {
+    ((active.max(1) - 1) as f32 * (SLOT + SLOT_GAP), SLOT)
 }
 
 fn slot_count(h: &hyprland::State, min: u32) -> usize {
@@ -199,38 +200,71 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
 
 fn left<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let n = slot_count(&app.hypr, app.config.workspaces);
-    let slots = (1..=n as i32)
-        .map(|id| {
-            if app
-                .hypr
-                .workspaces
-                .iter()
-                .any(|w| w.id == id && w.windows > 0)
-            {
-                Slot::Occupied
-            } else {
-                Slot::Empty
+    let active = app.hypr.active_on(&o.name);
+    // One slot per workspace: the icon of the app last used there, or a faint number when the
+    // workspace is empty. A soft highlight glides to the active one.
+    let slots = row((1..=n as i32).map(|id| {
+        let ws = app
+            .hypr
+            .workspaces
+            .iter()
+            .find(|w| w.id == id && w.windows > 0);
+        let content: Element<'a, Message> = match ws {
+            Some(w) if !w.app.is_empty() => {
+                match crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
+                {
+                    Some(p) => ui::image_file(&p, 16.0),
+                    None => label(id.to_string(), text::SMALL, s.ink).into(),
+                }
             }
-        })
-        .collect();
-    let dots = workspaces(
-        s,
+            Some(_) => label(id.to_string(), text::SMALL, s.ink).into(),
+            None => label(
+                id.to_string(),
+                text::CAPTION,
+                if active == Some(id) {
+                    s.ink_dim
+                } else {
+                    s.ink_faint
+                },
+            )
+            .into(),
+        };
+        control(container(content).center(SLOT))
+            .radius(size::CONTROL_RADIUS)
+            .colors(
+                iced::Color::TRANSPARENT,
+                s.raised.scale_alpha(0.8),
+                s.raised_press,
+            )
+            .on_press(Message::Dispatch(hyprland::focus_workspace(id)))
+            .on_scroll(|lines| {
+                Message::Dispatch(hyprland::cycle_workspace(if lines > 0.0 { -1 } else { 1 }))
+            })
+            .into()
+    }))
+    .spacing(SLOT_GAP);
+    let highlight = container(Space::new())
+        .width(SLOT)
+        .height(SLOT)
+        .style(move |_| container::Style {
+            background: Some(s.raised_hi.into()),
+            border: iced::Border::default().rounded(size::CONTROL_RADIUS),
+            ..container::Style::default()
+        });
+    let width = n as f32 * (SLOT + SLOT_GAP) - SLOT_GAP;
+    let dots = stack![
+        pin(highlight).x(o.pill_x.value).width(width).height(SLOT),
         slots,
-        (
-            o.pill_x.value,
-            // The pill stretches with its speed while it travels, like a drop of ink.
-            o.pill_w.value + (o.pill_x.velocity.abs() * 0.02).min(14.0),
-        ),
-        |i| Message::Dispatch(hyprland::focus_workspace(i as i32 + 1)),
-        |dir| Message::Dispatch(hyprland::cycle_workspace(dir)),
-    );
+    ]
+    .width(width)
+    .height(SLOT);
     let title = if app.hypr.focused_monitor == o.name {
         crate::services::apps::name_for_class(&app.hypr.window_class)
     } else {
         String::new()
     };
     row![dots, label(title, text::SMALL, s.ink_dim),]
-        .spacing(6)
+        .spacing(10)
         .align_y(Alignment::Center)
         .into()
 }

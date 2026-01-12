@@ -89,7 +89,12 @@ fn clock(us: i64) -> String {
     }
 }
 
-pub fn art<'a, M: 'static>(s: Scheme, p: &Player, size: f32, radius: f32) -> Element<'a, M> {
+pub fn art<'a, M: Clone + 'static>(
+    s: Scheme,
+    p: &Player,
+    size: f32,
+    radius: f32,
+) -> Element<'a, M> {
     match &p.art {
         Some(path) if std::path::Path::new(path).is_file() => {
             crate::ui::cover(image::Handle::from_path(path), size, size, radius)
