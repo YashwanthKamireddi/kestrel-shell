@@ -24,7 +24,7 @@ fn slot_count(h: &hyprland::State, min: u32) -> usize {
 
 pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let s = app.scheme;
-    let t = app.config.frame.thickness;
+    let t = app.frame().thickness;
     let panel = app.panel.as_ref().filter(|p| p.output == o.id);
     let focused = app.focused_output() == Some(o.id) && panel.is_none();
     let drop = |x: f32, w: f32, h: f32| Drop {
@@ -55,7 +55,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         color: s.base,
         bar: size::BAR,
         frame: t,
-        corner: app.config.frame.radius,
+        corner: app.frame().radius,
         drops,
     })
     .width(Length::Fill)

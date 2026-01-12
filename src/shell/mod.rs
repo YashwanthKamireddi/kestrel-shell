@@ -32,8 +32,8 @@ pub fn frame(app: &App, edge: Edge) -> Element<'_, Message> {
     canvas(FrameShape {
         color: app.scheme.base,
         edge,
-        frame: app.config.frame.thickness,
-        corner: app.config.frame.radius,
+        frame: app.frame().thickness,
+        corner: app.frame().radius,
     })
     .width(Length::Fill)
     .height(Length::Fill)
