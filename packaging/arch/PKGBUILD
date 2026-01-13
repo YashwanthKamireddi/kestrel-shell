@@ -1,11 +1,11 @@
 # Local package for kestrel, built from this repository.
 pkgname=kestrel
-pkgver=0.1.0.r28.g8f8c771
+pkgver=0.1.0.r29.gc6ec646
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
 license=('GPL-3.0-or-later')
-depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-geist-variable')
+depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-geist-mono-variable' 'ttf-twemoji')
 optdepends=('hyprsunset: night light'
             'cliphist: clipboard history in the launcher'
             'wl-clipboard: copying from clipboard history'

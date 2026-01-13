@@ -32,10 +32,10 @@ pub fn label_w<'a>(
     label(s, size, color).font(theme::font(weight))
 }
 
-/// Shortens `s` to fit `width` px at `size` px text (Geist averages ~0.55 em per character),
+/// Shortens `s` to fit `width` px at `size` px text (Geist Mono: 0.6 em per character),
 /// ending with an ellipsis.
 pub fn fit(s: &str, size: f32, width: f32) -> String {
-    let chars = (width / (size * 0.55)).floor().max(4.0) as usize;
+    let chars = (width / (size * 0.6)).floor().max(4.0) as usize;
     ellipsize(s, chars)
 }
 

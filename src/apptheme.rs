@@ -224,17 +224,17 @@ fn kdeglobals(s: &Scheme, text: &str) -> String {
             seen.insert(k.to_string());
             continue;
         }
-        // Qt apps use the shell's typeface (Geist, Medium).
+        // Qt apps use the shell's typeface (Geist Mono, Medium).
         if let Some((k, v)) = t.split_once('=')
             && matches!(
                 k,
                 "font" | "menuFont" | "smallestReadableFont" | "toolBarFont" | "activeFont"
             )
-            && !v.starts_with("Geist,")
+            && !v.starts_with("Geist Mono,")
         {
             let size = v.split(',').nth(1).unwrap_or("10");
             out.push(format!(
-                "{k}=Geist,{size},-1,5,500,0,0,0,0,0,0,0,0,0,0,1,Medium"
+                "{k}=Geist Mono,{size},-1,5,500,0,0,0,0,0,0,0,0,0,0,1,Medium"
             ));
             continue;
         }
@@ -257,7 +257,7 @@ fn hyprlock(s: &Scheme, wallpaper: Option<&str>, old: &str) -> String {
     out += &format!("$entry_border_color = {}\n", hypr(s.accent, 0x88));
     out += &format!("$entry_color = {}\n", hypr(s.ink, 0xff));
     // The shell's typeface, so the lock screen reads as part of it.
-    out += "$font_family = Geist Medium\n$font_family_clock = Geist SemiBold\n";
+    out += "$font_family = Geist Mono Medium\n$font_family_clock = Geist Mono SemiBold\n";
     match wallpaper {
         Some(w) => out += &format!("\n$background_image = {w}\n"),
         None => {

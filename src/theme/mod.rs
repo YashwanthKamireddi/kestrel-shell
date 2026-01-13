@@ -118,7 +118,7 @@ pub mod text {
     pub const DISPLAY: f32 = 32.0;
 }
 
-pub const FONT: Font = Font::with_name("Geist");
+pub const FONT: Font = Font::with_name("Geist Mono");
 
 pub fn font(weight: font::Weight) -> Font {
     Font { weight, ..FONT }
