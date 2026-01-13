@@ -4,6 +4,7 @@ mod app;
 mod apptheme;
 mod config;
 mod ipc;
+mod modules;
 mod motion;
 mod panels;
 mod subs;
@@ -64,9 +65,9 @@ fn env_logger() {
             m.level() <= self.0
         }
         fn log(&self, r: &log::Record) {
-            if self.enabled(r.metadata()) && r.target().starts_with("kestrel") {
-                eprintln!("{} {}: {}", r.level(), r.target(), r.args());
-            } else if r.level() <= log::Level::Warn {
+            // kestrel's own messages at the chosen level; everyone else's warnings and errors.
+            let ours = self.enabled(r.metadata()) && r.target().starts_with("kestrel");
+            if ours || r.level() <= log::Level::Warn {
                 eprintln!("{} {}: {}", r.level(), r.target(), r.args());
             }
         }

@@ -95,6 +95,7 @@ impl Oklch {
 }
 
 /// Relative luminance contrast ratio (WCAG) between two opaque colours.
+#[cfg(test)]
 pub fn contrast(a: Color, b: Color) -> f32 {
     let lum =
         |c: Color| 0.2126 * to_linear(c.r) + 0.7152 * to_linear(c.g) + 0.0722 * to_linear(c.b);

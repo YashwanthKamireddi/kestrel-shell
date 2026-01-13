@@ -64,7 +64,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     Task::none()
 }
 
-fn find<'a>(m: &'a tray::MenuItem, id: i32) -> Option<&'a tray::MenuItem> {
+fn find(m: &tray::MenuItem, id: i32) -> Option<&tray::MenuItem> {
     if m.id == id {
         return Some(m);
     }

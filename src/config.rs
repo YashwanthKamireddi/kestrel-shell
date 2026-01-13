@@ -21,8 +21,61 @@ pub struct Config {
     /// name is then only the label.
     pub weather_latitude: Option<f64>,
     pub weather_longitude: Option<f64>,
-    /// NBA scores: a bar chip while a game is live, today's games in the calendar.
-    pub nba: bool,
+    /// What the bar shows, where, and in which style.
+    pub bar: BarConfig,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BarStyle {
+    /// One continuous bar joined to the screen frame.
+    #[default]
+    Full,
+    /// Separate floating pills, one per section; no frame.
+    Pills,
+}
+
+/// `[bar]`: module ids per section, in order. A module not listed is off.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct BarConfig {
+    pub style: BarStyle,
+    pub left: Vec<String>,
+    pub center: Vec<String>,
+    pub right: Vec<String>,
+}
+
+impl Default for BarConfig {
+    fn default() -> Self {
+        let v = |ids: &[&str]| ids.iter().map(|s| (*s).to_string()).collect();
+        Self {
+            style: BarStyle::Full,
+            left: v(&["workspaces", "app"]),
+            center: v(&["clock"]),
+            right: v(&[
+                "media",
+                "tray",
+                "nba",
+                "weather",
+                "system",
+                "updates",
+                "privacy",
+                "status",
+                "notifications",
+                "power",
+            ]),
+        }
+    }
+}
+
+impl BarConfig {
+    pub fn contains(&self, id: &str) -> bool {
+        self.left
+            .iter()
+            .chain(&self.center)
+            .chain(&self.right)
+            .any(|m| m == id)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -52,7 +105,7 @@ impl Default for Config {
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,
-            nba: true,
+            bar: BarConfig::default(),
         }
     }
 }

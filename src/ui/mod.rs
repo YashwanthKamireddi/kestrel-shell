@@ -115,22 +115,6 @@ pub fn card<'a, M: 'a>(s: Scheme, content: impl Into<Element<'a, M>>) -> Element
         .into()
 }
 
-/// A panel heading with optional trailing controls.
-pub fn heading<'a, M: 'a>(
-    s: Scheme,
-    title: impl text::IntoFragment<'a>,
-    trailing: impl Into<Element<'a, M>>,
-) -> Element<'a, M> {
-    row![
-        label_w(title, theme::text::HEADING, s.ink, theme::SEMIBOLD),
-        Space::new().width(Length::Fill),
-        trailing.into(),
-    ]
-    .align_y(Alignment::Center)
-    .height(size::CONTROL)
-    .into()
-}
-
 /// A 1 px hairline.
 pub fn divider<'a, M: 'a>(s: Scheme) -> Element<'a, M> {
     container(Space::new())
@@ -141,10 +125,6 @@ pub fn divider<'a, M: 'a>(s: Scheme) -> Element<'a, M> {
             ..container::Style::default()
         })
         .into()
-}
-
-pub fn gap<'a, M: 'a>(n: f32) -> Element<'a, M> {
-    Space::new().width(n).height(n).into()
 }
 
 /// A quick-settings tile: icon, title and status. Accent-filled when on. An optional chevron

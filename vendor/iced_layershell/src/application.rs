@@ -634,7 +634,7 @@ where
             ));
             // kestrel patch: skip surfaces whose content cannot have changed.
             if let Some(key_fn) = app.redraw_key_fn.as_deref() {
-                for (id, s) in iced_surfaces.iter_mut() {
+                for (id, s) in &mut iced_surfaces {
                     let key = key_fn(&user_state, *id);
                     let unchanged = key.is_some() && key == s.redraw_key;
                     s.redraw_key = key;

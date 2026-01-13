@@ -164,9 +164,8 @@ pub fn command_line(app: &App) -> String {
     let mut chars = app.exec.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '%' {
-            match chars.next() {
-                Some('%') => out.push('%'),
-                _ => {}
+            if let Some('%') = chars.next() {
+                out.push('%')
             }
         } else {
             out.push(c);

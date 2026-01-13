@@ -140,7 +140,7 @@ fn best_pixmap(v: OwnedValue) -> Option<TrayIcon> {
     let (w, h, data) = best?;
     // ARGB32 in network byte order → RGBA.
     let mut rgba = Vec::with_capacity(data.len());
-    for px in data.chunks_exact(4) {
+    for px in data.as_chunks::<4>().0 {
         rgba.extend_from_slice(&[px[1], px[2], px[3], px[0]]);
     }
     Some(TrayIcon::Rgba(super::notifications::Pixels::new(
