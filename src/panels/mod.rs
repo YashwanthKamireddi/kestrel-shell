@@ -2,6 +2,7 @@
 
 pub mod calendar;
 pub mod control;
+pub mod island;
 pub mod keys;
 pub mod launcher;
 pub mod media;
@@ -26,6 +27,7 @@ pub enum PanelKind {
     Launcher,
     Wallpaper,
     Keys,
+    Island,
 }
 
 impl PanelKind {
@@ -39,6 +41,7 @@ impl PanelKind {
             "launcher" => Self::Launcher,
             "wallpaper" => Self::Wallpaper,
             "keys" | "cheatsheet" => Self::Keys,
+            "island" | "dashboard" => Self::Island,
             _ => return None,
         })
     }
@@ -54,6 +57,7 @@ impl PanelKind {
             Self::Launcher => 560.0,
             Self::Wallpaper => 560.0,
             Self::Keys => 720.0,
+            Self::Island => 400.0,
         }
     }
 }
@@ -89,7 +93,7 @@ pub enum Message {
 /// A panel was just opened: reset its transient state and load what it needs.
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
     match kind {
-        PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
+        PanelKind::Calendar | PanelKind::Island => app.panels.calendar = calendar::State::default(),
         PanelKind::Power => app.panels.power = power::State::default(),
         PanelKind::Control => {
             app.panels.control = control::State::default();
@@ -168,5 +172,6 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
+        PanelKind::Island => island::view(app, s),
     }
 }

@@ -2,6 +2,8 @@
 //! config lists which modules show and in what order; a module not listed is not shown and the
 //! services only it needs are never started.
 
+pub mod island;
+
 use crate::app::{App, Message, Output};
 use crate::config::BarConfig;
 use crate::panels::{Message as PanelMessage, PanelKind, control, media};
@@ -16,6 +18,7 @@ use iced::{Alignment, Color, Element};
 pub const KNOWN: &[&str] = &[
     "workspaces",
     "app",
+    "island",
     "clock",
     "media",
     "tray",
@@ -43,15 +46,17 @@ pub struct Needs {
 
 pub fn needs(bar: &BarConfig) -> Needs {
     let on = |id: &str| bar.contains(id);
+    // The island shows what is live (music, games) and opens the dashboard (weather, system).
+    let island = on("island");
     Needs {
-        media: on("media"),
+        media: on("media") || island,
         tray: on("tray"),
         // The control centre (status) shows Wi-Fi, Bluetooth and VPN.
         network: on("status"),
-        system: on("system"),
+        system: on("system") || island,
         updates: on("updates"),
-        weather: on("weather"),
-        nba: on("nba"),
+        weather: on("weather") || island,
+        nba: on("nba") || island,
     }
 }
 
@@ -67,6 +72,7 @@ pub fn items<'a>(
         "workspaces" => vec![workspaces(app, o, s)],
         "app" => vec![app_name(app, o, s)],
         "clock" => vec![clock(app, o, s, open)],
+        "island" => vec![island::bar(app, o, s, open)],
         "media" => media_chip(app, o, s, open),
         "tray" => tray(app, o, s, open),
         "nba" => nba(app, o, s, open),

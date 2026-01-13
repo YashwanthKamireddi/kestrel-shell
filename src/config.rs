@@ -51,15 +51,11 @@ impl Default for BarConfig {
         Self {
             style: BarStyle::Full,
             left: v(&["workspaces", "app"]),
-            center: v(&["clock"]),
+            center: v(&["island"]),
             right: v(&[
-                "media",
                 "tray",
-                "nba",
-                "weather",
-                "system",
-                "updates",
                 "privacy",
+                "updates",
                 "status",
                 "notifications",
                 "power",

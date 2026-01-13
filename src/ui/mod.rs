@@ -2,6 +2,7 @@
 
 pub mod control;
 pub mod icon;
+pub mod morph;
 pub mod reveal;
 pub mod shape;
 pub mod slider;
