@@ -20,7 +20,12 @@ pub struct Drop {
     /// The panel's right side merges into the screen frame instead of standing free.
     pub flush_right: bool,
     pub flush_left: bool,
+    /// Pill style: a free-standing card below the bar (all corners round), not joined to it.
+    pub floating: bool,
 }
+
+/// Gap between the pills and a floating panel.
+pub const FLOAT_GAP: f32 = 6.0;
 
 /// The bar surface: the bar band, the screen's two top inner corners and any panels.
 #[derive(Clone, Debug)]
@@ -29,6 +34,8 @@ pub struct BarShape {
     pub bar: f32,
     pub frame: f32,
     pub corner: f32,
+    /// Draw the bar band (full style). The pill style draws pills as widgets instead.
+    pub band: bool,
     pub drops: Vec<Drop>,
 }
 
@@ -45,16 +52,18 @@ impl<M> canvas::Program<M> for BarShape {
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
         let w = bounds.width;
-        let path = Path::new(|b| {
-            b.move_to(Point::ORIGIN);
-            b.line_to(Point::new(w, 0.0));
-            b.line_to(Point::new(w, self.bar));
-            b.line_to(Point::new(0.0, self.bar));
-            b.close();
-            top_corner(b, self.frame, self.bar, self.corner, false, w);
-            top_corner(b, self.frame, self.bar, self.corner, true, w);
-        });
-        frame.fill(&path, self.color);
+        if self.band {
+            let path = Path::new(|b| {
+                b.move_to(Point::ORIGIN);
+                b.line_to(Point::new(w, 0.0));
+                b.line_to(Point::new(w, self.bar));
+                b.line_to(Point::new(0.0, self.bar));
+                b.close();
+                top_corner(b, self.frame, self.bar, self.corner, false, w);
+                top_corner(b, self.frame, self.bar, self.corner, true, w);
+            });
+            frame.fill(&path, self.color);
+        }
         // Each panel is its own fill, so only the area it covers is redrawn while it moves.
         for d in &self.drops {
             if d.height < 0.5 {
@@ -72,7 +81,19 @@ impl<M> canvas::Program<M> for BarShape {
                 ),
                 Color::from_rgba8(0, 0, 0, 1.0 / 255.0),
             );
-            frame.fill(&Path::new(|b| drop_path(b, self.bar, d)), self.color);
+            if d.floating {
+                let r = d.radius.min(d.height / 2.0).min(d.width / 2.0);
+                frame.fill(
+                    &Path::rounded_rectangle(
+                        Point::new(d.x, self.bar + FLOAT_GAP),
+                        iced::Size::new(d.width, d.height),
+                        r.into(),
+                    ),
+                    self.color,
+                );
+            } else {
+                frame.fill(&Path::new(|b| drop_path(b, self.bar, d)), self.color);
+            }
         }
         vec![frame.into_geometry()]
     }

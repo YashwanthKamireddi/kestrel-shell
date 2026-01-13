@@ -26,6 +26,7 @@ pub fn slot_count(h: &hyprland::State, min: u32) -> usize {
 pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let s = app.scheme;
     let t = app.frame().thickness;
+    let pills = app.config.bar.style == crate::config::BarStyle::Pills;
     let panel = app.panel.as_ref().filter(|p| p.output == o.id);
     let focused = app.focused_output() == Some(o.id) && panel.is_none();
     let drop = |x: f32, w: f32, h: f32| Drop {
@@ -34,10 +35,18 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         height: h,
         radius: size::PANEL_RADIUS,
         join: size::JOIN,
-        flush_left: x <= t + 0.5,
-        flush_right: x + w >= o.size.width - t - 0.5,
+        flush_left: !pills && x <= t + 0.5,
+        flush_right: !pills && x + w >= o.size.width - t - 0.5,
+        floating: pills,
     };
-    let toast_x = o.size.width - t - TOAST_WIDTH;
+    // Pills float with a margin; the full bar runs to the frame.
+    let edge = if pills { 8.0 } else { t };
+    let top_gap = if pills {
+        crate::ui::shape::FLOAT_GAP
+    } else {
+        0.0
+    };
+    let toast_x = o.size.width - edge - TOAST_WIDTH;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
     let mut drops = Vec::new();
     if let Some(p) = panel {
@@ -57,6 +66,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         bar: size::BAR,
         frame: t,
         corner: app.frame().radius,
+        band: !pills,
         drops,
     })
     .width(Length::Fill)
@@ -65,15 +75,15 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let open = panel.filter(|p| p.open).map(|p| p.kind);
     let bar = container(
         row![
-            container(section(&app.config.bar.left, app, o, s, open)).width(Length::Fill),
-            section(&app.config.bar.center, app, o, s, open),
-            container(section(&app.config.bar.right, app, o, s, open))
+            container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
+            section(&app.config.bar.center, app, o, s, open, pills),
+            container(section(&app.config.bar.right, app, o, s, open, pills))
                 .width(Length::Fill)
                 .align_x(Alignment::End),
         ]
         .align_y(Alignment::Center),
     )
-    .padding([0.0, t + 6.0])
+    .padding([0.0, if pills { 8.0 } else { t + 6.0 }])
     .height(size::BAR)
     .center_y(size::BAR);
 
@@ -101,7 +111,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             pin(ui::reveal(content, width, p.h.value)
                 .offset((1.0 - alpha) * 6.0)
                 .on_measure(move |sz| Message::Measured(kind, sz)))
-            .position(Point::new(x, size::BAR))
+            .position(Point::new(x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
@@ -122,7 +132,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
                 .offset((1.0 - a) * 6.0)
                 .on_measure(Message::MeasuredToasts))
-            .position(Point::new(toast_x, size::BAR))
+            .position(Point::new(toast_x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
@@ -137,7 +147,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
                     .offset((1.0 - a) * 4.0)
                     .on_measure(Message::MeasuredOsd),
             )
-            .position(Point::new(osd_x, size::BAR))
+            .position(Point::new(osd_x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
@@ -198,18 +208,33 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
     .into()
 }
 
-/// One bar section: its modules' items in order.
+/// One bar section: its modules' items in order. In the pill style the section sits on its
+/// own floating pill (none when the section is empty).
 fn section<'a>(
     ids: &'a [String],
     app: &'a App,
     o: &'a Output,
     s: Scheme,
     open: Option<PanelKind>,
+    pills: bool,
 ) -> Element<'a, Message> {
-    row(ids
+    let items: Vec<Element<'a, Message>> = ids
         .iter()
-        .flat_map(|id| crate::modules::items(id, app, o, s, open)))
-    .spacing(4)
-    .align_y(Alignment::Center)
-    .into()
+        .flat_map(|id| crate::modules::items(id, app, o, s, open))
+        .collect();
+    let empty = items.is_empty();
+    let content = row(items).spacing(4).align_y(Alignment::Center);
+    if !pills || empty {
+        return content.into();
+    }
+    container(content)
+        .padding([0, 4])
+        .height(size::BAR - 6.0)
+        .center_y(size::BAR - 6.0)
+        .style(move |_| container::Style {
+            background: Some(s.base.into()),
+            border: iced::Border::default().rounded((size::BAR - 6.0) / 2.0),
+            ..container::Style::default()
+        })
+        .into()
 }
