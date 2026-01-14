@@ -73,6 +73,8 @@ icons! {
     Music => "music",
     Network => "network",
     Pause => "pause",
+    PinOff => "pin-off",
+    Pin => "pin",
     Play => "play",
     PlugZap => "plug-zap",
     Power => "power",
@@ -115,7 +117,6 @@ icons! {
     X => "x",
     Zap => "zap",
 }
-
 impl Icon {
     pub fn handle(self) -> Handle {
         static HANDLES: OnceLock<Vec<(Icon, Handle)>> = OnceLock::new();

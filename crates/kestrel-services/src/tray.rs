@@ -177,6 +177,16 @@ async fn read_item(c: &Connection, key: &str) -> Option<Item> {
     } else {
         get("IconPixmap").await.and_then(best_pixmap)
     };
+    // Electron leaves Title empty and names the app in the tooltip instead.
+    let mut title = s(get("Title").await);
+    if title.is_empty() {
+        type ToolTip = (String, Vec<(i32, i32, Vec<u8>)>, String, String);
+        title = p
+            .get_property::<ToolTip>("ToolTip")
+            .await
+            .map(|t| t.2)
+            .unwrap_or_default();
+    }
     let menu = get("Menu")
         .await
         .and_then(|v| zbus::zvariant::OwnedObjectPath::try_from(v).ok())
@@ -186,7 +196,7 @@ async fn read_item(c: &Connection, key: &str) -> Option<Item> {
         key: key.to_string(),
         bus: bus.to_string(),
         path: path.to_string(),
-        title: s(get("Title").await),
+        title,
         id,
         icon,
         menu,
@@ -263,9 +273,26 @@ pub async fn menu(bus: String, path: String) -> Option<MenuItem> {
     let p = dbus::proxy(&c, &bus, &path, MENU).await.ok()?;
     let _: Result<bool, _> = p.call("AboutToShow", &(0i32,)).await;
     let props: Vec<&str> = Vec::new();
-    let (_rev, layout): (u32, OwnedValue) =
-        p.call("GetLayout", &(0i32, -1i32, props)).await.ok()?;
-    parse_layout(&layout)
+    // The reply is (u revision, (i id, a{sv} props, av children)); read it typed. Reading the
+    // layout as a single variant fails, which left the menu stuck on "Loading…".
+    type Layout = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
+    let reply: (u32, Layout) = match p.call("GetLayout", &(0i32, -1i32, props)).await {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("tray menu {bus}{path}: {e}");
+            return None;
+        }
+    };
+    let (id, props, children) = reply.1;
+    let root = Value::Structure(
+        zbus::zvariant::StructureBuilder::new()
+            .add_field(id)
+            .add_field(props)
+            .add_field(children)
+            .build()
+            .ok()?,
+    );
+    parse_layout(&root)
 }
 
 pub async fn menu_event(bus: String, path: String, id: i32) {

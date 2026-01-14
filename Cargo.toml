@@ -34,6 +34,7 @@ libpulse-binding = { version = "2.30", features = ["pa_v15"] }
 inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+mlua = { version = "0.11", features = ["lua54", "vendored"] }
 
 [patch.crates-io]
 # wl_shm Argb8888 so the CPU renderer keeps alpha on Wayland.

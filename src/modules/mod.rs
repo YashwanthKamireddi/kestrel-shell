@@ -105,7 +105,7 @@ fn power<'a>(o: &'a Output, s: Scheme, open: Option<PanelKind>) -> Element<'a, M
     .into()
 }
 
-fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Message> {
+pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Message> {
     let px = 16.0;
     match &item.icon {
         Some(tray_service::TrayIcon::Name(n)) => match icons::lookup(n) {
@@ -165,11 +165,9 @@ fn tray<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
-    let _ = (&app, &o, &open);
     let id = o.id;
-    let _ = id;
-    let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
+    let tray_open = open == Some(PanelKind::Tray);
+    let colors = |active: bool| {
         (
             if active {
                 s.accent_soft
@@ -180,33 +178,52 @@ fn tray<'a>(
             s.raised_press,
         )
     };
-    let _ = pill(false);
+    let pins = &app.panels.tray.pins;
+    let mut items: Vec<Element<'a, Message>> = Vec::new();
+    let mut hidden = 0;
     for item in app.tray.items.iter().filter(|i| !i.passive) {
-        let active = open == Some(PanelKind::Tray)
-            && app
-                .panels
-                .tray
-                .item
-                .as_ref()
-                .is_some_and(|t| t.key == item.key);
-        let (a, b, c) = pill(active);
-        let it = item.clone();
-        let it2 = item.clone();
-        let menu_first = item.item_is_menu;
+        if !pins.contains(&crate::panels::tray::pin_key(item)) {
+            hidden += 1;
+            continue;
+        }
+        let (a, b, c) = colors(tray_open && crate::panels::tray::showing(app, Some(item)));
+        let menu = item.clone();
         let mut ctl =
             ui::control(iced::widget::container(tray_icon(s, item)).center(size::CONTROL))
                 .radius(size::CONTROL / 2.0)
                 .colors(a, b, c)
-                .on_right_press(Message::TrayMenu(it2, id, None));
-        ctl = if menu_first {
-            let it3 = item.clone();
-            ctl.on_press_at(move |r| Message::TrayMenu(it3.clone(), id, Some(r)))
+                .on_right_press(Message::TrayMenu(Some(menu), id, None));
+        ctl = if item.item_is_menu {
+            let it = item.clone();
+            ctl.on_press_at(move |r| Message::TrayMenu(Some(it.clone()), id, Some(r)))
         } else {
-            ctl.on_press(Message::Panel(PanelMessage::TrayActivate(it)))
+            ctl.on_press(Message::Panel(PanelMessage::TrayActivate(item.clone())))
         };
         items.push(ctl.into());
     }
-
+    if hidden > 0 {
+        let active = tray_open && crate::panels::tray::showing(app, None);
+        let (a, b, c) = colors(active);
+        items.push(
+            ui::control(
+                iced::widget::container(icon(
+                    if active {
+                        Icon::ChevronUp
+                    } else {
+                        Icon::ChevronDown
+                    },
+                    14.0,
+                    if active { s.accent } else { s.ink_dim },
+                ))
+                .center(size::CONTROL),
+            )
+            .width(22)
+            .radius(size::CONTROL / 2.0)
+            .colors(a, b, c)
+            .on_press_at(move |r| Message::TrayMenu(None, id, Some(r)))
+            .into(),
+        );
+    }
     items
 }
 /// A live NBA game (nothing when none is live).
@@ -441,10 +458,10 @@ fn privacy<'a>(
         let who = app.audio.recording.join(", ");
         items.push(
             iced::widget::tooltip(
-                iced::widget::container(icon(Icon::Mic, 14.0, s.base))
+                iced::widget::container(icon(Icon::Mic, 14.0, s.on_accent))
                     .center(22)
                     .style(move |_| iced::widget::container::Style {
-                        background: Some(s.warn.into()),
+                        background: Some(s.accent.into()),
                         border: iced::Border::default().rounded(11),
                         ..iced::widget::container::Style::default()
                     }),

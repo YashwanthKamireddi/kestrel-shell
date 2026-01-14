@@ -106,6 +106,15 @@ impl Default for Config {
     }
 }
 
+/// kestrel's state directory (`$XDG_STATE_HOME/kestrel`): things the shell remembers.
+pub fn state_dir() -> PathBuf {
+    std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
+        .unwrap_or_default()
+        .join("kestrel")
+}
+
 pub fn path() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
