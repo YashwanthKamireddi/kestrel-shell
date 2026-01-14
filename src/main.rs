@@ -4,6 +4,7 @@ mod app;
 mod apptheme;
 mod config;
 mod ipc;
+mod lua;
 mod modules;
 mod motion;
 mod panels;

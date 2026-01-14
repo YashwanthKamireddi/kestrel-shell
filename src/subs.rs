@@ -67,3 +67,57 @@ pub fn weather(
         _ => Subscription::none(),
     }
 }
+
+/// Which file in `~/.config/kestrel/` changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfigFile {
+    Toml,
+    Lua,
+}
+
+/// Changes to config.toml and init.lua, so edits apply without a restart. The directory is
+/// watched (not the files) because editors save by replacing the file.
+pub fn config_files() -> Subscription<ConfigFile> {
+    Subscription::run(config_stream)
+}
+
+fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
+    use futures::{SinkExt, StreamExt};
+    crate::services::stream::channel(4, async |mut out| {
+        let dir = crate::config::path()
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
+        let _ = std::fs::create_dir_all(&dir);
+        let Ok(ino) = inotify::Inotify::init() else {
+            return;
+        };
+        let mask = inotify::WatchMask::CLOSE_WRITE
+            | inotify::WatchMask::MOVED_TO
+            | inotify::WatchMask::CREATE
+            | inotify::WatchMask::DELETE;
+        if let Err(e) = ino.watches().add(&dir, mask) {
+            log::warn!("config: watching {}: {e}", dir.display());
+            return;
+        }
+        let Ok(mut events) = ino.into_event_stream([0u8; 4096]) else {
+            return;
+        };
+        while let Some(Ok(e)) = events.next().await {
+            let file = match e.name.as_deref().and_then(|n| n.to_str()) {
+                Some("config.toml") => ConfigFile::Toml,
+                Some("init.lua") => ConfigFile::Lua,
+                _ => continue,
+            };
+            // An editor's save is several events; let it finish, then report once.
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            if out.send(file).await.is_err() {
+                return;
+            }
+        }
+    })
+}
+
+pub fn lua() -> Subscription<crate::lua::Event> {
+    Subscription::run(crate::lua::stream)
+}

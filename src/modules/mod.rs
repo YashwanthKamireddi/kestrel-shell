@@ -83,14 +83,40 @@ pub fn items<'a>(
         "status" => status(app, o, s, open),
         "notifications" => bell(app, o, s, open),
         "power" => vec![power(o, s, open)],
-        other => {
-            log::warn!(
-                "bar: unknown module {other:?} (known: {})",
-                KNOWN.join(", ")
-            );
-            Vec::new()
+        // Anything else is a Lua widget (shown once it has produced something).
+        other => app
+            .chips
+            .get_key_value(other)
+            .map(|(name, c)| vec![lua_chip(name, c, s)])
+            .unwrap_or_default(),
+    }
+}
+
+/// A Lua widget: an optional icon and a label; clicking runs its `click`.
+fn lua_chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, Message> {
+    let mut r = row![].spacing(6).align_y(Alignment::Center);
+    // A Lucide name from kestrel's set, else an icon theme name or a path.
+    if let Some(name) = c.icon.as_deref() {
+        if let Some(i) = Icon::named(name) {
+            r = r.push(icon(i, size::ICON, s.ink));
+        } else if let Some(p) = icons::lookup(name) {
+            r = r.push(ui::image_file(&p, size::ICON));
         }
     }
+    if !c.text.is_empty() {
+        r = r.push(label(
+            ui::fit(&c.text, text::SMALL, 220.0),
+            text::SMALL,
+            s.ink,
+        ));
+    }
+    ui::control(r)
+        .padding([0, 10])
+        .height(size::CONTROL)
+        .radius(size::CONTROL / 2.0)
+        .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+        .on_press(Message::LuaClick(name.to_string()))
+        .into()
 }
 
 fn power<'a>(o: &'a Output, s: Scheme, open: Option<PanelKind>) -> Element<'a, Message> {

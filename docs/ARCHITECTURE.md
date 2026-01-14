@@ -102,9 +102,15 @@ not enabled, and its subscription is never created.
 
 ## Configuration
 
-`~/.config/kestrel/config.toml` (layout, modules, theme) — every key optional, unknown keys
-ignored. Phase 2 adds `init.lua` for custom widgets and behaviour, with live reload; a Lua error
-shows a notification and never stops the shell.
+`~/.config/kestrel/config.toml` (layout, modules, theme): every key optional, unknown keys
+ignored. `~/.config/kestrel/init.lua` (`src/lua.rs`) sets the bar layout on top of it and defines
+widgets: named bar items whose `update` returns text and an icon, with an optional `click`.
+
+Both files are watched (the directory, since editors replace files) and apply on save:
+config changes rebuild only what they touch (surfaces when the frame changes, the wallpaper when
+its path changes). The script runs on its own thread with its own Lua state; every call has a
+1 s instruction budget, `kestrel.read` commands a 2 s limit, and errors come back as a
+notification (once per failing widget). A panic on that thread ends the Lua layer only.
 
 ## Quality gate
 
