@@ -7,6 +7,7 @@ pub mod keys;
 pub mod launcher;
 pub mod media;
 pub mod notifications;
+pub mod overview;
 pub mod power;
 pub mod tray;
 pub mod wallpaper;
@@ -28,6 +29,7 @@ pub enum PanelKind {
     Wallpaper,
     Keys,
     Island,
+    Overview,
 }
 
 impl PanelKind {
@@ -42,6 +44,7 @@ impl PanelKind {
             "wallpaper" => Self::Wallpaper,
             "keys" | "cheatsheet" => Self::Keys,
             "island" | "dashboard" => Self::Island,
+            "overview" => Self::Overview,
             _ => return None,
         })
     }
@@ -58,6 +61,7 @@ impl PanelKind {
             Self::Wallpaper => 560.0,
             Self::Keys => 720.0,
             Self::Island => 400.0,
+            Self::Overview => overview::WIDTH,
         }
     }
 }
@@ -73,6 +77,7 @@ pub struct State {
     pub launcher: launcher::State,
     pub wallpaper: wallpaper::State,
     pub keys: keys::State,
+    pub overview: overview::State,
 }
 
 #[derive(Clone, Debug)]
@@ -86,6 +91,7 @@ pub enum Message {
     Launcher(launcher::Message),
     Wallpaper(wallpaper::Message),
     Keys(keys::Message),
+    Overview(overview::Message),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
 }
@@ -106,6 +112,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Launcher => return launcher::open(app),
         PanelKind::Wallpaper => return wallpaper::open(app),
         PanelKind::Keys => return keys::open(app),
+        PanelKind::Overview => return overview::open(app),
         PanelKind::Notifications | PanelKind::Tray => {}
     }
     Task::none()
@@ -125,6 +132,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Launcher(m) => launcher::update(app, m),
         Message::Wallpaper(m) => wallpaper::update(app, m),
         Message::Keys(m) => keys::update(app, m),
+        Message::Overview(m) => overview::update(app, m),
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
@@ -173,5 +181,6 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
         PanelKind::Island => island::view(app, s),
+        PanelKind::Overview => overview::view(app, s),
     }
 }
