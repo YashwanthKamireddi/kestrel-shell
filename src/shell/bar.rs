@@ -5,7 +5,7 @@ use crate::panels::{self, PanelKind};
 use crate::services::hyprland;
 use crate::theme::{Scheme, size, text};
 use crate::ui::shape::{BarShape, Drop};
-use crate::ui::{self, label};
+use crate::ui::{self, label, label_w};
 use iced::widget::{Space, canvas, container, mouse_area, pin, row, stack};
 use iced::{Alignment, Element, Length, Point};
 
@@ -163,13 +163,20 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
 fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
     const PAD: f32 = 16.0;
     if let Some(t) = &osd.text {
+        let mut words = iced::widget::column![label_w(
+            ui::fit(t, text::BODY, OSD_WIDTH - 2.0 * PAD - 30.0),
+            text::BODY,
+            s.ink,
+            crate::theme::MEDIUM
+        )]
+        .spacing(2);
+        if let Some(sub) = &osd.sub {
+            words = words.push(label(sub.clone(), text::SMALL, s.ink_dim));
+        }
         return container(
-            row![
-                ui::icon(osd.icon, 18.0, s.ink),
-                label(t.clone(), text::BODY, s.ink),
-            ]
-            .spacing(12)
-            .align_y(Alignment::Center),
+            row![ui::icon(osd.icon, 18.0, s.ink), words]
+                .spacing(12)
+                .align_y(Alignment::Center),
         )
         .center_x(Length::Fill)
         .padding([14.0, PAD])
