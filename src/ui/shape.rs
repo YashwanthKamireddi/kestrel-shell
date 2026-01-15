@@ -53,16 +53,16 @@ impl<M> canvas::Program<M> for BarShape {
         let mut frame = Frame::new(renderer, bounds.size());
         let w = bounds.width;
         if self.band {
-            let path = Path::new(|b| {
-                b.move_to(Point::ORIGIN);
-                b.line_to(Point::new(w, 0.0));
-                b.line_to(Point::new(w, self.bar));
-                b.line_to(Point::new(0.0, self.bar));
-                b.close();
-                top_corner(b, self.frame, self.bar, self.corner, false, w);
-                top_corner(b, self.frame, self.bar, self.corner, true, w);
-            });
-            frame.fill(&path, self.color);
+            frame.fill_rectangle(Point::ORIGIN, iced::Size::new(w, self.bar), self.color);
+            // Separate fills: the mirrored right corner winds the other way, so in one path
+            // its half-pixel overlap with the band cancels out (non-zero rule) and leaves a
+            // see-through line under the bar.
+            for right in [false, true] {
+                frame.fill(
+                    &Path::new(|b| top_corner(b, self.frame, self.bar, self.corner, right, w)),
+                    self.color,
+                );
+            }
         }
         // Each panel is its own fill, so only the area it covers is redrawn while it moves.
         for d in &self.drops {
@@ -210,14 +210,12 @@ impl<M> canvas::Program<M> for FrameShape {
                 frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.color);
             }
             Edge::Bottom => {
-                let path = Path::new(|b| {
-                    b.move_to(Point::new(0.0, h - t));
-                    b.line_to(Point::new(w, h - t));
-                    b.line_to(Point::new(w, h));
-                    b.line_to(Point::new(0.0, h));
-                    b.close();
-                    if r > 0.0 {
-                        for right in [false, true] {
+                frame.fill_rectangle(Point::new(0.0, h - t), iced::Size::new(w, t), self.color);
+                // One fill per corner: mirrored corners wind the other way and would cancel
+                // their overlap with the band (see `BarShape`).
+                if r > 0.0 {
+                    for right in [false, true] {
+                        let path = Path::new(|b| {
                             let fx = |x: f32| if right { w - x } else { x };
                             let base = h - t;
                             b.move_to(Point::new(fx(t - 0.5), base + 0.5));
@@ -230,10 +228,10 @@ impl<M> canvas::Program<M> for FrameShape {
                             );
                             b.line_to(Point::new(fx(t + r), base + 0.5));
                             b.close();
-                        }
+                        });
+                        frame.fill(&path, self.color);
                     }
-                });
-                frame.fill(&path, self.color);
+                }
             }
         }
         vec![frame.into_geometry()]

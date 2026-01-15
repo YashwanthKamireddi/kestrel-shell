@@ -62,10 +62,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Morph<'_, M> {
         renderer: &iced::Renderer,
         _limits: &layout::Limits,
     ) -> layout::Node {
-        let limits = layout::Limits::new(
-            Size::new(0.0, self.height),
-            Size::new(f32::INFINITY, self.height),
-        );
+        // Natural height: a row forced to the box height centres its children only within
+        // their own tallest one, which pins them to the top. Centre here instead.
+        let limits = layout::Limits::new(Size::ZERO, Size::new(f32::INFINITY, f32::INFINITY));
         let child = self
             .content
             .as_widget_mut()
