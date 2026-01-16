@@ -1,7 +1,9 @@
 //! Panels: what hangs from the bar. Each panel is a view built only from the component kit.
 
 pub mod calendar;
+pub mod clipboard;
 pub mod control;
+pub mod emoji;
 pub mod island;
 pub mod keys;
 pub mod launcher;
@@ -30,6 +32,8 @@ pub enum PanelKind {
     Keys,
     Island,
     Overview,
+    Clipboard,
+    Emoji,
 }
 
 impl PanelKind {
@@ -45,6 +49,8 @@ impl PanelKind {
             "keys" | "cheatsheet" => Self::Keys,
             "island" | "dashboard" => Self::Island,
             "overview" => Self::Overview,
+            "clipboard" => Self::Clipboard,
+            "emoji" => Self::Emoji,
             _ => return None,
         })
     }
@@ -62,6 +68,8 @@ impl PanelKind {
             Self::Keys => 720.0,
             Self::Island => 400.0,
             Self::Overview => overview::WIDTH,
+            Self::Clipboard => clipboard::WIDTH,
+            Self::Emoji => emoji::WIDTH,
         }
     }
 }
@@ -78,6 +86,8 @@ pub struct State {
     pub wallpaper: wallpaper::State,
     pub keys: keys::State,
     pub overview: overview::State,
+    pub clipboard: clipboard::State,
+    pub emoji: emoji::State,
 }
 
 #[derive(Clone, Debug)]
@@ -92,8 +102,28 @@ pub enum Message {
     Wallpaper(wallpaper::Message),
     Keys(keys::Message),
     Overview(overview::Message),
+    Clipboard(clipboard::Message),
+    Emoji(emoji::Message),
+    /// A navigation key while a panel is open (Esc is the shell's).
+    Key(Key),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
+}
+
+/// Navigation keys every panel may use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Key {
+    Up,
+    Down,
+    Left,
+    Right,
+    Tab,
+    BackTab,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Delete,
 }
 
 /// A panel was just opened: reset its transient state and load what it needs.
@@ -113,6 +143,8 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Wallpaper => return wallpaper::open(app),
         PanelKind::Keys => return keys::open(app),
         PanelKind::Overview => return overview::open(app),
+        PanelKind::Clipboard => return clipboard::open(app),
+        PanelKind::Emoji => return emoji::open(app),
         PanelKind::Notifications | PanelKind::Tray => {}
     }
     Task::none()
@@ -133,6 +165,15 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Wallpaper(m) => wallpaper::update(app, m),
         Message::Keys(m) => keys::update(app, m),
         Message::Overview(m) => overview::update(app, m),
+        Message::Clipboard(m) => clipboard::update(app, m),
+        Message::Emoji(m) => emoji::update(app, m),
+        Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
+            Some(PanelKind::Launcher) => launcher::key(app, k),
+            Some(PanelKind::Clipboard) => clipboard::key(app, k),
+            Some(PanelKind::Emoji) => emoji::key(app, k),
+            Some(PanelKind::Overview) => overview::key(app, k),
+            _ => Task::none(),
+        },
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
@@ -149,21 +190,33 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 .map(|_| Message::Media(media::Message::Poll)),
         );
     }
-    if open == Some(PanelKind::Launcher) {
-        subs.push(iced::keyboard::listen().filter_map(|e| match e {
-            iced::keyboard::Event::KeyPressed {
+    if open.is_some() {
+        // Seen even when a text field has the keyboard (it would swallow Delete and Tab).
+        subs.push(iced::event::listen_with(|e, _status, _id| {
+            use iced::keyboard::key::Named as N;
+            let iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(k),
+                modifiers,
                 ..
-            } => match k {
-                iced::keyboard::key::Named::ArrowDown => {
-                    Some(Message::Launcher(launcher::Message::Move(1)))
-                }
-                iced::keyboard::key::Named::ArrowUp => {
-                    Some(Message::Launcher(launcher::Message::Move(-1)))
-                }
-                _ => None,
-            },
-            _ => None,
+            }) = e
+            else {
+                return None;
+            };
+            let key = match k {
+                N::ArrowUp => Key::Up,
+                N::ArrowDown => Key::Down,
+                N::ArrowLeft => Key::Left,
+                N::ArrowRight => Key::Right,
+                N::Tab if modifiers.shift() => Key::BackTab,
+                N::Tab => Key::Tab,
+                N::PageUp => Key::PageUp,
+                N::PageDown => Key::PageDown,
+                N::Home => Key::Home,
+                N::End => Key::End,
+                N::Delete => Key::Delete,
+                _ => return None,
+            };
+            Some(Message::Key(key))
         }));
     }
     Subscription::batch(subs)
@@ -182,5 +235,7 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Keys => keys::view(app, s),
         PanelKind::Island => island::view(app, s),
         PanelKind::Overview => overview::view(app, s),
+        PanelKind::Clipboard => clipboard::view(app, s),
+        PanelKind::Emoji => emoji::view(app, s),
     }
 }

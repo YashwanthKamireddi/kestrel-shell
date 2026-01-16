@@ -1,20 +1,26 @@
-//! Overview: every workspace and its windows at a glance. Type to filter windows; Enter goes to
-//! the first match; click a window to focus it, or a workspace to switch to it.
+//! Overview (Super+Tab): every workspace as a small picture of its screen, each window drawn
+//! where it really is with its app's icon. Type to find a window (the rest dim); Tab or the
+//! arrows move between windows; Enter goes to the selected one; a click focuses a window, or
+//! a workspace when it lands on the background.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{apps, hyprland, icons};
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
-use iced::widget::{Space, column, container, row, text_input};
+use iced::widget::{Space, column, container, pin, row, stack, text_input};
 use iced::{Alignment, Color, Element, Length, Task};
 
-const COLUMNS: usize = 4;
-pub const WIDTH: f32 = 1000.0;
+const COLUMNS: usize = 3;
+const GAP: f32 = 16.0;
+pub const WIDTH: f32 = 1040.0;
+const PAD: f32 = 16.0;
 
 #[derive(Default)]
 pub struct State {
     query: String,
+    /// Address of the selected window.
+    selected: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -31,8 +37,23 @@ fn msg(m: Message) -> AppMessage {
 }
 
 pub fn open(app: &mut App) -> Task<AppMessage> {
-    app.panels.overview.query.clear();
-    Task::Iced(iced::widget::focus(INPUT_ID.clone()))
+    let st = &mut app.panels.overview;
+    st.query.clear();
+    // Start on the window you were in.
+    st.selected = app
+        .hypr
+        .windows
+        .iter()
+        .min_by_key(|w| w.focus)
+        .map(|w| w.address.clone());
+    Task::batch([
+        Task::Iced(iced::widget::focus(INPUT_ID.clone())),
+        // Positions change without an event (resizing); read them fresh.
+        Task::perform(hyprland::snapshot(), |s| match s {
+            Some(s) => AppMessage::Hypr(s),
+            None => AppMessage::Batch(Vec::new()),
+        }),
+    ])
 }
 
 fn matches(w: &hyprland::Window, q: &str) -> bool {
@@ -42,39 +63,127 @@ fn matches(w: &hyprland::Window, q: &str) -> bool {
         || apps::name_for_class(&w.class).to_lowercase().contains(q)
 }
 
+fn workspace_ids(app: &App) -> Vec<i32> {
+    let count = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces) as i32;
+    (1..=count).collect()
+}
+
+/// Windows of a workspace in reading order: tiled top-left first, floating ones last.
+fn windows_on(app: &App, id: i32) -> Vec<&hyprland::Window> {
+    let mut v: Vec<&hyprland::Window> = app
+        .hypr
+        .windows
+        .iter()
+        .filter(|w| w.workspace == id)
+        .collect();
+    v.sort_by(|a, b| {
+        (a.floating, a.y as i32 / 40, a.x as i32).cmp(&(b.floating, b.y as i32 / 40, b.x as i32))
+    });
+    v
+}
+
+/// Every matching window in on-screen order, with its card index.
+fn order(app: &App) -> Vec<(usize, &hyprland::Window)> {
+    let q = app.panels.overview.query.trim().to_lowercase();
+    workspace_ids(app)
+        .into_iter()
+        .enumerate()
+        .flat_map(|(card, id)| windows_on(app, id).into_iter().map(move |w| (card, w)))
+        .filter(|(_, w)| matches(w, &q))
+        .collect()
+}
+
+fn focus(address: &str) -> Task<AppMessage> {
+    Task::batch([
+        Task::done(AppMessage::Dispatch(hyprland::focus_window(address))),
+        Task::done(AppMessage::Close),
+    ])
+}
+
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
-        Message::Query(q) => app.panels.overview.query = q,
+        Message::Query(q) => {
+            app.panels.overview.query = q;
+            // Keep the selection on a match.
+            let list = order(app);
+            let st = &app.panels.overview;
+            let still = st
+                .selected
+                .as_ref()
+                .is_some_and(|a| list.iter().any(|(_, w)| &w.address == a));
+            if !still {
+                let first = list.first().map(|(_, w)| w.address.clone());
+                app.panels.overview.selected = first;
+            }
+        }
         Message::Submit => {
-            let q = app.panels.overview.query.trim().to_lowercase();
-            if let Some(w) = app
-                .hypr
-                .windows
-                .iter()
-                .filter(|w| matches(w, &q))
-                .min_by_key(|w| w.focus)
-            {
-                let lua = hyprland::focus_window(&w.address);
-                return Task::batch([
-                    Task::done(AppMessage::Dispatch(lua)),
-                    Task::done(AppMessage::Close),
-                ]);
+            let list = order(app);
+            let st = &app.panels.overview;
+            let target = st
+                .selected
+                .as_ref()
+                .filter(|a| list.iter().any(|(_, w)| &w.address == *a))
+                .cloned()
+                .or_else(|| list.first().map(|(_, w)| w.address.clone()));
+            if let Some(a) = target {
+                return focus(&a);
             }
         }
     }
     Task::none()
 }
 
-fn app_icon<'a>(class: &str, size: f32, s: Scheme) -> Element<'a, AppMessage> {
+pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+    use super::Key;
+    let list = order(app);
+    if list.is_empty() {
+        return Task::none();
+    }
+    let cur = app
+        .panels
+        .overview
+        .selected
+        .as_ref()
+        .and_then(|a| list.iter().position(|(_, w)| &w.address == a))
+        .unwrap_or(0);
+    let n = list.len();
+    let next = match k {
+        Key::Right | Key::Tab => (cur + 1) % n,
+        Key::Left | Key::BackTab => (cur + n - 1) % n,
+        Key::Down | Key::Up => {
+            // The first window of the nearest card in that direction.
+            let card = list[cur].0 as i64;
+            let step = if k == Key::Down {
+                COLUMNS as i64
+            } else {
+                -(COLUMNS as i64)
+            };
+            let mut target = card + step;
+            let last = list.last().map_or(0, |(c, _)| *c) as i64;
+            let mut found = None;
+            while (0..=last).contains(&target) && found.is_none() {
+                found = list.iter().position(|(c, _)| *c as i64 == target);
+                target += step.signum();
+            }
+            found.unwrap_or(cur)
+        }
+        Key::Home => 0,
+        Key::End => n - 1,
+        _ => return Task::none(),
+    };
+    app.panels.overview.selected = Some(list[next].1.address.clone());
+    Task::none()
+}
+
+fn app_icon<'a>(class: &str, px: f32, s: Scheme) -> Element<'a, AppMessage> {
     match icons::lookup(&apps::icon_for_class(class)) {
-        Some(p) => ui::image_file(&p, size),
-        None => icon(Icon::AppWindow, size * 0.8, s.ink_dim).into(),
+        Some(p) => ui::image_file(&p, px),
+        None => icon(Icon::AppWindow, px * 0.8, s.ink_dim).into(),
     }
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let st = &app.panels.overview;
-    let q = st.query.trim().to_lowercase();
     let input = text_input("Find a window", &st.query)
         .id(INPUT_ID.clone())
         .on_input(|q| msg(Message::Query(q)))
@@ -91,9 +200,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             selection: s.accent_soft,
         });
     let field = container(
-        row![icon(Icon::Search, 18.0, s.ink_dim), input]
-            .spacing(4)
-            .align_y(Alignment::Center),
+        row![
+            icon(Icon::Search, 18.0, s.ink_dim),
+            input,
+            label("Tab  ↑↓←→  Enter", text::CAPTION, s.ink_faint),
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center),
     )
     .padding([0, 12])
     .height(44)
@@ -104,16 +217,17 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ..container::Style::default()
     });
 
-    let count = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces) as i32;
+    let card_w = (WIDTH - 2.0 * PAD - (COLUMNS as f32 - 1.0) * GAP) / COLUMNS as f32;
     let active = app.hypr.active_on(&app.hypr.focused_monitor);
-    let card_w = (WIDTH - 24.0 - (COLUMNS as f32 - 1.0) * 12.0) / COLUMNS as f32;
-    let cards: Vec<Element<'_, AppMessage>> = (1..=count)
-        .map(|id| workspace_card(app, s, id, active == Some(id), &q, card_w))
+    let q = st.query.trim().to_lowercase();
+    let cards: Vec<Element<'_, AppMessage>> = workspace_ids(app)
+        .into_iter()
+        .map(|id| card(app, s, id, active == Some(id), &q, card_w))
         .collect();
-    let mut grid = column![].spacing(12);
+    let mut grid = column![].spacing(GAP);
     let mut it = cards.into_iter().peekable();
     while it.peek().is_some() {
-        let mut r = row![].spacing(12);
+        let mut r = row![].spacing(GAP);
         for _ in 0..COLUMNS {
             r = r.push(
                 it.next()
@@ -122,12 +236,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         grid = grid.push(r);
     }
-    container(column![field, grid].spacing(12))
-        .padding(12)
+    container(column![field, grid].spacing(PAD))
+        .padding(PAD)
         .into()
 }
 
-fn workspace_card<'a>(
+fn card<'a>(
     app: &'a App,
     s: Scheme,
     id: i32,
@@ -135,101 +249,130 @@ fn workspace_card<'a>(
     q: &str,
     width: f32,
 ) -> Element<'a, AppMessage> {
-    let windows: Vec<&hyprland::Window> = app
-        .hypr
-        .windows
-        .iter()
-        .filter(|w| w.workspace == id && matches(w, q))
-        .collect();
-    let header = control(
-        row![
-            label_w(
-                id.to_string(),
-                text::BODY,
-                if current { s.accent } else { s.ink },
-                theme::SEMIBOLD
-            ),
-            Space::new().width(Length::Fill),
-            label(
-                match windows.len() {
-                    0 => "Empty".to_string(),
-                    1 => "1 window".to_string(),
-                    n => format!("{n} windows"),
-                },
-                text::CAPTION,
-                s.ink_faint
-            ),
-        ]
-        .align_y(Alignment::Center),
-    )
-    .padding([0, 10])
-    .height(30)
-    .width(Length::Fill)
-    .radius(size::ROW_RADIUS)
-    .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
-    .no_press_scale()
-    .on_press(AppMessage::Batch(vec![
-        AppMessage::Dispatch(hyprland::focus_workspace(id)),
-        AppMessage::Close,
-    ]));
-    let mut col = column![header].spacing(2);
-    for w in windows.iter().take(6) {
-        let name = apps::name_for_class(&w.class);
-        let title = if w.title.is_empty() {
-            name.clone()
-        } else {
-            w.title.clone()
-        };
-        col = col.push(
-            control(
-                row![
-                    app_icon(&w.class, 20.0, s),
-                    column![
-                        label(
-                            ui::fit(&title, text::SMALL, width - 70.0),
-                            text::SMALL,
-                            s.ink
-                        ),
-                        label(
-                            ui::fit(&name, text::CAPTION, width - 70.0),
-                            text::CAPTION,
-                            s.ink_faint
-                        ),
-                    ]
-                    .spacing(1),
-                ]
-                .spacing(10)
-                .align_y(Alignment::Center),
-            )
-            .padding([0, 10])
-            .height(44)
-            .width(Length::Fill)
-            .radius(size::ROW_RADIUS)
-            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+    let windows = windows_on(app, id);
+    let selected = app.panels.overview.selected.as_deref();
+    // The picture has the screen's shape.
+    let (sw, sh) = windows.first().map_or((1920.0, 1080.0), |w| w.screen);
+    let height = width * sh / sw.max(1.0);
+    let k = width / sw.max(1.0);
+
+    let summary = match windows.len() {
+        0 => "Empty".to_string(),
+        1 => apps::name_for_class(&windows[0].class),
+        n => format!("{n} windows"),
+    };
+    let header = row![
+        label_w(
+            id.to_string(),
+            text::BODY,
+            if current { s.accent } else { s.ink },
+            theme::SEMIBOLD
+        ),
+        Space::new().width(Length::Fill),
+        label(summary, text::CAPTION, s.ink_faint),
+    ]
+    .align_y(Alignment::Center)
+    .padding([0, 4]);
+
+    let backdrop: Element<'_, AppMessage> = match &app.wallpaper {
+        Some(w) => ui::cover(w.thumb.clone(), width, height, 10.0),
+        None => container(Space::new())
+            .width(width)
+            .height(height)
+            .style(move |_| container::Style {
+                background: Some(s.raised.into()),
+                border: iced::Border::default().rounded(10),
+                ..container::Style::default()
+            })
+            .into(),
+    };
+    // Clicking the background switches to the workspace.
+    let mut layers = stack![
+        control(backdrop)
+            .width(width)
+            .height(height)
+            .radius(10.0)
             .no_press_scale()
             .on_press(AppMessage::Batch(vec![
-                AppMessage::Dispatch(hyprland::focus_window(&w.address)),
+                AppMessage::Dispatch(hyprland::focus_workspace(id)),
                 AppMessage::Close,
-            ])),
+            ]))
+    ]
+    .width(width)
+    .height(height);
+    for w in &windows {
+        let (x, y) = ((w.x * k).max(0.0), (w.y * k).max(0.0));
+        let (bw, bh) = (
+            (w.w * k).clamp(16.0, width - x),
+            (w.h * k).clamp(12.0, height - y),
         );
-    }
-    if windows.len() > 6 {
-        col = col.push(
-            container(label(
-                format!("+{} more", windows.len() - 6),
+        let hit = matches(w, q);
+        let sel = selected == Some(w.address.as_str());
+        let px = (bw.min(bh) * 0.42).clamp(14.0, 36.0);
+        let mut inner = column![app_icon(&w.class, px, s)]
+            .spacing(4)
+            .align_x(Alignment::Center);
+        if bh >= 64.0 && bw >= 96.0 {
+            let title = if w.title.is_empty() {
+                apps::name_for_class(&w.class)
+            } else {
+                w.title.clone()
+            };
+            inner = inner.push(label(
+                ui::fit(&title, text::CAPTION, bw - 16.0),
                 text::CAPTION,
-                s.ink_faint,
-            ))
-            .padding([4, 10]),
-        );
+                s.ink_dim,
+            ));
+        }
+        let fill = if sel { s.raised_hi } else { s.raised };
+        let alpha = if hit { 0.94 } else { 0.35 };
+        let tile =
+            control(
+                container(inner)
+                    .center_x(bw)
+                    .center_y(bh)
+                    .style(move |_| container::Style {
+                        background: Some(fill.scale_alpha(alpha).into()),
+                        border: iced::Border {
+                            color: if sel {
+                                s.accent
+                            } else {
+                                s.ink.scale_alpha(0.08)
+                            },
+                            width: if sel { 2.0 } else { 1.0 },
+                            radius: 8.0.into(),
+                        },
+                        ..container::Style::default()
+                    }),
+            )
+            .width(bw)
+            .height(bh)
+            .radius(8.0)
+            .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.06), s.raised_press)
+            .no_press_scale()
+            .on_press(focus_msg(&w.address));
+        layers = layers.push(pin(tile).x(x).y(y));
     }
-    container(col.height(Length::Fixed(30.0 + 2.0 + 6.0 * 46.0)))
-        .padding(6)
-        .width(width)
-        .style(move |_| container::Style {
-            background: Some(if current { s.raised_hi } else { s.raised }.into()),
-            border: iced::Border::default().rounded(size::CARD_RADIUS),
-            ..container::Style::default()
-        })
-        .into()
+    // The current workspace's outline sits on top, where the picture can't cover it.
+    if current {
+        layers = layers.push(container(Space::new()).width(width).height(height).style(
+            move |_| container::Style {
+                border: iced::Border {
+                    color: s.accent,
+                    width: 2.0,
+                    radius: 10.0.into(),
+                },
+                ..container::Style::default()
+            },
+        ));
+    }
+    let frame = layers;
+    column![header, frame].spacing(8).width(width).into()
+}
+
+fn focus_msg(address: &str) -> AppMessage {
+    AppMessage::Batch(vec![
+        AppMessage::Dispatch(hyprland::focus_window(address)),
+        AppMessage::Close,
+    ])
 }

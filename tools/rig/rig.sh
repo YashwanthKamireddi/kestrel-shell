@@ -46,7 +46,7 @@ run)
     kill_kestrel; sleep 0.3
     env -i HOME="$WORK/home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
         WAYLAND_DISPLAY="$(display)" HYPRLAND_INSTANCE_SIGNATURE="$(sig)" LANG=en_US.UTF-8 \
-        RUST_LOG="${RUST_LOG:-kestrel=info}" KESTREL_SOCKET="$WORK/kestrel.sock" \
+        RUST_LOG="${RUST_LOG:-kestrel=info}" KESTREL_SOCKET="$WORK/kestrel.sock" ${KESTREL_TRACE:+KESTREL_TRACE=1} \
         setsid dbus-run-session -- "$BIN" >"$WORK/kestrel.log" 2>&1 </dev/null &
     sleep "${WAIT:-2}"
     tail -5 "$WORK/kestrel.log"
