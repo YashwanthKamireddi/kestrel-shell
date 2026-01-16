@@ -118,7 +118,9 @@ pub mod text {
     pub const DISPLAY: f32 = 32.0;
 }
 
-pub const FONT: Font = Font::with_name("Geist Mono");
+/// The shell's typeface (also given to Qt apps and the lock screen).
+pub const FONT_NAME: &str = "Rubik";
+pub const FONT: Font = Font::with_name(FONT_NAME);
 
 pub fn font(weight: font::Weight) -> Font {
     Font { weight, ..FONT }
