@@ -130,11 +130,14 @@ pub fn divider<'a, M: 'a>(s: Scheme) -> Element<'a, M> {
 
 /// A quick-settings tile: icon, title and status. Accent-filled when on. An optional chevron
 /// opens the tile's details.
+/// Width of a quick-settings tile (two per row in the 368 px control centre).
+pub const TILE_W: f32 = 168.0;
+
 pub fn tile<'a, M: Clone + 'static>(
     s: Scheme,
     i: Icon,
-    title: impl text::IntoFragment<'a>,
-    status: impl text::IntoFragment<'a>,
+    title: impl Into<String>,
+    status: impl Into<String>,
     on: bool,
     on_press: M,
     details: Option<M>,
@@ -144,11 +147,24 @@ pub fn tile<'a, M: Clone + 'static>(
     } else {
         (s.raised, s.raised_hi, s.ink, s.ink_dim)
     };
+    // What is left beside the icon (and the chevron): long names (a device called
+    // "Yash's AirPods 4") are shortened instead of running under the chevron.
+    let text_w =
+        TILE_W - 14.0 - 8.0 - size::ICON_TILE - 12.0 - if details.is_some() { 30.0 } else { 0.0 };
     let mut content = row![
         icon(i, size::ICON_TILE, fg),
         iced::widget::column![
-            label_w(title, theme::text::BODY, fg, theme::MEDIUM),
-            label(status, theme::text::CAPTION, dim),
+            label_w(
+                fit(&title.into(), theme::text::BODY, text_w),
+                theme::text::BODY,
+                fg,
+                theme::MEDIUM
+            ),
+            label(
+                fit(&status.into(), theme::text::CAPTION, text_w),
+                theme::text::CAPTION,
+                dim
+            ),
         ]
         .spacing(1)
         .width(Length::Fill),

@@ -11,6 +11,8 @@ use iced::{Alignment, Element, Length, Point};
 
 /// Workspace slot size and spacing in the bar.
 pub const SLOT: f32 = 28.0;
+/// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
+pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
 pub const SLOT_GAP: f32 = 2.0;
 
 /// Left edge and width of the highlight behind the active workspace.

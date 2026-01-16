@@ -16,10 +16,11 @@ pub struct Spring {
 }
 
 impl Spring {
-    /// Panel opening: ~340 ms with a slight settle.
-    pub const OPEN: (f32, f32) = (17.0, 0.82);
-    /// Closing and quick moves: no overshoot, ~200 ms.
-    pub const CLOSE: (f32, f32) = (26.0, 1.0);
+    /// Panel opening: settles in ~280 ms with 0.6 % overshoot (Material 3 expressive stiffness,
+    /// damped further; docs/muse-ux report, 2026-11-12). Visible growth, no bounce.
+    pub const OPEN: (f32, f32) = (19.5, 0.85);
+    /// Closing and quick moves: ~160 ms, no visible overshoot. Exits run faster than entries.
+    pub const CLOSE: (f32, f32) = (30.0, 0.95);
     /// Small UI elements (workspace pill): snappy, barely any overshoot.
     pub const SNAP: (f32, f32) = (24.0, 0.86);
 
@@ -111,13 +112,18 @@ mod tests {
         s.to(1.0, Spring::OPEN);
         let mut peak: f32 = 0.0;
         let mut t = 0.0;
+        // When it last was more than 1 % away: what the eye reads as "arrived".
+        let mut arrived = 0.0;
         while !s.settled() && t < 2.0 {
             s.step(1.0 / 60.0);
             peak = peak.max(s.value);
             t += 1.0 / 60.0;
+            if (s.value - 1.0).abs() > 0.01 {
+                arrived = t;
+            }
         }
-        assert!(t < 0.6, "took {t}s");
-        assert!(peak > 1.0 && peak < 1.05, "peak {peak}");
+        assert!(arrived < 0.32, "arrived after {arrived}s");
+        assert!(peak > 1.0 && peak < 1.02, "peak {peak}");
     }
 
     #[test]
@@ -126,7 +132,7 @@ mod tests {
         s.to(0.0, Spring::CLOSE);
         for _ in 0..60 {
             s.step(1.0 / 60.0);
-            assert!(s.value >= -1e-3);
+            assert!(s.value >= -2e-3, "overshoot {}", s.value);
         }
         assert!(s.settled());
     }
