@@ -168,3 +168,22 @@ pub use iced_highlighter as highlighter;
 pub type Element<'a, Message> = iced_core::Element<'a, Message, Theme, Renderer>;
 
 pub type Result = std::result::Result<(), Error>;
+
+/// Temporary surface tracing (KESTREL_TRACE=1) for the flicker hunt.
+#[doc(hidden)]
+#[must_use]
+pub fn trace_on() -> bool {
+    static ON: std::sync::LazyLock<bool> =
+        std::sync::LazyLock::new(|| std::env::var_os("KESTREL_TRACE").is_some());
+    *ON
+}
+#[doc(hidden)]
+#[macro_export]
+macro_rules! ktrace {
+    ($($a:tt)*) => {
+        if $crate::trace_on() {
+            let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+            eprintln!("TRACE {}.{:03} {}", t.as_secs(), t.subsec_millis(), format!($($a)*));
+        }
+    };
+}

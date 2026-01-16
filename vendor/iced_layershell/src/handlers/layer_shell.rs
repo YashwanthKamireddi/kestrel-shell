@@ -29,6 +29,7 @@ impl LayerShellHandler for WaylandState {
         let wl_surface = layer.wl_surface();
         if let Some(data) = self.surfaces.get_mut(wl_surface) {
             let new_size = configure.new_size;
+            crate::ktrace!("configure {:?} {:?}", data.id, new_size);
             // (0, 0) means compositor hasn't set a size — keep current or use default
             if new_size.0 > 0 && new_size.1 > 0 {
                 data.size = new_size;

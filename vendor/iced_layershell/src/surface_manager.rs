@@ -24,8 +24,11 @@ pub(crate) struct IcedSurface {
     pub viewport: Viewport,
     pub cache: Option<iced_runtime::user_interface::Cache>,
     pub needs_redraw: bool,
-    /// Redraw key at the last rebuild (see `Application::redraw_key`).
+    /// kestrel patch: redraw key of the content last presented (see
+    /// `Application::redraw_key`).
     pub redraw_key: Option<u64>,
+    /// The compositor needs a new frame (configure, scale, resize) whatever the key says.
+    pub forced: bool,
 }
 
 /// Surfaces requested during an update, created together once it's done by
@@ -118,6 +121,7 @@ pub(crate) fn apply_layer_shell_command(
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
             {
+                crate::ktrace!("keyboard {id:?}");
                 data.layer_surface.set_keyboard_interactivity(ki.to_sctk());
                 data.layer_surface.wl_surface().commit();
             }
@@ -126,6 +130,7 @@ pub(crate) fn apply_layer_shell_command(
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get_mut(wl)
             {
+                crate::ktrace!("set_size {id:?} {w}x{h}");
                 data.layer_surface.set_size(w, h);
                 data.layer_surface.wl_surface().commit();
             }
@@ -142,6 +147,7 @@ pub(crate) fn apply_layer_shell_command(
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
             {
+                crate::ktrace!("input_region {id:?} {:?}", rects.as_ref().map(Vec::len));
                 let wl_surf = data.layer_surface.wl_surface();
                 match rects {
                     None => {
@@ -449,6 +455,7 @@ pub(crate) fn sync_iced_surfaces(
                     cache: None,
                     needs_redraw: true,
                     redraw_key: None,
+                    forced: true,
                 },
             );
         }

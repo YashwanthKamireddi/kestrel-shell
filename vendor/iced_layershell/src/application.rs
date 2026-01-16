@@ -340,6 +340,7 @@ where
             needs_redraw: true,
             cache: None,
             redraw_key: None,
+            forced: true,
         },
     );
 
@@ -413,6 +414,7 @@ where
         for id in wl_state.surfaces_need_redraw.drain() {
             if let Some(iced_s) = iced_surfaces.get_mut(&id) {
                 iced_s.needs_redraw = true;
+                iced_s.forced = true;
             }
         }
 
@@ -472,6 +474,12 @@ where
                 && (iced.viewport.physical_size() != new_vp.physical_size()
                     || (iced.viewport.scale_factor() - new_vp.scale_factor()).abs() > f32::EPSILON)
             {
+                crate::ktrace!(
+                    "viewport {:?} {}x{}",
+                    data.id,
+                    new_vp.physical_width(),
+                    new_vp.physical_height()
+                );
                 compositor.configure_surface(
                     &mut iced.surface,
                     new_vp.physical_width(),
@@ -479,6 +487,7 @@ where
                 );
                 iced.viewport = new_vp;
                 iced.needs_redraw = true;
+                iced.forced = true;
             }
         }
 
@@ -585,6 +594,7 @@ where
                     }
                 }
                 iced_runtime::user_interface::State::Outdated => {
+                    crate::ktrace!("outdated {surface_id:?}");
                     if let Some(s) = iced_surfaces.get_mut(surface_id) {
                         s.needs_redraw = true;
                     }
@@ -622,28 +632,12 @@ where
             }
 
             // Rebuild all UIs with new state
-            let pending: HashMap<SurfaceId, bool> = iced_surfaces
-                .iter()
-                .map(|(id, s)| (*id, s.needs_redraw))
-                .collect();
             user_interfaces = ManuallyDrop::new(build_user_interfaces(
                 &app.view,
                 &user_state,
                 &mut iced_surfaces,
                 &mut renderer,
             ));
-            // kestrel patch: skip surfaces whose content cannot have changed.
-            if let Some(key_fn) = app.redraw_key_fn.as_deref() {
-                for (id, s) in &mut iced_surfaces {
-                    let key = key_fn(&user_state, *id);
-                    let unchanged = key.is_some() && key == s.redraw_key;
-                    s.redraw_key = key;
-                    if unchanged && !pending.get(id).copied().unwrap_or(true) {
-                        s.needs_redraw = false;
-                    }
-                }
-            }
-
             // Process synchronous actions (widget ops, clipboard, etc.)
             // after UIs are rebuilt, matching iced_winit's pattern.
             for action in sync_actions {
@@ -711,6 +705,17 @@ where
                     _ => continue,
                 };
 
+                // kestrel patch: skip surfaces whose content cannot have changed since they
+                // were last presented, unless the compositor needs a frame. Input events and
+                // redraw retries mark every surface; this is the one place all redraws pass.
+                let key = app
+                    .redraw_key_fn
+                    .as_deref()
+                    .and_then(|f| f(&user_state, *surface_id));
+                if !iced_s.forced && key.is_some() && key == iced_s.redraw_key {
+                    continue;
+                }
+
                 let cursor = scaled_cursor(
                     &wl_state,
                     *surface_id,
@@ -736,6 +741,7 @@ where
                 if let Some(d) = wl_state.surfaces.get_mut(&wl_surface)
                     && d.frame_pending
                 {
+                    crate::ktrace!("defer {:?}", surface_id);
                     d.needs_rerender = true;
                     continue;
                 }
@@ -803,6 +809,12 @@ where
                     wl_surf.frame(&qh, wl_surf.clone());
                     data.frame_pending = true;
 
+                    crate::ktrace!(
+                        "present {:?} vp {:?} conf {:?}",
+                        surface_id,
+                        iced_s.viewport.physical_size(),
+                        data.size
+                    );
                     match compositor.present(
                         &mut renderer,
                         &mut iced_s.surface,
@@ -811,6 +823,8 @@ where
                         || {},
                     ) {
                         Ok(()) => {
+                            iced_s.redraw_key = key;
+                            iced_s.forced = false;
                             // The buffer this commits carries the scale, so the
                             // blur region may commit the surface again.
                             data.committed_scale_factor = data.scale_factor;
@@ -949,7 +963,7 @@ where
                 &surface_scales,
             );
 
-            // Mark all surfaces for redraw
+            // Mark all surfaces for redraw (the redraw key filters them at draw time)
             for s in iced_surfaces.values_mut() {
                 s.needs_redraw = true;
             }
@@ -1017,11 +1031,13 @@ fn run_action<Message: std::fmt::Debug>(
             ping.ping();
         }
         Action::Window(iced_runtime::window::Action::RedrawAll) => {
+            crate::ktrace!("redraw_all");
             for iced_s in iced_surfaces.values_mut() {
                 iced_s.needs_redraw = true;
             }
         }
         Action::Window(iced_runtime::window::Action::RelayoutAll) => {
+            crate::ktrace!("relayout_all");
             for (id, iced_s) in iced_surfaces.iter_mut() {
                 if let Some(ui) = user_interfaces.remove(id) {
                     user_interfaces
