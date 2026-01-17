@@ -42,6 +42,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         flush_left: !pills && x <= t + 0.5,
         flush_right: !pills && x + w >= o.size.width - t - 0.5,
         floating: pills,
+        top: size::BAR + crate::ui::shape::FLOAT_GAP,
     };
     // Pills float with a margin; the full bar runs to the frame.
     let edge = if pills { PILL_MARGIN } else { t };
@@ -53,11 +54,24 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let toast_x = o.size.width - edge - TOAST_WIDTH;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
     let mut drops = Vec::new();
+    // A panel growing out of a pill covers the bar row, so it is drawn above it (see below).
+    let mut over_bar = None;
     if let Some(p) = panel {
-        drops.push(drop(p.x.value, p.w.value, p.h.value));
+        let mut d = drop(p.x.value, p.w.value, p.h.value);
+        if let Some(origin) = p.origin {
+            // Same top as the pill, corners blending from the pill's to a panel's.
+            let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
+            let k = p.progress(natural);
+            d.top = origin.y;
+            d.radius = origin.height / 2.0 + (size::PANEL_RADIUS - origin.height / 2.0) * k;
+            over_bar = Some(d);
+        } else {
+            drops.push(d);
+        }
     }
     let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
-    let show_osd = focused && app.osd.is_some();
+    // With the island in the bar, pop-ups live inside it instead of dropping a box.
+    let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
     if show_toasts {
         drops.push(drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value));
     }
@@ -104,6 +118,21 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         layers.push(shape.into());
     }
     layers.push(bar.into());
+    if let Some(d) = over_bar {
+        layers.push(
+            canvas(BarShape {
+                color: s.base,
+                bar: size::BAR,
+                frame: t,
+                corner: 0.0,
+                band: false,
+                drops: vec![d],
+            })
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        );
+    }
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);
@@ -115,7 +144,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             pin(ui::reveal(content, width, p.h.value)
                 .offset((1.0 - alpha) * 6.0)
                 .on_measure(move |sz| Message::Measured(kind, sz)))
-            .position(Point::new(x, size::BAR + top_gap))
+            .position(Point::new(x, p.origin.map_or(size::BAR + top_gap, |o| o.y)))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),

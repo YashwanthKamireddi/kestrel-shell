@@ -11,6 +11,12 @@ use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
+/// Whether volume, brightness and other pop-ups show inside the island (pill style with the
+/// island in the bar) rather than as a separate drop.
+pub fn hosts_osd(app: &App) -> bool {
+    app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
+}
+
 /// What the island shows next to the time, most important first.
 enum Activity<'a> {
     Game(&'a crate::services::web::Game),
@@ -43,6 +49,16 @@ pub fn bar<'a>(
     );
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink_dim);
     let mut content = row![].spacing(10).align_y(Alignment::Center);
+    // A pop-up (volume, brightness, a device) takes the island while it lasts.
+    if hosts_osd(app)
+        && let Some(osd) = app
+            .osd
+            .as_ref()
+            .filter(|o| o.until > std::time::Instant::now())
+    {
+        content = content.push(osd_row(osd, s));
+        return finish(content, o, s, active);
+    }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
         let lead: Element<'a, Message> = match &f.thumb {
@@ -107,6 +123,68 @@ pub fn bar<'a>(
         );
     }
     finish(content, o, s, active)
+}
+
+/// A level (icon, bar, value) or an event (icon, title, line under it), sized for the island.
+fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme) -> Element<'a, Message> {
+    if let Some(title) = &osd.text {
+        let mut r = row![
+            icon(osd.icon, 15.0, s.accent),
+            label_w(
+                ui::fit(title, text::SMALL, 200.0),
+                text::SMALL,
+                s.ink,
+                theme::SEMIBOLD
+            ),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
+        if let Some(sub) = &osd.sub {
+            r = r.push(label(
+                ui::fit(sub, text::SMALL, 160.0),
+                text::SMALL,
+                s.ink_dim,
+            ));
+        }
+        return r.into();
+    }
+    const TRACK: f32 = 150.0;
+    let bar = |w: f32, c: iced::Color| {
+        iced::widget::container(iced::widget::Space::new())
+            .width(w)
+            .height(5)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(c.into()),
+                border: iced::Border::default().rounded(3),
+                ..iced::widget::container::Style::default()
+            })
+    };
+    let level = osd.value.clamp(0.0, 1.0);
+    row![
+        icon(
+            osd.icon,
+            15.0,
+            if level > 0.0 { s.accent } else { s.ink_dim }
+        ),
+        iced::widget::stack![
+            bar(TRACK, s.raised_hi),
+            bar(
+                (TRACK * level).max(5.0),
+                if level > 0.0 { s.accent } else { s.ink_faint }
+            ),
+        ],
+        label_w(
+            format!("{:.0}", level * 100.0),
+            text::SMALL,
+            s.ink,
+            theme::SEMIBOLD
+        )
+        .width(26)
+        .align_x(Alignment::End),
+    ]
+    .spacing(10)
+    .align_y(Alignment::Center)
+    .into()
 }
 
 /// The island's pill around whatever it shows, springing to its width.

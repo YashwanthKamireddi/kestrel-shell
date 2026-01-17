@@ -20,8 +20,10 @@ pub struct Drop {
     /// The panel's right side merges into the screen frame instead of standing free.
     pub flush_right: bool,
     pub flush_left: bool,
-    /// Pill style: a free-standing card below the bar (all corners round), not joined to it.
+    /// Pill style: a free-standing card (all corners round), not joined to the bar.
     pub floating: bool,
+    /// Top edge of a floating card.
+    pub top: f32,
 }
 
 /// Gap between the pills and a floating panel.
@@ -74,7 +76,10 @@ impl<M> canvas::Program<M> for BarShape {
             // pixels of the previous frame are repainted too.
             let pad = 2.0;
             frame.fill_rectangle(
-                Point::new(d.x - d.join - pad, self.bar - pad),
+                Point::new(
+                    d.x - d.join - pad,
+                    if d.floating { d.top } else { self.bar } - pad,
+                ),
                 iced::Size::new(
                     d.width + 2.0 * (d.join + pad),
                     d.height + d.join + 2.0 * pad,
@@ -85,7 +90,7 @@ impl<M> canvas::Program<M> for BarShape {
                 let r = d.radius.min(d.height / 2.0).min(d.width / 2.0);
                 frame.fill(
                     &Path::rounded_rectangle(
-                        Point::new(d.x, self.bar + FLOAT_GAP),
+                        Point::new(d.x, d.top),
                         iced::Size::new(d.width, d.height),
                         r.into(),
                     ),
