@@ -96,9 +96,10 @@ pub fn art<'a, M: Clone + 'static>(
     radius: f32,
 ) -> Element<'a, M> {
     match &p.art {
-        Some(path) if std::path::Path::new(path).is_file() => {
-            crate::ui::cover(image::Handle::from_path(path), size, size, radius)
-        }
+        Some(path) if std::path::Path::new(path).is_file() => match trimmed_art(path) {
+            Some(h) => crate::ui::cover(h, size, size, radius),
+            None => crate::ui::cover(image::Handle::from_path(path), size, size, radius),
+        },
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))
             .center(size)
             .style(move |_| container::Style {
@@ -108,6 +109,72 @@ pub fn art<'a, M: Clone + 'static>(
             })
             .into(),
     }
+}
+
+/// Artwork with flat bars cut away: video thumbnails (Shorts, portrait clips) often come as a
+/// 16:9 frame with filled sides, which a square crop shows as a picture cut off at the edges.
+/// Decoded once per file, downscaled, and kept.
+fn trimmed_art(path: &str) -> Option<image::Handle> {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static CACHE: LazyLock<Mutex<HashMap<String, Option<image::Handle>>>> =
+        LazyLock::new(Default::default);
+    if let Some(hit) = CACHE.lock().ok()?.get(path) {
+        return hit.clone();
+    }
+    let made = (|| {
+        let img = ::image::open(path).ok()?.thumbnail(512, 512).into_rgba8();
+        let (x, y, w, h) = content_box(&img);
+        let cut = ::image::imageops::crop_imm(&img, x, y, w, h).to_image();
+        Some(image::Handle::from_rgba(
+            cut.width(),
+            cut.height(),
+            cut.into_raw(),
+        ))
+    })();
+    let mut cache = CACHE.lock().ok()?;
+    if cache.len() > 32 {
+        cache.clear();
+    }
+    cache.insert(path.to_string(), made.clone());
+    made
+}
+
+/// The part of an image inside uniform bars on its edges (at most 40 % cut from each side).
+fn content_box(img: &::image::RgbaImage) -> (u32, u32, u32, u32) {
+    let (w, h) = img.dimensions();
+    let flat = |pixels: &mut dyn Iterator<Item = &::image::Rgba<u8>>| {
+        let v: Vec<[i32; 3]> = pixels
+            .map(|p| [i32::from(p[0]), i32::from(p[1]), i32::from(p[2])])
+            .collect();
+        let n = v.len().max(1) as i32;
+        let mean = v
+            .iter()
+            .fold([0; 3], |a, p| [a[0] + p[0], a[1] + p[1], a[2] + p[2]]);
+        let mean = mean.map(|c| c / n);
+        // Nearly every pixel within a small distance of the line's mean colour.
+        let off = v
+            .iter()
+            .filter(|p| (0..3).map(|i| (p[i] - mean[i]).abs()).sum::<i32>() > 36)
+            .count();
+        (off as f32) < v.len() as f32 * 0.02
+    };
+    let col = |x: u32| flat(&mut (0..h).map(|y| img.get_pixel(x, y)));
+    let row = |y: u32| flat(&mut (0..w).map(|x| img.get_pixel(x, y)));
+    let (mut l, mut r, mut t, mut b) = (0, w, 0, h);
+    while l < w * 2 / 5 && col(l) {
+        l += 1;
+    }
+    while r > w * 3 / 5 && col(r - 1) {
+        r -= 1;
+    }
+    while t < h * 2 / 5 && row(t) {
+        t += 1;
+    }
+    while b > h * 3 / 5 && row(b - 1) {
+        b -= 1;
+    }
+    (l, t, (r - l).max(1), (b - t).max(1))
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
@@ -249,4 +316,24 @@ pub fn chip<'a>(s: Scheme, p: &Player, active: bool) -> Element<'a, AppMessage> 
     .spacing(8)
     .align_y(Alignment::Center)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::content_box;
+
+    #[test]
+    fn side_bars_are_cut() {
+        // A 160x90 frame: brown bars 50 px wide each side, a varied picture between.
+        let img = ::image::RgbaImage::from_fn(160, 90, |x, y| {
+            if !(50..110).contains(&x) {
+                ::image::Rgba([90, 60, 40, 255])
+            } else {
+                ::image::Rgba([(x * 3) as u8, (y * 2) as u8, 128, 255])
+            }
+        });
+        let (x, y, w, h) = content_box(&img);
+        assert_eq!((x, w), (50, 60));
+        assert_eq!((y, h), (0, 90));
+    }
 }

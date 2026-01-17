@@ -254,7 +254,10 @@ fn card<'a>(
     // The picture has the screen's shape.
     let (sw, sh) = windows.first().map_or((1920.0, 1080.0), |w| w.screen);
     let height = width * sh / sw.max(1.0);
-    let k = width / sw.max(1.0);
+    // Windows are drawn inside an inset, so a selected window's outline never meets the
+    // card's rounded edge (where it would be cut).
+    const INSET: f32 = 6.0;
+    let k = (width - 2.0 * INSET) / sw.max(1.0);
 
     let summary = match windows.len() {
         0 => "Empty".to_string(),
@@ -301,10 +304,10 @@ fn card<'a>(
     .width(width)
     .height(height);
     for w in &windows {
-        let (x, y) = ((w.x * k).max(0.0), (w.y * k).max(0.0));
+        let (x, y) = (INSET + (w.x * k).max(0.0), INSET + (w.y * k).max(0.0));
         let (bw, bh) = (
-            (w.w * k).clamp(16.0, width - x),
-            (w.h * k).clamp(12.0, height - y),
+            (w.w * k).clamp(16.0, width - INSET - x),
+            (w.h * k).clamp(12.0, height - INSET - y),
         );
         let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
