@@ -7,6 +7,7 @@
 pub mod apps;
 pub mod audio;
 pub mod bluetooth;
+pub mod clipboard;
 pub mod clock;
 pub mod dbus;
 pub mod hyprland;

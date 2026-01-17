@@ -28,6 +28,9 @@ pub fn power() -> Subscription<power::State> {
 pub fn mpris() -> Subscription<mpris::State> {
     Subscription::run(mpris::stream)
 }
+pub fn copied() -> Subscription<crate::services::clipboard::Copied> {
+    Subscription::run(crate::services::clipboard::stream)
+}
 pub fn tray() -> Subscription<tray::State> {
     Subscription::run(tray::stream)
 }

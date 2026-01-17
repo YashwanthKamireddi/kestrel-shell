@@ -13,6 +13,8 @@ use iced::{Alignment, Element, Length, Point};
 pub const SLOT: f32 = 28.0;
 /// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
 pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
+/// The floating pills' distance from the screen's sides.
+pub const PILL_MARGIN: f32 = 8.0;
 pub const SLOT_GAP: f32 = 2.0;
 
 /// Left edge and width of the highlight behind the active workspace.
@@ -42,7 +44,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         floating: pills,
     };
     // Pills float with a margin; the full bar runs to the frame.
-    let edge = if pills { 8.0 } else { t };
+    let edge = if pills { PILL_MARGIN } else { t };
     let top_gap = if pills {
         crate::ui::shape::FLOAT_GAP
     } else {
@@ -85,7 +87,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         ]
         .align_y(Alignment::Center),
     )
-    .padding([0.0, if pills { 8.0 } else { t + 6.0 }])
+    .padding([0.0, if pills { PILL_MARGIN } else { t + 6.0 }])
     .height(size::BAR)
     .center_y(size::BAR);
 

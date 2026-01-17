@@ -116,7 +116,6 @@ impl<'a, M> Control<'a, M> {
 struct State {
     hovered: bool,
     pressed: bool,
-    right_pressed: bool,
     /// 0 = rest, 1 = hovered.
     hover_t: f32,
     scale: Spring,
@@ -157,7 +156,6 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         tree::State::new(State {
             hovered: false,
             pressed: false,
-            right_pressed: false,
             hover_t: 0.0,
             scale: Spring::new(1.0),
             last: None,
@@ -233,11 +231,18 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
 
         if !shell.is_event_captured() {
             match event {
+                // Acts on press, not release: the shell answers the moment the button goes
+                // down (as menus do), instead of a click's length later.
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if over => {
                     if pressable {
                         state.pressed = true;
                         if self.press_scale {
                             state.scale.to(PRESSED_SCALE, Spring::CLOSE);
+                        }
+                        if let Some(f) = &self.on_press_at {
+                            shell.publish(f(bounds));
+                        } else if let Some(m) = &self.on_press {
+                            shell.publish(m.clone());
                         }
                         shell.capture_event();
                     }
@@ -246,28 +251,12 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                     if state.pressed {
                         state.pressed = false;
                         state.scale.to(1.0, (20.0, 0.5));
-                        if over {
-                            if let Some(f) = &self.on_press_at {
-                                shell.publish(f(bounds));
-                            } else if let Some(m) = &self.on_press {
-                                shell.publish(m.clone());
-                            }
-                        }
                         shell.capture_event();
                     }
                 }
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if over => {
-                    if self.on_right_press.is_some() {
-                        state.right_pressed = true;
-                        shell.capture_event();
-                    }
-                }
-                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)) => {
-                    if state.right_pressed {
-                        state.right_pressed = false;
-                        if over && let Some(m) = &self.on_right_press {
-                            shell.publish(m.clone());
-                        }
+                    if let Some(m) = &self.on_right_press {
+                        shell.publish(m.clone());
                         shell.capture_event();
                     }
                 }

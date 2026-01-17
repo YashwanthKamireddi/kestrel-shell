@@ -35,7 +35,6 @@ pub fn bar<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Island);
-    let id = o.id;
     let time = label_w(
         app.now.format("%H:%M").to_string(),
         text::BODY,
@@ -44,6 +43,30 @@ pub fn bar<'a>(
     );
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink_dim);
     let mut content = row![].spacing(10).align_y(Alignment::Center);
+    // A flash (something copied) takes the whole island for a moment.
+    if let Some(f) = &app.flash {
+        let lead: Element<'a, Message> = match &f.thumb {
+            Some(h) => ui::cover(h.clone(), 34.0, 20.0, 4.0),
+            None => icon(f.icon, 14.0, s.accent).into(),
+        };
+        let mut words = row![label_w(
+            f.title.clone(),
+            text::SMALL,
+            s.ink,
+            theme::SEMIBOLD
+        )]
+        .spacing(8)
+        .align_y(Alignment::Center);
+        if !f.detail.is_empty() {
+            words = words.push(label(
+                ui::fit(&f.detail, text::SMALL, 240.0),
+                text::SMALL,
+                s.ink_dim,
+            ));
+        }
+        content = content.push(row![lead, words].spacing(8).align_y(Alignment::Center));
+        return finish(content, o, s, active);
+    }
     match activity(app) {
         Activity::Game(g) => {
             content = content.push(
@@ -83,6 +106,17 @@ pub fn bar<'a>(
             .align_y(Alignment::Center),
         );
     }
+    finish(content, o, s, active)
+}
+
+/// The island's pill around whatever it shows, springing to its width.
+fn finish<'a>(
+    content: iced::widget::Row<'a, Message>,
+    o: &'a Output,
+    s: Scheme,
+    active: bool,
+) -> Element<'a, Message> {
+    let id = o.id;
     let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
     ui::control(inner)
