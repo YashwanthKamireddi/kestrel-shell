@@ -22,12 +22,6 @@ pub fn pill_geometry(_h: &hyprland::State, _monitor: &str, active: i32, _min: u3
     ((active.max(1) - 1) as f32 * (SLOT + SLOT_GAP), SLOT)
 }
 
-/// Top edge of a panel growing out of the pill `origin`, `k` of the way open.
-fn panel_top(origin: iced::Rectangle, k: f32) -> f32 {
-    let rest = size::BAR + crate::ui::shape::FLOAT_GAP;
-    origin.y + (rest - origin.y) * k
-}
-
 pub fn slot_count(h: &hyprland::State, min: u32) -> usize {
     let max_id = h.workspaces.iter().map(|w| w.id).max().unwrap_or(1).max(1) as u32;
     max_id.max(min) as usize
@@ -60,22 +54,8 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let toast_x = o.size.width - edge - TOAST_WIDTH;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
     let mut drops = Vec::new();
-    // A panel growing out of a pill covers the bar row, so it is drawn above it (see below).
-    let mut over_bar = None;
     if let Some(p) = panel {
-        let mut d = drop(p.x.value, p.w.value, p.h.value);
-        if let Some(origin) = p.origin {
-            // Same top as the pill, corners blending from the pill's to a panel's.
-            let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
-            let k = p.progress(natural);
-            // Starts as the pill itself, then settles just below the bar, so it never
-            // covers the pills beside the one it came from.
-            d.top = panel_top(origin, k);
-            d.radius = origin.height / 2.0 + (size::PANEL_RADIUS - origin.height / 2.0) * k;
-            over_bar = Some(d);
-        } else {
-            drops.push(d);
-        }
+        drops.push(drop(p.x.value, p.w.value, p.h.value));
     }
     let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
@@ -126,19 +106,21 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         layers.push(shape.into());
     }
     layers.push(bar.into());
-    if let Some(d) = over_bar {
+    // Music floats as its own bubble left of the island, which stays centred.
+    if app.config.bar.center.iter().any(|m| m == "island")
+        && let Some(b) = crate::modules::island::bubble(app, o, s)
+    {
+        let island_w = o.island_w.value + 24.0;
+        let x = (o.size.width - island_w) / 2.0 - 8.0 - crate::modules::island::BUBBLE;
         layers.push(
-            canvas(BarShape {
-                color: s.base,
-                bar: size::BAR,
-                frame: t,
-                corner: 0.0,
-                band: false,
-                drops: vec![d],
-            })
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into(),
+            pin(b)
+                .position(Point::new(
+                    x,
+                    (size::BAR - crate::modules::island::BUBBLE) / 2.0,
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
         );
     }
     if let Some(p) = panel {
@@ -152,13 +134,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             pin(ui::reveal(content, width, p.h.value)
                 .offset((1.0 - alpha) * 6.0)
                 .on_measure(move |sz| Message::Measured(kind, sz)))
-            .position(Point::new(
-                x,
-                p.origin.map_or(size::BAR + top_gap, |o| {
-                    let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
-                    panel_top(o, p.progress(natural))
-                }),
-            ))
+            .position(Point::new(x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),

@@ -126,7 +126,22 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::Loaded(v) => {
             app.panels.wallpaper.items = Some(
                 v.into_iter()
-                    .map(|(p, t)| (p, image::Handle::from_path(t)))
+                    .map(|(p, t)| {
+                        // Rounded in the pixels, so the selection ring meets round corners.
+                        let h = ::image::open(&t)
+                            .ok()
+                            .map(|img| {
+                                let r = ui::rounded_cover(
+                                    &img.into_rgba8(),
+                                    THUMB_W,
+                                    THUMB_H,
+                                    size::ROW_RADIUS - 3.0,
+                                );
+                                image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
+                            })
+                            .unwrap_or_else(|| image::Handle::from_path(&t));
+                        (p, h)
+                    })
                     .collect(),
             );
             Task::none()
@@ -165,13 +180,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 for (path, thumb) in chunk {
                     let on = current.as_deref() == Some(path.as_path());
                     r = r.push(
-                        control(ui::cover(
-                            thumb.clone(),
-                            THUMB_W,
-                            THUMB_H,
-                            size::ROW_RADIUS - 2.0,
-                        ))
-                        .padding(2)
+                        control(
+                            iced::widget::image(thumb.clone())
+                                .width(THUMB_W)
+                                .height(THUMB_H),
+                        )
+                        .padding(3)
                         .radius(size::ROW_RADIUS)
                         .colors(
                             if on { s.accent } else { Color::TRANSPARENT },

@@ -363,7 +363,7 @@ pub fn weather_tint(w: &crate::services::web::Weather) -> Color {
     let rgb = |r, g, b| Color::from_rgb8(r, g, b);
     match w.code {
         0 | 1 if w.is_day => rgb(0xFF, 0xC2, 0x4D),
-        0 | 1 => rgb(0xD6, 0xDE, 0xFF),
+        0 | 1 => rgb(0xC8, 0xC4, 0xFF),
         2 if w.is_day => rgb(0xFF, 0xD7, 0x8A),
         2 => rgb(0xC5, 0xCC, 0xE8),
         45 | 48 | 3 => rgb(0xB8, 0xC0, 0xCC),
@@ -424,4 +424,44 @@ pub fn rounded_cover(img: &::image::RgbaImage, w: f32, h: f32, radius: f32) -> :
         }
     }
     out
+}
+
+/// Temperature as a colour: cool blue, mild white, warm amber, hot orange.
+pub fn temperature_tint(c: f32) -> Color {
+    let rgb = |r, g, b| Color::from_rgb8(r, g, b);
+    match c {
+        t if t < 12.0 => rgb(0x8E, 0xC5, 0xFF),
+        t if t < 22.0 => rgb(0xD8, 0xF0, 0xFF),
+        t if t < 30.0 => rgb(0xFF, 0xD0, 0x80),
+        _ => rgb(0xFF, 0x9A, 0x6B),
+    }
+}
+
+/// An image file shown at `w` × `h` with rounded corners (see `rounded_cover`), decoded once
+/// per file and size.
+pub fn rounded_file(
+    path: &std::path::Path,
+    w: f32,
+    h: f32,
+    radius: f32,
+) -> Option<iced::widget::image::Handle> {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    type Key = (std::path::PathBuf, u32, u32, u32);
+    static CACHE: LazyLock<Mutex<HashMap<Key, Option<iced::widget::image::Handle>>>> =
+        LazyLock::new(Default::default);
+    let key = (path.to_path_buf(), w as u32, h as u32, radius as u32);
+    if let Some(hit) = CACHE.lock().ok()?.get(&key) {
+        return hit.clone();
+    }
+    let made = ::image::open(path).ok().map(|img| {
+        let r = rounded_cover(&img.into_rgba8(), w, h, radius);
+        iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
+    });
+    let mut cache = CACHE.lock().ok()?;
+    if cache.len() > 256 {
+        cache.clear();
+    }
+    cache.insert(key, made.clone());
+    made
 }

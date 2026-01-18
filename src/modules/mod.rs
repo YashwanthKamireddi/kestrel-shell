@@ -337,7 +337,11 @@ fn weather<'a>(
             ui::control(
                 row![
                     icon(crate::ui::weather_icon(w), 14.0, crate::ui::weather_tint(w)),
-                    label(format!("{:.0}°", w.temp), text::SMALL, s.ink_dim),
+                    label(
+                        format!("{:.0}°", w.temp),
+                        text::SMALL,
+                        crate::ui::temperature_tint(w.temp)
+                    ),
                 ]
                 .spacing(5)
                 .align_y(Alignment::Center),
@@ -713,7 +717,7 @@ fn app_name<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> 
     } else {
         String::new()
     };
-    container(label(name, text::SMALL, s.ink_dim))
+    container(label(name, text::SMALL, s.ink))
         .padding([0, 6])
         .into()
 }
@@ -737,7 +741,7 @@ fn clock<'a>(
                 if active { s.accent } else { s.ink },
                 theme::SEMIBOLD
             ),
-            label(date, text::SMALL, s.ink_dim),
+            label(date, text::SMALL, s.ink),
         ]
         .spacing(8)
         .align_y(Alignment::Center),

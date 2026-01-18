@@ -34,48 +34,52 @@ fn activity(app: &App) -> Activity<'_> {
     }
 }
 
-/// The island, with what is playing as its own pill beside it.
+/// The island. What is playing floats beside it as its own bubble (`bubble`), drawn by the
+/// bar outside this row so the island stays centred.
 pub fn items<'a>(
     app: &'a App,
     o: &'a Output,
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
-    let mut v = Vec::new();
-    if let Activity::Music(p) = activity(app) {
-        v.push(media_pill(p, o, s, open == Some(PanelKind::Media)));
-    }
-    v.push(bar(app, o, s, open));
-    v
+    vec![bar(app, o, s, open)]
 }
 
-/// Now playing: artwork, title, and the play state; opens the media panel.
-fn media_pill<'a>(
-    p: &'a crate::services::mpris::Player,
-    o: &'a Output,
-    s: Scheme,
-    active: bool,
-) -> Element<'a, Message> {
+/// Diameter of the music bubble.
+pub const BUBBLE: f32 = 30.0;
+
+/// The music bubble: the cover in a circle, ringed in the accent while it plays. Opens the
+/// media panel. None when nothing plays.
+pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
+    let Activity::Music(p) = activity(app) else {
+        return None;
+    };
     let id = o.id;
-    ui::control(
-        row![
-            media::art(s, p, 20.0, 5.0),
-            label(ui::fit(&p.title, text::SMALL, 200.0), text::SMALL, s.ink),
-            icon(Icon::AudioLines, 14.0, s.accent),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center),
+    let open = app
+        .panel
+        .as_ref()
+        .is_some_and(|q| q.open && q.kind == PanelKind::Media);
+    let ring = if open { s.ink } else { s.accent };
+    Some(
+        ui::control(
+            iced::widget::container(media::art(s, p, BUBBLE - 6.0, (BUBBLE - 6.0) / 2.0))
+                .center(BUBBLE)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.base.into()),
+                    border: iced::Border {
+                        color: ring,
+                        width: 2.0,
+                        radius: (BUBBLE / 2.0).into(),
+                    },
+                    ..iced::widget::container::Style::default()
+                }),
+        )
+        .width(BUBBLE)
+        .height(BUBBLE)
+        .radius(BUBBLE / 2.0)
+        .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
+        .into(),
     )
-    .padding([0, 10])
-    .height(size::CONTROL)
-    .radius(size::CONTROL / 2.0)
-    .colors(
-        if active { s.accent_soft } else { s.raised },
-        if active { s.accent_soft } else { s.raised_hi },
-        s.raised_press,
-    )
-    .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
-    .into()
 }
 
 pub fn bar<'a>(
@@ -91,7 +95,7 @@ pub fn bar<'a>(
         if active { s.accent } else { s.ink },
         theme::SEMIBOLD,
     );
-    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink_dim);
+    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(10).align_y(Alignment::Center);
     // A pop-up (volume, brightness, a device) takes the island while it lasts.
     if hosts_osd(app)
@@ -151,7 +155,12 @@ pub fn bar<'a>(
         content = content.push(
             row![
                 icon(ui::weather_icon(w), 15.0, ui::weather_tint(w)),
-                label(format!("{:.0}°", w.temp), text::SMALL, s.ink),
+                label_w(
+                    format!("{:.0}°", w.temp),
+                    text::SMALL,
+                    ui::temperature_tint(w.temp),
+                    theme::MEDIUM
+                ),
             ]
             .spacing(4)
             .align_y(Alignment::Center),

@@ -63,6 +63,12 @@ fn matches(w: &hyprland::Window, q: &str) -> bool {
         || apps::name_for_class(&w.class).to_lowercase().contains(q)
 }
 
+/// A workspace card's picture size (for a 16:9 screen).
+pub fn card_size() -> (f32, f32) {
+    let w = (WIDTH - 2.0 * PAD - (COLUMNS as f32 - 1.0) * GAP) / COLUMNS as f32;
+    (w, w * 9.0 / 16.0)
+}
+
 fn workspace_ids(app: &App) -> Vec<i32> {
     let count = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces) as i32;
     (1..=count).collect()
@@ -278,7 +284,11 @@ fn card<'a>(
     .padding([0, 4]);
 
     let backdrop: Element<'_, AppMessage> = match &app.wallpaper {
-        Some(w) => ui::cover(w.thumb.clone(), width, height, 10.0),
+        Some(w) => iced::widget::image(w.thumb.clone())
+            .width(width)
+            .height(height)
+            .content_fit(iced::ContentFit::Fill)
+            .into(),
         None => container(Space::new())
             .width(width)
             .height(height)
