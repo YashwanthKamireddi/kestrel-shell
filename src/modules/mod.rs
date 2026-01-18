@@ -72,7 +72,7 @@ pub fn items<'a>(
         "workspaces" => vec![workspaces(app, o, s)],
         "app" => vec![app_name(app, o, s)],
         "clock" => vec![clock(app, o, s, open)],
-        "island" => vec![island::bar(app, o, s, open)],
+        "island" => island::items(app, o, s, open),
         "media" => media_chip(app, o, s, open),
         "tray" => tray(app, o, s, open),
         "nba" => nba(app, o, s, open),
@@ -336,7 +336,7 @@ fn weather<'a>(
         items.push(
             ui::control(
                 row![
-                    icon(crate::ui::weather_icon(w), 14.0, s.ink_dim),
+                    icon(crate::ui::weather_icon(w), 14.0, crate::ui::weather_tint(w)),
                     label(format!("{:.0}°", w.temp), text::SMALL, s.ink_dim),
                 ]
                 .spacing(5)

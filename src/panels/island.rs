@@ -22,50 +22,70 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     container(col).padding(12).into()
 }
 
-/// Time, date and the weather, side by side.
+/// Time, date and the weather, on a sky that matches the weather and the time of day.
 fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let when = column![
+    let Some(w) = &app.weather else {
+        return container(clock(app, s.ink, s.ink_dim))
+            .padding([4, 6])
+            .into();
+    };
+    let white = Color::from_rgb8(0xF7, 0xF8, 0xFC);
+    let soft = white.scale_alpha(0.78);
+    let r = row![
+        clock(app, white, soft),
+        column![
+            row![
+                icon(ui::weather_icon(w), 28.0, ui::weather_tint(w)),
+                label_w(
+                    format!("{:.0}°", w.temp),
+                    theme::text::DISPLAY,
+                    white,
+                    theme::SEMIBOLD
+                ),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+            label(w.describe(), text::SMALL, soft),
+            label(
+                format!("H {:.0}°  L {:.0}°", w.high, w.low),
+                text::CAPTION,
+                soft
+            ),
+        ]
+        .spacing(2)
+        .align_x(Alignment::End),
+    ]
+    .align_y(Alignment::Center);
+    let (top, bottom) = ui::weather_sky(w);
+    container(r)
+        .padding([16, 18])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(
+                iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
+                    .add_stop(0.0, top)
+                    .add_stop(1.0, bottom)
+                    .into(),
+            ),
+            border: iced::Border::default().rounded(crate::theme::size::CARD_RADIUS),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn clock(app: &App, ink: Color, dim: Color) -> Element<'_, AppMessage> {
+    column![
         label_w(
             app.now.format("%H:%M").to_string(),
             theme::text::DISPLAY,
-            s.ink,
+            ink,
             theme::SEMIBOLD
         ),
-        label(
-            app.now.format("%A, %-d %B").to_string(),
-            text::BODY,
-            s.ink_dim
-        ),
+        label(app.now.format("%A, %-d %B").to_string(), text::BODY, dim),
     ]
     .spacing(2)
-    .width(Length::Fill);
-    let mut r = row![when].align_y(Alignment::Center);
-    if let Some(w) = &app.weather {
-        r = r.push(
-            column![
-                row![
-                    icon(ui::weather_icon(w), 20.0, s.ink),
-                    label_w(
-                        format!("{:.0}°", w.temp),
-                        theme::text::HEADING,
-                        s.ink,
-                        theme::MEDIUM
-                    ),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-                label(w.describe(), text::SMALL, s.ink_dim),
-                label(
-                    format!("H {:.0}°  L {:.0}°", w.high, w.low),
-                    text::CAPTION,
-                    s.ink_faint
-                ),
-            ]
-            .spacing(2)
-            .align_x(Alignment::End),
-        );
-    }
-    container(r).padding([4, 6]).into()
+    .width(Length::Fill)
+    .into()
 }
 
 /// What's playing, with the essential controls.

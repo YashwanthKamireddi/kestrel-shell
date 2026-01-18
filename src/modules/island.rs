@@ -34,6 +34,50 @@ fn activity(app: &App) -> Activity<'_> {
     }
 }
 
+/// The island, with what is playing as its own pill beside it.
+pub fn items<'a>(
+    app: &'a App,
+    o: &'a Output,
+    s: Scheme,
+    open: Option<PanelKind>,
+) -> Vec<Element<'a, Message>> {
+    let mut v = Vec::new();
+    if let Activity::Music(p) = activity(app) {
+        v.push(media_pill(p, o, s, open == Some(PanelKind::Media)));
+    }
+    v.push(bar(app, o, s, open));
+    v
+}
+
+/// Now playing: artwork, title, and the play state; opens the media panel.
+fn media_pill<'a>(
+    p: &'a crate::services::mpris::Player,
+    o: &'a Output,
+    s: Scheme,
+    active: bool,
+) -> Element<'a, Message> {
+    let id = o.id;
+    ui::control(
+        row![
+            media::art(s, p, 20.0, 5.0),
+            label(ui::fit(&p.title, text::SMALL, 200.0), text::SMALL, s.ink),
+            icon(Icon::AudioLines, 14.0, s.accent),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .padding([0, 10])
+    .height(size::CONTROL)
+    .radius(size::CONTROL / 2.0)
+    .colors(
+        if active { s.accent_soft } else { s.raised },
+        if active { s.accent_soft } else { s.raised_hi },
+        s.raised_press,
+    )
+    .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
+    .into()
+}
+
 pub fn bar<'a>(
     app: &'a App,
     o: &'a Output,
@@ -99,24 +143,15 @@ pub fn bar<'a>(
                 .align_y(Alignment::Center),
             );
         }
-        Activity::Music(p) => {
-            content = content.push(
-                row![
-                    media::art(s, p, 18.0, 5.0),
-                    label(ui::fit(&p.title, text::SMALL, 220.0), text::SMALL, s.ink),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            );
-        }
-        Activity::None => {}
+        // Music has its own pill beside the island (see `items`).
+        Activity::Music(_) | Activity::None => {}
     }
     content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
     if let Some(w) = &app.weather {
         content = content.push(
             row![
-                icon(ui::weather_icon(w), 14.0, s.ink_dim),
-                label(format!("{:.0}°", w.temp), text::SMALL, s.ink_dim),
+                icon(ui::weather_icon(w), 15.0, ui::weather_tint(w)),
+                label(format!("{:.0}°", w.temp), text::SMALL, s.ink),
             ]
             .spacing(4)
             .align_y(Alignment::Center),
