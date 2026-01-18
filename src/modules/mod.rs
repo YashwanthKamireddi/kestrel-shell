@@ -645,16 +645,19 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
                 }
             }
             Some(_) => label(id.to_string(), text::SMALL, s.ink).into(),
-            None => label(
-                id.to_string(),
-                text::CAPTION,
-                if active == Some(id) {
-                    s.ink_dim
-                } else {
-                    s.ink_faint
-                },
-            )
-            .into(),
+            // Empty: the current one shows its number in the accent, the rest a quiet dot.
+            None if active == Some(id) => {
+                label_w(id.to_string(), text::SMALL, s.accent, theme::SEMIBOLD).into()
+            }
+            None => container(Space::new())
+                .width(4)
+                .height(4)
+                .style(move |_| container::Style {
+                    background: Some(s.ink_faint.into()),
+                    border: iced::Border::default().rounded(2),
+                    ..container::Style::default()
+                })
+                .into(),
         };
         ui::control(container(content).center(SLOT))
             .radius(size::CONTROL_RADIUS)
@@ -670,11 +673,26 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             .into()
     }))
     .spacing(SLOT_GAP);
-    let highlight = container(Space::new())
+    // The current workspace: an accent-tinted pill with a short accent bar at its foot,
+    // gliding to whichever workspace becomes current.
+    let highlight =
+        container(
+            container(Space::new())
+                .width(12)
+                .height(3)
+                .style(move |_| container::Style {
+                    background: Some(s.accent.into()),
+                    border: iced::Border::default().rounded(2),
+                    ..container::Style::default()
+                }),
+        )
         .width(SLOT)
         .height(SLOT)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::End)
+        .padding([1, 0])
         .style(move |_| container::Style {
-            background: Some(s.raised_hi.into()),
+            background: Some(s.accent.scale_alpha(0.16).into()),
             border: iced::Border::default().rounded(size::CONTROL_RADIUS),
             ..container::Style::default()
         });
