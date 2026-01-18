@@ -58,7 +58,7 @@ impl PanelKind {
     pub fn width(self) -> f32 {
         match self {
             Self::Control => 368.0,
-            Self::Media => 380.0,
+            Self::Media => media::WIDTH,
             Self::Calendar => 312.0,
             Self::Notifications => 392.0,
             Self::Power => 232.0,

@@ -22,6 +22,12 @@ pub fn pill_geometry(_h: &hyprland::State, _monitor: &str, active: i32, _min: u3
     ((active.max(1) - 1) as f32 * (SLOT + SLOT_GAP), SLOT)
 }
 
+/// Top edge of a panel growing out of the pill `origin`, `k` of the way open.
+fn panel_top(origin: iced::Rectangle, k: f32) -> f32 {
+    let rest = size::BAR + crate::ui::shape::FLOAT_GAP;
+    origin.y + (rest - origin.y) * k
+}
+
 pub fn slot_count(h: &hyprland::State, min: u32) -> usize {
     let max_id = h.workspaces.iter().map(|w| w.id).max().unwrap_or(1).max(1) as u32;
     max_id.max(min) as usize
@@ -62,7 +68,9 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             // Same top as the pill, corners blending from the pill's to a panel's.
             let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
             let k = p.progress(natural);
-            d.top = origin.y;
+            // Starts as the pill itself, then settles just below the bar, so it never
+            // covers the pills beside the one it came from.
+            d.top = panel_top(origin, k);
             d.radius = origin.height / 2.0 + (size::PANEL_RADIUS - origin.height / 2.0) * k;
             over_bar = Some(d);
         } else {
@@ -144,7 +152,13 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             pin(ui::reveal(content, width, p.h.value)
                 .offset((1.0 - alpha) * 6.0)
                 .on_measure(move |sz| Message::Measured(kind, sz)))
-            .position(Point::new(x, p.origin.map_or(size::BAR + top_gap, |o| o.y)))
+            .position(Point::new(
+                x,
+                p.origin.map_or(size::BAR + top_gap, |o| {
+                    let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
+                    panel_top(o, p.progress(natural))
+                }),
+            ))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),

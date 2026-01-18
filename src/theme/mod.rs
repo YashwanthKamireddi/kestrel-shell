@@ -44,6 +44,8 @@ pub struct Scheme {
     pub good: Color,
     pub warn: Color,
     pub bad: Color,
+    /// How far content has faded in (1 = fully shown); see `faded`.
+    pub opacity: f32,
 }
 
 impl Scheme {
@@ -71,6 +73,16 @@ impl Scheme {
             good: Oklch::new(0.80, 0.13, 150.0).to_color(),
             warn: Oklch::new(0.84, 0.13, 85.0).to_color(),
             bad: Oklch::new(0.70, 0.17, 25.0).to_color(),
+            opacity: 1.0,
+        }
+    }
+
+    /// Any other colour (artwork tints, a weather sky) faded in step with the scheme.
+    pub fn fade(&self, c: Color) -> Color {
+        if self.opacity >= 1.0 {
+            c
+        } else {
+            color::mix(self.base, c, self.opacity.max(0.0))
         }
     }
 }
@@ -98,6 +110,7 @@ impl Scheme {
             good: f(self.good),
             warn: f(self.warn),
             bad: f(self.bad),
+            opacity: alpha.max(0.0),
         }
     }
 }

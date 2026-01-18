@@ -29,13 +29,13 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .padding([4, 6])
             .into();
     };
-    let white = Color::from_rgb8(0xF7, 0xF8, 0xFC);
-    let soft = white.scale_alpha(0.78);
+    let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
+    let soft = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC).scale_alpha(0.78));
     let r = row![
         clock(app, white, soft),
         column![
             row![
-                icon(ui::weather_icon(w), 28.0, ui::weather_tint(w)),
+                icon(ui::weather_icon(w), 28.0, s.fade(ui::weather_tint(w))),
                 label_w(
                     format!("{:.0}°", w.temp),
                     theme::text::DISPLAY,
@@ -57,6 +57,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .align_y(Alignment::Center);
     let (top, bottom) = ui::weather_sky(w);
+    let (top, bottom) = (s.fade(top), s.fade(bottom));
     container(r)
         .padding([16, 18])
         .width(Length::Fill)

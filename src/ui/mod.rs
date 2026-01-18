@@ -388,3 +388,40 @@ pub fn weather_sky(w: &crate::services::web::Weather) -> (Color, Color) {
         _ => (rgb(0x37, 0x40, 0x4E), rgb(0x18, 0x1C, 0x24)),
     }
 }
+
+/// `img` cropped to fill `w` × `h` (logical px), scaled to twice that for sharpness, with its
+/// corners rounded in the pixels themselves (anti-aliased): the CPU renderer does not round
+/// images, so this is what keeps artwork and thumbnails from showing square, cut-off corners.
+pub fn rounded_cover(img: &::image::RgbaImage, w: f32, h: f32, radius: f32) -> ::image::RgbaImage {
+    let (tw, th) = (
+        (w * 2.0).round().max(1.0) as u32,
+        (h * 2.0).round().max(1.0) as u32,
+    );
+    let (sw, sh) = img.dimensions();
+    // Crop to the target's shape, centred.
+    let (cw, ch) = if u64::from(sw) * u64::from(th) > u64::from(sh) * u64::from(tw) {
+        ((u64::from(sh) * u64::from(tw) / u64::from(th)) as u32, sh)
+    } else {
+        (sw, (u64::from(sw) * u64::from(th) / u64::from(tw)) as u32)
+    };
+    let crop = ::image::imageops::crop_imm(img, (sw - cw) / 2, (sh - ch) / 2, cw.max(1), ch.max(1))
+        .to_image();
+    let mut out = ::image::imageops::resize(&crop, tw, th, ::image::imageops::FilterType::Triangle);
+    let r = (radius * 2.0).min(tw as f32 / 2.0).min(th as f32 / 2.0);
+    if r > 0.5 {
+        for y in 0..th {
+            for x in 0..tw {
+                // Distance outside the rounded rectangle, measured from the nearest corner centre.
+                let cx = (x as f32 + 0.5).clamp(r, tw as f32 - r);
+                let cy = (y as f32 + 0.5).clamp(r, th as f32 - r);
+                let d = ((x as f32 + 0.5 - cx).powi(2) + (y as f32 + 0.5 - cy).powi(2)).sqrt();
+                let cover = (r - d + 0.5).clamp(0.0, 1.0);
+                if cover < 1.0 {
+                    let px = out.get_pixel_mut(x, y);
+                    px[3] = (f32::from(px[3]) * cover) as u8;
+                }
+            }
+        }
+    }
+    out
+}

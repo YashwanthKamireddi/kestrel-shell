@@ -96,8 +96,8 @@ pub fn art<'a, M: Clone + 'static>(
     radius: f32,
 ) -> Element<'a, M> {
     match &p.art {
-        Some(path) if std::path::Path::new(path).is_file() => match trimmed_art(path) {
-            Some(h) => crate::ui::cover(h, size, size, radius),
+        Some(path) if std::path::Path::new(path).is_file() => match art_at(path, size, radius) {
+            Some(h) => iced::widget::image(h).width(size).height(size).into(),
             None => crate::ui::cover(image::Handle::from_path(path), size, size, radius),
         },
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))
@@ -114,11 +114,44 @@ pub fn art<'a, M: Clone + 'static>(
 /// Artwork with flat bars cut away: video thumbnails (Shorts, portrait clips) often come as a
 /// 16:9 frame with filled sides, which a square crop shows as a picture cut off at the edges.
 /// Decoded once per file, downscaled, and kept.
-fn trimmed_art(path: &str) -> Option<image::Handle> {
+/// The artwork at one display size: trimmed, square, corners rounded. Kept per size.
+fn art_at(path: &str, size: f32, radius: f32) -> Option<image::Handle> {
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};
-    static CACHE: LazyLock<Mutex<HashMap<String, Option<image::Handle>>>> =
+    type Key = (String, u32, u32);
+    static SIZED: LazyLock<Mutex<HashMap<Key, Option<image::Handle>>>> =
         LazyLock::new(Default::default);
+    let key = (path.to_string(), size as u32, radius as u32);
+    if let Some(hit) = SIZED.lock().ok()?.get(&key) {
+        return hit.clone();
+    }
+    let made = art_pixels(path).map(|img| {
+        let r = crate::ui::rounded_cover(&img, size, size, radius);
+        image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
+    });
+    let mut cache = SIZED.lock().ok()?;
+    if cache.len() > 64 {
+        cache.clear();
+    }
+    cache.insert(key, made.clone());
+    made
+}
+
+/// The artwork's pixels with flat bars cut away (cached by `art_data`).
+fn art_pixels(path: &str) -> Option<::image::RgbaImage> {
+    art_data(path).map(|(img, _)| img)
+}
+
+/// The artwork's average colour, for tinting what surrounds it.
+pub fn art_colour(p: &Player) -> Option<Color> {
+    art_data(p.art.as_deref()?).map(|(_, c)| c)
+}
+
+fn art_data(path: &str) -> Option<(::image::RgbaImage, Color)> {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    type Entry = Option<(::image::RgbaImage, Color)>;
+    static CACHE: LazyLock<Mutex<HashMap<String, Entry>>> = LazyLock::new(Default::default);
     if let Some(hit) = CACHE.lock().ok()?.get(path) {
         return hit.clone();
     }
@@ -126,14 +159,19 @@ fn trimmed_art(path: &str) -> Option<image::Handle> {
         let img = ::image::open(path).ok()?.thumbnail(512, 512).into_rgba8();
         let (x, y, w, h) = content_box(&img);
         let cut = ::image::imageops::crop_imm(&img, x, y, w, h).to_image();
-        Some(image::Handle::from_rgba(
-            cut.width(),
-            cut.height(),
-            cut.into_raw(),
-        ))
+        let n = u64::from((cut.width() * cut.height()).max(1));
+        let sum = cut.pixels().fold([0u64; 3], |a, p| {
+            [
+                a[0] + u64::from(p[0]),
+                a[1] + u64::from(p[1]),
+                a[2] + u64::from(p[2]),
+            ]
+        });
+        let avg = Color::from_rgb8((sum[0] / n) as u8, (sum[1] / n) as u8, (sum[2] / n) as u8);
+        Some((cut, avg))
     })();
     let mut cache = CACHE.lock().ok()?;
-    if cache.len() > 32 {
+    if cache.len() > 8 {
         cache.clear();
     }
     cache.insert(path.to_string(), made.clone());
@@ -177,6 +215,9 @@ fn content_box(img: &::image::RgbaImage) -> (u32, u32, u32, u32) {
     (l, t, (r - l).max(1), (b - t).max(1))
 }
 
+/// Panel width: room for a large cover beside the text.
+pub const WIDTH: f32 = 460.0;
+
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(p) = current(app) else {
         return container(empty(s, Icon::Music, "Nothing is playing"))
@@ -215,27 +256,34 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         top = top.push(chips);
     }
 
-    let mut meta = column![label_w(
-        ui::ellipsize(&p.title, 38),
+    // Right of the artwork: where it plays, what it is, how far along, and the controls.
+    const ART: f32 = 136.0;
+    let text_w = WIDTH - 2.0 * 16.0 - ART - 16.0;
+    let mut meta = column![].spacing(4);
+    if !p.identity.is_empty() {
+        meta = meta.push(
+            container(label(p.identity.clone(), text::CAPTION, s.ink_dim))
+                .padding([2, 8])
+                .style(move |_| container::Style {
+                    background: Some(s.ink.scale_alpha(0.08).into()),
+                    border: iced::Border::default().rounded(8),
+                    ..container::Style::default()
+                }),
+        );
+    }
+    meta = meta.push(label_w(
+        ui::fit(&p.title, text::TITLE, text_w),
         text::TITLE,
         s.ink,
-        theme::SEMIBOLD
-    )]
-    .spacing(3);
+        theme::SEMIBOLD,
+    ));
     if !p.artist.is_empty() {
-        meta = meta.push(label(ui::ellipsize(&p.artist, 44), text::SMALL, s.ink_dim));
+        meta = meta.push(label(
+            ui::fit(&p.artist, text::SMALL, text_w),
+            text::SMALL,
+            s.ink_dim,
+        ));
     }
-    if !p.identity.is_empty() {
-        meta = meta.push(label(p.identity.clone(), text::CAPTION, s.ink_faint));
-    }
-    top = top.push(
-        row![
-            art(s, p, 72.0, 12.0),
-            container(meta).center_y(72).width(Length::Fill)
-        ]
-        .spacing(14)
-        .align_y(Alignment::Center),
-    );
 
     // Progress, when the player reports a length.
     if p.length > 0 {
@@ -254,11 +302,15 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .min(p.length);
         let frac = pos as f32 / p.length as f32;
         let b2 = bus.clone();
-        let bar =
-            crate::ui::slider::slider(Space::new(), frac, 6.0, (s.raised_hi, s.accent), move |f| {
-                msg(Message::Seek(b2.clone(), f))
-            });
-        top = top.push(
+        let bar = crate::ui::slider::slider(
+            Space::new(),
+            frac,
+            4.0,
+            (s.ink.scale_alpha(0.14), s.accent),
+            move |f| msg(Message::Seek(b2.clone(), f)),
+        );
+        meta = meta.push(Space::new().height(4));
+        meta = meta.push(
             column![
                 bar,
                 row![
@@ -267,25 +319,25 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     label(clock(p.length), text::CAPTION, s.ink_faint),
                 ]
             ]
-            .spacing(6),
+            .spacing(4),
         );
     }
 
     let side = |i: Icon, m: Option<AppMessage>| {
-        control(container(icon(i, 18.0, if m.is_some() { s.ink } else { s.ink_faint })).center(40))
-            .radius(20.0)
-            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+        control(container(icon(i, 17.0, if m.is_some() { s.ink } else { s.ink_faint })).center(36))
+            .radius(18.0)
+            .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.08), s.raised_press)
             .on_press_maybe(m)
     };
     let play = control(
         container(icon(
             if p.playing { Icon::Pause } else { Icon::Play },
-            20.0,
+            18.0,
             s.on_accent,
         ))
-        .center(48),
+        .center(42),
     )
-    .radius(24.0)
+    .radius(21.0)
     .colors(s.accent, s.accent, s.accent)
     .on_press(msg(Message::PlayPause(bus.clone())));
     let transport = row![
@@ -299,11 +351,41 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             p.can_next.then(|| msg(Message::Next(bus.clone())))
         ),
     ]
-    .spacing(16)
+    .spacing(10)
     .align_y(Alignment::Center);
-    top = top.push(container(transport).center_x(Length::Fill));
+    meta = meta.push(container(transport).center_x(Length::Fill));
 
-    container(top).padding(16).into()
+    top = top.push(
+        row![art(s, p, ART, 16.0), container(meta).width(Length::Fill)]
+            .spacing(16)
+            .align_y(Alignment::Center),
+    );
+
+    // The panel takes a deep tint of the artwork's own colour.
+    let tint = art_colour(p).map(|c| s.fade(mix(c, s.base, 0.72)));
+    let base = s.base;
+    container(top)
+        .padding(16)
+        .style(move |_| container::Style {
+            background: tint.map(|deep| {
+                iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2 * 3.0))
+                    .add_stop(0.0, deep)
+                    .add_stop(1.0, base)
+                    .into()
+            }),
+            border: iced::Border::default().rounded(crate::theme::size::PANEL_RADIUS),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// `a` mixed toward `b` by `t` (0 = a, 1 = b).
+fn mix(a: Color, b: Color, t: f32) -> Color {
+    Color::from_rgb(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+    )
 }
 
 /// The bar chip: a small cover and the title.
