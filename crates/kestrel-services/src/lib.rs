@@ -17,6 +17,7 @@ pub mod mpris;
 pub mod network;
 pub mod notifications;
 pub mod power;
+pub mod previews;
 pub mod stream;
 pub mod system;
 pub mod toggles;

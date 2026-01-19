@@ -22,7 +22,6 @@ pub const KNOWN: &[&str] = &[
     "clock",
     "media",
     "tray",
-    "nba",
     "weather",
     "system",
     "updates",
@@ -41,7 +40,6 @@ pub struct Needs {
     pub system: bool,
     pub updates: bool,
     pub weather: bool,
-    pub nba: bool,
 }
 
 pub fn needs(bar: &BarConfig) -> Needs {
@@ -56,7 +54,6 @@ pub fn needs(bar: &BarConfig) -> Needs {
         system: on("system") || island,
         updates: on("updates"),
         weather: on("weather") || island,
-        nba: on("nba") || island,
     }
 }
 
@@ -75,7 +72,6 @@ pub fn items<'a>(
         "island" => island::items(app, o, s, open),
         "media" => media_chip(app, o, s, open),
         "tray" => tray(app, o, s, open),
-        "nba" => nba(app, o, s, open),
         "weather" => weather(app, o, s, open),
         "system" => system(app, o, s, open),
         "updates" => updates(app, o, s, open),
@@ -159,11 +155,11 @@ fn media_chip<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -196,11 +192,11 @@ fn tray<'a>(
     let colors = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -252,62 +248,6 @@ fn tray<'a>(
     }
     items
 }
-/// A live NBA game (nothing when none is live).
-fn nba<'a>(
-    app: &'a App,
-    o: &'a Output,
-    s: Scheme,
-    open: Option<PanelKind>,
-) -> Vec<Element<'a, Message>> {
-    let _ = (&app, &o, &open);
-    let id = o.id;
-    let _ = id;
-    let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.accent_soft
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.accent_soft } else { s.raised_hi },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
-    // A live NBA game.
-    if let Some(g) = app
-        .nba
-        .iter()
-        .find(|g| g.phase == crate::services::web::Phase::Live)
-    {
-        items.push(
-            ui::control(
-                row![
-                    icon(Icon::Trophy, 14.0, s.ink_dim),
-                    label(
-                        format!(
-                            "{} {}–{} {}  {}",
-                            g.away, g.away_score, g.home_score, g.home, g.detail
-                        ),
-                        text::SMALL,
-                        s.ink
-                    ),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-            )
-            .padding([0, 10])
-            .height(size::CONTROL)
-            .radius(size::CONTROL / 2.0)
-            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Calendar, id, r))
-            .into(),
-        );
-    }
-
-    items
-}
 /// Weather now; the forecast is in the calendar.
 fn weather<'a>(
     app: &'a App,
@@ -322,11 +262,11 @@ fn weather<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -371,11 +311,11 @@ fn system<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -426,11 +366,11 @@ fn updates<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -474,11 +414,11 @@ fn privacy<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -528,18 +468,18 @@ fn status<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
     let _ = pill(false);
     // Status cluster → control centre.
     let active = open == Some(PanelKind::Control);
-    let fg = if active { s.accent } else { s.ink };
+    let fg = s.ink;
     let mut status = row![].spacing(10).align_y(Alignment::Center);
     if app.net.available {
         status = status.push(icon(control::wifi_icon(&app.net), size::ICON, fg));
@@ -600,11 +540,11 @@ fn bell<'a>(
     let pill = |active: bool| {
         (
             if active {
-                s.accent_soft
+                s.selected()
             } else {
                 Color::TRANSPARENT
             },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
     };
@@ -735,12 +675,7 @@ fn clock<'a>(
     let id = o.id;
     ui::control(
         row![
-            label_w(
-                time,
-                text::BODY,
-                if active { s.accent } else { s.ink },
-                theme::SEMIBOLD
-            ),
+            label_w(time, text::BODY, s.ink, theme::SEMIBOLD),
             label(date, text::SMALL, s.ink),
         ]
         .spacing(8)
@@ -751,11 +686,11 @@ fn clock<'a>(
     .radius(size::CONTROL / 2.0)
     .colors(
         if active {
-            s.accent_soft
+            s.selected()
         } else {
             iced::Color::TRANSPARENT
         },
-        if active { s.accent_soft } else { s.raised_hi },
+        if active { s.selected() } else { s.hover() },
         s.raised_press,
     )
     .on_press_at(move |b| Message::Toggle(PanelKind::Calendar, id, b))

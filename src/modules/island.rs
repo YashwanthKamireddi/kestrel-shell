@@ -5,9 +5,8 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::panels::media;
-use crate::services::web::Phase;
 use crate::theme::{self, Scheme, size, text};
-use crate::ui::{self, Icon, icon, label, label_w};
+use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
@@ -15,23 +14,6 @@ use iced::{Alignment, Element};
 /// island in the bar) rather than as a separate drop.
 pub fn hosts_osd(app: &App) -> bool {
     app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
-}
-
-/// What the island shows next to the time, most important first.
-enum Activity<'a> {
-    Game(&'a crate::services::web::Game),
-    Music(&'a crate::services::mpris::Player),
-    None,
-}
-
-fn activity(app: &App) -> Activity<'_> {
-    if let Some(g) = app.nba.iter().find(|g| g.phase == Phase::Live) {
-        return Activity::Game(g);
-    }
-    match app.media.main() {
-        Some(p) if p.playing => Activity::Music(p),
-        _ => Activity::None,
-    }
 }
 
 /// The island. What is playing floats beside it as its own bubble (`bubble`), drawn by the
@@ -48,18 +30,23 @@ pub fn items<'a>(
 /// Diameter of the music bubble.
 pub const BUBBLE: f32 = 30.0;
 
-/// The music bubble: the cover in a circle, ringed in the accent while it plays. Opens the
-/// media panel. None when nothing plays.
+/// The music bubble: the cover in a circle, ringed in the accent while it plays and quietly
+/// while paused. Opens the media panel. None when there is no player.
 pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
-    let Activity::Music(p) = activity(app) else {
-        return None;
-    };
+    // Stays while paused: the bubble is the player, not just the sound.
+    let p = app.media.main()?;
     let id = o.id;
     let open = app
         .panel
         .as_ref()
         .is_some_and(|q| q.open && q.kind == PanelKind::Media);
-    let ring = if open { s.ink } else { s.accent };
+    let ring = if open {
+        s.ink
+    } else if p.playing {
+        s.accent
+    } else {
+        s.ink_faint
+    };
     Some(
         ui::control(
             iced::widget::container(media::art(s, p, BUBBLE - 6.0, (BUBBLE - 6.0) / 2.0))
@@ -92,7 +79,7 @@ pub fn bar<'a>(
     let time = label_w(
         app.now.format("%H:%M").to_string(),
         text::BODY,
-        if active { s.accent } else { s.ink },
+        s.ink,
         theme::SEMIBOLD,
     );
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
@@ -130,25 +117,6 @@ pub fn bar<'a>(
         }
         content = content.push(row![lead, words].spacing(8).align_y(Alignment::Center));
         return finish(content, o, s, active);
-    }
-    match activity(app) {
-        Activity::Game(g) => {
-            content = content.push(
-                row![
-                    icon(Icon::Trophy, 14.0, s.accent),
-                    label(
-                        format!("{} {}–{} {}", g.away, g.away_score, g.home_score, g.home),
-                        text::SMALL,
-                        s.ink
-                    ),
-                    label(g.detail.clone(), text::CAPTION, s.ink_dim),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-            );
-        }
-        // Music has its own pill beside the island (see `items`).
-        Activity::Music(_) | Activity::None => {}
     }
     content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
     if let Some(w) = &app.weather {
@@ -241,13 +209,15 @@ fn finish<'a>(
     let id = o.id;
     let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
+    // As tall as a pill, so in the pill style it is the pill.
+    let h = size::BAR - 6.0;
     ui::control(inner)
-        .padding([0, 12])
-        .height(size::CONTROL)
-        .radius(size::CONTROL / 2.0)
+        .padding([0, 14])
+        .height(h)
+        .radius(h / 2.0)
         .colors(
-            if active { s.accent_soft } else { s.raised },
-            if active { s.accent_soft } else { s.raised_hi },
+            if active { s.raised_press } else { s.raised },
+            if active { s.raised_press } else { s.raised_hi },
             s.raised_press,
         )
         .on_press_at(move |r| Message::Toggle(PanelKind::Island, id, r))

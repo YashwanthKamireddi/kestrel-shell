@@ -47,7 +47,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         hover: Color::TRANSPARENT,
         press: Color::TRANSPARENT,
         border: None,
-        press_scale: true,
+        press_scale: false,
         center_x: false,
     }
 }
@@ -250,7 +250,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                     if state.pressed {
                         state.pressed = false;
-                        state.scale.to(1.0, (20.0, 0.5));
+                        state.scale.to(1.0, Spring::CLOSE);
                         shell.capture_event();
                     }
                 }

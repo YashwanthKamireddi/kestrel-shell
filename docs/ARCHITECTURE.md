@@ -74,7 +74,7 @@ A module is one feature. It owns:
 
 | Part | What |
 |---|---|
-| `id` | the name used in config (`"workspaces"`, `"media"`, `"nba"`, …) |
+| `id` | the name used in config (`"workspaces"`, `"media"`, `"weather"`, …) |
 | config | its `[modules.<id>]` table, with defaults |
 | state + messages | its own `State`, `Message`, `update` |
 | subscription | the services it listens to; only built while the module is enabled |

@@ -183,7 +183,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         control(
                             iced::widget::image(thumb.clone())
                                 .width(THUMB_W)
-                                .height(THUMB_H),
+                                .height(THUMB_H)
+                                .opacity(s.opacity),
                         )
                         .padding(3)
                         .radius(size::ROW_RADIUS)

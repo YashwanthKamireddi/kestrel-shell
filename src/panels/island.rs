@@ -3,7 +3,6 @@
 
 use super::{calendar, media};
 use crate::app::{App, Message as AppMessage};
-use crate::services::web::Phase;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, card, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
@@ -13,9 +12,6 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let mut col = column![today(app, s)].spacing(12);
     if let Some(p) = media::current(app) {
         col = col.push(playing(s, p));
-    }
-    if !app.nba.is_empty() {
-        col = col.push(games(app, s));
     }
     col = col.push(system(app, s));
     col = col.push(card(s, calendar::month(app, s)));
@@ -151,47 +147,6 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
         .spacing(12)
         .align_y(Alignment::Center),
     )
-}
-
-/// NBA: live games first, then today's; at most five.
-fn games(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let mut list: Vec<&crate::services::web::Game> = app.nba.iter().collect();
-    list.sort_by_key(|g| match g.phase {
-        Phase::Live => 0,
-        Phase::Upcoming => 1,
-        Phase::Final => 2,
-    });
-    let mut col = column![
-        row![
-            icon(Icon::Trophy, 14.0, s.ink_dim),
-            label_w("NBA", text::SMALL, s.ink_dim, theme::MEDIUM),
-        ]
-        .spacing(6)
-        .align_y(Alignment::Center)
-    ]
-    .spacing(8);
-    for g in list.into_iter().take(5) {
-        let live = g.phase == Phase::Live;
-        let score = if g.phase == Phase::Upcoming {
-            String::new()
-        } else {
-            format!("{}  {}", g.away_score, g.home_score)
-        };
-        col = col.push(
-            row![
-                label(format!("{} @ {}", g.away, g.home), text::SMALL, s.ink)
-                    .width(Length::Fixed(110.0)),
-                label(score, text::SMALL, if live { s.ink } else { s.ink_dim }).width(Length::Fill),
-                label(
-                    g.detail.clone(),
-                    text::CAPTION,
-                    if live { s.accent } else { s.ink_faint }
-                ),
-            ]
-            .align_y(Alignment::Center),
-        );
-    }
-    card(s, col)
 }
 
 /// CPU, memory and temperature as quiet level bars.

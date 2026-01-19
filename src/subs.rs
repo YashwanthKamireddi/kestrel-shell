@@ -46,9 +46,6 @@ pub fn system() -> Subscription<system::State> {
 pub fn updates() -> Subscription<updates::State> {
     Subscription::run(updates::stream)
 }
-pub fn nba() -> Subscription<Vec<web::Game>> {
-    Subscription::run(web::nba_stream)
-}
 
 /// Weather for a city, or exact coordinates with the city as the label.
 pub fn weather(

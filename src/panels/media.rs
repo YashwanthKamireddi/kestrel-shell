@@ -97,7 +97,11 @@ pub fn art<'a, M: Clone + 'static>(
 ) -> Element<'a, M> {
     match &p.art {
         Some(path) if std::path::Path::new(path).is_file() => match art_at(path, size, radius) {
-            Some(h) => iced::widget::image(h).width(size).height(size).into(),
+            Some(h) => iced::widget::image(h)
+                .width(size)
+                .height(size)
+                .opacity(s.opacity)
+                .into(),
             None => crate::ui::cover(image::Handle::from_path(path), size, size, radius),
         },
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))

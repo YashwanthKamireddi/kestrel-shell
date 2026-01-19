@@ -88,18 +88,14 @@ pub fn icon_button<'a, M: Clone + 'static>(
     on_press: M,
     active: bool,
 ) -> control::Control<'a, M> {
-    let (fg, rest) = if active {
-        (s.accent, s.accent_soft)
+    let rest = if active {
+        s.selected()
     } else {
-        (s.ink, Color::TRANSPARENT)
+        Color::TRANSPARENT
     };
-    control(container(icon(i, size::ICON, fg)).center(Length::Fixed(size::CONTROL)))
+    control(container(icon(i, size::ICON, s.ink)).center(Length::Fixed(size::CONTROL)))
         .radius(size::CONTROL / 2.0)
-        .colors(
-            rest,
-            if active { rest } else { s.raised_hi },
-            s.raised_press,
-        )
+        .colors(rest, if active { rest } else { s.hover() }, s.raised_press)
         .on_press(on_press)
 }
 

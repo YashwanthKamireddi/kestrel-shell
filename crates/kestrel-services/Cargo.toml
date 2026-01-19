@@ -19,5 +19,8 @@ inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
 anyhow = "1"
 wayland-client = "0.31"
+wayland-backend = "0.3"
+wayland-scanner = "0.31"
+bitflags = "2"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }

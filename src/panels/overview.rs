@@ -21,10 +21,13 @@ pub struct State {
     query: String,
     /// Address of the selected window.
     selected: Option<String>,
+    /// Live pictures of the windows, by address (kept between opens, refreshed on each).
+    previews: std::collections::HashMap<String, crate::services::previews::Preview>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
+    Previews(Vec<(String, Option<crate::services::previews::Preview>)>),
     Query(String),
     Submit,
 }
@@ -48,6 +51,21 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
         .map(|w| w.address.clone());
     Task::batch([
         Task::Iced(iced::widget::focus(INPUT_ID.clone())),
+        // Fresh pictures of every window, made off the UI thread.
+        Task::perform(
+            {
+                let addrs: Vec<String> =
+                    app.hypr.windows.iter().map(|w| w.address.clone()).collect();
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        crate::services::previews::capture(&addrs, 640)
+                    })
+                    .await
+                    .unwrap_or_default()
+                }
+            },
+            |v| msg(Message::Previews(v)),
+        ),
         // Positions change without an event (resizing); read them fresh.
         Task::perform(hyprland::snapshot(), |s| match s {
             Some(s) => AppMessage::Hypr(s),
@@ -108,6 +126,22 @@ fn focus(address: &str) -> Task<AppMessage> {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
+        Message::Previews(v) => {
+            let live: std::collections::HashSet<&str> = app
+                .hypr
+                .windows
+                .iter()
+                .map(|w| w.address.as_str())
+                .collect();
+            let st = &mut app.panels.overview;
+            st.previews.retain(|a, _| live.contains(a.as_str()));
+            for (a, p) in v {
+                if let Some(p) = p {
+                    st.previews.insert(a, p);
+                }
+            }
+            preview_cache_clear();
+        }
         Message::Query(q) => {
             app.panels.overview.query = q;
             // Keep the selection on a match.
@@ -284,10 +318,11 @@ fn card<'a>(
     .padding([0, 4]);
 
     let backdrop: Element<'_, AppMessage> = match &app.wallpaper {
-        Some(w) => iced::widget::image(w.thumb.clone())
+        Some(w) => iced::widget::image(w.thumb_soft.clone())
             .width(width)
             .height(height)
             .content_fit(iced::ContentFit::Fill)
+            .opacity(s.opacity)
             .into(),
         None => container(Space::new())
             .width(width)
@@ -321,43 +356,68 @@ fn card<'a>(
         );
         let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
-        let px = (bw.min(bh) * 0.42).clamp(14.0, 36.0);
-        let mut inner = column![app_icon(&w.class, px, s)]
-            .spacing(4)
-            .align_x(Alignment::Center);
-        if bh >= 64.0 && bw >= 96.0 {
-            let title = if w.title.is_empty() {
-                apps::name_for_class(&w.class)
-            } else {
-                w.title.clone()
-            };
-            inner = inner.push(label(
-                ui::fit(&title, text::CAPTION, bw - 16.0),
-                text::CAPTION,
-                s.ink_dim,
-            ));
-        }
-        let fill = if sel { s.raised_hi } else { s.raised };
-        let alpha = if hit { 0.94 } else { 0.35 };
-        let tile =
-            control(
+        let alpha = if hit { 1.0 } else { 0.3 };
+        let body: Element<'_, AppMessage> = match preview(app, &w.address, bw, bh) {
+            // The window itself, with its app's icon as a small badge.
+            Some(h) => stack![
+                iced::widget::image(h)
+                    .width(bw)
+                    .height(bh)
+                    .opacity(alpha * s.opacity),
+                container(app_icon(&w.class, 16.0, s))
+                    .padding(6)
+                    .width(bw)
+                    .height(bh)
+                    .align_x(Alignment::Start)
+                    .align_y(Alignment::End),
+            ]
+            .into(),
+            // No picture yet: the icon (and title when there is room) on a card.
+            None => {
+                let px = (bw.min(bh) * 0.42).clamp(14.0, 36.0);
+                let mut inner = column![app_icon(&w.class, px, s)]
+                    .spacing(4)
+                    .align_x(Alignment::Center);
+                if bh >= 64.0 && bw >= 96.0 {
+                    let title = if w.title.is_empty() {
+                        apps::name_for_class(&w.class)
+                    } else {
+                        w.title.clone()
+                    };
+                    inner = inner.push(label(
+                        ui::fit(&title, text::CAPTION, bw - 16.0),
+                        text::CAPTION,
+                        s.ink_dim,
+                    ));
+                }
                 container(inner)
                     .center_x(bw)
                     .center_y(bh)
                     .style(move |_| container::Style {
-                        background: Some(fill.scale_alpha(alpha).into()),
-                        border: iced::Border {
-                            color: if sel {
-                                s.accent
-                            } else {
-                                s.ink.scale_alpha(0.08)
-                            },
-                            width: if sel { 2.0 } else { 1.0 },
-                            radius: 8.0.into(),
-                        },
+                        background: Some(s.raised.scale_alpha(0.94 * alpha).into()),
+                        border: iced::Border::default().rounded(8),
                         ..container::Style::default()
-                    }),
-            )
+                    })
+                    .into()
+            }
+        };
+        // Selection: an accent ring drawn over the picture.
+        let ring = container(Space::new())
+            .width(bw)
+            .height(bh)
+            .style(move |_| container::Style {
+                border: iced::Border {
+                    color: if sel {
+                        s.accent
+                    } else {
+                        s.ink.scale_alpha(0.10)
+                    },
+                    width: if sel { 2.5 } else { 1.0 },
+                    radius: 8.0.into(),
+                },
+                ..container::Style::default()
+            });
+        let tile = control(stack![body, ring])
             .width(bw)
             .height(bh)
             .radius(8.0)
@@ -365,6 +425,26 @@ fn card<'a>(
             .no_press_scale()
             .on_press(focus_msg(&w.address));
         layers = layers.push(pin(tile).x(x).y(y));
+    }
+    // An empty workspace: its number, large, on the calm backdrop.
+    if windows.is_empty() {
+        layers = layers.push(
+            container(
+                column![
+                    label_w(
+                        id.to_string(),
+                        theme::text::DISPLAY,
+                        if current { s.accent } else { s.ink },
+                        theme::SEMIBOLD
+                    ),
+                    label("Empty", text::CAPTION, s.ink_dim),
+                ]
+                .spacing(2)
+                .align_x(Alignment::Center),
+            )
+            .center_x(width)
+            .center_y(height),
+        );
     }
     // The current workspace's outline sits on top, where the picture can't cover it.
     if current {
@@ -381,6 +461,31 @@ fn card<'a>(
     }
     let frame = layers;
     column![header, frame].spacing(8).width(width).into()
+}
+
+/// A window's picture at a tile's size, corners rounded; made once per size.
+fn preview(app: &App, address: &str, w: f32, h: f32) -> Option<iced::widget::image::Handle> {
+    let key = (address.to_string(), w as u32, h as u32);
+    if let Some(hit) = PREVIEWS.lock().ok()?.get(&key) {
+        return Some(hit.clone());
+    }
+    let p = app.panels.overview.previews.get(address)?;
+    let img = image::RgbaImage::from_raw(p.width, p.height, p.rgba.clone())?;
+    let r = ui::rounded_cover(&img, w, h, 8.0);
+    let handle = iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw());
+    PREVIEWS.lock().ok()?.insert(key, handle.clone());
+    Some(handle)
+}
+
+type PreviewKey = (String, u32, u32);
+static PREVIEWS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<PreviewKey, iced::widget::image::Handle>>,
+> = std::sync::LazyLock::new(Default::default);
+
+fn preview_cache_clear() {
+    if let Ok(mut c) = PREVIEWS.lock() {
+        c.clear();
+    }
 }
 
 fn focus_msg(address: &str) -> AppMessage {

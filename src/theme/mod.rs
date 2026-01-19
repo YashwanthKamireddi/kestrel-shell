@@ -77,12 +77,23 @@ impl Scheme {
         }
     }
 
+    /// A bar control under the pointer: a faint neutral lift.
+    pub fn hover(&self) -> Color {
+        self.ink.scale_alpha(0.07 * self.opacity)
+    }
+
+    /// A bar control whose panel is open: a clear neutral fill. Colour is kept for
+    /// indicators (the current workspace, a level), never for "this is selected".
+    pub fn selected(&self) -> Color {
+        self.ink.scale_alpha(0.14 * self.opacity)
+    }
+
     /// Any other colour (artwork tints, a weather sky) faded in step with the scheme.
     pub fn fade(&self, c: Color) -> Color {
         if self.opacity >= 1.0 {
             c
         } else {
-            color::mix(self.base, c, self.opacity.max(0.0))
+            c.scale_alpha(self.opacity.max(0.0))
         }
     }
 }
@@ -94,7 +105,8 @@ impl Scheme {
         if alpha >= 1.0 {
             return self;
         }
-        let f = |c: Color| color::mix(self.base, c, alpha.max(0.0));
+        // True transparency: panels fade over whatever is behind them.
+        let f = |c: Color| c.scale_alpha(alpha.clamp(0.0, 1.0));
         Self {
             base: self.base,
             raised: f(self.raised),
