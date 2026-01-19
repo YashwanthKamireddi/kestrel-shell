@@ -131,12 +131,14 @@ pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Messag
     let px = 16.0;
     match &item.icon {
         Some(tray_service::TrayIcon::Name(n)) => match icons::lookup(n) {
-            Some(p) => ui::image_file(&p, px),
+            Some(p) => ui::image_file_faded(&p, px, s.opacity),
             None => icon(Icon::AppWindow, px, s.ink_dim).into(),
         },
-        Some(tray_service::TrayIcon::Rgba(p)) => {
-            image(crate::ui::pixels(p)).width(px).height(px).into()
-        }
+        Some(tray_service::TrayIcon::Rgba(p)) => image(crate::ui::pixels(p))
+            .width(px)
+            .height(px)
+            .opacity(s.opacity)
+            .into(),
         None => icon(Icon::AppWindow, px, s.ink_dim).into(),
     }
 }
@@ -223,7 +225,8 @@ fn tray<'a>(
         };
         items.push(ctl.into());
     }
-    if hidden > 0 {
+    // Always there while the tray has anything: it is also how pinned icons get unpinned.
+    if hidden > 0 || !items.is_empty() {
         let active = tray_open && crate::panels::tray::showing(app, None);
         let (a, b, c) = colors(active);
         items.push(

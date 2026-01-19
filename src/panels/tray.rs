@@ -335,7 +335,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .into(),
             (Some(false), _) => Space::new().width(14).into(),
             (None, Some(name)) => match icons::lookup(name) {
-                Some(p) => ui::image_file(&p, 14.0),
+                Some(p) => ui::image_file_faded(&p, 14.0, s.opacity),
                 None => Space::new().width(14).into(),
             },
             (None, None) => Space::new().width(14).into(),

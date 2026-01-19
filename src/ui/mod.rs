@@ -73,11 +73,15 @@ pub fn ellipsize(s: &str, max: usize) -> String {
     }
 }
 
+/// An icon in `color`. The colour's transparency becomes the icon's opacity: the SVG tint
+/// alone ignores alpha, which left icons at full strength while a panel faded out.
 pub fn icon(i: Icon, size: f32, color: Color) -> Svg<'static> {
+    let solid = Color { a: 1.0, ..color };
     svg(i.handle())
         .width(size)
         .height(size)
-        .style(move |_, _| svg::Style { color: Some(color) })
+        .opacity(color.a)
+        .style(move |_, _| svg::Style { color: Some(solid) })
 }
 
 /// A round icon button for the bar and panel headers. `active` marks an open panel or an
@@ -305,15 +309,26 @@ pub fn empty<'a, M: 'a>(s: Scheme, i: Icon, msg: impl text::IntoFragment<'a>) ->
 
 /// An image file (SVG or raster) at a square size.
 pub fn image_file<'a, M: 'a>(path: &std::path::Path, size: f32) -> Element<'a, M> {
+    image_file_faded(path, size, 1.0)
+}
+
+/// `image_file` at `opacity` (a panel's fade: `Scheme::opacity`).
+pub fn image_file_faded<'a, M: 'a>(
+    path: &std::path::Path,
+    size: f32,
+    opacity: f32,
+) -> Element<'a, M> {
     if path.extension().is_some_and(|e| e == "svg") {
         iced::widget::svg(iced::widget::svg::Handle::from_path(path))
             .width(size)
             .height(size)
+            .opacity(opacity)
             .into()
     } else {
         iced::widget::image(iced::widget::image::Handle::from_path(path))
             .width(size)
             .height(size)
+            .opacity(opacity)
             .into()
     }
 }

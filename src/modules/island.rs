@@ -30,36 +30,22 @@ pub fn items<'a>(
 /// Diameter of the music bubble.
 pub const BUBBLE: f32 = 30.0;
 
-/// The music bubble: the cover in a circle, ringed in the accent while it plays and quietly
-/// while paused. Opens the media panel. None when there is no player.
+/// The music bubble: the cover in a circle, dimmed while paused. Opens the media panel. None
+/// when there is no player.
 pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
     // Stays while paused: the bubble is the player, not just the sound.
     let p = app.media.main()?;
     let id = o.id;
-    let open = app
-        .panel
-        .as_ref()
-        .is_some_and(|q| q.open && q.kind == PanelKind::Media);
-    let ring = if open {
-        s.ink
-    } else if p.playing {
-        s.accent
-    } else {
-        s.ink_faint
-    };
+    // Just the cover in a circle; while paused it dims.
     Some(
         ui::control(
-            iced::widget::container(media::art(s, p, BUBBLE - 6.0, (BUBBLE - 6.0) / 2.0))
-                .center(BUBBLE)
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(s.base.into()),
-                    border: iced::Border {
-                        color: ring,
-                        width: 2.0,
-                        radius: (BUBBLE / 2.0).into(),
-                    },
-                    ..iced::widget::container::Style::default()
-                }),
+            iced::widget::container(media::art(
+                s.faded(if p.playing { 1.0 } else { 0.5 }),
+                p,
+                BUBBLE,
+                BUBBLE / 2.0,
+            ))
+            .center(BUBBLE),
         )
         .width(BUBBLE)
         .height(BUBBLE)

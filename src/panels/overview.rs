@@ -217,7 +217,7 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
 
 fn app_icon<'a>(class: &str, px: f32, s: Scheme) -> Element<'a, AppMessage> {
     match icons::lookup(&apps::icon_for_class(class)) {
-        Some(p) => ui::image_file(&p, px),
+        Some(p) => ui::image_file_faded(&p, px, s.opacity),
         None => icon(Icon::AppWindow, px * 0.8, s.ink_dim).into(),
     }
 }

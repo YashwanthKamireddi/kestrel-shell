@@ -62,7 +62,7 @@ fn ago(t: SystemTime) -> String {
 
 fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     match icons::lookup(&n.app_icon) {
-        Some(p) => ui::image_file(&p, 16.0),
+        Some(p) => ui::image_file_faded(&p, 16.0, s.opacity),
         None => icon(Icon::Bell, 14.0, s.ink_dim).into(),
     }
 }
