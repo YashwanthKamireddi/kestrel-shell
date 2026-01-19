@@ -276,7 +276,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         );
     }
     meta = meta.push(label_w(
-        ui::fit(&p.title, text::TITLE, text_w),
+        ui::two_lines(&p.title, text::TITLE, text_w),
         text::TITLE,
         s.ink,
         theme::SEMIBOLD,

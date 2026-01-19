@@ -104,7 +104,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
             .on_press_maybe(m)
     };
     let mut meta = column![label_w(
-        ui::fit(&p.title, text::BODY, 210.0),
+        ui::two_lines(&p.title, text::BODY, 210.0),
         text::BODY,
         s.ink,
         theme::MEDIUM

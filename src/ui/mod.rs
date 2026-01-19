@@ -40,6 +40,35 @@ pub fn fit(s: &str, size: f32, width: f32) -> String {
     ellipsize(s, chars)
 }
 
+/// `s` on up to two lines of `width` px at `size` px text, broken between words; "…" only
+/// if even two lines are not enough. For titles, which should be read, not cut.
+pub fn two_lines(s: &str, size: f32, width: f32) -> String {
+    let per = (width / (size * 0.56)).floor().max(4.0) as usize;
+    let words: Vec<&str> = s.split_whitespace().collect();
+    let mut first = String::new();
+    let mut i = 0;
+    while i < words.len() {
+        let next = if first.is_empty() {
+            words[i].chars().count()
+        } else {
+            first.chars().count() + 1 + words[i].chars().count()
+        };
+        if next > per && !first.is_empty() {
+            break;
+        }
+        if !first.is_empty() {
+            first.push(' ');
+        }
+        first.push_str(words[i]);
+        i += 1;
+    }
+    if i >= words.len() {
+        return fit(&first, size, width);
+    }
+    let rest = words[i..].join(" ");
+    format!("{}\n{}", fit(&first, size, width), fit(&rest, size, width))
+}
+
 /// An image that fills a `w` × `h` frame (cropping as needed). Wrapped in a `Control`
 /// because that is what clips: iced's image draws a covering image past its own bounds, and a
 /// container's `clip` only narrows the viewport, it does not cut the drawing.
@@ -475,4 +504,20 @@ pub fn rounded_file(
     }
     cache.insert(key, made.clone());
     made
+}
+
+#[cfg(test)]
+mod text_tests {
+    #[test]
+    fn titles_break_between_words() {
+        let t = super::two_lines(
+            "Warriors vs. Rockets Reaction Houston rolling with",
+            13.0,
+            160.0,
+        );
+        let lines: Vec<&str> = t.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(!lines[0].ends_with(' '));
+        assert_eq!(super::two_lines("Short", 13.0, 160.0), "Short");
+    }
 }
