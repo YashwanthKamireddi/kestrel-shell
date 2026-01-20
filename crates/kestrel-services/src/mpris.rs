@@ -31,6 +31,9 @@ pub struct Player {
     pub can_next: bool,
     pub can_prev: bool,
     pub can_seek: bool,
+    /// The process behind it: a browser's own player ends its bus name in `.instance<PID>`,
+    /// the browser-integration player carries `kde:pid`. Used to join the two.
+    pub pid: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -55,6 +58,15 @@ pub enum Command {
     Previous(String),
     /// Absolute position in microseconds.
     Seek(String, i64),
+}
+
+fn clean(t: &str) -> String {
+    t.chars()
+        .filter(|c| !matches!(c, '\u{200e}' | '\u{200f}' | '\u{200b}' | '\u{feff}'))
+        .map(|c| if c == '\u{a0}' { ' ' } else { c })
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 fn s(m: &HashMap<String, OwnedValue>, k: &str) -> Option<String> {
@@ -83,10 +95,20 @@ async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
         })
         .unwrap_or(0);
     let art = s(&meta, "mpris:artUrl").and_then(|u| u.strip_prefix("file://").map(str::to_string));
+    let pid = meta
+        .get("kde:pid")
+        .and_then(|v| {
+            i64::try_from(v.clone())
+                .ok()
+                .or_else(|| u32::try_from(v.clone()).ok().map(i64::from))
+        })
+        .and_then(|p| u32::try_from(p).ok())
+        .or_else(|| bus.rsplit(".instance").next().and_then(|p| p.parse().ok()));
     Ok(Player {
         bus: bus.to_string(),
         identity,
-        title: s(&meta, "xesam:title").unwrap_or_default(),
+        // Pages put invisible direction marks and non-breaking spaces in titles.
+        title: clean(&s(&meta, "xesam:title").unwrap_or_default()),
         artist,
         album: s(&meta, "xesam:album").unwrap_or_default(),
         art,
@@ -95,7 +117,38 @@ async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
         can_next: p.get_property("CanGoNext").await.unwrap_or(false),
         can_prev: p.get_property("CanGoPrevious").await.unwrap_or(false),
         can_seek: p.get_property("CanSeek").await.unwrap_or(false),
+        pid,
     })
+}
+
+/// One browser tab can be reported twice: by the browser itself (true playback state,
+/// position and controls, but a generic title like "Apple Music - Web Player") and by the
+/// browser integration (the song, artist and cover, but a playback state that goes stale).
+/// Join them: what is playing from the integration, how it is playing from the browser.
+fn join_browser_players(players: &mut Vec<Player>) {
+    let integration: Vec<Player> = players
+        .iter()
+        .filter(|p| p.bus.contains("browser_integration") || p.bus.contains("browser-integration"))
+        .cloned()
+        .collect();
+    for rich in integration {
+        let Some(pid) = rich.pid else {
+            continue;
+        };
+        let Some(native) = players
+            .iter_mut()
+            .find(|p| p.bus != rich.bus && p.pid == Some(pid))
+        else {
+            continue;
+        };
+        native.title = rich.title.clone();
+        native.artist = rich.artist.clone();
+        native.album = rich.album.clone();
+        if rich.art.is_some() {
+            native.art = rich.art.clone();
+        }
+        players.retain(|p| p.bus != rich.bus);
+    }
 }
 
 /// Richer metadata wins when two players show the same thing.
@@ -113,15 +166,19 @@ async fn read(c: &Connection) -> zbus::Result<State> {
     .await?
     .call("ListNames", &())
     .await?;
-    let mut players: Vec<Player> = Vec::new();
+    let mut all: Vec<Player> = Vec::new();
     for n in names.iter().filter(|n| n.starts_with(PREFIX)) {
         // playerctld mirrors other players.
         if n.ends_with(".playerctld") {
             continue;
         }
-        let Ok(p) = read_player(c, n).await else {
-            continue;
-        };
+        if let Ok(p) = read_player(c, n).await {
+            all.push(p);
+        }
+    }
+    join_browser_players(&mut all);
+    let mut players: Vec<Player> = Vec::new();
+    for p in all {
         if p.title.trim().is_empty() {
             continue;
         }
@@ -242,4 +299,39 @@ pub fn stream() -> impl Stream<Item = State> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod join_tests {
+    use super::*;
+
+    #[test]
+    fn a_tab_reported_twice_becomes_one_player() {
+        let native = Player {
+            bus: "org.mpris.MediaPlayer2.chromium.instance132820".into(),
+            identity: "Chromium".into(),
+            title: "Apple Music - Web Player".into(),
+            playing: true,
+            length: 620_000_000,
+            pid: Some(132_820),
+            ..Player::default()
+        };
+        let rich = Player {
+            bus: "org.mpris.MediaPlayer2.plasma-browser-integration".into(),
+            identity: "Chromium".into(),
+            title: "Cry".into(),
+            artist: "Charlie Puth & Kenny G".into(),
+            art: Some("/tmp/a.jpg".into()),
+            playing: false,
+            pid: Some(132_820),
+            ..Player::default()
+        };
+        let mut v = vec![native, rich];
+        join_browser_players(&mut v);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].title, "Cry");
+        assert!(v[0].playing, "playback state comes from the browser");
+        assert_eq!(v[0].bus, "org.mpris.MediaPlayer2.chromium.instance132820");
+        assert_eq!(v[0].art.as_deref(), Some("/tmp/a.jpg"));
+    }
 }
