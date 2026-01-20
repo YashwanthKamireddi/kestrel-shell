@@ -4,6 +4,7 @@ pub mod control;
 pub mod icon;
 pub mod morph;
 pub mod reveal;
+pub mod ring;
 pub mod shape;
 pub mod slider;
 

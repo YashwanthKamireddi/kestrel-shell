@@ -5,7 +5,7 @@ use super::{calendar, media};
 use crate::app::{App, Message as AppMessage};
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, card, control, icon, label, label_w};
-use iced::widget::{Space, column, container, row};
+use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Length};
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
@@ -149,61 +149,56 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
     )
 }
 
-/// CPU, memory and temperature as quiet level bars.
+/// CPU, memory and temperature as rings: the value in the middle, the colour moving from the
+/// accent to amber to red as the load rises.
 fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let sys = app.system;
-    let meter = |i: Icon, name: &'static str, value: f32, shown: String| {
-        let hot = value >= 0.85;
-        let width = 120.0;
-        let bar = iced::widget::stack![
-            container(Space::new())
-                .width(width)
-                .height(4)
-                .style(move |_| container::Style {
-                    background: Some(s.raised_hi.into()),
-                    border: iced::Border::default().rounded(2),
-                    ..container::Style::default()
-                }),
-            container(Space::new())
-                .width((width * value.clamp(0.0, 1.0)).max(4.0))
-                .height(4)
-                .style(move |_| container::Style {
-                    background: Some(if hot { s.warn } else { s.accent }.into()),
-                    border: iced::Border::default().rounded(2),
-                    ..container::Style::default()
-                }),
-        ];
-        row![
-            icon(i, 14.0, s.ink_dim),
-            label(name, text::SMALL, s.ink_dim).width(Length::Fixed(60.0)),
-            container(bar).center_y(16).width(Length::Fill),
-            label(shown, text::SMALL, if hot { s.warn } else { s.ink }).width(Length::Fixed(44.0)),
+    let gauge = |i: Icon, name: &'static str, value: f32, shown: String| {
+        let tone = if value >= 0.85 {
+            s.bad
+        } else if value >= 0.6 {
+            s.warn
+        } else {
+            s.accent
+        };
+        let size = 72.0;
+        column![
+            iced::widget::stack![
+                ui::ring::ring(value, size, 7.0, tone, s.ink.scale_alpha(0.08 * s.opacity)),
+                container(label_w(shown, text::BODY, s.ink, theme::SEMIBOLD)).center(size),
+            ],
+            row![
+                icon(i, 13.0, s.ink_dim),
+                label(name, text::SMALL, s.ink_dim)
+            ]
+            .spacing(5)
+            .align_y(Alignment::Center),
         ]
         .spacing(8)
-        .align_y(Alignment::Center)
+        .align_x(Alignment::Center)
+        .width(Length::Fill)
     };
-    let mut col = column![
-        meter(
+    let mut r = row![
+        gauge(
             Icon::Cpu,
             "CPU",
             f32::from(sys.cpu) / 100.0,
             format!("{}%", sys.cpu)
         ),
-        meter(
+        gauge(
             Icon::MemoryStick,
             "Memory",
             f32::from(sys.mem) / 100.0,
             format!("{}%", sys.mem)
         ),
-    ]
-    .spacing(8);
+    ];
     if let Some(t) = sys.temp {
-        col = col.push(meter(
+        r = r.push(gauge(
             Icon::Thermometer,
             "Temp",
-            f32::from(t) / 100.0,
+            (f32::from(t) - 30.0) / 70.0,
             format!("{t}°"),
         ));
     }
-    card(s, col)
+    card(s, r.align_y(Alignment::Start))
 }
