@@ -302,7 +302,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
 
     // Progress, when the player reports a length.
-    if p.length > 0 {
+    if p.length > 0 && !app.length_unreliable.contains(&p.bus) {
         let pos = app
             .panels
             .media
