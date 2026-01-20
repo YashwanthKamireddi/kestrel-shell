@@ -133,6 +133,14 @@ async fn read(c: &Connection) -> zbus::Result<State> {
             players.push(p);
         }
     }
+    // A browser often keeps a bare placeholder ("Apple Music - Web Player": no cover, no
+    // artist, no length) next to the real track; drop it when the same app has a real one.
+    let real: Vec<String> = players
+        .iter()
+        .filter(|p| richness(p) > 0)
+        .map(|p| p.identity.clone())
+        .collect();
+    players.retain(|p| richness(p) > 0 || !real.contains(&p.identity));
     players.sort_by(|a, b| b.playing.cmp(&a.playing).then(a.bus.cmp(&b.bus)));
     Ok(State { players })
 }

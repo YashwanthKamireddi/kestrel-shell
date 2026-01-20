@@ -183,11 +183,16 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
-    // Media position is not signalled; read it once a second while the panel shows it.
+    // Media position is not signalled: read it while the panel shows it.
     if open == Some(PanelKind::Media) && media::current(app).is_some_and(|p| p.playing) {
+        // Smooth progress: redrawn ten times a second from the last read, re-read every 2 s.
         subs.push(
-            iced::time::every(std::time::Duration::from_secs(1))
+            iced::time::every(std::time::Duration::from_secs(2))
                 .map(|_| Message::Media(media::Message::Poll)),
+        );
+        subs.push(
+            iced::time::every(std::time::Duration::from_millis(100))
+                .map(|_| Message::Media(media::Message::Tick)),
         );
     }
     if open.is_some() {

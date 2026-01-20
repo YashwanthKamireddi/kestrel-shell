@@ -26,6 +26,8 @@ pub enum Message {
     Seek(String, f32),
     Position(Option<i64>),
     Poll,
+    /// Redraw the moving progress between position reads.
+    Tick,
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -69,6 +71,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::Position(p) => {
             app.panels.media.position = p.map(|p| (p, std::time::Instant::now()));
         }
+        Message::Tick => {}
         Message::Poll => {
             if let Some(p) = current(app) {
                 return Task::perform(mpris::position(p.bus.clone()), |p| {
@@ -232,16 +235,25 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
     let mut top = column![].spacing(12);
     if app.media.players.len() > 1 {
+        // Named by app, unless two come from the same app: then by what they play.
+        let same_app = |q: &Player| {
+            app.media
+                .players
+                .iter()
+                .filter(|o| o.identity == q.identity)
+                .count()
+                > 1
+        };
         let chips = row(app.media.players.iter().map(|q| {
             let on = q.bus == p.bus;
             control(label(
                 ui::ellipsize(
-                    if q.identity.is_empty() {
+                    if q.identity.is_empty() || same_app(q) {
                         &q.title
                     } else {
                         &q.identity
                     },
-                    18,
+                    22,
                 ),
                 text::SMALL,
                 if on { s.on_accent } else { s.ink_dim },
