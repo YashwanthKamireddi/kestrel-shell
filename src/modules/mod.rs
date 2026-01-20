@@ -91,7 +91,7 @@ pub fn items<'a>(
 /// A Lua widget: an optional icon and a label; clicking runs its `click`.
 fn lua_chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, Message> {
     let mut r = row![].spacing(6).align_y(Alignment::Center);
-    // A Lucide name from kestrel's set, else an icon theme name or a path.
+    // A name from kestrel's icon set, else an icon theme name or a path.
     if let Some(name) = c.icon.as_deref() {
         if let Some(i) = Icon::named(name) {
             r = r.push(icon(i, size::ICON, s.ink));

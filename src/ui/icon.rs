@@ -1,4 +1,6 @@
-//! The icon set: Lucide (ISC licence, assets/icons/LICENSE-lucide), 1.75 px stroke.
+//! The icon set: Material Symbols Rounded, filled (Apache-2.0, assets/icons/
+//! LICENSE-material-symbols), the icon language of Material 3. Kept under kestrel's own names
+//! (wifi, battery-3, …); level variants let status icons show the real level.
 //! Each icon is embedded once and its handle reused, so the renderer caches the raster.
 
 use iced::widget::svg::Handle;
@@ -20,7 +22,20 @@ icons! {
     ArrowLeft => "arrow-left",
     AudioLines => "audio-lines",
     Battery => "battery",
+    Battery0 => "battery-0",
+    Battery1 => "battery-1",
+    Battery2 => "battery-2",
+    Battery3 => "battery-3",
+    Battery4 => "battery-4",
+    Battery5 => "battery-5",
+    Battery6 => "battery-6",
     BatteryCharging => "battery-charging",
+    BatteryCharging20 => "battery-charging-20",
+    BatteryCharging30 => "battery-charging-30",
+    BatteryCharging50 => "battery-charging-50",
+    BatteryCharging60 => "battery-charging-60",
+    BatteryCharging80 => "battery-charging-80",
+    BatteryCharging90 => "battery-charging-90",
     BatteryFull => "battery-full",
     BatteryLow => "battery-low",
     BatteryMedium => "battery-medium",
@@ -125,6 +140,9 @@ icons! {
     VolumeX => "volume-x",
     Watch => "watch",
     Wifi => "wifi",
+    Wifi1 => "wifi-1",
+    Wifi2 => "wifi-2",
+    Wifi3 => "wifi-3",
     WifiHigh => "wifi-high",
     WifiLow => "wifi-low",
     WifiOff => "wifi-off",
@@ -133,7 +151,7 @@ icons! {
     Zap => "zap",
 }
 impl Icon {
-    /// The icon with this Lucide name ("hard-drive"), for the Lua layer.
+    /// The icon with this name ("hard-drive"), for the Lua layer.
     pub fn named(name: &str) -> Option<Icon> {
         NAMES.iter().find(|(n, _)| *n == name).map(|(_, i)| *i)
     }
