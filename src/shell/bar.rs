@@ -63,7 +63,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let k = p.progress(natural);
         let lift = if pills { (1.0 - k) * GLIDE } else { 0.0 };
-        let h = if natural > 0.0 { natural } else { p.h.value };
+        let h = if p.h.value > 0.0 { p.h.value } else { natural };
         let mut d = drop(p.x.value, p.w.value, h);
         d.top -= lift;
         panel_drop = Some((d, k, lift, h));
