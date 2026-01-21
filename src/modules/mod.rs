@@ -485,7 +485,21 @@ fn status<'a>(
     let fg = s.ink;
     let mut status = row![].spacing(10).align_y(Alignment::Center);
     if app.net.available {
-        status = status.push(icon(control::wifi_icon(&app.net), size::ICON, fg));
+        use crate::services::network::Link;
+        status = status.push(match app.net.link {
+            // Bands lit to the real signal.
+            Link::Wifi => ui::indicators::wifi(
+                Some(match app.net.strength {
+                    0..=25 => 0,
+                    26..=50 => 1,
+                    51..=75 => 2,
+                    _ => 3,
+                }),
+                s,
+            ),
+            Link::None if app.net.wifi_enabled => ui::indicators::wifi(None, s),
+            _ => icon(control::wifi_icon(&app.net), size::ICON, fg).into(),
+        });
     }
     if app.bt.powered {
         let i = if app.bt.connected().next().is_some() {
@@ -495,16 +509,16 @@ fn status<'a>(
         };
         status = status.push(icon(i, size::ICON, fg));
     }
-    status = status.push(icon(control::volume_icon(app.audio.sink()), size::ICON, fg));
+    status = status.push(match app.audio.sink() {
+        // Waves for the level, crossed out when muted.
+        Some(d) if !d.headphones => ui::indicators::speaker(d.volume, d.muted, s),
+        d => icon(control::volume_icon(d), size::ICON, fg).into(),
+    });
     if app.power.has_battery {
         let low = app.power.percent < 15.0 && !app.power.charging;
         status = status.push(
             row![
-                icon(
-                    control::battery_icon(&app.power),
-                    size::ICON,
-                    if low { s.bad } else { fg }
-                ),
+                ui::indicators::battery(app.power.percent / 100.0, app.power.charging, s),
                 label(
                     format!("{:.0}%", app.power.percent),
                     text::SMALL,
