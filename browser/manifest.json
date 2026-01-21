@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "kestrel media",
+  "version": "1.0",
+  "description": "Tells the kestrel shell what this browser is playing (title, artist, cover, progress) and lets it control playback.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx0AIGwYL4baD4Fl1DqT41mV+Bwx/q6q08boNAWVBHlONjnj7fV1M1LVUSc6IXSA131SpVPczh9hdLoqsXVnwKd9p2Xtn9OsUmESLy6e9hI+XSbJWoHWQUMI+u3EhcaDeK/tONNP0jBO38Jw3+bvPOPrMmSm89Rqt9Zvr6dcgQcMof8su/R7abXGZX6vJDKKtPGEsIyzseztVLbXINEmLEyXuHowGy7fMqyINkpDziedO0RNBv5M7h8BPcN50jqvVh0q0s2e3FbWIxwKc0aZBSVWUfRcpgI18eUwvhOeq9t92on3e4XeDmVfxwgerL5xdgmTX9UnZhuAcfvzByLzw7wIDAQAB",
+  "permissions": ["nativeMessaging"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://*/*", "http://*/*"], "js": ["page.js"], "world": "MAIN", "run_at": "document_idle" },
+    { "matches": ["https://*/*", "http://*/*"], "js": ["bridge.js"], "run_at": "document_idle" }
+  ]
+}

@@ -134,15 +134,12 @@ pub fn icon_button<'a, M: Clone + 'static>(
 }
 
 /// The card that groups related controls inside a panel.
-pub fn card<'a, M: 'a>(s: Scheme, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
+/// A group of content in a panel. Flat: no grey box, no outline; groups are told apart by
+/// space alone (design call, 2026-11-12).
+pub fn card<'a, M: 'a>(_s: Scheme, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
     container(content)
         .padding(size::PANEL_PAD)
         .width(Length::Fill)
-        .style(move |_| container::Style {
-            background: Some(s.raised.into()),
-            border: iced::Border::default().rounded(size::CARD_RADIUS),
-            ..container::Style::default()
-        })
         .into()
 }
 
@@ -269,7 +266,7 @@ pub fn list_row<'a, M: Clone + 'static>(
     let mut texts = iced::widget::column![label_w(
         title,
         theme::text::BODY,
-        s.ink,
+        if selected { s.accent } else { s.ink },
         if selected {
             theme::MEDIUM
         } else {
@@ -290,15 +287,9 @@ pub fn list_row<'a, M: Clone + 'static>(
     .height(44)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
-    .colors(
-        if selected {
-            s.accent_soft
-        } else {
-            Color::TRANSPARENT
-        },
-        if selected { s.accent_soft } else { s.raised_hi },
-        s.raised_press,
-    )
+    // No box behind a row: the selected one (the network in use) is told by its name in the
+    // accent; the pointer only lifts a row faintly.
+    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
     .no_press_scale()
     .on_press_maybe(on_press)
     .into()
