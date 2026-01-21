@@ -126,6 +126,22 @@ async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
 /// browser integration (the song, artist and cover, but a playback state that goes stale).
 /// Join them: what is playing from the integration, how it is playing from the browser.
 fn join_browser_players(players: &mut Vec<Player>) {
+    // kestrel's own browser player (the "kestrel media" extension) reads the page itself and
+    // is exact: with it there, the browser's generic player and the integration's go.
+    let own: Vec<u32> = players
+        .iter()
+        .filter(|p| p.bus.contains(".kestrel_browser."))
+        .filter_map(|p| p.pid)
+        .collect();
+    if !own.is_empty() {
+        players.retain(|p| {
+            p.bus.contains(".kestrel_browser.")
+                || !(p.pid.is_some_and(|pid| own.contains(&pid))
+                    || p.bus.contains("browser-integration")
+                    || p.bus.contains("browser_integration"))
+        });
+        return;
+    }
     let integration: Vec<Player> = players
         .iter()
         .filter(|p| p.bus.contains("browser_integration") || p.bus.contains("browser-integration"))

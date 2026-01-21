@@ -1,6 +1,6 @@
 # Local package for kestrel, built from this repository.
 pkgname=kestrel
-pkgver=0.1.0.r60.g3936c09
+pkgver=0.1.0.r61.g591f864
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
@@ -37,4 +37,8 @@ package() {
     install -Dm755 "$_repo/target/release/kestrel" "$pkgdir/usr/bin/kestrel"
     install -Dm644 "$startdir/kestrel.service" "$pkgdir/usr/lib/systemd/user/kestrel.service"
     install -Dm644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    # The "kestrel media" browser extension (load it unpacked from here) and its native host.
+    install -Dm644 -t "$pkgdir/usr/share/kestrel/browser" "$_repo"/browser/*
+    install -Dm644 "$_repo/packaging/browser/dev.kestrel.media.json" \
+        "$pkgdir/etc/chromium/native-messaging-hosts/dev.kestrel.media.json"
 }

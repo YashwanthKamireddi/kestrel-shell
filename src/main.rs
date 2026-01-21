@@ -19,6 +19,14 @@ use iced::{KeyboardInteractivity, Layer, LayerShellSettings};
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Started by the browser for the "kestrel media" extension (it passes its origin).
+    if args
+        .first()
+        .is_some_and(|a| a.starts_with("chrome-extension://"))
+    {
+        services::browser_host::run();
+        return Ok(());
+    }
     if !args.is_empty() {
         if args[0] == "--help" || args[0] == "-h" {
             println!("kestrel                 run the shell");
