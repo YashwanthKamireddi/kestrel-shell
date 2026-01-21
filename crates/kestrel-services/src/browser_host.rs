@@ -284,11 +284,23 @@ async fn fetch_art(url: &str) -> Option<String> {
         .join("kestrel")
         .join("art");
     std::fs::create_dir_all(&dir).ok()?;
-    let file = dir.join(format!("{:x}.img", hash(url)));
-    if !file.is_file() {
-        let bytes = reqwest::get(url).await.ok()?.bytes().await.ok()?;
-        std::fs::write(&file, &bytes).ok()?;
+    let stem = format!("{:x}", hash(url));
+    for ext in ["jpg", "png", "webp"] {
+        let f = dir.join(format!("{stem}.{ext}"));
+        if f.is_file() {
+            return Some(f.to_string_lossy().into_owned());
+        }
     }
+    let bytes = reqwest::get(url).await.ok()?.bytes().await.ok()?;
+    // Named by what it is (readers go by the extension); anything else is not kept.
+    let ext = match image::guess_format(&bytes).ok()? {
+        image::ImageFormat::Jpeg => "jpg",
+        image::ImageFormat::Png => "png",
+        image::ImageFormat::WebP => "webp",
+        _ => return None,
+    };
+    let file = dir.join(format!("{stem}.{ext}"));
+    std::fs::write(&file, &bytes).ok()?;
     Some(file.to_string_lossy().into_owned())
 }
 

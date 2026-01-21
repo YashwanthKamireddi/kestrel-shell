@@ -2,7 +2,6 @@
 
 pub mod control;
 pub mod icon;
-pub mod indicators;
 pub mod morph;
 pub mod reveal;
 pub mod ring;

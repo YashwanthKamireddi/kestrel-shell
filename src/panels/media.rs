@@ -99,14 +99,18 @@ pub fn art<'a, M: Clone + 'static>(
     radius: f32,
 ) -> Element<'a, M> {
     match &p.art {
-        Some(path) if std::path::Path::new(path).is_file() => match art_at(path, size, radius) {
-            Some(h) => iced::widget::image(h)
+        // Only a picture that decoded is drawn: a file the renderer cannot read would abort it.
+        Some(path)
+            if std::path::Path::new(path).is_file() && art_at(path, size, radius).is_some() =>
+        {
+            let h = art_at(path, size, radius)
+                .unwrap_or_else(|| image::Handle::from_rgba(1, 1, vec![0; 4]));
+            iced::widget::image(h)
                 .width(size)
                 .height(size)
                 .opacity(s.opacity)
-                .into(),
-            None => crate::ui::cover(image::Handle::from_path(path), size, size, radius),
-        },
+                .into()
+        }
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))
             .center(size)
             .style(move |_| container::Style {
@@ -163,7 +167,18 @@ fn art_data(path: &str) -> Option<(::image::RgbaImage, Color)> {
         return hit.clone();
     }
     let made = (|| {
-        let img = ::image::open(path).ok()?.thumbnail(512, 512).into_rgba8();
+        // By content, not by name (a file can be named anything).
+        let img = ::image::ImageReader::open(path)
+            .ok()?
+            .with_guessed_format()
+            .ok()?
+            .decode()
+            .ok()?
+            .thumbnail(512, 512)
+            .into_rgba8();
+        if img.width() == 0 || img.height() == 0 {
+            return None;
+        }
         let (x, y, w, h) = content_box(&img);
         let cut = ::image::imageops::crop_imm(&img, x, y, w, h).to_image();
         let n = u64::from((cut.width() * cut.height()).max(1));
