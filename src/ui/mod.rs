@@ -169,10 +169,12 @@ pub fn tile<'a, M: Clone + 'static>(
     on_press: M,
     details: Option<M>,
 ) -> Element<'a, M> {
+    // Off: no box at all, just the icon and words (the pointer lifts it faintly). On: the
+    // accent, which is the only fill a tile ever has.
     let (bg, hover, fg, dim) = if on {
         (s.accent, s.accent, s.on_accent, s.on_accent)
     } else {
-        (s.raised, s.raised_hi, s.ink, s.ink_dim)
+        (Color::TRANSPARENT, s.hover(), s.ink, s.ink_dim)
     };
     // What is left beside the icon (and the chevron): long names (a device called
     // "Yash's AirPods 4") are shortened instead of running under the chevron.

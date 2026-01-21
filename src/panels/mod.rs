@@ -129,7 +129,15 @@ pub enum Key {
 /// A panel was just opened: reset its transient state and load what it needs.
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
     match kind {
-        PanelKind::Calendar | PanelKind::Island => app.panels.calendar = calendar::State::default(),
+        PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
+        PanelKind::Island => {
+            app.panels.calendar = calendar::State::default();
+            // The rings sweep in from empty.
+            for g in &mut app.gauges {
+                g.snap(0.0);
+            }
+            app.aim_gauges();
+        }
         PanelKind::Power => app.panels.power = power::State::default(),
         PanelKind::Control => {
             app.panels.control = control::State::default();

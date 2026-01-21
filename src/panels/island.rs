@@ -153,7 +153,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
 /// accent to amber to red as the load rises.
 fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let sys = app.system;
-    let gauge = |i: Icon, name: &'static str, value: f32, shown: String| {
+    let gauge = |i: Icon, name: &'static str, value: f32, shown: String, drawn: f32| {
         let tone = if value >= 0.85 {
             s.bad
         } else if value >= 0.6 {
@@ -164,7 +164,7 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let size = 72.0;
         column![
             iced::widget::stack![
-                ui::ring::ring(value, size, 7.0, tone, s.ink.scale_alpha(0.08 * s.opacity)),
+                ui::ring::ring(drawn, size, 7.0, tone, s.ink.scale_alpha(0.08 * s.opacity)),
                 container(label_w(shown, text::BODY, s.ink, theme::SEMIBOLD)).center(size),
             ],
             row![
@@ -183,13 +183,15 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Icon::Cpu,
             "CPU",
             f32::from(sys.cpu) / 100.0,
-            format!("{}%", sys.cpu)
+            format!("{}%", sys.cpu),
+            app.gauges[0].value
         ),
         gauge(
             Icon::MemoryStick,
             "Memory",
             f32::from(sys.mem) / 100.0,
-            format!("{}%", sys.mem)
+            format!("{}%", sys.mem),
+            app.gauges[1].value
         ),
     ];
     if let Some(t) = sys.temp {
@@ -198,6 +200,7 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             "Temp",
             (f32::from(t) - 30.0) / 70.0,
             format!("{t}°"),
+            app.gauges[2].value,
         ));
     }
     card(s, r.align_y(Alignment::Start))
