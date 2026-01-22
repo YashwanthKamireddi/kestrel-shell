@@ -165,8 +165,8 @@ pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 
 /// Spacing and shape.
 pub mod size {
-    pub const BAR: f32 = 36.0;
-    pub const CONTROL: f32 = 28.0;
+    pub const BAR: f32 = 40.0;
+    pub const CONTROL: f32 = 30.0;
     pub const PANEL_RADIUS: f32 = 24.0;
     pub const PANEL_PAD: f32 = 12.0;
     /// Concave curve where a panel leaves the bar.

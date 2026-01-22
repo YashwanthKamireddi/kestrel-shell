@@ -28,7 +28,8 @@ pub fn items<'a>(
 }
 
 /// Diameter of the music bubble.
-pub const BUBBLE: f32 = 30.0;
+/// The same height as the pills, so the circle and the pills line up.
+pub const BUBBLE: f32 = size::BAR - 6.0;
 
 /// The music bubble: the cover in a circle, dimmed while paused. Opens the media panel. None
 /// when there is no player.
@@ -36,16 +37,31 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
     // Stays while paused: the bubble is the player, not just the sound.
     let p = app.media.main()?;
     let id = o.id;
-    // Just the cover in a circle; while paused it dims.
+    // The cover in a circle, ringed in the cover's own colour; while paused it dims.
+    let ring = media::art_edge(p).unwrap_or(s.ink_faint);
+    let ring = if p.playing {
+        ring
+    } else {
+        ring.scale_alpha(0.5)
+    };
+    let inner = BUBBLE - 5.0;
     Some(
         ui::control(
             iced::widget::container(media::art(
                 s.faded(if p.playing { 1.0 } else { 0.5 }),
                 p,
-                BUBBLE,
-                BUBBLE / 2.0,
+                inner,
+                inner / 2.0,
             ))
-            .center(BUBBLE),
+            .center(BUBBLE)
+            .style(move |_| iced::widget::container::Style {
+                border: iced::Border {
+                    color: ring,
+                    width: 1.5,
+                    radius: (BUBBLE / 2.0).into(),
+                },
+                ..iced::widget::container::Style::default()
+            }),
         )
         .width(BUBBLE)
         .height(BUBBLE)
