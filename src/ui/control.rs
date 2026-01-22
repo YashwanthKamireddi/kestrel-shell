@@ -290,7 +290,12 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             });
             state.last = Some(*now);
             let want = if state.hovered { 1.0 } else { 0.0 };
-            let step = dt / HOVER_SECS;
+            // Game mode: hover changes at once, no fade frames.
+            let step = if crate::motion::still() {
+                1.0
+            } else {
+                dt / HOVER_SECS
+            };
             state.hover_t = if state.hover_t < want {
                 (state.hover_t + step).min(want)
             } else {

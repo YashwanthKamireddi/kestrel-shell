@@ -1,7 +1,20 @@
 //! Motion primitives. Springs give panels their weight; tweens handle simple fades.
 //! Both are stepped with real elapsed time, so a slow frame never makes motion slower.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+
+/// Game mode: no motion anywhere in the shell. Every spring arrives at once, so nothing asks
+/// for animation frames and no CPU goes to movement while a game runs.
+static STILL: AtomicBool = AtomicBool::new(false);
+
+pub fn set_still(on: bool) {
+    STILL.store(on, Ordering::Relaxed);
+}
+
+pub fn still() -> bool {
+    STILL.load(Ordering::Relaxed)
+}
 
 /// A damped spring that chases `target`.
 #[derive(Clone, Copy, Debug)]
@@ -38,6 +51,9 @@ impl Spring {
         self.target = target;
         self.omega = omega;
         self.zeta = zeta;
+        if still() {
+            self.snap(target);
+        }
     }
 
     pub fn snap(&mut self, value: f32) {
