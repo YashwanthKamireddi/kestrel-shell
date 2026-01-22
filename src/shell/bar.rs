@@ -107,7 +107,12 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let mut layers: Vec<Element<'a, Message>> = Vec::new();
     let panel_shape = panel_drop.map(|(d, k, _, _)| {
         canvas(BarShape {
-            color: s.base.scale_alpha(k),
+            // Closing, the box goes with its content instead of lingering faintly after it.
+            color: s.base.scale_alpha(if panel.is_some_and(|p| p.open) {
+                k
+            } else {
+                crate::motion::range(k, 0.45, 1.0)
+            }),
             bar: size::BAR,
             frame: t,
             corner: 0.0,

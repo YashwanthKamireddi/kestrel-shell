@@ -10,7 +10,7 @@ use crate::panels::{Message as PanelMessage, PanelKind, control, media};
 use crate::services::{hyprland, icons, tray as tray_service};
 use crate::shell::bar::{SLOT, SLOT_GAP};
 use crate::theme::{self, Scheme, size, text};
-use crate::ui::{self, Icon, icon, icon_button, label, label_w};
+use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, container, image, pin, row, stack};
 use iced::{Alignment, Color, Element};
 
@@ -117,11 +117,12 @@ fn lua_chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, M
 
 fn power<'a>(o: &'a Output, s: Scheme, open: Option<PanelKind>) -> Element<'a, Message> {
     let id = o.id;
-    icon_button(
+    ui::icon_button_in(
         s,
         Icon::Power,
         Message::Close,
         open == Some(PanelKind::Power),
+        s.bad,
     )
     .on_press_at(move |b| Message::Toggle(PanelKind::Power, id, b))
     .into()
@@ -384,8 +385,8 @@ fn updates<'a>(
         items.push(
             ui::control(
                 row![
-                    icon(Icon::ArrowDownToLine, 14.0, s.ink),
-                    label(u.total().to_string(), text::SMALL, s.ink),
+                    icon(Icon::ArrowDownToLine, 14.0, s.warn),
+                    label(u.total().to_string(), text::SMALL, s.warn),
                 ]
                 .spacing(5)
                 .align_y(Alignment::Center),
@@ -484,27 +485,53 @@ fn status<'a>(
     let active = open == Some(PanelKind::Control);
     let fg = s.ink;
     let mut status = row![].spacing(10).align_y(Alignment::Center);
+    // Each icon in the colour of its situation, the way the weather has its own.
+    let _ = fg;
     if app.net.available {
-        status = status.push(icon(control::wifi_icon(&app.net), size::ICON, fg));
+        use crate::services::network::Link;
+        let tint = match app.net.link {
+            Link::Wired => s.info,
+            Link::Wifi if app.net.strength >= 50 => s.info,
+            Link::Wifi => s.warn,
+            Link::None => s.bad,
+        };
+        status = status.push(icon(control::wifi_icon(&app.net), size::ICON, tint));
     }
     if app.bt.powered {
-        let i = if app.bt.connected().next().is_some() {
+        let connected = app.bt.connected().next().is_some();
+        let i = if connected {
             Icon::BluetoothConnected
         } else {
             Icon::Bluetooth
         };
-        status = status.push(icon(i, size::ICON, fg));
+        status = status.push(icon(
+            i,
+            size::ICON,
+            if connected { s.info } else { s.ink_dim },
+        ));
     }
-    status = status.push(icon(control::volume_icon(app.audio.sink()), size::ICON, fg));
+    let sink = app.audio.sink();
+    let tint = match sink {
+        Some(d) if d.muted || d.volume <= 0.001 => s.bad,
+        Some(d) if d.volume > 1.0 => s.warn,
+        Some(_) => s.accent,
+        None => s.ink_dim,
+    };
+    status = status.push(icon(control::volume_icon(sink), size::ICON, tint));
     if app.power.has_battery {
         let low = app.power.percent < 15.0 && !app.power.charging;
+        let tint = if app.power.charging || app.power.percent >= 50.0 {
+            s.good
+        } else if app.power.percent >= 20.0 {
+            s.ink
+        } else if app.power.percent >= 10.0 {
+            s.warn
+        } else {
+            s.bad
+        };
         status = status.push(
             row![
-                icon(
-                    control::battery_icon(&app.power),
-                    size::ICON,
-                    if low { s.bad } else { fg }
-                ),
+                icon(control::battery_icon(&app.power), size::ICON, tint),
                 label(
                     format!("{:.0}%", app.power.percent),
                     text::SMALL,
@@ -559,12 +586,18 @@ fn bell<'a>(
     } else {
         Icon::Bell
     };
+    let tint = if app.unread && !app.dnd {
+        s.accent
+    } else {
+        s.ink
+    };
     items.push(
-        icon_button(
+        ui::icon_button_in(
             s,
             bell,
             Message::Close,
             open == Some(PanelKind::Notifications),
+            tint,
         )
         .on_press_at(move |r| Message::Toggle(PanelKind::Notifications, id, r))
         .into(),

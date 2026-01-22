@@ -394,7 +394,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
     // The panel takes a deep tint of the artwork's own colour.
     let tint = art_colour(p).map(|c| s.fade(mix(c, s.base, 0.72)));
-    let base = s.base;
+    // Both ends fade with the panel (the bottom at full strength stayed behind on close).
+    let base = s.fade(s.base);
     container(top)
         .padding(16)
         .style(move |_| container::Style {

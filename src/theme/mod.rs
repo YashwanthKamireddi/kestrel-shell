@@ -44,6 +44,8 @@ pub struct Scheme {
     pub good: Color,
     pub warn: Color,
     pub bad: Color,
+    /// Blue: connected, informational (Wi-Fi with a good signal, a Bluetooth device).
+    pub info: Color,
     /// How far content has faded in (1 = fully shown); see `faded`.
     pub opacity: f32,
 }
@@ -73,6 +75,7 @@ impl Scheme {
             good: Oklch::new(0.80, 0.13, 150.0).to_color(),
             warn: Oklch::new(0.84, 0.13, 85.0).to_color(),
             bad: Oklch::new(0.70, 0.17, 25.0).to_color(),
+            info: Oklch::new(0.78, 0.12, 245.0).to_color(),
             opacity: 1.0,
         }
     }
@@ -122,6 +125,7 @@ impl Scheme {
             good: f(self.good),
             warn: f(self.warn),
             bad: f(self.bad),
+            info: f(self.info),
             opacity: alpha.max(0.0),
         }
     }
@@ -145,7 +149,12 @@ pub mod text {
 
 /// The shell's typeface (also given to Qt apps and the lock screen).
 pub const FONT_NAME: &str = "Rubik";
-pub const FONT: Font = Font::with_name(FONT_NAME);
+/// Medium by default, like the lock screen: the regular weight looked thin and grainy at bar
+/// sizes (design call, 2026-11-13). Headings go to Semibold.
+pub const FONT: Font = Font {
+    weight: font::Weight::Medium,
+    ..Font::with_name(FONT_NAME)
+};
 
 pub fn font(weight: font::Weight) -> Font {
     Font { weight, ..FONT }

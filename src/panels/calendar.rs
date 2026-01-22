@@ -136,7 +136,7 @@ fn day<'a>(
     let weight = if is_today {
         theme::SEMIBOLD
     } else {
-        iced::font::Weight::Normal
+        iced::font::Weight::Medium
     };
     let n = label_w(date.day().to_string(), text::BODY, color, weight);
     let disc = container(n).center(30).style(move |_| container::Style {

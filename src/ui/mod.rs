@@ -122,12 +122,23 @@ pub fn icon_button<'a, M: Clone + 'static>(
     on_press: M,
     active: bool,
 ) -> control::Control<'a, M> {
+    icon_button_in(s, i, on_press, active, s.ink)
+}
+
+/// `icon_button` with the icon in `tint` (a colour that says something about the state).
+pub fn icon_button_in<'a, M: Clone + 'static>(
+    s: Scheme,
+    i: Icon,
+    on_press: M,
+    active: bool,
+    tint: Color,
+) -> control::Control<'a, M> {
     let rest = if active {
         s.selected()
     } else {
         Color::TRANSPARENT
     };
-    control(container(icon(i, size::ICON, s.ink)).center(Length::Fixed(size::CONTROL)))
+    control(container(icon(i, size::ICON, tint)).center(Length::Fixed(size::CONTROL)))
         .radius(size::CONTROL / 2.0)
         .colors(rest, if active { rest } else { s.hover() }, s.raised_press)
         .on_press(on_press)
@@ -272,7 +283,7 @@ pub fn list_row<'a, M: Clone + 'static>(
         if selected {
             theme::MEDIUM
         } else {
-            font::Weight::Normal
+            font::Weight::Medium
         }
     )]
     .spacing(1)
