@@ -9,11 +9,12 @@ use crate::services::{apps, hyprland, icons};
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, pin, row, stack, text_input};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Color, Element, Task};
 
-const COLUMNS: usize = 3;
-const GAP: f32 = 16.0;
-pub const WIDTH: f32 = 1040.0;
+/// All workspaces in one compact row.
+const COLUMNS: usize = 5;
+const GAP: f32 = 14.0;
+pub const WIDTH: f32 = 1300.0;
 const PAD: f32 = 16.0;
 
 #[derive(Default)]
@@ -21,13 +22,23 @@ pub struct State {
     query: String,
     /// Address of the selected window.
     selected: Option<String>,
-    /// Live pictures of the windows, by address (kept between opens, refreshed on each).
-    previews: std::collections::HashMap<String, crate::services::previews::Preview>,
+    /// Live pictures of the windows, by address, ready at their tile's size (kept between
+    /// opens so the overview shows them at once; refreshed on each open, off the UI thread).
+    previews: std::collections::HashMap<String, Ready>,
 }
+
+/// A window's picture, rounded at a tile's size.
+struct Ready {
+    size: (u32, u32),
+    handle: iced::widget::image::Handle,
+}
+
+/// (address, tile size, picture width, height, RGBA): made off the UI thread.
+type Made = (String, (u32, u32), u32, u32, Vec<u8>);
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Previews(Vec<(String, Option<crate::services::previews::Preview>)>),
+    Previews(Vec<Made>),
     Query(String),
     Submit,
 }
@@ -51,17 +62,24 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
         .map(|w| w.address.clone());
     Task::batch([
         Task::Iced(iced::widget::focus(INPUT_ID.clone())),
-        // Fresh pictures of every window, made off the UI thread.
+        // Fresh pictures of every window: captured, scaled and rounded to their tiles off the
+        // UI thread, so opening never stutters.
         Task::perform(
             {
-                let addrs: Vec<String> =
-                    app.hypr.windows.iter().map(|w| w.address.clone()).collect();
-                async move {
-                    tokio::task::spawn_blocking(move || {
-                        crate::services::previews::capture(&addrs, 640)
+                let (cw, ch) = card_size();
+                let jobs: Vec<(String, (f32, f32))> = app
+                    .hypr
+                    .windows
+                    .iter()
+                    .map(|w| {
+                        let (_, _, bw, bh) = tile_rect(w, cw, ch);
+                        (w.address.clone(), (bw, bh))
                     })
-                    .await
-                    .unwrap_or_default()
+                    .collect();
+                async move {
+                    tokio::task::spawn_blocking(move || make_previews(&jobs))
+                        .await
+                        .unwrap_or_default()
                 }
             },
             |v| msg(Message::Previews(v)),
@@ -79,6 +97,42 @@ fn matches(w: &hyprland::Window, q: &str) -> bool {
         || w.title.to_lowercase().contains(q)
         || w.class.to_lowercase().contains(q)
         || apps::name_for_class(&w.class).to_lowercase().contains(q)
+}
+
+fn make_previews(jobs: &[(String, (f32, f32))]) -> Vec<Made> {
+    let addrs: Vec<String> = jobs.iter().map(|(a, _)| a.clone()).collect();
+    let widest = jobs.iter().map(|(_, (w, _))| *w).fold(0.0, f32::max);
+    crate::services::previews::capture(&addrs, (widest * 2.0).max(64.0) as u32)
+        .into_iter()
+        .filter_map(|(a, p)| {
+            let p = p?;
+            let (bw, bh) = jobs.iter().find(|(j, _)| *j == a)?.1;
+            let img = image::RgbaImage::from_raw(p.width, p.height, p.rgba)?;
+            let r = ui::rounded_cover(&img, bw, bh, 7.0);
+            Some((
+                a,
+                (bw as u32, bh as u32),
+                r.width(),
+                r.height(),
+                r.into_raw(),
+            ))
+        })
+        .collect()
+}
+
+/// Where a window sits on its card (inset, so a selected window's ring never meets the
+/// card's rounded edge).
+fn tile_rect(w: &hyprland::Window, cw: f32, ch: f32) -> (f32, f32, f32, f32) {
+    const INSET: f32 = 5.0;
+    let (sw, _) = w.screen;
+    let k = (cw - 2.0 * INSET) / sw.max(1.0);
+    let (x, y) = (INSET + (w.x * k).max(0.0), INSET + (w.y * k).max(0.0));
+    (
+        x,
+        y,
+        (w.w * k).clamp(16.0, cw - INSET - x),
+        (w.h * k).clamp(12.0, ch - INSET - y),
+    )
 }
 
 /// A workspace card's picture size (for a 16:9 screen).
@@ -127,20 +181,26 @@ fn focus(address: &str) -> Task<AppMessage> {
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
         Message::Previews(v) => {
+            let st = &mut app.panels.overview;
+            for (a, size, w, h, rgba) in v {
+                st.previews.insert(
+                    a,
+                    Ready {
+                        size,
+                        handle: iced::widget::image::Handle::from_rgba(w, h, rgba),
+                    },
+                );
+            }
             let live: std::collections::HashSet<&str> = app
                 .hypr
                 .windows
                 .iter()
                 .map(|w| w.address.as_str())
                 .collect();
-            let st = &mut app.panels.overview;
-            st.previews.retain(|a, _| live.contains(a.as_str()));
-            for (a, p) in v {
-                if let Some(p) = p {
-                    st.previews.insert(a, p);
-                }
-            }
-            preview_cache_clear();
+            app.panels
+                .overview
+                .previews
+                .retain(|a, _| live.contains(a.as_str()));
         }
         Message::Query(q) => {
             app.panels.overview.query = q;
@@ -291,31 +351,7 @@ fn card<'a>(
 ) -> Element<'a, AppMessage> {
     let windows = windows_on(app, id);
     let selected = app.panels.overview.selected.as_deref();
-    // The picture has the screen's shape.
-    let (sw, sh) = windows.first().map_or((1920.0, 1080.0), |w| w.screen);
-    let height = width * sh / sw.max(1.0);
-    // Windows are drawn inside an inset, so a selected window's outline never meets the
-    // card's rounded edge (where it would be cut).
-    const INSET: f32 = 6.0;
-    let k = (width - 2.0 * INSET) / sw.max(1.0);
-
-    let summary = match windows.len() {
-        0 => "Empty".to_string(),
-        1 => apps::name_for_class(&windows[0].class),
-        n => format!("{n} windows"),
-    };
-    let header = row![
-        label_w(
-            id.to_string(),
-            text::BODY,
-            if current { s.accent } else { s.ink },
-            theme::SEMIBOLD
-        ),
-        Space::new().width(Length::Fill),
-        label(summary, text::CAPTION, s.ink_faint),
-    ]
-    .align_y(Alignment::Center)
-    .padding([0, 4]);
+    let (_, height) = card_size();
 
     let backdrop: Element<'_, AppMessage> = match &app.wallpaper {
         Some(w) => iced::widget::image(w.thumb_soft.clone())
@@ -349,143 +385,84 @@ fn card<'a>(
     .width(width)
     .height(height);
     for w in &windows {
-        let (x, y) = (INSET + (w.x * k).max(0.0), INSET + (w.y * k).max(0.0));
-        let (bw, bh) = (
-            (w.w * k).clamp(16.0, width - INSET - x),
-            (w.h * k).clamp(12.0, height - INSET - y),
-        );
+        let (x, y, bw, bh) = tile_rect(w, width, height);
         let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
         let alpha = if hit { 1.0 } else { 0.3 };
-        let body: Element<'_, AppMessage> = match preview(app, &w.address, bw, bh) {
-            // The window itself, with its app's icon as a small badge.
-            Some(h) => stack![
-                iced::widget::image(h)
-                    .width(bw)
-                    .height(bh)
-                    .opacity(alpha * s.opacity),
-                container(app_icon(&w.class, 16.0, s))
-                    .padding(6)
-                    .width(bw)
-                    .height(bh)
-                    .align_x(Alignment::Start)
-                    .align_y(Alignment::End),
-            ]
-            .into(),
-            // No picture yet: the icon (and title when there is room) on a card.
-            None => {
-                let px = (bw.min(bh) * 0.42).clamp(14.0, 36.0);
-                let mut inner = column![app_icon(&w.class, px, s)]
-                    .spacing(4)
-                    .align_x(Alignment::Center);
-                if bh >= 64.0 && bw >= 96.0 {
-                    let title = if w.title.is_empty() {
-                        apps::name_for_class(&w.class)
-                    } else {
-                        w.title.clone()
-                    };
-                    inner = inner.push(label(
-                        ui::fit(&title, text::CAPTION, bw - 16.0),
-                        text::CAPTION,
-                        s.ink_dim,
-                    ));
-                }
-                container(inner)
-                    .center_x(bw)
-                    .center_y(bh)
-                    .style(move |_| container::Style {
-                        background: Some(s.raised.scale_alpha(0.94 * alpha).into()),
-                        border: iced::Border::default().rounded(8),
-                        ..container::Style::default()
-                    })
-                    .into()
-            }
+        let ready = app
+            .panels
+            .overview
+            .previews
+            .get(&w.address)
+            .filter(|r| r.size == (bw as u32, bh as u32));
+        let body: Element<'_, AppMessage> = match ready {
+            Some(r) => iced::widget::image(r.handle.clone())
+                .width(bw)
+                .height(bh)
+                .opacity(alpha * s.opacity)
+                .into(),
+            // No picture yet: the app's icon on a quiet card.
+            None => container(app_icon(&w.class, (bw.min(bh) * 0.4).clamp(14.0, 28.0), s))
+                .center_x(bw)
+                .center_y(bh)
+                .style(move |_| container::Style {
+                    background: Some(s.raised.scale_alpha(0.9 * alpha).into()),
+                    border: iced::Border::default().rounded(7),
+                    ..container::Style::default()
+                })
+                .into(),
         };
-        // Selection: an accent ring drawn over the picture.
-        let ring = container(Space::new())
+        let mut tile = stack![body];
+        // The one outline in the overview: the selected window.
+        if sel {
+            tile = tile.push(
+                container(Space::new())
+                    .width(bw)
+                    .height(bh)
+                    .style(move |_| container::Style {
+                        border: iced::Border {
+                            color: s.accent,
+                            width: 2.0,
+                            radius: 7.0.into(),
+                        },
+                        ..container::Style::default()
+                    }),
+            );
+        }
+        let tile = control(tile)
             .width(bw)
             .height(bh)
-            .style(move |_| container::Style {
-                border: iced::Border {
-                    color: if sel {
-                        s.accent
-                    } else {
-                        s.ink.scale_alpha(0.10)
-                    },
-                    width: if sel { 2.5 } else { 1.0 },
-                    radius: 8.0.into(),
-                },
-                ..container::Style::default()
-            });
-        let tile = control(stack![body, ring])
-            .width(bw)
-            .height(bh)
-            .radius(8.0)
-            .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.06), s.raised_press)
+            .radius(7.0)
+            .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.08), s.raised_press)
             .no_press_scale()
             .on_press(focus_msg(&w.address));
         layers = layers.push(pin(tile).x(x).y(y));
     }
-    // An empty workspace: its number, large, on the calm backdrop.
-    if windows.is_empty() {
-        layers = layers.push(
-            container(
-                column![
-                    label_w(
-                        id.to_string(),
-                        theme::text::DISPLAY,
-                        if current { s.accent } else { s.ink },
-                        theme::SEMIBOLD
-                    ),
-                    label("Empty", text::CAPTION, s.ink_dim),
-                ]
-                .spacing(2)
-                .align_x(Alignment::Center),
-            )
-            .center_x(width)
-            .center_y(height),
-        );
-    }
-    // The current workspace's outline sits on top, where the picture can't cover it.
-    if current {
-        layers = layers.push(container(Space::new()).width(width).height(height).style(
-            move |_| container::Style {
-                border: iced::Border {
-                    color: s.accent,
-                    width: 2.0,
-                    radius: 10.0.into(),
-                },
-                ..container::Style::default()
-            },
-        ));
-    }
-    let frame = layers;
-    column![header, frame].spacing(8).width(width).into()
-}
 
-/// A window's picture at a tile's size, corners rounded; made once per size.
-fn preview(app: &App, address: &str, w: f32, h: f32) -> Option<iced::widget::image::Handle> {
-    let key = (address.to_string(), w as u32, h as u32);
-    if let Some(hit) = PREVIEWS.lock().ok()?.get(&key) {
-        return Some(hit.clone());
-    }
-    let p = app.panels.overview.previews.get(address)?;
-    let img = image::RgbaImage::from_raw(p.width, p.height, p.rgba.clone())?;
-    let r = ui::rounded_cover(&img, w, h, 8.0);
-    let handle = iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw());
-    PREVIEWS.lock().ok()?.insert(key, handle.clone());
-    Some(handle)
-}
-
-type PreviewKey = (String, u32, u32);
-static PREVIEWS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<PreviewKey, iced::widget::image::Handle>>,
-> = std::sync::LazyLock::new(Default::default);
-
-fn preview_cache_clear() {
-    if let Ok(mut c) = PREVIEWS.lock() {
-        c.clear();
-    }
+    // Under the card: its number (in the accent when it is the one you are on) and what is
+    // there.
+    let summary = match windows.len() {
+        0 => "Empty".to_string(),
+        1 => apps::name_for_class(&windows[0].class),
+        n => format!("{n} windows"),
+    };
+    let caption = row![
+        label_w(
+            id.to_string(),
+            text::SMALL,
+            if current { s.accent } else { s.ink },
+            theme::SEMIBOLD
+        ),
+        label(
+            ui::fit(&summary, text::CAPTION, width - 30.0),
+            text::CAPTION,
+            s.ink_dim
+        ),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center)
+    .padding([0, 2]);
+    column![layers, caption].spacing(8).width(width).into()
 }
 
 fn focus_msg(address: &str) -> AppMessage {
