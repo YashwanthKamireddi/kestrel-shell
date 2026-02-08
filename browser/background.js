@@ -14,22 +14,30 @@ function best() {
 }
 
 function publish() {
+  // The helper can go away (the shell restarted, the browser suspended this worker): any
+  // report from a tab brings it back.
+  if (!port) connect();
   if (!port) return;
   const p = best();
   port.postMessage(p ? { tab: p.tab, ...p.s } : { tab: null });
 }
 
 function connect() {
-  port = chrome.runtime.connectNative("dev.kestrel.media");
+  try {
+    port = chrome.runtime.connectNative("dev.kestrel.media");
+  } catch {
+    port = null;
+    return;
+  }
   port.onMessage.addListener((m) => {
     const p = best();
     if (p && m.cmd) chrome.tabs.sendMessage(p.tab, m).catch(() => {});
   });
   port.onDisconnect.addListener(() => {
     port = null;
-    setTimeout(connect, 5000);
   });
-  publish();
+  const p = best();
+  if (p) port.postMessage({ tab: p.tab, ...p.s });
 }
 
 chrome.runtime.onMessage.addListener((m, sender) => {

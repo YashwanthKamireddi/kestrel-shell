@@ -20,7 +20,7 @@
 //! Also: `kestrel.exec(cmd)` starts a program, `kestrel.read(cmd)` runs one and returns its
 //! output (2 s limit), `kestrel.notify(title, body)` shows a notification.
 //!
-//! A widget's `icon` is a name from kestrel's icon set (assets/icons), else an icon theme
+//! A widget's `icon` is a name from kestrel's icon set (src/ui/icon.rs), else an icon theme
 //! name ("drive-harddisk") or a file path.
 
 use crate::config::BarStyle;

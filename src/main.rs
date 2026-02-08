@@ -52,6 +52,7 @@ fn main() -> anyhow::Result<()> {
         .theme(app::theme)
         .redraw_key(app::redraw_key)
         .default_font(theme::FONT)
+        .font(ui::icon::BYTES)
         .antialiasing(true)
         // The first surface is a 1 px placeholder; real surfaces are made per monitor.
         .layer_shell(LayerShellSettings {

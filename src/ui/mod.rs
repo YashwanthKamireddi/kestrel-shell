@@ -9,7 +9,7 @@ pub mod shape;
 pub mod slider;
 
 use crate::theme::{self, Scheme, size};
-use iced::widget::{Space, Svg, Text, container, row, svg, text};
+use iced::widget::{Space, Text, container, row, text};
 use iced::{Alignment, Color, Element, Length, font};
 
 pub use control::control;
@@ -103,15 +103,17 @@ pub fn ellipsize(s: &str, max: usize) -> String {
     }
 }
 
-/// An icon in `color`. The colour's transparency becomes the icon's opacity: the SVG tint
-/// alone ignores alpha, which left icons at full strength while a panel faded out.
-pub fn icon(i: Icon, size: f32, color: Color) -> Svg<'static> {
-    let solid = Color { a: 1.0, ..color };
-    svg(i.handle())
+/// An icon in `color` (its alpha included, so it fades with a panel), `size` px square.
+pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
+    iced::widget::text(i.glyph().to_string())
+        .font(icon::FONT)
+        .size(size)
+        .color(color)
+        .line_height(iced::widget::text::LineHeight::Relative(1.0))
         .width(size)
         .height(size)
-        .opacity(color.a)
-        .style(move |_, _| svg::Style { color: Some(solid) })
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
 }
 
 /// A round icon button for the bar and panel headers. `active` marks an open panel or an
