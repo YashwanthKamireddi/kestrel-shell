@@ -61,7 +61,9 @@ impl Scheme {
         let n = |l: f32, k: f32| Oklch::new(l, k * tint, h).to_color();
         let accent_c = if has_colour { c.clamp(0.09, 0.16) } else { 0.0 };
         Self {
-            base: n(0.16, 0.010),
+            // True black (AMOLED, design call 2026-11-13): pills and panels stand out against any
+            // wallpaper; raised surfaces keep a slight lift so they still read as layers.
+            base: Color::BLACK,
             raised: n(0.215, 0.013),
             raised_hi: n(0.25, 0.015),
             raised_press: n(0.28, 0.016),
