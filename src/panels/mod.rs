@@ -11,6 +11,7 @@ pub mod media;
 pub mod notifications;
 pub mod overview;
 pub mod power;
+pub mod settings;
 pub mod tray;
 pub mod wallpaper;
 
@@ -34,6 +35,7 @@ pub enum PanelKind {
     Overview,
     Clipboard,
     Emoji,
+    Settings,
 }
 
 impl PanelKind {
@@ -51,6 +53,7 @@ impl PanelKind {
             "overview" => Self::Overview,
             "clipboard" => Self::Clipboard,
             "emoji" => Self::Emoji,
+            "settings" => Self::Settings,
             _ => return None,
         })
     }
@@ -70,6 +73,7 @@ impl PanelKind {
             Self::Overview => overview::WIDTH,
             Self::Clipboard => clipboard::WIDTH,
             Self::Emoji => emoji::WIDTH,
+            Self::Settings => settings::WIDTH,
         }
     }
 }
@@ -88,6 +92,7 @@ pub struct State {
     pub overview: overview::State,
     pub clipboard: clipboard::State,
     pub emoji: emoji::State,
+    pub settings: settings::State,
 }
 
 #[derive(Clone, Debug)]
@@ -104,6 +109,7 @@ pub enum Message {
     Overview(overview::Message),
     Clipboard(clipboard::Message),
     Emoji(emoji::Message),
+    Settings(settings::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
     /// Left click on a tray icon.
@@ -155,6 +161,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Overview => return overview::open(app),
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
+        PanelKind::Settings => return settings::open(app),
         PanelKind::Notifications | PanelKind::Tray => {}
     }
     Task::none()
@@ -177,6 +184,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Overview(m) => overview::update(app, m),
         Message::Clipboard(m) => clipboard::update(app, m),
         Message::Emoji(m) => emoji::update(app, m),
+        Message::Settings(m) => settings::update(app, m),
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
@@ -255,5 +263,6 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Overview => overview::view(app, s),
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
+        PanelKind::Settings => settings::view(app, s),
     }
 }

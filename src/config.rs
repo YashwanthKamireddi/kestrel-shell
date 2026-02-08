@@ -136,34 +136,44 @@ pub fn load() -> Config {
 
 /// Saves the wallpaper choice, keeping the rest of the file (and its comments) as it is.
 pub fn set_wallpaper(path: &str) {
+    set(&[], "wallpaper", toml_edit::value(path));
+}
+
+/// Change one setting in config.toml in place (comments and the rest kept as they are).
+/// `table` is the path of tables (`&["bar"]`, or `&[]` for a top-level key). The file is
+/// watched, so the change applies at once.
+pub fn set(table: &[&str], key: &str, value: toml_edit::Item) {
     let p = self::path();
     let text = std::fs::read_to_string(&p).unwrap_or_default();
-    let line = format!("wallpaper = {}", toml::Value::String(path.to_string()));
-    let mut found = false;
-    let mut out: Vec<String> = text
-        .lines()
-        .map(|l| {
-            let key = l.trim_start();
-            if !found && (key.starts_with("wallpaper ") || key.starts_with("wallpaper=")) {
-                found = true;
-                line.clone()
-            } else {
-                l.to_string()
-            }
-        })
-        .collect();
-    if !found {
-        // Top-level keys must come before the first [table].
-        let at = out
-            .iter()
-            .position(|l| l.trim_start().starts_with('['))
-            .unwrap_or(out.len());
-        out.insert(at, line);
+    let Ok(mut doc) = text.parse::<toml_edit::DocumentMut>() else {
+        log::warn!("config: {} does not parse; not changing it", p.display());
+        return;
+    };
+    let mut t = doc.as_table_mut();
+    for name in table {
+        if !t.contains_key(name) {
+            t.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
+        }
+        let Some(next) = t.get_mut(name).and_then(toml_edit::Item::as_table_mut) else {
+            log::warn!("config: [{name}] is not a table");
+            return;
+        };
+        t = next;
     }
+    t.insert(key, value);
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    let _ = std::fs::write(&p, out.join("\n") + "\n");
+    let _ = std::fs::write(&p, doc.to_string());
+}
+
+/// A list of strings as a config value.
+pub fn list(items: &[String]) -> toml_edit::Item {
+    let mut a = toml_edit::Array::new();
+    for i in items {
+        a.push(i.as_str());
+    }
+    toml_edit::value(a)
 }
 
 pub fn expand(p: &str) -> PathBuf {
