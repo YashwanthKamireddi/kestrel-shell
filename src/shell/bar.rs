@@ -68,7 +68,10 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         d.top -= lift;
         panel_drop = Some((d, k, lift, h));
     }
-    let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
+    // With the island in the bar, notifications arrive in it instead of a box of their own.
+    let show_toasts = focused
+        && (app.toast_sheet.visible() || !app.toasts.is_empty())
+        && !crate::modules::island::hosts_osd(app);
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
     let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
     if show_toasts {

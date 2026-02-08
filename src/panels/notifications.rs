@@ -68,12 +68,14 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
 }
 
 fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
-    let handle = match n.image.as_ref()? {
-        Image::Path(p) if std::path::Path::new(p).is_file() => image::Handle::from_path(p),
-        Image::Rgba(p) => crate::ui::pixels(p),
-        Image::Path(_) => return None,
-    };
-    Some(ui::cover(handle, 40.0, 40.0, 8.0))
+    match n.image.as_ref()? {
+        // Decoded first: an app's unreadable file must never reach the renderer.
+        Image::Path(p) => {
+            let h = ui::rounded_file(std::path::Path::new(p), 40.0, 40.0, 8.0)?;
+            Some(image(h).width(40.0).height(40.0).into())
+        }
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 40.0, 40.0, 8.0)),
+    }
 }
 
 /// One notification. `toast` cards show a close button always; centre cards on hover would

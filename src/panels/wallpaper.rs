@@ -126,9 +126,14 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::Loaded(v) => {
             app.panels.wallpaper.items = Some(
                 v.into_iter()
-                    .map(|(p, t)| {
+                    .filter_map(|(p, t)| {
                         // Rounded in the pixels, so the selection ring meets round corners.
-                        let h = ::image::open(&t)
+                        // An unreadable picture is left out (never handed to the renderer).
+                        let h = ::image::ImageReader::open(&t)
+                            .ok()?
+                            .with_guessed_format()
+                            .ok()?
+                            .decode()
                             .ok()
                             .map(|img| {
                                 let r = ui::rounded_cover(
@@ -138,9 +143,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                                     size::ROW_RADIUS - 3.0,
                                 );
                                 image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
-                            })
-                            .unwrap_or_else(|| image::Handle::from_path(&t));
-                        (p, h)
+                            })?;
+                        Some((p, h))
                     })
                     .collect(),
             );

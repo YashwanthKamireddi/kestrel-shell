@@ -360,13 +360,36 @@ pub fn image_file_faded<'a, M: 'a>(
             .height(size)
             .opacity(opacity)
             .into()
-    } else {
+    } else if raster_ok(path) {
         iced::widget::image(iced::widget::image::Handle::from_path(path))
             .width(size)
             .height(size)
             .opacity(opacity)
             .into()
+    } else {
+        // Unreadable: an empty square instead (the renderer aborts on undecodable pictures).
+        Space::new().width(size).height(size).into()
     }
+}
+
+/// Whether a picture file decodes (checked once per file).
+fn raster_ok(path: &std::path::Path) -> bool {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static SEEN: LazyLock<Mutex<HashMap<std::path::PathBuf, bool>>> =
+        LazyLock::new(Default::default);
+    if let Some(ok) = SEEN.lock().ok().and_then(|m| m.get(path).copied()) {
+        return ok;
+    }
+    let ok = ::image::ImageReader::open(path)
+        .ok()
+        .and_then(|r| r.with_guessed_format().ok())
+        .and_then(|r| r.into_dimensions().ok())
+        .is_some_and(|(w, h)| w > 0 && h > 0);
+    if let Ok(mut m) = SEEN.lock() {
+        m.insert(path.to_path_buf(), ok);
+    }
+    ok
 }
 
 /// One renderer handle per distinct image (by content id), so pixels re-read by a service are
@@ -501,10 +524,15 @@ pub fn rounded_file(
     if let Some(hit) = CACHE.lock().ok()?.get(&key) {
         return hit.clone();
     }
-    let made = ::image::open(path).ok().map(|img| {
-        let r = rounded_cover(&img.into_rgba8(), w, h, radius);
-        iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
-    });
+    let made = ::image::ImageReader::open(path)
+        .ok()
+        .and_then(|r| r.with_guessed_format().ok())
+        .and_then(|r| r.decode().ok())
+        .filter(|img| img.width() > 0 && img.height() > 0)
+        .map(|img| {
+            let r = rounded_cover(&img.into_rgba8(), w, h, radius);
+            iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
+        });
     let mut cache = CACHE.lock().ok()?;
     if cache.len() > 256 {
         cache.clear();
