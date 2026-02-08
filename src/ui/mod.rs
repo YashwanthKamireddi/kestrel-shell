@@ -173,16 +173,29 @@ pub fn divider<'a, M: 'a>(s: Scheme) -> Element<'a, M> {
 /// Width of a quick-settings tile (two per row in the 368 px control centre).
 pub const TILE_W: f32 = 168.0;
 
-pub fn tile<'a, M: Clone + 'static>(
-    s: Scheme,
-    i: Icon,
-    title: impl Into<String>,
-    status: impl Into<String>,
-    on: bool,
-    on_press: M,
-    details: Option<M>,
-    focused: bool,
-) -> Element<'a, M> {
+/// A quick-settings tile's contents.
+pub struct Tile<M> {
+    pub icon: Icon,
+    pub title: String,
+    pub status: String,
+    pub on: bool,
+    pub press: M,
+    /// Its page (the chevron), if it has one.
+    pub details: Option<M>,
+    /// The keyboard is on it.
+    pub focused: bool,
+}
+
+pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
+    let Tile {
+        icon: i,
+        title,
+        status,
+        on,
+        press: on_press,
+        details,
+        focused,
+    } = t;
     // Off: no box at all, just the icon and words (the pointer lifts it faintly). On: the
     // accent, which is the only fill a tile ever has.
     let (bg, hover, fg, dim) = if on {
@@ -198,13 +211,13 @@ pub fn tile<'a, M: Clone + 'static>(
         icon(i, size::ICON_TILE, fg),
         iced::widget::column![
             label_w(
-                fit(&title.into(), theme::text::BODY, text_w),
+                fit(&title, theme::text::BODY, text_w),
                 theme::text::BODY,
                 fg,
                 theme::MEDIUM
             ),
             label(
-                fit(&status.into(), theme::text::CAPTION, text_w),
+                fit(&status, theme::text::CAPTION, text_w),
                 theme::text::CAPTION,
                 dim
             ),
