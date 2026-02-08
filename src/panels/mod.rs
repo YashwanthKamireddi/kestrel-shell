@@ -124,6 +124,8 @@ pub enum Key {
     Home,
     End,
     Delete,
+    Enter,
+    Space,
 }
 
 /// A panel was just opened: reset its transient state and load what it needs.
@@ -180,6 +182,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
             Some(PanelKind::Emoji) => emoji::key(app, k),
             Some(PanelKind::Overview) => overview::key(app, k),
+            Some(PanelKind::Control) => control::key(app, k),
             _ => Task::none(),
         },
         Message::TrayActivate(item) => {
@@ -227,6 +230,8 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::Home => Key::Home,
                 N::End => Key::End,
                 N::Delete => Key::Delete,
+                N::Enter => Key::Enter,
+                N::Space => Key::Space,
                 _ => return None,
             };
             Some(Message::Key(key))

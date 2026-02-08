@@ -181,6 +181,7 @@ pub fn tile<'a, M: Clone + 'static>(
     on: bool,
     on_press: M,
     details: Option<M>,
+    focused: bool,
 ) -> Element<'a, M> {
     // Off: no box at all, just the icon and words (the pointer lifts it faintly). On: the
     // accent, which is the only fill a tile ever has.
@@ -226,7 +227,7 @@ pub fn tile<'a, M: Clone + 'static>(
                 .on_press(d),
         );
     }
-    control(content)
+    let body = control(content)
         .padding(iced::Padding {
             top: 0.0,
             right: 8.0,
@@ -237,8 +238,26 @@ pub fn tile<'a, M: Clone + 'static>(
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
         .colors(bg, hover, if on { bg } else { s.raised_press })
-        .on_press(on_press)
-        .into()
+        .on_press(on_press);
+    if !focused {
+        return body.into();
+    }
+    // Where the keyboard is: a slim accent ring.
+    iced::widget::stack![
+        body,
+        container(Space::new())
+            .width(Length::Fill)
+            .height(56)
+            .style(move |_| container::Style {
+                border: iced::Border {
+                    color: if on { s.ink } else { s.accent },
+                    width: 2.0,
+                    radius: size::CARD_RADIUS.into(),
+                },
+                ..container::Style::default()
+            }),
+    ]
+    .into()
 }
 
 /// An on/off switch.
