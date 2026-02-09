@@ -493,7 +493,13 @@ fn status<'a>(
             Link::Wired => s.info,
             Link::Wifi if app.net.strength >= 50 => s.info,
             Link::Wifi => s.warn,
+            Link::None if app.net.connecting => s.info,
             Link::None => s.bad,
+        };
+        let tint = if app.net.connecting {
+            tint.scale_alpha(app.breath())
+        } else {
+            tint
         };
         status = status.push(icon(control::wifi_icon(&app.net), size::ICON, tint));
     }
@@ -528,6 +534,12 @@ fn status<'a>(
             s.warn
         } else {
             s.bad
+        };
+        // Charging: the battery breathes.
+        let tint = if app.power.charging && app.power.percent < 99.5 {
+            tint.scale_alpha(app.breath())
+        } else {
+            tint
         };
         status = status.push(
             row![
