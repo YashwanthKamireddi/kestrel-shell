@@ -121,3 +121,7 @@ fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
 pub fn lua() -> Subscription<crate::lua::Event> {
     Subscription::run(crate::lua::stream)
 }
+
+pub fn level() -> Subscription<f32> {
+    Subscription::run(crate::services::level::stream)
+}

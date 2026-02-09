@@ -151,6 +151,27 @@ pub fn bar<'a>(
         content = content.push(row![lead, words].spacing(8).align_y(Alignment::Center));
         return finish(content, o, s, active);
     }
+    // While music plays: four bars dancing to it, before the time.
+    if !crate::motion::still() && app.media.main().is_some_and(|p| p.playing) {
+        let bars = app.levels.iter().rev().map(|v| {
+            let h = 4.0 + v.clamp(0.0, 1.0) * 12.0;
+            iced::widget::container(iced::widget::Space::new())
+                .width(3)
+                .height(h)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.accent.into()),
+                    border: iced::Border::default().rounded(1.5),
+                    ..iced::widget::container::Style::default()
+                })
+                .into()
+        });
+        content = content.push(
+            iced::widget::row(bars)
+                .spacing(2)
+                .height(16)
+                .align_y(Alignment::Center),
+        );
+    }
     content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
     if let Some(w) = &app.weather {
         content = content.push(

@@ -13,6 +13,7 @@ pub mod clock;
 pub mod dbus;
 pub mod hyprland;
 pub mod icons;
+pub mod level;
 pub mod logind;
 pub mod mpris;
 pub mod network;
