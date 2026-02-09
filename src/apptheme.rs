@@ -254,9 +254,15 @@ fn hyprlock(s: &Scheme, wallpaper: Option<&str>, old: &str) -> String {
     out += &format!("$entry_background_color = {}\n", hypr(s.raised, 0xcc));
     out += &format!("$entry_border_color = {}\n", hypr(s.accent, 0x88));
     out += &format!("$entry_color = {}\n", hypr(s.ink, 0xff));
+    out += &format!("$accent_color = {}\n", hypr(s.accent, 0xff));
+    out += &format!("$fail_color = {}\n", hypr(s.bad, 0xff));
+    out += &format!("$surface_color = {}\n", hypr(s.base, 0xdd));
+    out += &format!("$dim_color = {}\n", hypr(s.ink_dim, 0xff));
     // The shell's typeface, so the lock screen reads as part of it.
+    // The family only: weights are set where text is drawn ("Rubik Medium" is not a family,
+    // and the lock screen fell back to another font).
     out += &format!(
-        "$font_family = {f} Medium\n$font_family_clock = {f} SemiBold\n",
+        "$font_family = {f}\n$font_family_clock = {f}\n",
         f = crate::theme::FONT_NAME
     );
     match wallpaper {
