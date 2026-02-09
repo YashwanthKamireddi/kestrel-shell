@@ -56,6 +56,8 @@ impl Action {
 #[derive(Default)]
 pub struct State {
     armed: Option<Action>,
+    /// The row the keyboard is on.
+    focus: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -80,14 +82,42 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     Task::batch([Task::done(AppMessage::Close), run.discard()])
 }
 
+/// Up / Down move between the actions, Enter presses (the risky ones still ask a second time,
+/// so Enter twice).
+pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+    use super::Key;
+    let n = Action::ALL.len();
+    let st = &mut app.panels.power;
+    let at = st.focus.unwrap_or(0);
+    match k {
+        Key::Down | Key::Tab => st.focus = Some(if st.focus.is_none() { 0 } else { (at + 1) % n }),
+        Key::Up | Key::BackTab => {
+            st.focus = Some(if st.focus.is_none() {
+                n - 1
+            } else {
+                (at + n - 1) % n
+            })
+        }
+        Key::Enter | Key::Space if st.focus.is_some() => {
+            return update(app, Message::Press(Action::ALL[at]));
+        }
+        _ => {}
+    }
+    Task::none()
+}
+
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let armed = app.panels.power.armed;
+    let focus = app.panels.power.focus;
     let rows = Action::ALL.map(|a| {
         let is_armed = armed == Some(a);
+        let focused = focus.is_some_and(|i| Action::ALL[i] == a);
         let (fg, rest, hover) = if is_armed {
             (s.base, s.bad, s.bad)
+        } else if focused {
+            (s.ink, s.selected(), s.selected())
         } else {
-            (s.ink, Color::TRANSPARENT, s.raised_hi)
+            (s.ink, Color::TRANSPARENT, s.hover())
         };
         let text_s = if is_armed {
             a.confirm().unwrap_or(a.label())

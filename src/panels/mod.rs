@@ -191,6 +191,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Emoji) => emoji::key(app, k),
             Some(PanelKind::Overview) => overview::key(app, k),
             Some(PanelKind::Control) => control::key(app, k),
+            Some(PanelKind::Power) => power::key(app, k),
             _ => Task::none(),
         },
         Message::TrayActivate(item) => {

@@ -591,17 +591,45 @@ fn bell<'a>(
     } else {
         s.ink
     };
-    items.push(
-        ui::icon_button_in(
-            s,
-            bell,
-            Message::Close,
-            open == Some(PanelKind::Notifications),
-            tint,
-        )
-        .on_press_at(move |r| Message::Toggle(PanelKind::Notifications, id, r))
-        .into(),
-    );
+    let button = ui::icon_button_in(
+        s,
+        bell,
+        Message::Close,
+        open == Some(PanelKind::Notifications),
+        tint,
+    )
+    .on_press_at(move |r| Message::Toggle(PanelKind::Notifications, id, r));
+    // How many arrived since the centre was last opened: a small accent badge.
+    let unseen = app.unseen;
+    if unseen > 0 && !app.dnd {
+        let badge = container(label_w(
+            if unseen > 9 {
+                "9+".to_string()
+            } else {
+                unseen.to_string()
+            },
+            9.5,
+            s.on_accent,
+            theme::SEMIBOLD,
+        ))
+        .center_x(iced::Length::Shrink)
+        .padding([0, 4])
+        .height(14)
+        .center_y(14)
+        .style(move |_| container::Style {
+            background: Some(s.accent.into()),
+            border: iced::Border::default().rounded(7),
+            ..container::Style::default()
+        });
+        items.push(
+            stack![button, pin(badge).x(16.0).y(1.0)]
+                .width(size::CONTROL + 6.0)
+                .height(size::CONTROL)
+                .into(),
+        );
+    } else {
+        items.push(button.into());
+    }
     items
 }
 /// Workspace slots: app icon or faint number, with a gliding highlight on the active one.
