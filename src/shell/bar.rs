@@ -278,6 +278,12 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
 
 /// One bar section: its modules' items in order. In the pill style the section sits on its
 /// own floating pill (none when the section is empty).
+/// Items that belong together share one pill (the status cluster, the tray, the bell, power);
+/// anything else stands alone in a pill of its own.
+const CLUSTER: &[&str] = &["tray", "privacy", "status", "notifications", "power"];
+
+/// One bar section: its modules' items in order. In the pill style every standalone module
+/// sits on its own floating pill and the clustered ones share one (none when empty).
 fn section<'a>(
     ids: &'a [String],
     app: &'a App,
@@ -286,26 +292,44 @@ fn section<'a>(
     open: Option<PanelKind>,
     pills: bool,
 ) -> Element<'a, Message> {
-    let items: Vec<Element<'a, Message>> = ids
-        .iter()
-        .flat_map(|id| crate::modules::items(id, app, o, s, open))
-        .collect();
-    let empty = items.is_empty();
-    // A section with one item (the island) is that item: it fills the pill edge to edge, so
-    // its highlight is the whole pill, not a smaller shape inside it.
-    let single = items.len() == 1;
-    let content = row(items).spacing(4).align_y(Alignment::Center);
-    if !pills || empty {
-        return content.into();
+    if !pills {
+        let items: Vec<Element<'a, Message>> = ids
+            .iter()
+            .flat_map(|id| crate::modules::items(id, app, o, s, open))
+            .collect();
+        return row(items).spacing(4).align_y(Alignment::Center).into();
     }
-    container(content)
-        .padding([0, if single { 0 } else { 4 }])
-        .height(size::BAR - 6.0)
-        .center_y(size::BAR - 6.0)
-        .style(move |_| container::Style {
-            background: Some(s.base.into()),
-            border: iced::Border::default().rounded((size::BAR - 6.0) / 2.0),
-            ..container::Style::default()
-        })
-        .into()
+    // Consecutive clustered modules form one group; every other module is a group alone.
+    let mut groups: Vec<Vec<Element<'a, Message>>> = Vec::new();
+    let mut in_cluster = false;
+    for id in ids {
+        let items = crate::modules::items(id, app, o, s, open);
+        if items.is_empty() {
+            continue;
+        }
+        let clustered = CLUSTER.contains(&id.as_str());
+        if clustered && in_cluster {
+            if let Some(g) = groups.last_mut() {
+                g.extend(items);
+            }
+        } else {
+            groups.push(items);
+        }
+        in_cluster = clustered;
+    }
+    let pills_row = groups.into_iter().map(|items| {
+        // A pill with one item (the island) is that item: it fills the pill edge to edge.
+        let single = items.len() == 1;
+        container(row(items).spacing(4).align_y(Alignment::Center))
+            .padding([0, if single { 0 } else { 4 }])
+            .height(size::BAR - 6.0)
+            .center_y(size::BAR - 6.0)
+            .style(move |_| container::Style {
+                background: Some(s.base.into()),
+                border: iced::Border::default().rounded((size::BAR - 6.0) / 2.0),
+                ..container::Style::default()
+            })
+            .into()
+    });
+    row(pills_row).spacing(6).align_y(Alignment::Center).into()
 }

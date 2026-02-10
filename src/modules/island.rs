@@ -24,6 +24,17 @@ pub fn items<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
+    // With the time and the weather in pills of their own, an idle island has nothing to say:
+    // it is not drawn until something happens (music, a notification, a pop-up, a copy).
+    let idle = app.config.bar.contains("clock")
+        && (app.config.bar.contains("weather") || app.weather.is_none())
+        && !app.media.main().is_some_and(|p| p.playing)
+        && app.toasts.is_empty()
+        && app.flash.is_none()
+        && !(hosts_osd(app) && app.osd.is_some());
+    if idle {
+        return Vec::new();
+    }
     vec![bar(app, o, s, open)]
 }
 
@@ -172,8 +183,16 @@ pub fn bar<'a>(
                 .align_y(Alignment::Center),
         );
     }
-    content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
-    if let Some(w) = &app.weather {
+    // The time and the weather stay out of the island when they have pills of their own.
+    // (With both standalone and nothing else to show, the island keeps the time.)
+    let only_time =
+        app.config.bar.contains("weather") && !app.media.main().is_some_and(|p| p.playing);
+    if !app.config.bar.contains("clock") || only_time {
+        content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
+    }
+    if !app.config.bar.contains("weather")
+        && let Some(w) = &app.weather
+    {
         content = content.push(
             row![
                 icon(ui::weather_icon(w), 15.0, ui::weather_tint(w)),

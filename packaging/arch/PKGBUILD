@@ -1,6 +1,6 @@
 # Local package for kestrel, built from this repository.
 pkgname=kestrel
-pkgver=0.1.0.r79.g25ef317
+pkgver=0.1.0.r80.gd6012d3
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
