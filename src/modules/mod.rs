@@ -67,9 +67,17 @@ pub fn items<'a>(
 ) -> Vec<Element<'a, Message>> {
     match id {
         "workspaces" => vec![workspaces(app, o, s)],
+        // Nothing focused: no pill at all, not an empty one.
+        "app" if app.hypr.focused_monitor != o.name || app.hypr.window_class.is_empty() => {
+            Vec::new()
+        }
         "app" => vec![app_name(app, o, s)],
         "clock" => vec![clock(app, o, s, open)],
         "island" => island::items(app, o, s, open),
+        // Pill style: the music is a round bubble (one thing, one circle).
+        "media" if app.config.bar.style == crate::config::BarStyle::Pills => {
+            island::bubble(app, o, s).into_iter().collect()
+        }
         "media" => media_chip(app, o, s, open),
         "tray" => tray(app, o, s, open),
         "weather" => weather(app, o, s, open),
@@ -275,26 +283,30 @@ fn weather<'a>(
         )
     };
     let _ = pill(false);
-    // Weather now; the forecast is in the calendar.
+    // Weather now, as a circle: the condition's icon over the temperature. It opens the
+    // dashboard, which has the full weather.
     if let Some(w) = &app.weather {
+        let d = size::BAR - 6.0;
         items.push(
             ui::control(
-                row![
-                    icon(crate::ui::weather_icon(w), 14.0, crate::ui::weather_tint(w)),
-                    label(
+                iced::widget::column![
+                    icon(crate::ui::weather_icon(w), 13.0, crate::ui::weather_tint(w)),
+                    label_w(
                         format!("{:.0}°", w.temp),
-                        text::SMALL,
-                        crate::ui::temperature_tint(w.temp)
+                        9.5,
+                        crate::ui::temperature_tint(w.temp),
+                        theme::SEMIBOLD
                     ),
                 ]
-                .spacing(5)
-                .align_y(Alignment::Center),
+                .spacing(0)
+                .align_x(Alignment::Center),
             )
-            .padding([0, 10])
-            .height(size::CONTROL)
-            .radius(size::CONTROL / 2.0)
-            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Calendar, id, r))
+            .width(d)
+            .height(d)
+            .center_x()
+            .radius(d / 2.0)
+            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .on_press_at(move |r| Message::Toggle(PanelKind::Island, id, r))
             .into(),
         );
     }
@@ -485,65 +497,32 @@ fn status<'a>(
     let active = open == Some(PanelKind::Control);
     let fg = s.ink;
     let mut status = row![].spacing(10).align_y(Alignment::Center);
-    // Each icon in the colour of its situation, the way the weather has its own.
-    let _ = fg;
+    // Plain white icons (design call): only a nearly empty battery turns red. What is in progress
+    // breathes (charging, Wi-Fi connecting).
+    let alive = |on: bool| if on { fg.scale_alpha(app.breath()) } else { fg };
     if app.net.available {
-        use crate::services::network::Link;
-        let tint = match app.net.link {
-            Link::Wired => s.info,
-            Link::Wifi if app.net.strength >= 50 => s.info,
-            Link::Wifi => s.warn,
-            Link::None if app.net.connecting => s.info,
-            Link::None => s.bad,
-        };
-        let tint = if app.net.connecting {
-            tint.scale_alpha(app.breath())
-        } else {
-            tint
-        };
-        status = status.push(icon(control::wifi_icon(&app.net), size::ICON, tint));
+        status = status.push(icon(
+            control::wifi_icon(&app.net),
+            size::ICON,
+            alive(app.net.connecting),
+        ));
     }
     if app.bt.powered {
-        let connected = app.bt.connected().next().is_some();
-        let i = if connected {
+        let i = if app.bt.connected().next().is_some() {
             Icon::BluetoothConnected
         } else {
             Icon::Bluetooth
         };
-        status = status.push(icon(
-            i,
-            size::ICON,
-            if connected { s.info } else { s.ink_dim },
-        ));
+        status = status.push(icon(i, size::ICON, fg));
     }
-    let sink = app.audio.sink();
-    let tint = match sink {
-        Some(d) if d.muted || d.volume <= 0.001 => s.bad,
-        Some(d) if d.volume > 1.0 => s.warn,
-        Some(_) => s.accent,
-        None => s.ink_dim,
-    };
-    status = status.push(icon(control::volume_icon(sink), size::ICON, tint));
+    status = status.push(icon(control::volume_icon(app.audio.sink()), size::ICON, fg));
     if app.power.has_battery {
         let low = app.power.percent < 15.0 && !app.power.charging;
-        let tint = if app.power.charging || app.power.percent >= 50.0 {
-            s.good
-        } else if app.power.percent >= 20.0 {
-            s.ink
-        } else if app.power.percent >= 10.0 {
-            s.warn
-        } else {
-            s.bad
-        };
-        // Charging: the battery breathes.
-        let tint = if app.power.charging && app.power.percent < 99.5 {
-            tint.scale_alpha(app.breath())
-        } else {
-            tint
-        };
+        let charging = app.power.charging && app.power.percent < 99.5;
+        let c = if low { s.bad } else { alive(charging) };
         status = status.push(
             row![
-                icon(control::battery_icon(&app.power), size::ICON, tint),
+                icon(control::battery_icon(&app.power), size::ICON, c),
                 label(
                     format!("{:.0}%", app.power.percent),
                     text::SMALL,

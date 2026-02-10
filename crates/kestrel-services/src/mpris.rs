@@ -128,14 +128,15 @@ async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
 fn join_browser_players(players: &mut Vec<Player>) {
     // kestrel's own browser player (the "kestrel media" extension) reads the page itself and
     // is exact: with it there, the browser's generic player and the integration's go.
+    // Only one that knows what is playing counts (a freshly started helper has nothing yet).
     let own: Vec<u32> = players
         .iter()
-        .filter(|p| p.bus.contains(".kestrel_browser."))
+        .filter(|p| p.bus.contains(".kestrel_browser.") && !p.title.trim().is_empty())
         .filter_map(|p| p.pid)
         .collect();
     if !own.is_empty() {
         players.retain(|p| {
-            p.bus.contains(".kestrel_browser.")
+            (p.bus.contains(".kestrel_browser.") && !p.title.trim().is_empty())
                 || !(p.pid.is_some_and(|pid| own.contains(&pid))
                     || p.bus.contains("browser-integration")
                     || p.bus.contains("browser_integration"))

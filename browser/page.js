@@ -67,6 +67,8 @@
     document.addEventListener(ev, () => send(true), true)
   );
   setInterval(() => send(false), 1000);
+  // Every 5 s regardless, so a helper that restarted (or a worker that slept) catches up.
+  setInterval(() => send(true), 5000);
   const hook = () => {
     const mk = music();
     if (!mk || mk.__kestrel) return;

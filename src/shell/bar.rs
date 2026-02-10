@@ -142,6 +142,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     layers.push(bar.into());
     // Music floats as its own bubble left of the island, which stays centred.
     if app.config.bar.center.iter().any(|m| m == "island")
+        && !app.config.bar.contains("media")
         && let Some(b) = crate::modules::island::bubble(app, o, s)
     {
         let island_w = o.island_w.value + 28.0;
