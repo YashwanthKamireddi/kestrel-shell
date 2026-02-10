@@ -18,7 +18,12 @@
 //! ```
 //!
 //! Also: `kestrel.exec(cmd)` starts a program, `kestrel.read(cmd)` runs one and returns its
-//! output (2 s limit), `kestrel.notify(title, body)` shows a notification.
+//! output (2 s limit), `kestrel.notify(title, body)` shows a notification,
+//! `kestrel.island{ icon, title, detail }` shows a moment in the island, and
+//! `kestrel.on(event, fn)` runs `fn(table)` when something happens:
+//! workspace {id}, window {class, title}, notification {app, summary, body},
+//! media {title, artist, playing}, device {name, connected}, power {charging, percent},
+//! battery {percent}.
 //!
 //! A widget's `icon` is a name from kestrel's icon set (src/ui/icon.rs), else an icon theme
 //! name ("drive-harddisk") or a file path.
@@ -85,11 +90,22 @@ pub enum Event {
     Notify(String, String),
     /// `kestrel.exec`: a command for Hyprland to start.
     Exec(String),
+    /// `kestrel.island{}`: a moment in the island (icon name, title, detail).
+    Island(Option<String>, String, String),
+}
+
+/// A value in an event's table.
+#[derive(Clone, Debug)]
+pub enum Val {
+    Str(String),
+    Num(f64),
+    Bool(bool),
 }
 
 enum Command {
     Reload,
     Click(String),
+    Event(&'static str, Vec<(&'static str, Val)>),
 }
 
 static COMMANDS: OnceLock<Mutex<mpsc::Sender<Command>>> = OnceLock::new();
@@ -105,6 +121,12 @@ fn send(c: Command) {
 /// Re-read init.lua.
 pub fn reload() {
     send(Command::Reload);
+}
+
+/// Something happened that scripts can react to (`kestrel.on(name, fn)`); `fields` become
+/// the table the handler receives.
+pub fn event(name: &'static str, fields: Vec<(&'static str, Val)>) {
+    send(Command::Event(name, fields));
 }
 
 /// A widget was clicked.
@@ -186,6 +208,7 @@ fn run(rx: &mpsc::Receiver<Command>, emit: &(impl Fn(Event) + Clone + 'static)) 
                 session = Session::load(emit);
             }
             Ok(Command::Click(name)) => session.click(&name, emit),
+            Ok(Command::Event(name, fields)) => session.dispatch(name, &fields, emit),
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
@@ -197,6 +220,8 @@ struct Session {
     lua: Lua,
     deadline: Rc<Cell<Instant>>,
     widgets: Vec<Widget>,
+    /// `kestrel.on` handlers: (event, function, failed already).
+    handlers: Rc<RefCell<Vec<(String, Function, bool)>>>,
 }
 
 impl Session {
@@ -223,6 +248,7 @@ impl Session {
             lua,
             deadline,
             widgets: Vec::new(),
+            handlers: Rc::new(RefCell::new(Vec::new())),
         };
         let file = path();
         let Ok(source) = std::fs::read_to_string(&file) else {
@@ -321,6 +347,43 @@ impl Session {
             })?,
         )?;
 
+        let handlers = self.handlers.clone();
+        k.set(
+            "on",
+            lua.create_function(move |_, (name, f): (String, Function)| {
+                const EVENTS: &[&str] = &[
+                    "workspace",
+                    "window",
+                    "notification",
+                    "media",
+                    "device",
+                    "power",
+                    "battery",
+                ];
+                if !EVENTS.contains(&name.as_str()) {
+                    return Err(mlua::Error::runtime(format!(
+                        "kestrel.on: no event {name:?} (events: {})",
+                        EVENTS.join(", ")
+                    )));
+                }
+                handlers.borrow_mut().push((name, f, false));
+                Ok(())
+            })?,
+        )?;
+
+        let e = emit.clone();
+        k.set(
+            "island",
+            lua.create_function(move |_, t: Table| {
+                e(Event::Island(
+                    t.get::<Option<String>>("icon")?,
+                    t.get::<Option<String>>("title")?.unwrap_or_default(),
+                    t.get::<Option<String>>("detail")?.unwrap_or_default(),
+                ));
+                Ok(())
+            })?,
+        )?;
+
         let e = emit.clone();
         k.set(
             "exec",
@@ -381,6 +444,32 @@ impl Session {
                     w.failing = true;
                     emit(Event::Error(format!("widget {:?}: {}", w.name, short(&e))));
                 }
+            }
+        }
+    }
+
+    /// Run every handler for `name` with the event's table. A failing handler is reported
+    /// once, then quietly skipped until the script reloads.
+    fn dispatch(&mut self, name: &str, fields: &[(&'static str, Val)], emit: &impl Fn(Event)) {
+        let Ok(table) = self.lua.create_table() else {
+            return;
+        };
+        for (k, v) in fields {
+            let _ = match v {
+                Val::Str(s) => table.set(*k, s.as_str()),
+                Val::Num(n) => table.set(*k, *n),
+                Val::Bool(b) => table.set(*k, *b),
+            };
+        }
+        let mut handlers = self.handlers.borrow_mut();
+        for (event, f, failed) in handlers.iter_mut() {
+            if event != name || *failed {
+                continue;
+            }
+            self.deadline.set(Instant::now() + CALL_LIMIT);
+            if let Err(e) = f.call::<()>(table.clone()) {
+                *failed = true;
+                emit(Event::Error(format!("kestrel.on({name:?}): {}", short(&e))));
             }
         }
     }

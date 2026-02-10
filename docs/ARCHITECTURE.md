@@ -104,7 +104,10 @@ not enabled, and its subscription is never created.
 
 `~/.config/kestrel/config.toml` (layout, modules, theme): every key optional, unknown keys
 ignored. `~/.config/kestrel/init.lua` (`src/lua.rs`) sets the bar layout on top of it and defines
-widgets: named bar items whose `update` returns text and an icon, with an optional `click`.
+widgets: named bar items whose `update` returns text and an icon, with an optional `click`;
+handlers for shell events (`kestrel.on`: workspace, window, notification, media, device,
+power, battery), sent only when the thing really changes; and moments in the island
+(`kestrel.island{}`).
 
 Both files are watched (the directory, since editors replace files) and apply on save:
 config changes rebuild only what they touch (surfaces when the frame changes, the wallpaper when
