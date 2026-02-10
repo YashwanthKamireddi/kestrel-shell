@@ -28,6 +28,12 @@ pub struct Spring {
     pub zeta: f32,
 }
 
+impl Default for Spring {
+    fn default() -> Self {
+        Self::new(0.0)
+    }
+}
+
 impl Spring {
     /// Panel opening: settles in ~280 ms with 0.6 % overshoot (Material 3 expressive stiffness,
     /// damped further; docs/muse-ux report, 2026-11-12). Visible growth, no bounce.
