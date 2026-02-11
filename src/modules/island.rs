@@ -16,8 +16,8 @@ pub fn hosts_osd(app: &App) -> bool {
     app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
 }
 
-/// The island. What is playing floats beside it as its own bubble (`bubble`), drawn by the
-/// bar outside this row so the island stays centred.
+/// The island. What is playing sits beside it as its own bubble (`bubble`, placed by the bar
+/// so the time stays centred).
 pub fn items<'a>(
     app: &'a App,
     o: &'a Output,
@@ -48,29 +48,38 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
     // Stays while paused: the bubble is the player, not just the sound.
     let p = app.media.main()?;
     let id = o.id;
-    // The cover in a circle, ringed in the cover's own colour; while paused it dims.
+    // A pill like the others (black), holding the cover in a circle ringed in the cover's own
+    // colour; while paused it dims.
     let ring = media::art_edge(p).unwrap_or(s.ink_faint);
     let ring = if p.playing {
         ring
     } else {
         ring.scale_alpha(0.5)
     };
-    let inner = BUBBLE - 5.0;
+    let art = BUBBLE - 8.0;
     Some(
         ui::control(
-            iced::widget::container(media::art(
-                s.faded(if p.playing { 1.0 } else { 0.5 }),
-                p,
-                inner,
-                inner / 2.0,
-            ))
+            iced::widget::container(
+                iced::widget::container(media::art(
+                    s.faded(if p.playing { 1.0 } else { 0.5 }),
+                    p,
+                    art - 3.0,
+                    (art - 3.0) / 2.0,
+                ))
+                .center(art)
+                .style(move |_| iced::widget::container::Style {
+                    border: iced::Border {
+                        color: ring,
+                        width: 1.5,
+                        radius: (art / 2.0).into(),
+                    },
+                    ..iced::widget::container::Style::default()
+                }),
+            )
             .center(BUBBLE)
             .style(move |_| iced::widget::container::Style {
-                border: iced::Border {
-                    color: ring,
-                    width: 1.5,
-                    radius: (BUBBLE / 2.0).into(),
-                },
+                background: Some(s.base.into()),
+                border: iced::Border::default().rounded(BUBBLE / 2.0),
                 ..iced::widget::container::Style::default()
             }),
         )

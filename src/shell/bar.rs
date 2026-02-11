@@ -93,19 +93,55 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     .height(Length::Fill);
 
     let open = panel.filter(|p| p.open).map(|p| p.kind);
-    let bar = container(
-        row![
-            container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
-            section(&app.config.bar.center, app, o, s, open, pills),
-            container(section(&app.config.bar.right, app, o, s, open, pills))
-                .width(Length::Fill)
-                .align_x(Alignment::End),
-        ]
-        .align_y(Alignment::Center),
-    )
-    .padding([0.0, if pills { PILL_MARGIN } else { t + 6.0 }])
-    .height(size::BAR)
-    .center_y(size::BAR);
+    // The time sits at the exact centre of the screen, always: the centre items listed before it
+    // line up to its left, the ones after to its right, so switching items on or off never
+    // moves it (the clock, or the island when there is no separate clock).
+    let center = &app.config.bar.center;
+    let anchor = center
+        .iter()
+        .position(|m| m == "clock")
+        .or_else(|| center.iter().position(|m| m == "island"));
+    let sides = row![
+        container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
+        container(section(&app.config.bar.right, app, o, s, open, pills))
+            .width(Length::Fill)
+            .align_x(Alignment::End),
+    ]
+    .align_y(Alignment::Center);
+    let middle: Element<'a, Message> = match anchor {
+        Some(i) => {
+            let mut before = row![section(&center[..i], app, o, s, open, pills)]
+                .spacing(6)
+                .align_y(Alignment::Center);
+            // Music with no media item of its own: its bubble sits just left of the time.
+            if pills
+                && !app.config.bar.contains("media")
+                && center[i] == "island"
+                && let Some(b) = crate::modules::island::bubble(app, o, s)
+            {
+                before = before.push(b);
+            }
+            row![
+                container(before)
+                    .width(Length::Fill)
+                    .align_x(Alignment::End),
+                section(&center[i..=i], app, o, s, open, pills),
+                container(section(&center[i + 1..], app, o, s, open, pills))
+                    .width(Length::Fill)
+                    .align_x(Alignment::Start),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center)
+            .into()
+        }
+        None => container(section(center, app, o, s, open, pills))
+            .center_x(Length::Fill)
+            .into(),
+    };
+    let bar = container(stack![sides, middle].width(Length::Fill).height(size::BAR))
+        .padding([0.0, if pills { PILL_MARGIN } else { t + 6.0 }])
+        .height(size::BAR)
+        .center_y(size::BAR);
 
     let mut layers: Vec<Element<'a, Message>> = Vec::new();
     let panel_shape = panel_drop.map(|(d, k, _, _)| {
@@ -140,24 +176,6 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         layers.push(ps.into());
     }
     layers.push(bar.into());
-    // Music floats as its own bubble left of the island, which stays centred.
-    if app.config.bar.center.iter().any(|m| m == "island")
-        && !app.config.bar.contains("media")
-        && let Some(b) = crate::modules::island::bubble(app, o, s)
-    {
-        let island_w = o.island_w.value + 28.0;
-        let x = (o.size.width - island_w) / 2.0 - 8.0 - crate::modules::island::BUBBLE;
-        layers.push(
-            pin(b)
-                .position(Point::new(
-                    x,
-                    (size::BAR - crate::modules::island::BUBBLE) / 2.0,
-                ))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-        );
-    }
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);
