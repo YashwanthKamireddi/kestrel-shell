@@ -138,10 +138,19 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
             .center_x(Length::Fill)
             .into(),
     };
-    let bar = container(stack![sides, middle].width(Length::Fill).height(size::BAR))
-        .padding([0.0, if pills { PILL_MARGIN } else { t + 6.0 }])
-        .height(size::BAR)
-        .center_y(size::BAR);
+    // The side margin goes on each layer: the stack does not pass a container's padding on
+    // (the pills ended up touching the screen's edges).
+    let margin = if pills { PILL_MARGIN } else { t + 6.0 };
+    let layer = |e: Element<'a, Message>| {
+        container(e)
+            .padding([0.0, margin])
+            .width(Length::Fill)
+            .height(size::BAR)
+            .center_y(size::BAR)
+    };
+    let bar = stack![layer(sides.into()), layer(middle)]
+        .width(Length::Fill)
+        .height(size::BAR);
 
     let mut layers: Vec<Element<'a, Message>> = Vec::new();
     let panel_shape = panel_drop.map(|(d, k, _, _)| {
