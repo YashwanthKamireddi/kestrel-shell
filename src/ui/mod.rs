@@ -392,8 +392,8 @@ pub fn image_file_faded<'a, M: 'a>(
             .height(size)
             .opacity(opacity)
             .into()
-    } else if raster_ok(path) {
-        iced::widget::image(iced::widget::image::Handle::from_path(path))
+    } else if let Some(h) = sharp_file(path, size) {
+        iced::widget::image(h)
             .width(size)
             .height(size)
             .opacity(opacity)
@@ -404,28 +404,87 @@ pub fn image_file_faded<'a, M: 'a>(
     }
 }
 
-/// Whether a picture file decodes (checked once per file).
-fn raster_ok(path: &std::path::Path) -> bool {
+/// Device pixels per logical pixel to prepare pictures for (the sharpest output's scale).
+const PICTURE_SCALE: f32 = 2.0;
+
+/// `img` resized to `size` logical px with a high-quality filter. The renderer scales
+/// pictures with a plain bilinear filter, which turns a 256 px app icon drawn at 20 px into a
+/// jagged, pixelated one; done here once, it stays smooth.
+pub fn sharp_image(img: &::image::RgbaImage, size: f32) -> iced::widget::image::Handle {
+    let px = (size * PICTURE_SCALE).round().max(1.0) as u32;
+    let (w, h) = img.dimensions();
+    let out = if w > px || h > px {
+        let (tw, th) = if w >= h {
+            (
+                px,
+                (u64::from(h) * u64::from(px) / u64::from(w)).max(1) as u32,
+            )
+        } else {
+            (
+                (u64::from(w) * u64::from(px) / u64::from(h)).max(1) as u32,
+                px,
+            )
+        };
+        ::image::imageops::resize(img, tw, th, ::image::imageops::FilterType::Lanczos3)
+    } else {
+        img.clone()
+    };
+    let (w, h) = out.dimensions();
+    iced::widget::image::Handle::from_rgba(w, h, out.into_raw())
+}
+
+/// A picture file prepared by `sharp_image` (decoded by content, once per file and size).
+/// None when it does not decode (the renderer aborts on undecodable pictures).
+fn sharp_file(path: &std::path::Path, size: f32) -> Option<iced::widget::image::Handle> {
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};
-    static SEEN: LazyLock<Mutex<HashMap<std::path::PathBuf, bool>>> =
+    type Key = (std::path::PathBuf, u32);
+    static CACHE: LazyLock<Mutex<HashMap<Key, Option<iced::widget::image::Handle>>>> =
         LazyLock::new(Default::default);
-    if let Some(ok) = SEEN.lock().ok().and_then(|m| m.get(path).copied()) {
-        return ok;
+    let key = (path.to_path_buf(), size as u32);
+    if let Some(hit) = CACHE.lock().ok()?.get(&key) {
+        return hit.clone();
     }
-    let ok = ::image::ImageReader::open(path)
+    let made = ::image::ImageReader::open(path)
         .ok()
         .and_then(|r| r.with_guessed_format().ok())
-        .and_then(|r| r.into_dimensions().ok())
-        .is_some_and(|(w, h)| w > 0 && h > 0);
-    if let Ok(mut m) = SEEN.lock() {
-        m.insert(path.to_path_buf(), ok);
+        .and_then(|r| r.decode().ok())
+        .map(|i| sharp_image(&i.to_rgba8(), size));
+    if let Ok(mut m) = CACHE.lock() {
+        if m.len() > 512 {
+            m.clear();
+        }
+        m.insert(key, made.clone());
     }
-    ok
+    made
 }
 
 /// One renderer handle per distinct image (by content id), so pixels re-read by a service are
 /// not uploaded again.
+/// `pixels`, prepared for drawing at `size` logical px (see `sharp_image`).
+pub fn pixels_at(
+    p: &crate::services::notifications::Pixels,
+    size: f32,
+) -> iced::widget::image::Handle {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static CACHE: LazyLock<Mutex<HashMap<(u64, u32), iced::widget::image::Handle>>> =
+        LazyLock::new(Default::default);
+    let key = (p.id, size as u32);
+    if let Some(h) = CACHE.lock().ok().and_then(|m| m.get(&key).cloned()) {
+        return h;
+    }
+    let made = ::image::RgbaImage::from_raw(p.width, p.height, p.data.as_ref().clone())
+        .map_or_else(|| pixels(p), |img| sharp_image(&img, size));
+    if let Ok(mut m) = CACHE.lock() {
+        if m.len() > 256 {
+            m.clear();
+        }
+        m.insert(key, made.clone());
+    }
+    made
+}
+
 pub fn pixels(p: &crate::services::notifications::Pixels) -> iced::widget::image::Handle {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
@@ -446,10 +505,16 @@ pub fn pixels(p: &crate::services::notifications::Pixels) -> iced::widget::image
 
 /// The icon for a weather condition (WMO code).
 pub fn weather_icon(w: &crate::services::web::Weather) -> Icon {
-    match w.code {
-        0 | 1 if w.is_day => Icon::Sun,
+    weather_icon_for(w.code, w.is_day)
+}
+
+/// The icon for WMO code `code`, by day or night (for forecasts).
+pub fn weather_icon_for(code: u32, day: bool) -> Icon {
+    match code {
+        0 | 1 if day => Icon::Sun,
         0 | 1 => Icon::Moon,
-        2 => Icon::CloudSun,
+        2 if day => Icon::CloudSun,
+        2 => Icon::CloudMoon,
         3 => Icon::Cloud,
         45 | 48 => Icon::CloudFog,
         51..=57 => Icon::CloudDrizzle,
@@ -462,11 +527,16 @@ pub fn weather_icon(w: &crate::services::web::Weather) -> Icon {
 
 /// The weather's own colour: a warm sun, a pale moon, grey cloud, blue rain, violet storms.
 pub fn weather_tint(w: &crate::services::web::Weather) -> Color {
+    weather_tint_for(w.code, w.is_day)
+}
+
+/// `weather_tint` for WMO code `code`, by day or night (for forecasts).
+pub fn weather_tint_for(code: u32, day: bool) -> Color {
     let rgb = |r, g, b| Color::from_rgb8(r, g, b);
-    match w.code {
-        0 | 1 if w.is_day => rgb(0xFF, 0xC2, 0x4D),
+    match code {
+        0 | 1 if day => rgb(0xFF, 0xC2, 0x4D),
         0 | 1 => rgb(0xC8, 0xC4, 0xFF),
-        2 if w.is_day => rgb(0xFF, 0xD7, 0x8A),
+        2 if day => rgb(0xFF, 0xD7, 0x8A),
         2 => rgb(0xC5, 0xCC, 0xE8),
         45 | 48 | 3 => rgb(0xB8, 0xC0, 0xCC),
         51..=67 | 80..=82 => rgb(0x7C, 0xB8, 0xFF),

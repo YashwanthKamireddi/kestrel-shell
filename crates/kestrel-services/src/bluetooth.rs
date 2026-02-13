@@ -17,6 +17,8 @@ pub struct Device {
     /// BlueZ icon name: audio-headset, audio-headphones, input-mouse, phone, …
     pub icon: String,
     pub battery: Option<u8>,
+    /// Vendor and product, "bluetooth:v004Cp2019d242F" (0x004C is Apple).
+    pub modalias: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -70,6 +72,7 @@ async fn read(c: &Connection) -> zbus::Result<State> {
                     .or_else(|| prop(d, "Name"))
                     .unwrap_or_default(),
                 connected: prop(d, "Connected").unwrap_or(false),
+                modalias: prop(d, "Modalias").unwrap_or_default(),
                 icon: prop(d, "Icon").unwrap_or_default(),
                 battery: ifaces
                     .get("org.bluez.Battery1")

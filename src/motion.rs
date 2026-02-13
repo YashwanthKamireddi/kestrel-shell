@@ -40,6 +40,10 @@ impl Spring {
     pub const OPEN: (f32, f32) = (19.5, 0.85);
     /// Closing and quick moves: ~160 ms, no visible overshoot. Exits run faster than entries.
     pub const CLOSE: (f32, f32) = (30.0, 0.95);
+    /// A panel appearing: critically damped, visibly there in ~110 ms, no overshoot.
+    pub const SHOW: (f32, f32) = (38.0, 1.0);
+    /// A panel leaving: gone in ~70 ms.
+    pub const HIDE: (f32, f32) = (55.0, 1.0);
     /// Small UI elements (workspace pill): snappy, barely any overshoot.
     pub const SNAP: (f32, f32) = (24.0, 0.86);
 

@@ -23,6 +23,7 @@ pub const KNOWN: &[&str] = &[
     "media",
     "tray",
     "weather",
+    "airpods",
     "system",
     "updates",
     "privacy",
@@ -40,6 +41,7 @@ pub struct Needs {
     pub system: bool,
     pub updates: bool,
     pub weather: bool,
+    pub airpods: bool,
 }
 
 pub fn needs(bar: &BarConfig) -> Needs {
@@ -54,6 +56,7 @@ pub fn needs(bar: &BarConfig) -> Needs {
         system: on("system") || island,
         updates: on("updates"),
         weather: on("weather") || island,
+        airpods: on("airpods"),
     }
 }
 
@@ -72,7 +75,10 @@ pub fn items<'a>(
             Vec::new()
         }
         "app" => vec![app_name(app, o, s)],
+        // The island is the time pill; a clock beside it would show the time twice.
+        "clock" if app.config.bar.contains("island") => Vec::new(),
         "clock" => vec![clock(app, o, s, open)],
+        "airpods" => pods(app, o, s, open).into_iter().collect(),
         "island" => island::items(app, o, s, open),
         // Pill style: the music is a round bubble (one thing, one circle).
         "media" if app.config.bar.style == crate::config::BarStyle::Pills => {
@@ -143,7 +149,7 @@ pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Messag
             Some(p) => ui::image_file_faded(&p, px, s.opacity),
             None => icon(Icon::AppWindow, px, s.ink_dim).into(),
         },
-        Some(tray_service::TrayIcon::Rgba(p)) => image(crate::ui::pixels(p))
+        Some(tray_service::TrayIcon::Rgba(p)) => image(crate::ui::pixels_at(p, px))
             .width(px)
             .height(px)
             .opacity(s.opacity)
@@ -260,7 +266,7 @@ fn tray<'a>(
     }
     items
 }
-/// Weather now; the forecast is in the calendar.
+/// Weather now, as a circle; opens the weather panel.
 fn weather<'a>(
     app: &'a App,
     o: &'a Output,
@@ -287,6 +293,7 @@ fn weather<'a>(
     // dashboard, which has the full weather.
     if let Some(w) = &app.weather {
         let d = size::BAR - 6.0;
+        let active = open == Some(PanelKind::Weather);
         items.push(
             ui::control(
                 iced::widget::column![
@@ -305,8 +312,16 @@ fn weather<'a>(
             .height(d)
             .center_x()
             .radius(d / 2.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Island, id, r))
+            .colors(
+                if active {
+                    s.selected()
+                } else {
+                    Color::TRANSPARENT
+                },
+                if active { s.selected() } else { s.hover() },
+                s.raised_press,
+            )
+            .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
             .into(),
         );
     }
@@ -728,26 +743,75 @@ fn clock<'a>(
     let time = app.now.format("%H:%M").to_string();
     let date = app.now.format("%a %-d %b").to_string();
     let id = o.id;
-    ui::control(
-        row![
-            label_w(time, text::BODY, s.ink, theme::SEMIBOLD),
-            label(date, text::SMALL, s.ink),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center),
+    let mut r = row![
+        label_w(time, text::BODY, s.ink, theme::SEMIBOLD),
+        label(date, text::SMALL, s.ink),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+    if let Some(v) = island::visualiser(app, s) {
+        r = r.push(v);
+    }
+    ui::control(r)
+        .padding([0, 12])
+        .height(size::CONTROL)
+        .radius(size::CONTROL / 2.0)
+        .colors(
+            if active {
+                s.selected()
+            } else {
+                iced::Color::TRANSPARENT
+            },
+            if active { s.selected() } else { s.hover() },
+            s.raised_press,
+        )
+        .on_press_at(move |b| Message::Toggle(PanelKind::Calendar, id, b))
+        .into()
+}
+
+/// AirPods, while connected: a circle with the earbuds inside a ring filled to the lower bud's
+/// charge (green while charging, amber then red when low). Opens their panel.
+fn pods<'a>(
+    app: &'a App,
+    o: &'a Output,
+    s: Scheme,
+    open: Option<PanelKind>,
+) -> Option<Element<'a, Message>> {
+    crate::panels::pods::device(app)?;
+    let p = app.pods.as_ref();
+    let id = o.id;
+    let d = size::BAR - 6.0;
+    let active = open == Some(PanelKind::Pods);
+    let charge = p.and_then(|p| {
+        Some(crate::services::airpods::Charge {
+            level: p.level()?,
+            charging: p.charging(),
+        })
+    });
+    let (value, color) = match charge {
+        Some(c) => (f32::from(c.level) / 100.0, crate::panels::pods::tint(s, c)),
+        None => (0.0, s.ink_faint),
+    };
+    let ring = d - 8.0;
+    Some(
+        ui::control(stack![
+            ui::ring::ring(value, ring, 2.5, color, s.ink.scale_alpha(0.14 * s.opacity)),
+            container(icon(Icon::Earbuds, 14.0, s.ink)).center(ring),
+        ])
+        .width(d)
+        .height(d)
+        .center_x()
+        .radius(d / 2.0)
+        .colors(
+            if active {
+                s.selected()
+            } else {
+                Color::TRANSPARENT
+            },
+            if active { s.selected() } else { s.hover() },
+            s.raised_press,
+        )
+        .on_press_at(move |r| Message::Toggle(PanelKind::Pods, id, r))
+        .into(),
     )
-    .padding([0, 12])
-    .height(size::CONTROL)
-    .radius(size::CONTROL / 2.0)
-    .colors(
-        if active {
-            s.selected()
-        } else {
-            iced::Color::TRANSPARENT
-        },
-        if active { s.selected() } else { s.hover() },
-        s.raised_press,
-    )
-    .on_press_at(move |b| Message::Toggle(PanelKind::Calendar, id, b))
-    .into()
 }

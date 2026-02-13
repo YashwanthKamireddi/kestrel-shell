@@ -15,8 +15,6 @@ pub const SLOT: f32 = 28.0;
 pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
 /// The floating pills' distance from the screen's sides.
 pub const PILL_MARGIN: f32 = 8.0;
-/// How far a panel glides down into place as it fades in.
-const GLIDE: f32 = 8.0;
 pub const SLOT_GAP: f32 = 2.0;
 
 /// Left edge and width of the highlight behind the active workspace.
@@ -56,17 +54,16 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let toast_x = o.size.width - edge - TOAST_WIDTH;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
     let mut drops = Vec::new();
-    // The panel opens by fading in at its full size while gliding the last few pixels down
-    // into place (and closes the same way, faster); it does not unroll.
+    // The panel opens by fading in at its full size (and closes the same way, faster); it does
+    // not unroll or move.
     let mut panel_drop = None;
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let k = p.progress(natural);
-        let lift = if pills { (1.0 - k) * GLIDE } else { 0.0 };
         let h = if p.h.value > 0.0 { p.h.value } else { natural };
-        let mut d = drop(p.x.value, p.w.value, h);
-        d.top -= lift;
-        panel_drop = Some((d, k, lift, h));
+        // It fades in and out where it stands: moving it would put text and icons between
+        // pixels for a few frames (soft, shaky).
+        panel_drop = Some((drop(p.x.value, p.w.value, h), k, h));
     }
     // With the island in the bar, notifications arrive in it instead of a box of their own.
     let show_toasts = focused
@@ -95,12 +92,12 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let open = panel.filter(|p| p.open).map(|p| p.kind);
     // The time sits at the exact centre of the screen, always: the centre items listed before it
     // line up to its left, the ones after to its right, so switching items on or off never
-    // moves it (the clock, or the island when there is no separate clock).
+    // moves it (the island, which is the time pill; else a clock).
     let center = &app.config.bar.center;
     let anchor = center
         .iter()
-        .position(|m| m == "clock")
-        .or_else(|| center.iter().position(|m| m == "island"));
+        .position(|m| m == "island")
+        .or_else(|| center.iter().position(|m| m == "clock"));
     let sides = row![
         container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
         container(section(&app.config.bar.right, app, o, s, open, pills))
@@ -110,17 +107,7 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     .align_y(Alignment::Center);
     let middle: Element<'a, Message> = match anchor {
         Some(i) => {
-            let mut before = row![section(&center[..i], app, o, s, open, pills)]
-                .spacing(6)
-                .align_y(Alignment::Center);
-            // Music with no media item of its own: its bubble sits just left of the time.
-            if pills
-                && !app.config.bar.contains("media")
-                && center[i] == "island"
-                && let Some(b) = crate::modules::island::bubble(app, o, s)
-            {
-                before = before.push(b);
-            }
+            let before = section(&center[..i], app, o, s, open, pills);
             row![
                 container(before)
                     .width(Length::Fill)
@@ -153,13 +140,13 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         .height(size::BAR);
 
     let mut layers: Vec<Element<'a, Message>> = Vec::new();
-    let panel_shape = panel_drop.map(|(d, k, _, _)| {
+    let panel_shape = panel_drop.map(|(d, k, _)| {
         canvas(BarShape {
             // Closing, the box goes with its content instead of lingering faintly after it.
             color: s.base.scale_alpha(if panel.is_some_and(|p| p.open) {
                 k
             } else {
-                crate::motion::range(k, 0.45, 1.0)
+                crate::motion::range(k, 0.4, 1.0)
             }),
             bar: size::BAR,
             frame: t,
@@ -194,13 +181,10 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         let kind = p.kind;
         layers.push(
             pin(
-                ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.3))
+                ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.2))
                     .on_measure(move |sz| Message::Measured(kind, sz)),
             )
-            .position(Point::new(
-                x,
-                size::BAR + top_gap - panel_drop.map_or(0.0, |d| d.2),
-            ))
+            .position(Point::new(x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),

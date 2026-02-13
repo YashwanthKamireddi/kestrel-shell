@@ -10,10 +10,12 @@ pub mod launcher;
 pub mod media;
 pub mod notifications;
 pub mod overview;
+pub mod pods;
 pub mod power;
 pub mod settings;
 pub mod tray;
 pub mod wallpaper;
+pub mod weather;
 
 use crate::app::{App, Message as AppMessage};
 use crate::services::tray as tray_service;
@@ -36,6 +38,8 @@ pub enum PanelKind {
     Clipboard,
     Emoji,
     Settings,
+    Weather,
+    Pods,
 }
 
 impl PanelKind {
@@ -54,6 +58,8 @@ impl PanelKind {
             "clipboard" => Self::Clipboard,
             "emoji" => Self::Emoji,
             "settings" => Self::Settings,
+            "weather" => Self::Weather,
+            "airpods" | "pods" => Self::Pods,
             _ => return None,
         })
     }
@@ -74,6 +80,8 @@ impl PanelKind {
             Self::Clipboard => clipboard::WIDTH,
             Self::Emoji => emoji::WIDTH,
             Self::Settings => settings::WIDTH,
+            Self::Weather => weather::WIDTH,
+            Self::Pods => pods::WIDTH,
         }
     }
 }
@@ -162,7 +170,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
-        PanelKind::Notifications | PanelKind::Tray => {}
+        PanelKind::Notifications | PanelKind::Tray | PanelKind::Weather | PanelKind::Pods => {}
     }
     Task::none()
 }
@@ -265,5 +273,7 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
         PanelKind::Settings => settings::view(app, s),
+        PanelKind::Weather => weather::view(app, s),
+        PanelKind::Pods => pods::view(app, s),
     }
 }

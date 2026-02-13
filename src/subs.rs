@@ -22,6 +22,16 @@ pub fn network() -> Subscription<network::State> {
 pub fn bluetooth() -> Subscription<bluetooth::State> {
     Subscription::run(bluetooth::stream)
 }
+/// The AirPods at BlueZ object `path` (…/dev_B4_59_…): charge and fit.
+pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods>> {
+    let address = path
+        .rsplit('/')
+        .next()
+        .and_then(|d| d.strip_prefix("dev_"))
+        .unwrap_or_default()
+        .replace('_', ":");
+    Subscription::run_with(address, crate::services::airpods::stream)
+}
 pub fn power() -> Subscription<power::State> {
     Subscription::run(power::stream)
 }

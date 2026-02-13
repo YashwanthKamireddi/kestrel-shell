@@ -32,6 +32,17 @@ pub struct Weather {
     pub is_day: bool,
     pub high: f32,
     pub low: f32,
+    /// Feels like (°C), relative humidity (%), wind (km/h).
+    pub feels: f32,
+    pub humidity: f32,
+    pub wind: f32,
+    /// Today's sunrise and sunset, "HH:MM".
+    pub sunrise: String,
+    pub sunset: String,
+    /// The next hours: (hour, temperature, weather code, day or night).
+    pub hours: Vec<(u32, f32, u32, bool)>,
+    /// The coming days: (date "YYYY-MM-DD", weather code, high, low).
+    pub days: Vec<(String, u32, f32, f32)>,
 }
 
 impl Weather {
@@ -75,12 +86,69 @@ async fn locate(city: &str) -> Option<(f64, f64, String)> {
 async fn weather_once(lat: f64, lon: f64, place: &str) -> Option<Weather> {
     let v = get(&format!(
         "https://api.open-meteo.com/v1/forecast?latitude={lat:.3}&longitude={lon:.3}\
-         &current=temperature_2m,weather_code,is_day\
-         &daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto"
+         &current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,\
+         weather_code,is_day\
+         &hourly=temperature_2m,weather_code,is_day&forecast_hours=12\
+         &daily=temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset\
+         &forecast_days=6&timezone=auto"
     ))
     .await?;
     let c = v.get("current")?;
     let d = v.get("daily")?;
+    let h = v.get("hourly");
+    let f = |o: &Value, k: &str| o.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
+    let list = |o: &Value, k: &str| {
+        o.get(k)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let hhmm = |s: &Value| {
+        s.as_str()
+            .and_then(|s| s.get(11..16))
+            .unwrap_or("")
+            .to_string()
+    };
+    let hours = h
+        .map(|h| {
+            let (time, temp, code, day) = (
+                list(h, "time"),
+                list(h, "temperature_2m"),
+                list(h, "weather_code"),
+                list(h, "is_day"),
+            );
+            time.iter()
+                .enumerate()
+                .filter_map(|(i, t)| {
+                    let hour = t.as_str()?.get(11..13)?.parse().ok()?;
+                    Some((
+                        hour,
+                        temp.get(i)?.as_f64()? as f32,
+                        code.get(i)?.as_u64()? as u32,
+                        day.get(i).and_then(Value::as_u64) == Some(1),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let (dt, dc, dmax, dmin) = (
+        list(d, "time"),
+        list(d, "weather_code"),
+        list(d, "temperature_2m_max"),
+        list(d, "temperature_2m_min"),
+    );
+    let days = dt
+        .iter()
+        .enumerate()
+        .filter_map(|(i, t)| {
+            Some((
+                t.as_str()?.to_string(),
+                dc.get(i)?.as_u64()? as u32,
+                dmax.get(i)?.as_f64()? as f32,
+                dmin.get(i)?.as_f64()? as f32,
+            ))
+        })
+        .collect();
     Some(Weather {
         place: place.to_string(),
         temp: c.get("temperature_2m")?.as_f64()? as f32,
@@ -88,6 +156,13 @@ async fn weather_once(lat: f64, lon: f64, place: &str) -> Option<Weather> {
         is_day: c.get("is_day").and_then(Value::as_u64) == Some(1),
         high: d.get("temperature_2m_max")?.get(0)?.as_f64()? as f32,
         low: d.get("temperature_2m_min")?.get(0)?.as_f64()? as f32,
+        feels: f(c, "apparent_temperature"),
+        humidity: f(c, "relative_humidity_2m"),
+        wind: f(c, "wind_speed_10m"),
+        sunrise: list(d, "sunrise").first().map(hhmm).unwrap_or_default(),
+        sunset: list(d, "sunset").first().map(hhmm).unwrap_or_default(),
+        hours,
+        days,
     })
 }
 

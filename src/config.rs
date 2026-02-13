@@ -51,7 +51,7 @@ impl Default for BarConfig {
         Self {
             style: BarStyle::Full,
             left: v(&["workspaces", "app"]),
-            center: v(&["island"]),
+            center: v(&["island", "airpods"]),
             right: v(&[
                 "tray",
                 "privacy",

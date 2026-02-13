@@ -4,6 +4,7 @@
 //! full state snapshots plus async commands. None spawns helper processes for data, except where
 //! a module documents it (clipboard history, update checks, night light), and only on demand.
 
+pub mod airpods;
 pub mod apps;
 pub mod audio;
 pub mod bluetooth;

@@ -158,16 +158,6 @@ pub fn art_colour(p: &Player) -> Option<Color> {
     art_data(p.art.as_deref()?).map(|(_, c)| c)
 }
 
-/// The artwork's colour made bright enough to outline it (an average is usually muddy).
-pub fn art_edge(p: &Player) -> Option<Color> {
-    art_colour(p).map(|c| {
-        let mut o = crate::theme::color::Oklch::from_srgb(c.r, c.g, c.b);
-        o.l = o.l.max(0.72);
-        o.c = (o.c * 1.6).clamp(0.06, 0.18);
-        o.to_color()
-    })
-}
-
 fn art_data(path: &str) -> Option<(::image::RgbaImage, Color)> {
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};

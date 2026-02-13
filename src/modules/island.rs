@@ -16,66 +16,63 @@ pub fn hosts_osd(app: &App) -> bool {
     app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
 }
 
-/// The island. What is playing sits beside it as its own bubble (`bubble`, placed by the bar
-/// so the time stays centred).
+/// The island: the time pill. It always shows the time and date; music (unless it has its
+/// own bubble), the visualiser while music plays, and the weather (unless it has its own
+/// circle) join it, and pop-ups take it over for a moment.
 pub fn items<'a>(
     app: &'a App,
     o: &'a Output,
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
-    // With the time and the weather in pills of their own, an idle island has nothing to say:
-    // it is not drawn until something happens (music, a notification, a pop-up, a copy).
-    let idle = app.config.bar.contains("clock")
-        && (app.config.bar.contains("weather") || app.weather.is_none())
-        && !app.media.main().is_some_and(|p| p.playing)
-        && app.toasts.is_empty()
-        && app.flash.is_none()
-        && !(hosts_osd(app) && app.osd.is_some());
-    if idle {
-        return Vec::new();
-    }
     vec![bar(app, o, s, open)]
 }
 
-/// Diameter of the music bubble.
-/// The same height as the pills, so the circle and the pills line up.
+/// Five accent bars moving with the music, while it plays (never in game mode).
+pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
+    if crate::motion::still() || !app.media.main().is_some_and(|p| p.playing) {
+        return None;
+    }
+    // Heights on whole pixels: a bar ending between pixels looks soft.
+    let bars = app.levels.iter().map(|v| {
+        let h = (4.0 + v.clamp(0.0, 1.0) * 12.0).round();
+        iced::widget::container(iced::widget::Space::new())
+            .width(3)
+            .height(h)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(s.accent.into()),
+                border: iced::Border::default().rounded(1.5),
+                ..iced::widget::container::Style::default()
+            })
+            .into()
+    });
+    Some(
+        iced::widget::row(bars)
+            .spacing(2)
+            .height(16)
+            .align_y(Alignment::Center)
+            .into(),
+    )
+}
+
+/// Diameter of the music bubble: the same height as the pills, so they line up.
 pub const BUBBLE: f32 = size::BAR - 6.0;
 
-/// The music bubble: the cover in a circle, dimmed while paused. Opens the media panel. None
-/// when there is no player.
+/// The music bubble: a black pill circle with the cover inside, dimmed while paused. Opens the
+/// media panel. None when there is no player.
 pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
     // Stays while paused: the bubble is the player, not just the sound.
     let p = app.media.main()?;
     let id = o.id;
-    // A pill like the others (black), holding the cover in a circle ringed in the cover's own
-    // colour; while paused it dims.
-    let ring = media::art_edge(p).unwrap_or(s.ink_faint);
-    let ring = if p.playing {
-        ring
-    } else {
-        ring.scale_alpha(0.5)
-    };
     let art = BUBBLE - 8.0;
     Some(
         ui::control(
-            iced::widget::container(
-                iced::widget::container(media::art(
-                    s.faded(if p.playing { 1.0 } else { 0.5 }),
-                    p,
-                    art - 3.0,
-                    (art - 3.0) / 2.0,
-                ))
-                .center(art)
-                .style(move |_| iced::widget::container::Style {
-                    border: iced::Border {
-                        color: ring,
-                        width: 1.5,
-                        radius: (art / 2.0).into(),
-                    },
-                    ..iced::widget::container::Style::default()
-                }),
-            )
+            iced::widget::container(media::art(
+                s.faded(if p.playing { 1.0 } else { 0.5 }),
+                p,
+                art,
+                art / 2.0,
+            ))
             .center(BUBBLE)
             .style(move |_| iced::widget::container::Style {
                 background: Some(s.base.into()),
@@ -171,33 +168,28 @@ pub fn bar<'a>(
         content = content.push(row![lead, words].spacing(8).align_y(Alignment::Center));
         return finish(content, o, s, active);
     }
-    // While music plays: four bars dancing to it, before the time.
-    if !crate::motion::still() && app.media.main().is_some_and(|p| p.playing) {
-        let bars = app.levels.iter().rev().map(|v| {
-            let h = 4.0 + v.clamp(0.0, 1.0) * 12.0;
-            iced::widget::container(iced::widget::Space::new())
-                .width(3)
-                .height(h)
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(s.accent.into()),
-                    border: iced::Border::default().rounded(1.5),
-                    ..iced::widget::container::Style::default()
-                })
-                .into()
-        });
+    // Music without a bubble of its own: a small round cover and the title, before the time.
+    if !app.config.bar.contains("media")
+        && let Some(p) = app.media.main()
+    {
         content = content.push(
-            iced::widget::row(bars)
-                .spacing(2)
-                .height(16)
-                .align_y(Alignment::Center),
+            row![
+                media::art(s.faded(if p.playing { 1.0 } else { 0.5 }), p, 22.0, 11.0),
+                label_w(
+                    ui::fit(&p.title, text::SMALL, 170.0),
+                    text::SMALL,
+                    if p.playing { s.ink } else { s.ink_dim },
+                    theme::MEDIUM
+                ),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
         );
     }
-    // The time and the weather stay out of the island when they have pills of their own.
-    // (With both standalone and nothing else to show, the island keeps the time.)
-    let only_time =
-        app.config.bar.contains("weather") && !app.media.main().is_some_and(|p| p.playing);
-    if !app.config.bar.contains("clock") || only_time {
-        content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
+    content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
+    // While music plays: the visualiser, inside the time pill.
+    if let Some(v) = visualiser(app, s) {
+        content = content.push(v);
     }
     if !app.config.bar.contains("weather")
         && let Some(w) = &app.weather
