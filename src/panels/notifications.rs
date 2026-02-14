@@ -1,11 +1,11 @@
-//! Notification centre and toasts. Both use the same card.
+//! Notifications: the list in the control centre and the toasts. Both use the same card.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::icons;
 use crate::services::notifications::{self, Image, Notification, Reason};
 use crate::theme::{self, Scheme, size, text};
-use crate::ui::{self, Icon, control, empty, icon, label, label_w, switch};
+use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row, scrollable};
 use iced::{Alignment, Color, Element, Length, Task};
 use std::time::SystemTime;
@@ -15,7 +15,6 @@ pub enum Message {
     Dismiss(u32),
     Action(u32, String),
     ClearAll,
-    Dnd,
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -42,10 +41,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 ids.into_iter()
                     .map(|id| Task::future(notifications::closed(id, Reason::Dismissed)).discard()),
             )
-        }
-        Message::Dnd => {
-            app.dnd = !app.dnd;
-            Task::none()
         }
     }
 }
@@ -154,48 +149,29 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         .into()
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let mut trailing = row![
-        label("Do not disturb", text::SMALL, s.ink_dim),
-        switch(s, app.dnd, msg(Message::Dnd)),
-    ]
-    .spacing(8)
-    .align_y(Alignment::Center);
-    if !app.notifications.is_empty() {
-        trailing = trailing.push(
-            control(label("Clear", text::SMALL, s.ink))
-                .padding([4, 10])
-                .radius(size::CONTROL_RADIUS)
-                .colors(s.raised, s.raised_hi, s.raised_press)
-                .on_press(msg(Message::ClearAll)),
-        );
+/// Notifications inside the control centre: the newest first, cleared one by one or all at
+/// once. Nothing at all when there are none (no "empty" message).
+pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    if app.notifications.is_empty() {
+        return Space::new().into();
     }
     let header = row![
-        label_w("Notifications", text::HEADING, s.ink, theme::SEMIBOLD).width(Length::Fill),
-        trailing,
+        label_w("Notifications", text::BODY, s.ink, theme::SEMIBOLD).width(Length::Fill),
+        control(label("Clear all", text::SMALL, s.ink_dim))
+            .padding([4, 10])
+            .radius(12.0)
+            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .on_press(msg(Message::ClearAll)),
     ]
     .align_y(Alignment::Center)
-    .height(size::CONTROL + 4.0);
-
-    let content: Element<'_, AppMessage> = if app.notifications.is_empty() {
-        empty(s, Icon::BellOff, "You're all caught up")
-    } else {
-        let list = column(app.notifications.iter().rev().map(|n| card(s, n))).spacing(8);
-        scrollable(list)
-            .height(Length::Shrink)
-            .direction(scrollable::Direction::Vertical(
-                scrollable::Scrollbar::new().width(0).scroller_width(0),
-            ))
-            .into()
-    };
-    let max_h = 560.0;
-    column![header, container(content).max_height(max_h)]
-        .spacing(10)
-        .padding(iced::Padding {
-            top: 10.0,
-            right: 12.0,
-            bottom: 12.0,
-            left: 16.0,
-        })
+    .padding([0, 4]);
+    let list = column(app.notifications.iter().rev().map(|n| card(s, n))).spacing(8);
+    let list = scrollable(list)
+        .height(Length::Shrink)
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new().width(0).scroller_width(0),
+        ));
+    column![header, container(list).max_height(380)]
+        .spacing(8)
         .into()
 }

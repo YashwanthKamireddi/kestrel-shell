@@ -304,9 +304,30 @@ pub fn stream() -> impl Stream<Item = State> {
         };
         let merged = futures::stream::select(a.map(|_| ()), b.map(|_| ()));
         let mut changes = Box::pin(dbus::debounce(merged, std::time::Duration::from_millis(60)));
-        let mut last = None;
+        let mut last: Option<State> = None;
+        // A browser drops its player and makes a new one on every switch (the next Short, the
+        // next video); shown as is, the music bubble vanished and came back each time. A
+        // player that leaves is kept for a moment: if one comes back, it simply updates.
+        const GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+        let mut hold_until: Option<tokio::time::Instant> = None;
         loop {
             let s = read(&c).await.unwrap_or_default();
+            let lost = last
+                .as_ref()
+                .is_some_and(|l| !l.players.is_empty() && s.players.len() < l.players.len());
+            if lost {
+                let deadline =
+                    *hold_until.get_or_insert_with(|| tokio::time::Instant::now() + GRACE);
+                if tokio::time::Instant::now() < deadline {
+                    match tokio::time::timeout_at(deadline, changes.next()).await {
+                        Ok(None) => return,
+                        // Something changed (a player came back) or the moment passed:
+                        // look again.
+                        Ok(Some(())) | Err(_) => continue,
+                    }
+                }
+            }
+            hold_until = None;
             if last.as_ref() != Some(&s) {
                 last = Some(s.clone());
                 let _ = out.send(s).await;

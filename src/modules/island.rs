@@ -142,7 +142,7 @@ pub fn bar<'a>(
             ));
         }
         content = content.push(row![lead, words].spacing(10).align_y(Alignment::Center));
-        return finish_to(content, o, s, active, PanelKind::Notifications);
+        return finish_to(content, o, s, active, PanelKind::Control);
     }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {

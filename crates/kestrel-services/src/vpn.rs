@@ -112,6 +112,91 @@ pub async fn set_tailscale(on: bool) {
     }
 }
 
+/// A device on the tailnet.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Peer {
+    pub name: String,
+    pub ip: String,
+    pub os: String,
+    pub online: bool,
+    pub exit_node: bool,
+}
+
+/// This device on the tailnet and the others.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tailnet {
+    /// "Running", "NeedsLogin", "Stopped", …
+    pub state: String,
+    pub name: String,
+    pub ip: String,
+    pub peers: Vec<Peer>,
+}
+
+/// `tailscale status`, read (None while the daemon is not running).
+pub async fn tailnet() -> Option<Tailnet> {
+    let out = tokio::process::Command::new("tailscale")
+        .args(["status", "--json"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let str_of = |v: &serde_json::Value, k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let first_ip = |v: &serde_json::Value| {
+        v.get("TailscaleIPs")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|a| a.first())
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let me = v.get("Self");
+    let mut peers: Vec<Peer> = v
+        .get("Peer")
+        .and_then(serde_json::Value::as_object)
+        .map(|m| {
+            m.values()
+                .map(|p| Peer {
+                    name: str_of(p, "HostName"),
+                    ip: first_ip(p),
+                    os: str_of(p, "OS"),
+                    online: p.get("Online").and_then(serde_json::Value::as_bool) == Some(true),
+                    exit_node: p.get("ExitNode").and_then(serde_json::Value::as_bool) == Some(true),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    peers.sort_by(|a, b| b.online.cmp(&a.online).then(a.name.cmp(&b.name)));
+    Some(Tailnet {
+        state: str_of(&v, "BackendState"),
+        name: me.map(|m| str_of(m, "HostName")).unwrap_or_default(),
+        ip: me.map(first_ip).unwrap_or_default(),
+        peers,
+    })
+}
+
+/// What WARP says about itself ("Connected", "Disconnected", …), None while it is off.
+pub async fn warp_status() -> Option<String> {
+    let out = tokio::process::Command::new("warp-cli")
+        .args(["--accept-tos", "status"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let line = text
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("Status update:"))?
+        .trim()
+        .to_string();
+    Some(line)
+}
+
 /// The service's state stream: a snapshot on start and after every change.
 pub fn stream() -> impl Stream<Item = State> {
     crate::stream::channel(4, async |mut out| {

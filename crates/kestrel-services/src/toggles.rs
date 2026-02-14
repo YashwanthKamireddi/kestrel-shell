@@ -8,8 +8,6 @@ use std::os::fd::OwnedFd;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
-pub const NIGHT_TEMPERATURE: u32 = 4500;
-
 static SUNSET: Mutex<Option<Child>> = Mutex::new(None);
 static INHIBIT: Mutex<Option<OwnedFd>> = Mutex::new(None);
 
@@ -31,12 +29,13 @@ pub fn night_light() -> bool {
     g.is_some() || hyprsunset_running()
 }
 
-pub fn set_night_light(on: bool) {
+/// Turns night light on at `kelvin`, or off.
+pub fn set_night_light(on: bool, kelvin: u32) {
     let mut g = SUNSET.lock().unwrap();
     if on {
         if g.is_none() && !hyprsunset_running() {
             match Command::new("hyprsunset")
-                .args(["-t", &NIGHT_TEMPERATURE.to_string()])
+                .args(["-t", &kelvin.to_string()])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
@@ -55,6 +54,19 @@ pub fn set_night_light(on: bool) {
             let _ = Command::new("pkill").args(["-x", "hyprsunset"]).status();
         }
     }
+}
+
+/// Changes a running night light's warmth at once (hyprsunset listens through hyprctl).
+pub async fn set_temperature(kelvin: u32) {
+    if !night_light() {
+        return;
+    }
+    let _ = tokio::process::Command::new("hyprctl")
+        .args(["hyprsunset", "temperature", &kelvin.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
 }
 
 pub fn caffeine() -> bool {

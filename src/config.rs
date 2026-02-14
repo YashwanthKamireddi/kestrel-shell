@@ -21,6 +21,8 @@ pub struct Config {
     /// name is then only the label.
     pub weather_latitude: Option<f64>,
     pub weather_longitude: Option<f64>,
+    /// Night light's warmth in kelvin (lower is warmer).
+    pub night_light_temperature: u32,
     /// What the bar shows, where, and in which style.
     pub bar: BarConfig,
 }
@@ -101,6 +103,7 @@ impl Default for Config {
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,
+            night_light_temperature: 4500,
             bar: BarConfig::default(),
         }
     }

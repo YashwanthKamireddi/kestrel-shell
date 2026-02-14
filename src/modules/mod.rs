@@ -601,10 +601,10 @@ fn bell<'a>(
         s,
         bell,
         Message::Close,
-        open == Some(PanelKind::Notifications),
+        open == Some(PanelKind::Control),
         tint,
     )
-    .on_press_at(move |r| Message::Toggle(PanelKind::Notifications, id, r));
+    .on_press_at(move |r| Message::Toggle(PanelKind::Control, id, r));
     // How many arrived since the centre was last opened: a small accent badge.
     let unseen = app.unseen;
     if unseen > 0 && !app.dnd {
@@ -687,27 +687,14 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             .into()
     }))
     .spacing(SLOT_GAP);
-    // The current workspace: an accent-tinted pill with a short accent bar at its foot,
-    // gliding to whichever workspace becomes current.
-    let highlight =
-        container(
-            container(Space::new())
-                .width(12)
-                .height(3)
-                .style(move |_| container::Style {
-                    background: Some(s.accent.into()),
-                    border: iced::Border::default().rounded(2),
-                    ..container::Style::default()
-                }),
-        )
+    // The current workspace: a soft accent disc that glides to it, inside the pill (never
+    // past its edge).
+    let highlight = container(Space::new())
         .width(SLOT)
         .height(SLOT)
-        .align_x(Alignment::Center)
-        .align_y(Alignment::End)
-        .padding([1, 0])
         .style(move |_| container::Style {
-            background: Some(s.accent.scale_alpha(0.16).into()),
-            border: iced::Border::default().rounded(size::CONTROL_RADIUS),
+            background: Some(s.accent.scale_alpha(0.22 * s.opacity).into()),
+            border: iced::Border::default().rounded(SLOT / 2.0),
             ..container::Style::default()
         });
     let width = n as f32 * (SLOT + SLOT_GAP) - SLOT_GAP;
@@ -795,7 +782,7 @@ fn pods<'a>(
     Some(
         ui::control(stack![
             ui::ring::ring(value, d, 2.0, tint, s.ink.scale_alpha(0.16 * s.opacity)),
-            container(icon(Icon::Earbuds, 15.0, s.ink)).center(d),
+            container(icon(Icon::Headphones, 15.0, s.ink)).center(d),
         ])
         .width(d)
         .height(d)

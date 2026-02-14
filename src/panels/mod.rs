@@ -27,7 +27,6 @@ pub enum PanelKind {
     Control,
     Media,
     Calendar,
-    Notifications,
     Power,
     Tray,
     Launcher,
@@ -48,7 +47,8 @@ impl PanelKind {
             "control" | "control-centre" | "control-center" => Self::Control,
             "media" => Self::Media,
             "calendar" => Self::Calendar,
-            "notifications" => Self::Notifications,
+            // Notifications live in the control centre.
+            "notifications" => Self::Control,
             "power" => Self::Power,
             "launcher" => Self::Launcher,
             "wallpaper" => Self::Wallpaper,
@@ -66,10 +66,9 @@ impl PanelKind {
 
     pub fn width(self) -> f32 {
         match self {
-            Self::Control => 368.0,
+            Self::Control => 392.0,
             Self::Media => media::WIDTH,
             Self::Calendar => 312.0,
-            Self::Notifications => 392.0,
             Self::Power => 232.0,
             Self::Tray => 248.0,
             Self::Launcher => 560.0,
@@ -170,7 +169,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
-        PanelKind::Notifications | PanelKind::Tray | PanelKind::Weather | PanelKind::Pods => {}
+        PanelKind::Tray | PanelKind::Weather | PanelKind::Pods => {}
     }
     Task::none()
 }
@@ -263,7 +262,6 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Power => power::view(app, s),
         PanelKind::Control => control::view(app, s),
         PanelKind::Media => media::view(app, s),
-        PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),

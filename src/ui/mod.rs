@@ -171,101 +171,103 @@ pub fn divider<'a, M: 'a>(s: Scheme) -> Element<'a, M> {
 /// A quick-settings tile: icon, title and status. Accent-filled when on. An optional chevron
 /// opens the tile's details.
 /// Width of a quick-settings tile (two per row in the 368 px control centre).
-pub const TILE_W: f32 = 168.0;
+pub const TILE_W: f32 = 180.0;
 
-/// A quick-settings tile's contents.
+/// A quick-settings tile.
 pub struct Tile<M> {
     pub icon: Icon,
     pub title: String,
     pub status: String,
     pub on: bool,
+    /// Turns it on or off (its icon circle; the whole tile when it has no page).
     pub press: M,
-    /// Its page (the chevron), if it has one.
+    /// Its page, if it has one: a click anywhere on the tile but the icon opens it.
     pub details: Option<M>,
     /// The keyboard is on it.
     pub focused: bool,
 }
 
+pub const TILE_H: f32 = 60.0;
+
+/// A tile: a calm rounded card, an icon in a circle that fills with the accent when the thing
+/// is on, its name and state. No chevron to aim for: the circle switches it, the rest of the
+/// card opens its page.
 pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
     let Tile {
         icon: i,
         title,
         status,
         on,
-        press: on_press,
+        press,
         details,
         focused,
     } = t;
-    // Off: no box at all, just the icon and words (the pointer lifts it faintly). On: the
-    // accent, which is the only fill a tile ever has.
-    let (bg, hover, fg, dim) = if on {
-        (s.accent, s.accent, s.on_accent, s.on_accent)
+    const DOT: f32 = 38.0;
+    let text_w = TILE_W - 10.0 - DOT - 12.0 - 12.0;
+    let (dot_bg, dot_fg) = if on {
+        (s.accent, s.on_accent)
     } else {
-        (Color::TRANSPARENT, s.hover(), s.ink, s.ink_dim)
+        (s.ink.scale_alpha(0.1 * s.opacity), s.ink)
     };
-    // What is left beside the icon (and the chevron): long names (a device called
-    // "Yash's AirPods 4") are shortened instead of running under the chevron.
-    let text_w =
-        TILE_W - 14.0 - 8.0 - size::ICON_TILE - 12.0 - if details.is_some() { 30.0 } else { 0.0 };
-    let mut content = row![
-        icon(i, size::ICON_TILE, fg),
-        iced::widget::column![
-            label_w(
-                fit(&title, theme::text::BODY, text_w),
-                theme::text::BODY,
-                fg,
-                theme::MEDIUM
-            ),
-            label(
-                fit(&status, theme::text::CAPTION, text_w),
-                theme::text::CAPTION,
-                dim
-            ),
-        ]
-        .spacing(1)
-        .width(Length::Fill),
+    let circle = control(container(icon(i, size::ICON_TILE, dot_fg)).center(DOT))
+        .radius(DOT / 2.0)
+        .colors(
+            dot_bg,
+            if on {
+                dot_bg
+            } else {
+                s.ink.scale_alpha(0.16 * s.opacity)
+            },
+            if on {
+                s.accent.scale_alpha(0.85)
+            } else {
+                s.raised_press
+            },
+        )
+        .on_press(press.clone());
+    let words = iced::widget::column![
+        label_w(
+            fit(&title, theme::text::BODY, text_w),
+            theme::text::BODY,
+            s.ink,
+            theme::MEDIUM
+        ),
+        label(
+            fit(&status, theme::text::CAPTION, text_w),
+            theme::text::CAPTION,
+            if on { s.ink } else { s.ink_dim }
+        ),
     ]
-    .spacing(12)
-    .align_y(Alignment::Center);
-    if let Some(d) = details {
-        let press = if on {
-            s.on_accent.scale_alpha(0.12)
-        } else {
-            s.raised_press
-        };
-        content = content.push(
-            control(container(icon(Icon::ChevronRight, size::ICON, dim)).center(28))
-                .radius(14.0)
-                .colors(Color::TRANSPARENT, press, press)
-                .on_press(d),
-        );
-    }
-    let body = control(content)
+    .spacing(1)
+    .width(Length::Fill);
+    let fill = s.ink.scale_alpha(0.06 * s.opacity);
+    let body = control(row![circle, words].spacing(12).align_y(Alignment::Center))
         .padding(iced::Padding {
             top: 0.0,
-            right: 8.0,
+            right: 12.0,
             bottom: 0.0,
-            left: 14.0,
+            left: 11.0,
         })
-        .height(56)
+        .height(TILE_H)
         .width(Length::Fill)
-        .radius(size::CARD_RADIUS)
-        .colors(bg, hover, if on { bg } else { s.raised_press })
-        .on_press(on_press);
+        .radius(TILE_H / 2.0)
+        .colors(fill, s.ink.scale_alpha(0.1 * s.opacity), s.raised_press)
+        .no_press_scale()
+        .on_press(details.unwrap_or(press));
     if !focused {
         return body.into();
     }
-    // Where the keyboard is: a slim accent ring.
+    // Where the keyboard is: a fine white ring.
     iced::widget::stack![
         body,
         container(Space::new())
             .width(Length::Fill)
-            .height(56)
+            .height(TILE_H)
             .style(move |_| container::Style {
                 border: iced::Border {
-                    color: if on { s.ink } else { s.accent },
-                    width: 2.0,
-                    radius: size::CARD_RADIUS.into(),
+                    color: s.ink.scale_alpha(0.7 * s.opacity),
+                    width: 1.5,
+                    radius: (TILE_H / 2.0).into(),
                 },
                 ..container::Style::default()
             }),

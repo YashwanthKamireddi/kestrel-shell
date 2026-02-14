@@ -388,12 +388,12 @@ fn card<'a>(
         let (x, y, bw, bh) = tile_rect(w, width, height);
         let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
-        // Quiet emphasis, no colour: the selected window at full strength, the others a
-        // little back, the ones a search does not match far back.
+        // No borders or rings (design call): the selected window at full strength, the others
+        // back, the ones a search does not match far back.
         let alpha = if !hit {
             0.25
         } else if selected.is_some() && !sel {
-            0.7
+            0.5
         } else {
             1.0
         };
@@ -428,45 +428,11 @@ fn card<'a>(
             .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.08), s.raised_press)
             .no_press_scale()
             .on_press(focus_msg(&w.address));
-        // The selected window: a thin white focus ring set just outside it.
-        if sel {
-            const GAP: f32 = 3.0;
-            layers = layers.push(
-                pin(container(Space::new())
-                    .width(bw + 2.0 * GAP)
-                    .height(bh + 2.0 * GAP)
-                    .style(move |_| container::Style {
-                        border: iced::Border {
-                            color: s.ink.scale_alpha(0.9 * s.opacity),
-                            width: 1.5,
-                            radius: (7.0 + GAP).into(),
-                        },
-                        ..container::Style::default()
-                    }))
-                .x(x - GAP)
-                .y(y - GAP),
-            );
-        }
         layers = layers.push(pin(tile).x(x).y(y));
     }
-    // The workspace you are on: a fine hairline around its screen.
-    if current {
-        layers = layers.push(container(Space::new()).width(width).height(height).style(
-            move |_| container::Style {
-                border: iced::Border {
-                    color: s.ink.scale_alpha(0.35 * s.opacity),
-                    width: 1.0,
-                    radius: 10.0.into(),
-                },
-                ..container::Style::default()
-            },
-        ));
-    }
-
-    // Under the card: its number (in the accent when it is the one you are on) and what is
-    // there.
+    // Under the card: its number (bright when it is the one you are on) and what is there.
     let summary = match windows.len() {
-        0 => "Empty".to_string(),
+        0 => String::new(),
         1 => apps::name_for_class(&windows[0].class),
         n => format!("{n} windows"),
     };
