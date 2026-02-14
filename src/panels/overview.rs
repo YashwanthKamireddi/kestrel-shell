@@ -6,7 +6,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{apps, hyprland, icons};
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, pin, row, stack, text_input};
 use iced::{Alignment, Color, Element, Task};
@@ -312,8 +312,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .height(44)
     .center_y(44)
     .style(move |_| container::Style {
-        background: Some(s.raised.into()),
-        border: iced::Border::default().rounded(size::CARD_RADIUS),
+        background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
+        border: iced::Border::default().rounded(22),
         ..container::Style::default()
     });
 
@@ -388,7 +388,15 @@ fn card<'a>(
         let (x, y, bw, bh) = tile_rect(w, width, height);
         let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
-        let alpha = if hit { 1.0 } else { 0.3 };
+        // Quiet emphasis, no colour: the selected window at full strength, the others a
+        // little back, the ones a search does not match far back.
+        let alpha = if !hit {
+            0.25
+        } else if selected.is_some() && !sel {
+            0.7
+        } else {
+            1.0
+        };
         let ready = app
             .panels
             .overview
@@ -412,23 +420,7 @@ fn card<'a>(
                 })
                 .into(),
         };
-        let mut tile = stack![body];
-        // The one outline in the overview: the selected window.
-        if sel {
-            tile = tile.push(
-                container(Space::new())
-                    .width(bw)
-                    .height(bh)
-                    .style(move |_| container::Style {
-                        border: iced::Border {
-                            color: s.accent,
-                            width: 2.0,
-                            radius: 7.0.into(),
-                        },
-                        ..container::Style::default()
-                    }),
-            );
-        }
+        let tile = stack![body];
         let tile = control(tile)
             .width(bw)
             .height(bh)
@@ -436,7 +428,39 @@ fn card<'a>(
             .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.08), s.raised_press)
             .no_press_scale()
             .on_press(focus_msg(&w.address));
+        // The selected window: a thin white focus ring set just outside it.
+        if sel {
+            const GAP: f32 = 3.0;
+            layers = layers.push(
+                pin(container(Space::new())
+                    .width(bw + 2.0 * GAP)
+                    .height(bh + 2.0 * GAP)
+                    .style(move |_| container::Style {
+                        border: iced::Border {
+                            color: s.ink.scale_alpha(0.9 * s.opacity),
+                            width: 1.5,
+                            radius: (7.0 + GAP).into(),
+                        },
+                        ..container::Style::default()
+                    }))
+                .x(x - GAP)
+                .y(y - GAP),
+            );
+        }
         layers = layers.push(pin(tile).x(x).y(y));
+    }
+    // The workspace you are on: a fine hairline around its screen.
+    if current {
+        layers = layers.push(container(Space::new()).width(width).height(height).style(
+            move |_| container::Style {
+                border: iced::Border {
+                    color: s.ink.scale_alpha(0.35 * s.opacity),
+                    width: 1.0,
+                    radius: 10.0.into(),
+                },
+                ..container::Style::default()
+            },
+        ));
     }
 
     // Under the card: its number (in the accent when it is the one you are on) and what is
@@ -450,7 +474,7 @@ fn card<'a>(
         label_w(
             id.to_string(),
             text::SMALL,
-            if current { s.accent } else { s.ink },
+            if current { s.ink } else { s.ink_dim },
             theme::SEMIBOLD
         ),
         label(

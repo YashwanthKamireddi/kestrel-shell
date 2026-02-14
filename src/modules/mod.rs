@@ -769,7 +769,7 @@ fn clock<'a>(
         .into()
 }
 
-/// AirPods, while connected: a circle with the earbuds inside a ring filled to the lower bud's
+/// AirPods, while connected: a circle like the weather's, the earbuds over the lower bud's
 /// charge (green while charging, amber then red when low). Opens their panel.
 fn pods<'a>(
     app: &'a App,
@@ -778,26 +778,28 @@ fn pods<'a>(
     open: Option<PanelKind>,
 ) -> Option<Element<'a, Message>> {
     crate::panels::pods::device(app)?;
-    let p = app.pods.as_ref();
     let id = o.id;
     let d = size::BAR - 6.0;
     let active = open == Some(PanelKind::Pods);
-    let charge = p.and_then(|p| {
+    let charge = app.pods.as_ref().and_then(|p| {
         Some(crate::services::airpods::Charge {
             level: p.level()?,
             charging: p.charging(),
         })
     });
-    let (value, color) = match charge {
-        Some(c) => (f32::from(c.level) / 100.0, crate::panels::pods::tint(s, c)),
-        None => (0.0, s.ink_faint),
+    let (value, tint) = match charge {
+        Some(c) => (format!("{}%", c.level), crate::panels::pods::tint(s, c)),
+        None => ("…".to_string(), s.ink_dim),
     };
-    let ring = d - 8.0;
     Some(
-        ui::control(stack![
-            ui::ring::ring(value, ring, 2.5, color, s.ink.scale_alpha(0.14 * s.opacity)),
-            container(icon(Icon::Earbuds, 14.0, s.ink)).center(ring),
-        ])
+        ui::control(
+            iced::widget::column![
+                icon(Icon::Earbuds, 13.0, s.ink),
+                label_w(value, 9.5, tint, theme::SEMIBOLD),
+            ]
+            .spacing(0)
+            .align_x(Alignment::Center),
+        )
         .width(d)
         .height(d)
         .center_x()

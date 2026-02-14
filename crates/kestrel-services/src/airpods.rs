@@ -239,7 +239,7 @@ pub fn stream(address: &String) -> impl Stream<Item = Option<Pods>> + use<> {
                         wait = Duration::from_secs(2);
                     }
                     std::thread::sleep(wait);
-                    wait = (wait * 2).min(Duration::from_secs(60));
+                    wait = (wait * 2).min(Duration::from_secs(15));
                     if tx.is_closed() {
                         return;
                     }
