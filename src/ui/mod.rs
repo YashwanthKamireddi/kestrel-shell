@@ -643,6 +643,49 @@ pub fn rounded_file(
     made
 }
 
+/// A picture file shown whole (never cropped) inside `max_w` × `max_h`, its corners rounded:
+/// the handle and the size it takes. For previews where the whole picture matters (a
+/// screenshot in the clipboard).
+pub fn fitted_file(
+    path: &std::path::Path,
+    max_w: f32,
+    max_h: f32,
+    radius: f32,
+) -> Option<(iced::widget::image::Handle, f32, f32)> {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    type Key = (std::path::PathBuf, u32, u32);
+    type Hit = Option<(iced::widget::image::Handle, f32, f32)>;
+    static CACHE: LazyLock<Mutex<HashMap<Key, Hit>>> = LazyLock::new(Default::default);
+    let key = (path.to_path_buf(), max_w as u32, max_h as u32);
+    if let Some(hit) = CACHE.lock().ok()?.get(&key) {
+        return hit.clone();
+    }
+    let made = ::image::ImageReader::open(path)
+        .ok()
+        .and_then(|r| r.with_guessed_format().ok())
+        .and_then(|r| r.decode().ok())
+        .filter(|img| img.width() > 0 && img.height() > 0)
+        .map(|img| {
+            let (iw, ih) = (img.width() as f32, img.height() as f32);
+            let k = (max_w / iw).min(max_h / ih);
+            // At least a few pixels each way, so a thin strip stays visible.
+            let (w, h) = ((iw * k).round().max(4.0), (ih * k).round().max(4.0));
+            let r = rounded_cover(&img.into_rgba8(), w, h, radius.min(w / 2.0).min(h / 2.0));
+            (
+                iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
+                w,
+                h,
+            )
+        });
+    let mut cache = CACHE.lock().ok()?;
+    if cache.len() > 256 {
+        cache.clear();
+    }
+    cache.insert(key, made.clone());
+    made
+}
+
 #[cfg(test)]
 mod text_tests {
     #[test]
