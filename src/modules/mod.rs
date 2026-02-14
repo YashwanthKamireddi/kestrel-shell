@@ -769,8 +769,8 @@ fn clock<'a>(
         .into()
 }
 
-/// AirPods, while connected: a circle like the weather's, the earbuds over the lower bud's
-/// charge (green while charging, amber then red when low). Opens their panel.
+/// AirPods, while connected: a circle whose edge fills to the lower bud's charge (green while
+/// charging, amber then red when low), the earbuds inside. Opens their panel.
 fn pods<'a>(
     app: &'a App,
     o: &'a Output,
@@ -787,19 +787,16 @@ fn pods<'a>(
             charging: p.charging(),
         })
     });
+    // The circle's own edge is the gauge: a thin ring filled to the charge, the earbuds inside.
     let (value, tint) = match charge {
-        Some(c) => (format!("{}%", c.level), crate::panels::pods::tint(s, c)),
-        None => ("…".to_string(), s.ink_dim),
+        Some(c) => (f32::from(c.level) / 100.0, crate::panels::pods::tint(s, c)),
+        None => (0.0, s.ink_faint),
     };
     Some(
-        ui::control(
-            iced::widget::column![
-                icon(Icon::Earbuds, 13.0, s.ink),
-                label_w(value, 9.5, tint, theme::SEMIBOLD),
-            ]
-            .spacing(0)
-            .align_x(Alignment::Center),
-        )
+        ui::control(stack![
+            ui::ring::ring(value, d, 2.0, tint, s.ink.scale_alpha(0.16 * s.opacity)),
+            container(icon(Icon::Earbuds, 15.0, s.ink)).center(d),
+        ])
         .width(d)
         .height(d)
         .center_x()

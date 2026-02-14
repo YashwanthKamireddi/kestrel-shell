@@ -1,8 +1,8 @@
-//! AirPods, opened from their circle in the bar: each bud's and the case's charge as rings,
-//! where each bud is (in an ear, out, in the case), and a way to disconnect.
+//! AirPods, opened from their circle in the bar: each bud's and the case's charge, and a way
+//! to disconnect.
 
 use crate::app::{App, Message as AppMessage};
-use crate::services::airpods::{Charge, Place};
+use crate::services::airpods::Charge;
 use crate::services::bluetooth;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
@@ -73,44 +73,31 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .align_y(Alignment::Center);
 
     let p = app.pods.clone().unwrap_or_default();
-    let mut list = column![].spacing(10);
+    let mut list = column![].spacing(12);
     if let Some(h) = p.headset {
-        list = list.push(part(s, Icon::Headphones, "Headphones", Some(h), None));
+        list = list.push(part(s, Icon::Headphones, "Headphones", Some(h)));
     } else {
+        // Left and right always; the case only while it reports (a bud inside).
         list = list
-            .push(part(s, Icon::EarbudLeft, "Left", p.left, Some(p.left_at)))
-            .push(part(
-                s,
-                Icon::EarbudRight,
-                "Right",
-                p.right,
-                Some(p.right_at),
-            ))
-            .push(part(s, Icon::EarbudCase, "Case", p.case, None));
+            .push(part(s, Icon::EarbudLeft, "Left", p.left))
+            .push(part(s, Icon::EarbudRight, "Right", p.right));
+        if p.case.is_some() {
+            list = list.push(part(s, Icon::EarbudCase, "Case", p.case));
+        }
     }
     container(column![header, list].spacing(16).width(Length::Fill))
         .padding([16, 18])
         .into()
 }
 
-/// One part on a line: its glyph, its name and where it is, a slim charge bar, the number.
+/// One part on a line: its glyph and name, then a charge bar and the number.
 fn part<'a>(
     s: Scheme,
     glyph: Icon,
     name: &'a str,
     charge: Option<Charge>,
-    at: Option<Place>,
 ) -> Element<'a, AppMessage> {
-    const TRACK: f32 = 72.0;
-    let place = match (at, charge) {
-        (_, None) if name == "Case" => "Shows with a bud inside",
-        (_, None) => "Not connected",
-        (Some(Place::Ear), _) => "In ear",
-        (Some(Place::Out), _) => "Out of ear",
-        (Some(Place::Case), _) => "In case",
-        (_, Some(c)) if c.charging => "Charging",
-        _ => "",
-    };
+    const TRACK: f32 = 110.0;
     let (fill, color) = match charge {
         Some(c) => (f32::from(c.level) / 100.0, tint(s, c)),
         None => (0.0, s.ink_faint),
@@ -144,24 +131,20 @@ fn part<'a>(
             }
             r.into()
         }
-        None => label("—", text::BODY, s.ink_faint).into(),
+        None => label("–", text::BODY, s.ink_faint).into(),
     };
     let on = charge.is_some();
     row![
-        container(icon(glyph, 20.0, if on { s.ink } else { s.ink_faint })).center(28),
-        column![
-            label_w(
-                name,
-                text::BODY,
-                if on { s.ink } else { s.ink_dim },
-                theme::MEDIUM
-            ),
-            label(place, text::CAPTION, s.ink_dim),
-        ]
-        .spacing(1)
+        container(icon(glyph, 20.0, if on { s.ink } else { s.ink_faint })).center(26),
+        label_w(
+            name,
+            text::BODY,
+            if on { s.ink } else { s.ink_dim },
+            theme::MEDIUM
+        )
         .width(Length::Fill),
         track,
-        container(number).width(46).align_x(Alignment::End),
+        container(number).width(48).align_x(Alignment::End),
     ]
     .spacing(12)
     .align_y(Alignment::Center)

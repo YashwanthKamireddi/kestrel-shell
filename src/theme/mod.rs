@@ -59,7 +59,14 @@ impl Scheme {
         let c = if has_colour { seed.chroma } else { 0.0 };
         let tint = (c / 0.1).min(1.0) * (seed.coverage / 0.03).clamp(0.0, 1.0);
         let n = |l: f32, k: f32| Oklch::new(l, k * tint, h).to_color();
-        let accent_c = if has_colour { c.clamp(0.09, 0.16) } else { 0.0 };
+        // A vivid accent in the wallpaper's hue: a pale wallpaper's own saturation made a
+        // washed-out, muddy accent (design call 2026-11-13: "dull and cheap"). The hue is the
+        // wallpaper's; the strength is always clear (as strong as sRGB allows, up to 0.2).
+        let accent_c = if has_colour {
+            (c * 2.0).clamp(0.15, 0.2)
+        } else {
+            0.0
+        };
         Self {
             // True black (AMOLED, design call 2026-11-13): pills and panels stand out against any
             // wallpaper; raised surfaces keep a slight lift so they still read as layers.
@@ -71,9 +78,9 @@ impl Scheme {
             ink: n(0.97, 0.006),
             ink_dim: n(0.84, 0.010),
             ink_faint: n(0.66, 0.012),
-            accent: Oklch::new(if has_colour { 0.76 } else { 0.90 }, accent_c, h).to_color(),
-            on_accent: Oklch::new(0.20, accent_c * 0.3, h).to_color(),
-            accent_soft: Oklch::new(0.30, accent_c * 0.4, h).to_color(),
+            accent: Oklch::new(if has_colour { 0.74 } else { 0.90 }, accent_c, h).to_color(),
+            on_accent: Oklch::new(0.18, accent_c * 0.35, h).to_color(),
+            accent_soft: Oklch::new(0.32, accent_c * 0.5, h).to_color(),
             good: Oklch::new(0.80, 0.13, 150.0).to_color(),
             warn: Oklch::new(0.84, 0.13, 85.0).to_color(),
             bad: Oklch::new(0.70, 0.17, 25.0).to_color(),
