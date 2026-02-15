@@ -305,9 +305,10 @@ fn finish_to<'a>(
         .height(h)
         .radius(h / 2.0)
         .colors(
-            // Black like the other pills; it lifts on hover and while its panel is open.
-            if active { s.raised_press } else { s.base },
-            if active { s.raised_press } else { s.raised },
+            // The same states as every other pill: a faint lift on hover, a clear one while its
+            // panel is open.
+            if active { s.selected() } else { s.base },
+            if active { s.selected() } else { s.hover() },
             s.raised_press,
         )
         .on_press_at(move |r| Message::Toggle(kind, id, r))
