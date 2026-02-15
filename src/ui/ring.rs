@@ -68,3 +68,54 @@ pub fn ring<'a, M: 'a>(
     .height(Length::Fixed(size))
     .into()
 }
+
+/// A disc filled from the bottom to `value` (0 to 1), like a level in a glass: how full a
+/// battery is, without looking like a loading spinner.
+struct Level {
+    value: f32,
+    color: Color,
+}
+
+impl<M> canvas::Program<M> for Level {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        let c = frame.center();
+        let r = bounds.width.min(bounds.height) / 2.0;
+        let v = self.value.clamp(0.0, 1.0);
+        if v >= 0.999 {
+            frame.fill(&Path::circle(c, r), self.color);
+        } else if v > 0.001 {
+            // The surface line, then the circle's lower arc from one end of it to the other.
+            let y = r - 2.0 * r * v; // from the centre, down is positive
+            let a = (y / r).clamp(-1.0, 1.0).asin();
+            let seg = Path::new(|b| {
+                b.arc(canvas::path::Arc {
+                    center: c,
+                    radius: r,
+                    start_angle: Radians(a),
+                    end_angle: Radians(std::f32::consts::PI - a),
+                });
+                b.close();
+            });
+            frame.fill(&seg, self.color);
+        }
+        vec![frame.into_geometry()]
+    }
+}
+
+/// A `size` px disc filled to `value` from the bottom in `color`.
+pub fn level<'a, M: 'a>(value: f32, size: f32, color: Color) -> Element<'a, M> {
+    iced::widget::canvas(Level { value, color })
+        .width(Length::Fixed(size))
+        .height(Length::Fixed(size))
+        .into()
+}
