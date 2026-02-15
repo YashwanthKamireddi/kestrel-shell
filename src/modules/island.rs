@@ -33,9 +33,9 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
     if crate::motion::still() || !app.media.main().is_some_and(|p| p.playing) {
         return None;
     }
-    // Heights on whole pixels: a bar ending between pixels looks soft.
+    // Fractional heights: the ends are smoothed by the renderer, so the motion is continuous.
     let bars = app.levels.iter().map(|v| {
-        let h = (4.0 + v.clamp(0.0, 1.0) * 12.0).round();
+        let h = 4.0 + v.clamp(0.0, 1.0) * 12.0;
         iced::widget::container(iced::widget::Space::new())
             .width(3)
             .height(h)
@@ -65,25 +65,29 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
     let p = app.media.main()?;
     let id = o.id;
     let art = BUBBLE - 8.0;
+    // Snapped as one piece: the circle and the cover land on the same pixels, so the cover
+    // sits exactly in the middle.
     Some(
-        ui::control(
-            iced::widget::container(media::art(
-                s.faded(if p.playing { 1.0 } else { 0.5 }),
-                p,
-                art,
-                art / 2.0,
-            ))
-            .center(BUBBLE)
-            .style(move |_| iced::widget::container::Style {
-                background: Some(s.base.into()),
-                border: iced::Border::default().rounded(BUBBLE / 2.0),
-                ..iced::widget::container::Style::default()
-            }),
+        ui::snap::snap(
+            ui::control(
+                iced::widget::container(media::art_plain(
+                    s.faded(if p.playing { 1.0 } else { 0.5 }),
+                    p,
+                    art,
+                    art / 2.0,
+                ))
+                .center(BUBBLE)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.base.into()),
+                    border: iced::Border::default().rounded(BUBBLE / 2.0),
+                    ..iced::widget::container::Style::default()
+                }),
+            )
+            .width(BUBBLE)
+            .height(BUBBLE)
+            .radius(BUBBLE / 2.0)
+            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
         )
-        .width(BUBBLE)
-        .height(BUBBLE)
-        .radius(BUBBLE / 2.0)
-        .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
         .into(),
     )
 }

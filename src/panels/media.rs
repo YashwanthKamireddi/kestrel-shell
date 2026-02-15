@@ -98,6 +98,16 @@ pub fn art<'a, M: Clone + 'static>(
     size: f32,
     radius: f32,
 ) -> Element<'a, M> {
+    crate::ui::snap::snap(art_plain(s, p, size, radius)).into()
+}
+
+/// `art` without snapping to whole pixels, for use inside something snapped as a whole.
+pub fn art_plain<'a, M: Clone + 'static>(
+    s: Scheme,
+    p: &Player,
+    size: f32,
+    radius: f32,
+) -> Element<'a, M> {
     match &p.art {
         // Only a picture that decoded is drawn: a file the renderer cannot read would abort it.
         Some(path)
@@ -105,13 +115,11 @@ pub fn art<'a, M: Clone + 'static>(
         {
             let h = art_at(path, size, radius)
                 .unwrap_or_else(|| image::Handle::from_rgba(1, 1, vec![0; 4]));
-            crate::ui::snap::snap(
-                iced::widget::image(h)
-                    .width(size)
-                    .height(size)
-                    .opacity(s.opacity),
-            )
-            .into()
+            iced::widget::image(h)
+                .width(size)
+                .height(size)
+                .opacity(s.opacity)
+                .into()
         }
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))
             .center(size)
