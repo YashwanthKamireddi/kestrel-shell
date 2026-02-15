@@ -2,7 +2,7 @@
 //! (cached by iced while the value is unchanged), so it is cheap.
 
 use iced::widget::canvas::{self, Frame, Geometry, LineCap, Path, Stroke};
-use iced::{Color, Element, Length, Point, Radians, Rectangle, Renderer, Theme, mouse};
+use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
 struct Ring {
     value: f32,
@@ -29,14 +29,21 @@ impl<M> canvas::Program<M> for Ring {
         frame.stroke(&Path::circle(c, r), stroke(self.track));
         let v = self.value.clamp(0.0, 1.0);
         if v > 0.002 {
+            // Many short straight steps instead of one arc: a nearly full arc was drawn with
+            // a visible glitch where it met its own start.
             let start = -std::f32::consts::FRAC_PI_2;
+            let sweep = v.min(0.995) * std::f32::consts::TAU;
+            let steps = ((sweep / std::f32::consts::TAU) * 120.0).ceil().max(2.0) as usize;
             let arc = Path::new(|b| {
-                b.arc(canvas::path::Arc {
-                    center: Point::new(c.x, c.y),
-                    radius: r,
-                    start_angle: Radians(start),
-                    end_angle: Radians(start + v * std::f32::consts::TAU),
-                });
+                for i in 0..=steps {
+                    let a = start + sweep * i as f32 / steps as f32;
+                    let p = Point::new(c.x + r * a.cos(), c.y + r * a.sin());
+                    if i == 0 {
+                        b.move_to(p);
+                    } else {
+                        b.line_to(p);
+                    }
+                }
             });
             frame.stroke(
                 &arc,
@@ -58,64 +65,15 @@ pub fn ring<'a, M: 'a>(
     color: Color,
     track: Color,
 ) -> Element<'a, M> {
-    iced::widget::canvas(Ring {
-        value,
-        color,
-        track,
-        width,
-    })
-    .width(Length::Fixed(size))
-    .height(Length::Fixed(size))
-    .into()
-}
-
-/// A disc filled from the bottom to `value` (0 to 1), like a level in a glass: how full a
-/// battery is, without looking like a loading spinner.
-struct Level {
-    value: f32,
-    color: Color,
-}
-
-impl<M> canvas::Program<M> for Level {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &(),
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let c = frame.center();
-        let r = bounds.width.min(bounds.height) / 2.0;
-        let v = self.value.clamp(0.0, 1.0);
-        if v >= 0.999 {
-            frame.fill(&Path::circle(c, r), self.color);
-        } else if v > 0.001 {
-            // The surface line, then the circle's lower arc from one end of it to the other.
-            let y = r - 2.0 * r * v; // from the centre, down is positive
-            let a = (y / r).clamp(-1.0, 1.0).asin();
-            let seg = Path::new(|b| {
-                b.arc(canvas::path::Arc {
-                    center: c,
-                    radius: r,
-                    start_angle: Radians(a),
-                    end_angle: Radians(std::f32::consts::PI - a),
-                });
-                b.close();
-            });
-            frame.fill(&seg, self.color);
-        }
-        vec![frame.into_geometry()]
-    }
-}
-
-/// A `size` px disc filled to `value` from the bottom in `color`.
-pub fn level<'a, M: 'a>(value: f32, size: f32, color: Color) -> Element<'a, M> {
-    iced::widget::canvas(Level { value, color })
+    super::snap::snap(
+        iced::widget::canvas(Ring {
+            value,
+            color,
+            track,
+            width,
+        })
         .width(Length::Fixed(size))
-        .height(Length::Fixed(size))
-        .into()
+        .height(Length::Fixed(size)),
+    )
+    .into()
 }

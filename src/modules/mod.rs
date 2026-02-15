@@ -756,8 +756,8 @@ fn clock<'a>(
         .into()
 }
 
-/// AirPods, while connected: a circle filled from the bottom to the lower bud's charge (green
-/// while charging, amber then red when low), the headphones on top. Opens their panel.
+/// AirPods, while connected: a circle whose edge is a ring filled to the lower bud's charge
+/// (green while charging, amber then red when low), headphones inside. Opens their panel.
 fn pods<'a>(
     app: &'a App,
     o: &'a Output,
@@ -774,20 +774,14 @@ fn pods<'a>(
             charging: p.charging(),
         })
     });
-    // The circle fills from the bottom to the charge, like a glass (a ring with a gap read as
-    // a loading spinner); the headphones on top. Green while charging, amber / red when low.
+    // The circle's edge is the gauge: a thin ring filled to the charge, headphones inside.
     let (value, tint) = match charge {
         Some(c) => (f32::from(c.level) / 100.0, crate::panels::pods::tint(s, c)),
         None => (0.0, s.ink_faint),
     };
-    let fill = if tint == s.ink {
-        s.ink.scale_alpha(0.2 * s.opacity)
-    } else {
-        tint.scale_alpha(0.38 * s.opacity)
-    };
     Some(
         ui::control(stack![
-            ui::ring::level(value, d, fill),
+            ui::ring::ring(value, d, 2.0, tint, s.ink.scale_alpha(0.16 * s.opacity)),
             container(icon(Icon::Headphones, 15.0, s.ink)).center(d),
         ])
         .width(d)
