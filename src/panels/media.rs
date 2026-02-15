@@ -105,11 +105,13 @@ pub fn art<'a, M: Clone + 'static>(
         {
             let h = art_at(path, size, radius)
                 .unwrap_or_else(|| image::Handle::from_rgba(1, 1, vec![0; 4]));
-            iced::widget::image(h)
-                .width(size)
-                .height(size)
-                .opacity(s.opacity)
-                .into()
+            crate::ui::snap::snap(
+                iced::widget::image(h)
+                    .width(size)
+                    .height(size)
+                    .opacity(s.opacity),
+            )
+            .into()
         }
         _ => container(icon(Icon::Music, size * 0.4, s.ink_faint))
             .center(size)

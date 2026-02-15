@@ -7,6 +7,7 @@ pub mod reveal;
 pub mod ring;
 pub mod shape;
 pub mod slider;
+pub mod snap;
 
 use crate::theme::{self, Scheme, size};
 use iced::widget::{Space, Text, container, row, text};
@@ -79,13 +80,13 @@ pub fn cover<'a, M: Clone + 'a>(
     h: f32,
     radius: f32,
 ) -> Element<'a, M> {
-    control(
+    control(snap::snap(
         iced::widget::image(handle)
             .width(w)
             .height(h)
             .content_fit(iced::ContentFit::Cover)
             .border_radius(radius),
-    )
+    ))
     .width(w)
     .height(h)
     .into()
@@ -395,19 +396,22 @@ pub fn image_file_faded<'a, M: 'a>(
             .opacity(opacity)
             .into()
     } else if let Some(h) = sharp_file(path, size) {
-        iced::widget::image(h)
-            .width(size)
-            .height(size)
-            .opacity(opacity)
-            .into()
+        snap::snap(
+            iced::widget::image(h)
+                .width(size)
+                .height(size)
+                .opacity(opacity),
+        )
+        .into()
     } else {
         // Unreadable: an empty square instead (the renderer aborts on undecodable pictures).
         Space::new().width(size).height(size).into()
     }
 }
 
-/// Device pixels per logical pixel to prepare pictures for (the sharpest output's scale).
-const PICTURE_SCALE: f32 = 2.0;
+/// Device pixels per logical pixel to prepare pictures for: every screen here runs at scale 1,
+/// and a picture made larger is shrunk by the renderer's plain filter (jagged round edges).
+const PICTURE_SCALE: f32 = 1.0;
 
 /// `img` resized to `size` logical px with a high-quality filter. The renderer scales
 /// pictures with a plain bilinear filter, which turns a 256 px app icon drawn at 20 px into a
@@ -563,13 +567,13 @@ pub fn weather_sky(w: &crate::services::web::Weather) -> (Color, Color) {
     }
 }
 
-/// `img` cropped to fill `w` × `h` (logical px), scaled to twice that for sharpness, with its
+/// `img` cropped to fill `w` × `h` (logical px), made at the screen's pixel size, with its
 /// corners rounded in the pixels themselves (anti-aliased): the CPU renderer does not round
 /// images, so this is what keeps artwork and thumbnails from showing square, cut-off corners.
 pub fn rounded_cover(img: &::image::RgbaImage, w: f32, h: f32, radius: f32) -> ::image::RgbaImage {
     let (tw, th) = (
-        (w * 2.0).round().max(1.0) as u32,
-        (h * 2.0).round().max(1.0) as u32,
+        (w * PICTURE_SCALE).round().max(1.0) as u32,
+        (h * PICTURE_SCALE).round().max(1.0) as u32,
     );
     let (sw, sh) = img.dimensions();
     // Crop to the target's shape, centred.
@@ -581,7 +585,9 @@ pub fn rounded_cover(img: &::image::RgbaImage, w: f32, h: f32, radius: f32) -> :
     let crop = ::image::imageops::crop_imm(img, (sw - cw) / 2, (sh - ch) / 2, cw.max(1), ch.max(1))
         .to_image();
     let mut out = ::image::imageops::resize(&crop, tw, th, ::image::imageops::FilterType::Triangle);
-    let r = (radius * 2.0).min(tw as f32 / 2.0).min(th as f32 / 2.0);
+    let r = (radius * PICTURE_SCALE)
+        .min(tw as f32 / 2.0)
+        .min(th as f32 / 2.0);
     if r > 0.5 {
         for y in 0..th {
             for x in 0..tw {

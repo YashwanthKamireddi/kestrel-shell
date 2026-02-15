@@ -48,10 +48,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 theme::SEMIBOLD
             ),
             label(
-                if app.pods.is_some() {
-                    "Connected"
+                if device(app)
+                    .is_some_and(|d| super::control::in_progress(app, &d.path) == Some(false))
+                {
+                    "Disconnecting…"
                 } else {
-                    "Connected · reading battery…"
+                    "Connected"
                 },
                 text::CAPTION,
                 s.ink_dim

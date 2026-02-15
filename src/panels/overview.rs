@@ -300,13 +300,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             selection: s.accent_soft,
         });
     let field = container(
-        row![
-            icon(Icon::Search, 18.0, s.ink_dim),
-            input,
-            label("Tab  ↑↓←→  Enter", text::CAPTION, s.ink_faint),
-        ]
-        .spacing(4)
-        .align_y(Alignment::Center),
+        row![icon(Icon::Search, 18.0, s.ink_dim), input,]
+            .spacing(4)
+            .align_y(Alignment::Center),
     )
     .padding([0, 12])
     .height(44)
