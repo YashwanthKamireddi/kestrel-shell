@@ -153,7 +153,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
 /// accent to amber to red as the load rises.
 fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let sys = app.system;
-    let gauge = |i: Icon, name: &'static str, value: f32, shown: String, drawn: f32| {
+    let gauge = |name: &'static str, value: f32, shown: String, drawn: f32| {
         let tone = if value >= 0.85 {
             s.bad
         } else if value >= 0.6 {
@@ -167,12 +167,7 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 ui::ring::ring(drawn, size, 7.0, tone, s.ink.scale_alpha(0.08 * s.opacity)),
                 container(label_w(shown, text::BODY, s.ink, theme::SEMIBOLD)).center(size),
             ],
-            row![
-                icon(i, 13.0, s.ink_dim),
-                label(name, text::SMALL, s.ink_dim)
-            ]
-            .spacing(5)
-            .align_y(Alignment::Center),
+            label(name, text::SMALL, s.ink_dim),
         ]
         .spacing(8)
         .align_x(Alignment::Center)
@@ -180,14 +175,12 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     };
     let mut r = row![
         gauge(
-            Icon::Cpu,
             "CPU",
             f32::from(sys.cpu) / 100.0,
             format!("{}%", sys.cpu),
             app.gauges[0].value
         ),
         gauge(
-            Icon::MemoryStick,
             "Memory",
             f32::from(sys.mem) / 100.0,
             format!("{}%", sys.mem),
@@ -196,7 +189,6 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ];
     if let Some(t) = sys.temp {
         r = r.push(gauge(
-            Icon::Thermometer,
             "Temp",
             (f32::from(t) - 30.0) / 70.0,
             format!("{t}°"),

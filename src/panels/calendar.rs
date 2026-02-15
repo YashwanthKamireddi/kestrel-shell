@@ -125,6 +125,10 @@ fn day<'a>(
     today: NaiveDate,
     in_month: bool,
 ) -> Element<'a, AppMessage> {
+    // Other months' days are left blank: the month stands on its own.
+    if !in_month {
+        return Space::new().width(Length::Fill).height(CELL_H).into();
+    }
     let is_today = date == today;
     let color = if is_today {
         s.on_accent
