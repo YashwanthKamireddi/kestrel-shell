@@ -73,7 +73,12 @@ impl Scheme {
             base: Color::BLACK,
             raised: n(0.215, 0.013),
             raised_hi: n(0.25, 0.015),
-            raised_press: n(0.28, 0.016),
+            // Pressed: the hover overlay made a little stronger (libadwaita / Material state
+            // layers), never an opaque grey block.
+            raised_press: Color {
+                a: 0.16,
+                ..n(0.97, 0.006)
+            },
             line: n(0.30, 0.012),
             ink: n(0.97, 0.006),
             ink_dim: n(0.84, 0.010),
