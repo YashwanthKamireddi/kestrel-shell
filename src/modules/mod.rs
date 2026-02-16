@@ -91,7 +91,8 @@ pub fn items<'a>(
         "updates" => updates(app, o, s, open),
         "privacy" => privacy(app, o, s, open),
         "status" => status(app, o, s, open),
-        "notifications" => bell(app, o, s, open),
+        // Notifications live in the control centre: their bell is in its pill (see `status`).
+        "notifications" => Vec::new(),
         "power" => vec![power(o, s, open)],
         // Anything else is a Lua widget (shown once it has produced something).
         other => app
@@ -530,7 +531,7 @@ fn status<'a>(
         };
         status = status.push(icon(i, size::ICON, fg));
     }
-    status = status.push(icon(control::volume_icon(app.audio.sink()), size::ICON, fg));
+    status = status.push(icon(control::level_icon(app.audio.sink()), size::ICON, fg));
     if app.power.has_battery {
         let low = app.power.percent < 15.0 && !app.power.charging;
         let charging = app.power.charging && app.power.percent < 99.5;
@@ -548,6 +549,29 @@ fn status<'a>(
             .align_y(Alignment::Center),
         );
     }
+    // Notifications are part of the control centre: a bell joins its pill when something
+    // arrived unseen (with the count), or while Do not disturb is on.
+    if app.dnd {
+        status = status.push(icon(Icon::BellOff, size::ICON, fg));
+    } else if app.unseen > 0 {
+        status = status.push(
+            row![
+                icon(Icon::BellDot, size::ICON, s.accent),
+                label_w(
+                    if app.unseen > 9 {
+                        "9+".to_string()
+                    } else {
+                        app.unseen.to_string()
+                    },
+                    text::SMALL,
+                    s.accent,
+                    theme::SEMIBOLD
+                ),
+            ]
+            .spacing(3)
+            .align_y(Alignment::Center),
+        );
+    }
     let (a, b, c) = pill(active);
     items.push(
         ui::control(status)
@@ -560,82 +584,6 @@ fn status<'a>(
             .into(),
     );
 
-    items
-}
-/// Notifications bell; opens the notification centre.
-fn bell<'a>(
-    app: &'a App,
-    o: &'a Output,
-    s: Scheme,
-    open: Option<PanelKind>,
-) -> Vec<Element<'a, Message>> {
-    let _ = (&app, &o, &open);
-    let id = o.id;
-    let _ = id;
-    let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
-    let bell = if app.dnd {
-        Icon::BellOff
-    } else if app.unread {
-        Icon::BellDot
-    } else {
-        Icon::Bell
-    };
-    let tint = if app.unread && !app.dnd {
-        s.accent
-    } else {
-        s.ink
-    };
-    let button = ui::icon_button_in(
-        s,
-        bell,
-        Message::Close,
-        open == Some(PanelKind::Control),
-        tint,
-    )
-    .on_press_at(move |r| Message::Toggle(PanelKind::Control, id, r));
-    // How many arrived since the centre was last opened: a small accent badge.
-    let unseen = app.unseen;
-    if unseen > 0 && !app.dnd {
-        let badge = container(label_w(
-            if unseen > 9 {
-                "9+".to_string()
-            } else {
-                unseen.to_string()
-            },
-            9.5,
-            s.on_accent,
-            theme::SEMIBOLD,
-        ))
-        .center_x(iced::Length::Shrink)
-        .padding([0, 4])
-        .height(14)
-        .center_y(14)
-        .style(move |_| container::Style {
-            background: Some(s.accent.into()),
-            border: iced::Border::default().rounded(7),
-            ..container::Style::default()
-        });
-        items.push(
-            stack![button, pin(badge).x(16.0).y(1.0)]
-                .width(size::CONTROL + 6.0)
-                .height(size::CONTROL)
-                .into(),
-        );
-    } else {
-        items.push(button.into());
-    }
     items
 }
 /// Workspace slots: app icon or faint number, with a gliding highlight on the active one.

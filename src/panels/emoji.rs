@@ -19,6 +19,8 @@ const EMOJI: &str = include_str!("../../assets/emoji.txt");
 
 #[derive(Default)]
 pub struct State {
+    /// Scrolling not yet worth a whole row.
+    scroll: f32,
     query: String,
     selected: usize,
     /// First visible grid row.
@@ -102,7 +104,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::Scroll(lines) => {
             let rows = shown(st).len().div_ceil(COLUMNS);
-            let top = (st.top as f32 - lines).max(0.0) as usize;
+            // Small touchpad steps add up to whole rows.
+            st.scroll += lines;
+            let whole = st.scroll.trunc();
+            st.scroll -= whole;
+            let top = (st.top as f32 - whole).max(0.0) as usize;
             st.top = top.min(rows.saturating_sub(ROWS));
             let first = st.top * COLUMNS;
             st.selected = st.selected.clamp(first, first + ROWS * COLUMNS - 1);
