@@ -4,6 +4,7 @@ pub mod calendar;
 pub mod clipboard;
 pub mod control;
 pub mod emoji;
+pub mod files;
 pub mod island;
 pub mod keys;
 pub mod launcher;
@@ -39,6 +40,7 @@ pub enum PanelKind {
     Settings,
     Weather,
     Pods,
+    Files,
 }
 
 impl PanelKind {
@@ -60,6 +62,7 @@ impl PanelKind {
             "settings" => Self::Settings,
             "weather" => Self::Weather,
             "airpods" | "pods" => Self::Pods,
+            "files" => Self::Files,
             _ => return None,
         })
     }
@@ -81,6 +84,7 @@ impl PanelKind {
             Self::Settings => settings::WIDTH,
             Self::Weather => weather::WIDTH,
             Self::Pods => pods::WIDTH,
+            Self::Files => files::WIDTH,
         }
     }
 }
@@ -100,6 +104,7 @@ pub struct State {
     pub clipboard: clipboard::State,
     pub emoji: emoji::State,
     pub settings: settings::State,
+    pub files: files::State,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +122,7 @@ pub enum Message {
     Clipboard(clipboard::Message),
     Emoji(emoji::Message),
     Settings(settings::Message),
+    Files(files::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
     /// Left click on a tray icon.
@@ -169,7 +175,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
-        PanelKind::Tray | PanelKind::Weather | PanelKind::Pods => {}
+        PanelKind::Tray | PanelKind::Weather | PanelKind::Pods | PanelKind::Files => {}
     }
     Task::none()
 }
@@ -192,6 +198,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Clipboard(m) => clipboard::update(app, m),
         Message::Emoji(m) => emoji::update(app, m),
         Message::Settings(m) => settings::update(app, m),
+        Message::Files(m) => files::update(app, m),
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
@@ -199,6 +206,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Overview) => overview::key(app, k),
             Some(PanelKind::Control) => control::key(app, k),
             Some(PanelKind::Power) => power::key(app, k),
+            Some(PanelKind::Files) => files::key(app, k),
             _ => Task::none(),
         },
         Message::TrayActivate(item) => {
@@ -273,5 +281,6 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
         PanelKind::Settings => settings::view(app, s),
         PanelKind::Weather => weather::view(app, s),
         PanelKind::Pods => pods::view(app, s),
+        PanelKind::Files => files::view(app, s),
     }
 }

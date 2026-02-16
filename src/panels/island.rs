@@ -9,8 +9,11 @@ use iced::widget::{column, container, row};
 use iced::{Alignment, Color, Element, Length};
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    // Weather and music with pills of their own have their own panels: not repeated here.
     let mut col = column![today(app, s)].spacing(12);
-    if let Some(p) = media::current(app) {
+    if !app.config.bar.contains("media")
+        && let Some(p) = media::current(app)
+    {
         col = col.push(playing(s, p));
     }
     col = col.push(system(app, s));
@@ -20,7 +23,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
 /// Time, date and the weather, on a sky that matches the weather and the time of day.
 fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let Some(w) = &app.weather else {
+    let Some(w) = app
+        .weather
+        .as_ref()
+        .filter(|_| !app.config.bar.contains("weather"))
+    else {
         return container(clock(app, s.ink, s.ink_dim))
             .padding([4, 6])
             .into();

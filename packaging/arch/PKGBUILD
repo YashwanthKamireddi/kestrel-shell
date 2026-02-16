@@ -1,6 +1,6 @@
 # Local package for kestrel, built from this repository.
 pkgname=kestrel
-pkgver=0.1.0.r101.gbdb468c
+pkgver=0.1.0.r102.gd9251a9
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
@@ -37,6 +37,9 @@ package() {
     install -Dm755 "$_repo/target/release/kestrel" "$pkgdir/usr/bin/kestrel"
     install -Dm644 "$startdir/kestrel.service" "$pkgdir/usr/lib/systemd/user/kestrel.service"
     install -Dm644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    # kestrel's file picker, as the desktop portal's FileChooser backend.
+    install -Dm644 "$_repo/packaging/portal/kestrel.portal" \
+        "$pkgdir/usr/share/xdg-desktop-portal/portals/kestrel.portal"
     # The "kestrel media" browser extension (load it unpacked from here) and its native host.
     install -Dm644 -t "$pkgdir/usr/share/kestrel/browser" "$_repo"/browser/*
     install -Dm644 "$_repo/packaging/browser/dev.kestrel.media.json" \

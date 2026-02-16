@@ -32,6 +32,9 @@ pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods
         .replace('_', ":");
     Subscription::run_with(address, crate::services::airpods::stream)
 }
+pub fn filechooser() -> Subscription<crate::services::filechooser::Request> {
+    Subscription::run(crate::services::filechooser::stream)
+}
 pub fn power() -> Subscription<power::State> {
     Subscription::run(power::stream)
 }

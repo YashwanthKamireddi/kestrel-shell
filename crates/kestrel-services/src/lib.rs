@@ -12,6 +12,7 @@ pub mod browser_host;
 pub mod clipboard;
 pub mod clock;
 pub mod dbus;
+pub mod filechooser;
 pub mod hyprland;
 pub mod icons;
 pub mod level;
