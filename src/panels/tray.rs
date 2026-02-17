@@ -189,7 +189,7 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
     .height(34)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
-    .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
     .no_press_scale()
     .on_press(msg(Message::Back))
     .into()
@@ -216,7 +216,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let small = |i: Icon, fg: Color, m: AppMessage| {
             control(container(icon(i, 14.0, fg)).center(28))
                 .radius(14.0)
-                .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
                 .on_press(m)
         };
         let mut r = row![
@@ -253,7 +253,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .height(38)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
-                .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
                 .no_press_scale()
                 .on_press(primary)
                 .on_right_press(msg(Message::Show(item.clone()))),
@@ -362,7 +362,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .height(34)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
-                .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
                 .no_press_scale()
                 .on_press_maybe(on),
         );

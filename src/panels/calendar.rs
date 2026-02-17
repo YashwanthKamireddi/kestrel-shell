@@ -79,7 +79,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ))
     .padding([4, 8])
     .radius(size::CONTROL_RADIUS)
-    .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
     .on_press(msg(Message::Today));
 
     let nav = row![

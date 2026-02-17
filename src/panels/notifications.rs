@@ -84,7 +84,7 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         Space::new().width(Length::Fill),
         control(container(icon(Icon::X, 14.0, s.ink_dim)).center(22))
             .radius(11.0)
-            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
             .on_press(msg(Message::Dismiss(n.id))),
     ]
     .spacing(6)
@@ -125,7 +125,11 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
                 control(label(ui::ellipsize(l, 20), text::SMALL, s.ink))
                     .padding([6, 12])
                     .radius(size::CONTROL_RADIUS)
-                    .colors(s.raised_hi, s.raised_press, s.raised_press)
+                    .colors(
+                        s.ink.scale_alpha(0.08 * s.opacity),
+                        s.selected(),
+                        s.raised_press,
+                    )
                     .center_x()
                     .width(Length::Fill)
                     .on_press(msg(Message::Action(n.id, k.clone())))
@@ -140,9 +144,13 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
         .colors(
-            s.raised,
-            if has_default { s.raised_hi } else { s.raised },
-            s.raised,
+            s.ink.scale_alpha(0.06 * s.opacity),
+            if has_default {
+                s.ink.scale_alpha(0.1 * s.opacity)
+            } else {
+                s.ink.scale_alpha(0.06 * s.opacity)
+            },
+            s.ink.scale_alpha(0.06 * s.opacity),
         )
         .no_press_scale()
         .on_press_maybe(has_default.then(|| msg(Message::Action(n.id, "default".into()))))

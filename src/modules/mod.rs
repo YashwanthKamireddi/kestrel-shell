@@ -125,7 +125,7 @@ fn lua_chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, M
         .padding([0, 10])
         .height(size::CONTROL)
         .radius(size::CONTROL / 2.0)
-        .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
         .on_press(Message::LuaClick(name.to_string()))
         .into()
 }
@@ -374,7 +374,7 @@ fn system<'a>(
                 .padding([0, 10])
                 .height(size::CONTROL)
                 .radius(size::CONTROL / 2.0)
-                .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
                 .on_press(Message::Dispatch(crate::services::apps::launch_lua(
                     "kitty -e btop",
                 )))
@@ -422,7 +422,7 @@ fn updates<'a>(
             .padding([0, 10])
             .height(size::CONTROL)
             .radius(size::CONTROL / 2.0)
-            .colors(Color::TRANSPARENT, s.raised_hi, s.raised_press)
+            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
             .on_press(Message::Dispatch(crate::services::apps::launch_lua(
                 "kitty --title Updates sh -c 'yay -Syu; echo; read -p \"Done. Press Enter to close.\" _'",
             )))

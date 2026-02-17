@@ -194,7 +194,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         .radius(size::ROW_RADIUS)
                         .colors(
                             if on { s.accent } else { Color::TRANSPARENT },
-                            if on { s.accent } else { s.raised_hi },
+                            if on { s.accent } else { s.hover() },
                             s.raised_press,
                         )
                         .on_press(msg(Message::Set(path.clone()))),

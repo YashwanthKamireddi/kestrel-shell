@@ -286,8 +286,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .padding([4, 10])
             .radius(12.0)
             .colors(
-                if on { s.accent } else { s.raised },
-                if on { s.accent } else { s.raised_hi },
+                if on {
+                    s.accent
+                } else {
+                    s.ink.scale_alpha(0.06 * s.opacity)
+                },
+                if on { s.accent } else { s.selected() },
                 s.raised_press,
             )
             .on_press(msg(Message::Select(q.bus.clone())))
