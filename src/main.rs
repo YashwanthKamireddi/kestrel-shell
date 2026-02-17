@@ -53,6 +53,11 @@ fn main() -> anyhow::Result<()> {
         .redraw_key(app::redraw_key)
         .default_font(theme::FONT)
         .font(ui::icon::BYTES)
+        // Rubik's fixed weights: the installed Rubik is a variable font, and the text renderer
+        // draws its default (Light) instance for every weight, so Medium came out thin.
+        .font(theme::RUBIK_MEDIUM)
+        .font(theme::RUBIK_SEMIBOLD)
+        .font(theme::RUBIK_BOLD)
         .antialiasing(true)
         // The first surface is a 1 px placeholder; real surfaces are made per monitor.
         .layer_shell(LayerShellSettings {

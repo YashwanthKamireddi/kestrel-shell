@@ -30,6 +30,8 @@ pub struct State {
 
 #[derive(Clone, Debug)]
 pub enum Message {
+    /// The pointer came onto an emoji: it becomes the selection.
+    Hover(usize),
     Query(String),
     Pick(usize),
     Scroll(f32),
@@ -113,6 +115,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             let first = st.top * COLUMNS;
             st.selected = st.selected.clamp(first, first + ROWS * COLUMNS - 1);
         }
+        Message::Hover(i) => st.selected = i,
         Message::Pick(i) => {
             let Some((e, _)) = shown(st).get(i).copied() else {
                 return Task::none();
@@ -216,9 +219,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     } else {
                         Color::TRANSPARENT
                     },
-                    if selected { s.accent_soft } else { s.raised_hi },
+                    if selected { s.selected() } else { s.hover() },
                     s.raised_press,
                 )
+                .on_enter(msg(Message::Hover(i)))
                 .on_press(msg(Message::Pick(i))),
             );
         }

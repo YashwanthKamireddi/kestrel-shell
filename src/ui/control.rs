@@ -19,6 +19,8 @@ pub struct Control<'a, M> {
     on_press: Option<M>,
     on_press_at: Option<Box<dyn Fn(Rectangle) -> M + 'a>>,
     on_right_press: Option<M>,
+    /// Sent when the pointer comes onto it (lists: the pointer moves the selection).
+    on_enter: Option<M>,
     on_scroll: Option<Box<dyn Fn(f32) -> M + 'a>>,
     padding: Padding,
     width: Length,
@@ -38,6 +40,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         on_press: None,
         on_press_at: None,
         on_right_press: None,
+        on_enter: None,
         on_scroll: None,
         padding: Padding::ZERO,
         width: Length::Shrink,
@@ -57,6 +60,11 @@ impl<'a, M> Control<'a, M> {
         self.on_press = Some(m);
         self
     }
+    pub fn on_enter(mut self, m: M) -> Self {
+        self.on_enter = Some(m);
+        self
+    }
+
     pub fn on_press_maybe(mut self, m: Option<M>) -> Self {
         self.on_press = m;
         self
@@ -236,6 +244,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if over => {
                     if pressable {
                         state.pressed = true;
+                        shell.request_redraw();
                         if self.press_scale {
                             state.scale.to(PRESSED_SCALE, Spring::CLOSE);
                         }
@@ -252,6 +261,9 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                         state.pressed = false;
                         state.scale.to(1.0, Spring::CLOSE);
                         shell.capture_event();
+                        // Redrawn now: without this the pressed look stayed on screen until
+                        // something else redrew, seconds later.
+                        shell.request_redraw();
                     }
                 }
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if over => {
@@ -278,6 +290,9 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
 
         if state.hovered != over {
             state.hovered = over;
+            if over && let Some(m) = &self.on_enter {
+                shell.publish(m.clone());
+            }
             if !over && state.pressed {
                 state.scale.to(1.0, Spring::SNAP);
             }

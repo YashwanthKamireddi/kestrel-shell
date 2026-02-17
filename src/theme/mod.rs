@@ -161,6 +161,11 @@ pub mod text {
     pub const DISPLAY: f32 = 32.0;
 }
 
+/// Rubik at fixed weights, cut from the variable font (OFL, assets/fonts/LICENSE-rubik).
+pub const RUBIK_MEDIUM: &[u8] = include_bytes!("../../assets/fonts/Rubik-Medium.ttf");
+pub const RUBIK_SEMIBOLD: &[u8] = include_bytes!("../../assets/fonts/Rubik-SemiBold.ttf");
+pub const RUBIK_BOLD: &[u8] = include_bytes!("../../assets/fonts/Rubik-Bold.ttf");
+
 /// The shell's typeface (also given to Qt apps and the lock screen).
 pub const FONT_NAME: &str = "Rubik";
 /// Medium by default, like the lock screen: the regular weight looked thin and grainy at bar
