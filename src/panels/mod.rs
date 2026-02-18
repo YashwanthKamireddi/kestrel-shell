@@ -63,6 +63,7 @@ impl PanelKind {
             "weather" => Self::Weather,
             "airpods" | "pods" => Self::Pods,
             "files" => Self::Files,
+            "tray" => Self::Tray,
             _ => return None,
         })
     }
@@ -73,7 +74,7 @@ impl PanelKind {
             Self::Media => media::WIDTH,
             Self::Calendar => 312.0,
             Self::Power => 232.0,
-            Self::Tray => 248.0,
+            Self::Tray => 312.0,
             Self::Launcher => 560.0,
             Self::Wallpaper => 560.0,
             Self::Keys => 720.0,

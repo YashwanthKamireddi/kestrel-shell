@@ -195,71 +195,74 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
     .into()
 }
 
-/// Every tray item: activate, open its menu, pin it to the bar.
+/// Every tray app as a grid of icons with their names (like Windows 11's hidden icons): click
+/// to open the app, right-click for its menu (where it can be kept in the bar). Apps kept in
+/// the bar carry a small accent dot.
 fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    const CELL: f32 = 70.0;
+    const COLS: usize = 4;
     let st = &app.panels.tray;
     let items: Vec<&tray::Item> = app.tray.items.iter().filter(|i| !i.passive).collect();
     if items.is_empty() {
-        return container(label("Nothing in the tray", text::SMALL, s.ink_dim))
-            .padding(16)
-            .into();
+        return Space::new().into();
     }
-    let mut col = column![].spacing(2);
-    for item in items {
-        let key = pin_key(item);
-        let pinned = st.pins.contains(&key);
-        let name = if item.title.is_empty() {
-            item.id.clone()
-        } else {
-            item.title.clone()
-        };
-        let small = |i: Icon, fg: Color, m: AppMessage| {
-            control(container(icon(i, 14.0, fg)).center(28))
-                .radius(14.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
-                .on_press(m)
-        };
-        let mut r = row![
-            crate::modules::tray_icon(s, item),
-            label(ui::fit(&name, text::BODY, 120.0), text::BODY, s.ink).width(Length::Fill),
-            small(
-                if pinned { Icon::Pin } else { Icon::PinOff },
-                if pinned { s.accent } else { s.ink_faint },
-                msg(Message::Pin(key)),
-            ),
-        ]
-        .spacing(10)
-        .align_y(Alignment::Center);
-        if item.menu.is_some() {
-            r = r.push(small(
-                Icon::ChevronRight,
-                s.ink_dim,
-                msg(Message::Show(item.clone())),
-            ));
-        }
-        let primary = if item.item_is_menu {
-            msg(Message::Show(item.clone()))
-        } else {
-            msg(Message::Activate(item.clone()))
-        };
-        col = col.push(
-            control(r)
-                .padding(iced::Padding {
-                    top: 0.0,
-                    right: 4.0,
-                    bottom: 0.0,
-                    left: 10.0,
-                })
-                .height(38)
-                .width(Length::Fill)
-                .radius(size::ROW_RADIUS)
+    let mut grid = column![].spacing(4);
+    for chunk in items.chunks(COLS) {
+        let mut r = row![].spacing(4);
+        for &item in chunk {
+            let pinned = st.pins.contains(&pin_key(item));
+            let name = if item.title.is_empty() {
+                item.id.clone()
+            } else {
+                item.title.clone()
+            };
+            let mut glyph = iced::widget::stack![
+                container(crate::modules::tray_icon_at(s, item, 22.0)).center(30)
+            ];
+            if pinned {
+                glyph = glyph.push(
+                    iced::widget::pin(container(Space::new()).width(6).height(6).style(
+                        move |_| container::Style {
+                            background: Some(s.accent.into()),
+                            border: iced::Border::default().rounded(3),
+                            ..container::Style::default()
+                        },
+                    ))
+                    .x(25.0)
+                    .y(0.0),
+                );
+            }
+            let primary = if item.item_is_menu {
+                msg(Message::Show(item.clone()))
+            } else {
+                msg(Message::Activate(item.clone()))
+            };
+            r = r.push(
+                control(
+                    column![
+                        glyph.width(30).height(30),
+                        label(
+                            ui::fit(&name, text::CAPTION, CELL - 8.0),
+                            text::CAPTION,
+                            s.ink_dim
+                        ),
+                    ]
+                    .spacing(6)
+                    .align_x(Alignment::Center),
+                )
+                .width(CELL)
+                .height(CELL)
+                .center_x()
+                .radius(16.0)
                 .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
                 .no_press_scale()
                 .on_press(primary)
                 .on_right_press(msg(Message::Show(item.clone()))),
-        );
+            );
+        }
+        grid = grid.push(r);
     }
-    container(col).padding(8).into()
+    container(grid).padding(10).into()
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
@@ -310,6 +313,20 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             current.label.clone()
         };
         col = col.push(back_row(s, back));
+        if st.path.is_empty()
+            && let Some(item) = &st.item
+        {
+            let key = pin_key(item);
+            let pinned = st.pins.contains(&key);
+            col = col.push(
+                row![
+                    label("Keep in the bar", text::BODY, s.ink).width(Length::Fill),
+                    ui::switch(s, pinned, msg(Message::Pin(key))),
+                ]
+                .padding([6, 10])
+                .align_y(Alignment::Center),
+            );
+        }
         col = col.push(container(divider(s)).padding([4, 6]));
     }
     let any_marks = current

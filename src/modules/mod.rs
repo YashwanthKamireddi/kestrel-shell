@@ -144,7 +144,11 @@ fn power<'a>(o: &'a Output, s: Scheme, open: Option<PanelKind>) -> Element<'a, M
 }
 
 pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Message> {
-    let px = 16.0;
+    tray_icon_at(s, item, 16.0)
+}
+
+/// A tray app's icon at `px`.
+pub fn tray_icon_at<'a>(s: Scheme, item: &tray_service::Item, px: f32) -> Element<'a, Message> {
     match &item.icon {
         Some(tray_service::TrayIcon::Name(n)) => match icons::lookup(n) {
             Some(p) => ui::image_file_faded(&p, px, s.opacity),
