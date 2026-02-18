@@ -118,11 +118,7 @@ fn run(out: &futures::channel::mpsc::UnboundedSender<Bands>) -> Option<()> {
         while stream.readable_size().unwrap_or(0) > 0 {
             match stream.peek() {
                 Ok(PeekResult::Data(d)) => {
-                    buf.extend(
-                        d.chunks_exact(4)
-                            .filter_map(|c| <[u8; 4]>::try_from(c).ok())
-                            .map(f32::from_ne_bytes),
-                    );
+                    buf.extend(d.as_chunks::<4>().0.iter().map(|c| f32::from_ne_bytes(*c)));
                     let _ = stream.discard();
                 }
                 Ok(PeekResult::Hole(_)) => {
