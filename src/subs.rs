@@ -135,6 +135,6 @@ pub fn lua() -> Subscription<crate::lua::Event> {
     Subscription::run(crate::lua::stream)
 }
 
-pub fn level() -> Subscription<f32> {
+pub fn level() -> Subscription<crate::services::level::Bands> {
     Subscription::run(crate::services::level::stream)
 }

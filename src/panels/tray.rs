@@ -202,7 +202,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     const CELL: f32 = 70.0;
     const COLS: usize = 4;
     let st = &app.panels.tray;
-    let items: Vec<&tray::Item> = app.tray.items.iter().filter(|i| !i.passive).collect();
+    let items: Vec<&tray::Item> = app.tray.items.iter().collect();
     if items.is_empty() {
         return Space::new().into();
     }
@@ -265,6 +265,24 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     container(grid).padding(10).into()
 }
 
+/// "Keep in the bar", for the app whose menu is open.
+fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, AppMessage> {
+    let Some(item) = &st.item else {
+        return Space::new().into();
+    };
+    let key = pin_key(item);
+    let pinned = st.pins.contains(&key);
+    row![
+        icon(Icon::Pin, 14.0, if pinned { s.accent } else { s.ink_dim }),
+        label("Keep in the bar", text::BODY, s.ink).width(Length::Fill),
+        ui::switch(s, pinned, msg(Message::Pin(key))),
+    ]
+    .spacing(10)
+    .padding([6, 10])
+    .align_y(Alignment::Center)
+    .into()
+}
+
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let st = &app.panels.tray;
     if st.item.is_none() {
@@ -282,6 +300,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         })
         .unwrap_or_default();
     let Some(root) = &st.menu else {
+        if st.item.as_ref().is_some_and(|i| i.menu.is_none()) {
+            return container(column![keep_row(st, s)]).padding(8).into();
+        }
         let note = container(label(
             if st.item.as_ref().is_some_and(|i| i.menu.is_none()) {
                 format!("{title} has no menu")
@@ -313,20 +334,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             current.label.clone()
         };
         col = col.push(back_row(s, back));
-        if st.path.is_empty()
-            && let Some(item) = &st.item
-        {
-            let key = pin_key(item);
-            let pinned = st.pins.contains(&key);
-            col = col.push(
-                row![
-                    label("Keep in the bar", text::BODY, s.ink).width(Length::Fill),
-                    ui::switch(s, pinned, msg(Message::Pin(key))),
-                ]
-                .padding([6, 10])
-                .align_y(Alignment::Center),
-            );
-        }
+        col = col.push(container(divider(s)).padding([4, 6]));
+    }
+    // Every app's own menu starts with whether it stays in the bar.
+    if st.path.is_empty() {
+        col = col.push(keep_row(st, s));
         col = col.push(container(divider(s)).padding([4, 6]));
     }
     let any_marks = current

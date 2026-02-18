@@ -216,7 +216,8 @@ fn tray<'a>(
     let pins = &app.panels.tray.pins;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
     let mut hidden = 0;
-    for item in app.tray.items.iter().filter(|i| !i.passive) {
+    // Idle ("passive") apps too: they live behind the arrow like the rest.
+    for item in &app.tray.items {
         let pinned = pins.contains(&crate::panels::tray::pin_key(item));
         if !pinned {
             hidden += 1;
