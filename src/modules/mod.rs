@@ -202,7 +202,9 @@ fn media_chip<'a>(
 
     items
 }
-/// Tray icons: click activates, right click opens the app's menu.
+/// Tray icons: click activates, right click opens the app's menu (with "Keep in the bar").
+/// Apps not kept in the bar hide behind the arrow; the arrow slides them out inline, in the
+/// bar itself (like macOS's Ice), and tucks them away again. No panel to open.
 fn tray<'a>(
     app: &'a App,
     o: &'a Output,
@@ -211,31 +213,31 @@ fn tray<'a>(
 ) -> Vec<Element<'a, Message>> {
     let id = o.id;
     let tray_open = open == Some(PanelKind::Tray);
-    let colors = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
     let pins = &app.panels.tray.pins;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
     let mut hidden = 0;
     for item in app.tray.items.iter().filter(|i| !i.passive) {
-        if !pins.contains(&crate::panels::tray::pin_key(item)) {
+        let pinned = pins.contains(&crate::panels::tray::pin_key(item));
+        if !pinned {
             hidden += 1;
-            continue;
+            if !app.tray_expanded {
+                continue;
+            }
         }
-        let (a, b, c) = colors(tray_open && crate::panels::tray::showing(app, Some(item)));
+        let active = tray_open && crate::panels::tray::showing(app, Some(item));
         let menu = item.clone();
         let mut ctl =
             ui::control(iced::widget::container(tray_icon(s, item)).center(size::CONTROL))
                 .radius(size::CONTROL / 2.0)
-                .colors(a, b, c)
+                .colors(
+                    if active {
+                        s.selected()
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    if active { s.selected() } else { s.hover() },
+                    s.raised_press,
+                )
                 .on_right_press(Message::TrayMenu(Some(menu), id, None));
         ctl = if item.item_is_menu {
             let it = item.clone();
@@ -245,27 +247,25 @@ fn tray<'a>(
         };
         items.push(ctl.into());
     }
-    // Always there while the tray has anything: it is also how pinned icons get unpinned.
-    if hidden > 0 || !items.is_empty() {
-        let active = tray_open && crate::panels::tray::showing(app, None);
-        let (a, b, c) = colors(active);
+    if hidden > 0 {
+        let out = app.tray_expanded;
         items.push(
             ui::control(
                 iced::widget::container(icon(
-                    if active {
-                        Icon::ChevronUp
+                    if out {
+                        Icon::ChevronRight
                     } else {
-                        Icon::ChevronDown
+                        Icon::ChevronLeft
                     },
                     14.0,
-                    if active { s.accent } else { s.ink_dim },
+                    s.ink_dim,
                 ))
                 .center(size::CONTROL),
             )
             .width(22)
             .radius(size::CONTROL / 2.0)
-            .colors(a, b, c)
-            .on_press_at(move |r| Message::TrayMenu(None, id, Some(r)))
+            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .on_press(Message::TrayExpand)
             .into(),
         );
     }
