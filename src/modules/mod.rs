@@ -622,12 +622,8 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
                 .into(),
         };
         ui::control(container(content).center(SLOT))
-            .radius(size::CONTROL_RADIUS)
-            .colors(
-                iced::Color::TRANSPARENT,
-                s.raised.scale_alpha(0.8),
-                s.raised_press,
-            )
+            .radius(SLOT / 2.0)
+            .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
             .on_press(Message::Dispatch(hyprland::focus_workspace(id)))
             .on_scroll(|lines| {
                 Message::Dispatch(hyprland::cycle_workspace(if lines > 0.0 { -1 } else { 1 }))
@@ -635,13 +631,14 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             .into()
     }))
     .spacing(SLOT_GAP);
-    // The current workspace: a soft accent disc that glides to it, inside the pill (never
-    // past its edge).
+    // The current workspace: a soft accent capsule that stretches to the next one as you move
+    // (its two edges are separate springs) and settles round on it. Inside the pill always.
+    let span = (o.pill_r.value - o.pill_x.value).max(SLOT);
     let highlight = container(Space::new())
-        .width(SLOT)
+        .width(span)
         .height(SLOT)
         .style(move |_| container::Style {
-            background: Some(s.accent.scale_alpha(0.22 * s.opacity).into()),
+            background: Some(s.accent.scale_alpha(0.24 * s.opacity).into()),
             border: iced::Border::default().rounded(SLOT / 2.0),
             ..container::Style::default()
         });

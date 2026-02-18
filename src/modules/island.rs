@@ -28,28 +28,36 @@ pub fn items<'a>(
     vec![bar(app, o, s, open)]
 }
 
-/// Five accent bars moving with the music, while it plays (never in game mode).
+/// The now-playing bars: four rounded bars in the artwork's colour, growing from their middle
+/// with the music (never in game mode).
 pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
-    if crate::motion::still() || !app.media.main().is_some_and(|p| p.playing) {
+    let p = app.media.main()?;
+    if crate::motion::still() || !p.playing {
         return None;
     }
-    // Fractional heights: the ends are smoothed by the renderer, so the motion is continuous.
+    // The artwork's colour, made bright enough to read on black; else the accent.
+    let tint = media::art_colour(p).map_or(s.accent, |c| {
+        let mut o = crate::theme::color::Oklch::from_srgb(c.r, c.g, c.b);
+        o.l = o.l.clamp(0.72, 0.86);
+        o.c = o.c.max(0.08);
+        o.to_color()
+    });
     let bars = app.levels.iter().map(|v| {
-        let h = 4.0 + v.clamp(0.0, 1.0) * 12.0;
+        let h = 4.0 + v.clamp(0.0, 1.0) * 13.0;
         iced::widget::container(iced::widget::Space::new())
-            .width(3)
+            .width(3.5)
             .height(h)
             .style(move |_| iced::widget::container::Style {
-                background: Some(s.accent.into()),
-                border: iced::Border::default().rounded(1.5),
+                background: Some(tint.into()),
+                border: iced::Border::default().rounded(1.75),
                 ..iced::widget::container::Style::default()
             })
             .into()
     });
     Some(
         iced::widget::row(bars)
-            .spacing(2)
-            .height(16)
+            .spacing(2.5)
+            .height(18)
             .align_y(Alignment::Center)
             .into(),
     )
