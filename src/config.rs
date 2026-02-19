@@ -45,6 +45,9 @@ pub struct BarConfig {
     pub left: Vec<String>,
     pub center: Vec<String>,
     pub right: Vec<String>,
+    /// Pill style: modules that share one pill when they sit next to each other, e.g.
+    /// `groups = [["privacy", "status", "power"]]`. Everything else stands alone.
+    pub groups: Vec<Vec<String>>,
 }
 
 impl Default for BarConfig {
@@ -62,11 +65,17 @@ impl Default for BarConfig {
                 "notifications",
                 "power",
             ]),
+            groups: vec![v(&["tray", "privacy", "status", "notifications", "power"])],
         }
     }
 }
 
 impl BarConfig {
+    /// Which group `id` belongs to, if any.
+    pub fn group_of(&self, id: &str) -> Option<usize> {
+        self.groups.iter().position(|g| g.iter().any(|m| m == id))
+    }
+
     pub fn contains(&self, id: &str) -> bool {
         self.left
             .iter()

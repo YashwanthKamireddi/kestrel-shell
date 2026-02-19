@@ -323,12 +323,9 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
 
 /// One bar section: its modules' items in order. In the pill style the section sits on its
 /// own floating pill (none when the section is empty).
-/// Items that belong together share one pill (the status cluster, the tray, the bell, power);
-/// anything else stands alone in a pill of its own.
-const CLUSTER: &[&str] = &["tray", "privacy", "status", "notifications", "power"];
-
-/// One bar section: its modules' items in order. In the pill style every standalone module
-/// sits on its own floating pill and the clustered ones share one (none when empty).
+/// One bar section: its modules' items in order. In the pill style every module sits on its
+/// own floating pill, except neighbours of one `[bar] groups` entry, which share one (none
+/// when empty).
 fn section<'a>(
     ids: &'a [String],
     app: &'a App,
@@ -344,23 +341,23 @@ fn section<'a>(
             .collect();
         return row(items).spacing(4).align_y(Alignment::Center).into();
     }
-    // Consecutive clustered modules form one group; every other module is a group alone.
+    // Neighbours of the same group share a pill; every other module is a pill alone.
     let mut groups: Vec<Vec<Element<'a, Message>>> = Vec::new();
-    let mut in_cluster = false;
+    let mut last: Option<usize> = None;
     for id in ids {
         let items = crate::modules::items(id, app, o, s, open);
         if items.is_empty() {
             continue;
         }
-        let clustered = CLUSTER.contains(&id.as_str());
-        if clustered && in_cluster {
+        let group = app.config.bar.group_of(id);
+        if group.is_some() && group == last {
             if let Some(g) = groups.last_mut() {
                 g.extend(items);
             }
         } else {
             groups.push(items);
         }
-        in_cluster = clustered;
+        last = group;
     }
     let pills_row = groups.into_iter().map(|items| {
         // A pill with one item (the island) is that item: it fills the pill edge to edge.
