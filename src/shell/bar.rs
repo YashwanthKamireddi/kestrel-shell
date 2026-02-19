@@ -323,6 +323,49 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
 
 /// One bar section: its modules' items in order. In the pill style the section sits on its
 /// own floating pill (none when the section is empty).
+/// The message for a configured action: kestrel's own command, or a program to run.
+fn action(cmd: &str) -> Message {
+    match cmd.strip_prefix("kestrel:") {
+        Some(c) => Message::Ipc(c.trim().to_string()),
+        None => Message::Dispatch(crate::services::apps::launch_lua(cmd)),
+    }
+}
+
+/// A module's items with its configured mouse actions (`[modules.<id>]`) around them.
+fn with_actions<'a>(
+    id: &str,
+    app: &'a App,
+    items: Vec<Element<'a, Message>>,
+) -> Vec<Element<'a, Message>> {
+    let Some(m) = app.config.modules.get(id) else {
+        return items;
+    };
+    if items.is_empty() {
+        return items;
+    }
+    let mut area = mouse_area(row(items).spacing(4).align_y(Alignment::Center));
+    if let Some(c) = &m.right {
+        area = area.on_right_press(action(c));
+    }
+    if let Some(c) = &m.middle {
+        area = area.on_middle_press(action(c));
+    }
+    if m.scroll_up.is_some() || m.scroll_down.is_some() {
+        let (up, down) = (m.scroll_up.clone(), m.scroll_down.clone());
+        area = area.on_scroll(move |d| {
+            let y = match d {
+                iced::mouse::ScrollDelta::Lines { y, .. }
+                | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
+            };
+            match if y > 0.0 { &up } else { &down } {
+                Some(c) => action(c),
+                None => Message::Batch(Vec::new()),
+            }
+        });
+    }
+    vec![area.into()]
+}
+
 /// One bar section: its modules' items in order. In the pill style every module sits on its
 /// own floating pill, except neighbours of one `[bar] groups` entry, which share one (none
 /// when empty).
@@ -337,7 +380,7 @@ fn section<'a>(
     if !pills {
         let items: Vec<Element<'a, Message>> = ids
             .iter()
-            .flat_map(|id| crate::modules::items(id, app, o, s, open))
+            .flat_map(|id| with_actions(id, app, crate::modules::items(id, app, o, s, open)))
             .collect();
         return row(items).spacing(4).align_y(Alignment::Center).into();
     }
@@ -345,7 +388,7 @@ fn section<'a>(
     let mut groups: Vec<Vec<Element<'a, Message>>> = Vec::new();
     let mut last: Option<usize> = None;
     for id in ids {
-        let items = crate::modules::items(id, app, o, s, open);
+        let items = with_actions(id, app, crate::modules::items(id, app, o, s, open));
         if items.is_empty() {
             continue;
         }

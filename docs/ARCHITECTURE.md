@@ -109,6 +109,12 @@ handlers for shell events (`kestrel.on`: workspace, window, notification, media,
 power, battery), sent only when the thing really changes; and moments in the island
 (`kestrel.island{}`).
 
+In `config.toml`, `[bar] groups = [["privacy", "status", "power"]]` decides which neighbouring
+modules share a pill, and `[modules.<id>]` adds mouse actions to a module (`right`, `middle`,
+`scroll_up`, `scroll_down`: a command, or `kestrel:<command>` for kestrel's own); they fill
+buttons the module does not use. A mistake in the file keeps the running settings and is
+reported once with its line.
+
 Both files are watched (the directory, since editors replace files) and apply on save:
 config changes rebuild only what they touch (surfaces when the frame changes, the wallpaper when
 its path changes). The script runs on its own thread with its own Lua state; every call has a

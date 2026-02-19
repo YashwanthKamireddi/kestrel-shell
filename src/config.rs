@@ -25,6 +25,20 @@ pub struct Config {
     pub night_light_temperature: u32,
     /// What the bar shows, where, and in which style.
     pub bar: BarConfig,
+    /// Per-module extras: `[modules.clock] middle = "kitty -e khal interactive"`.
+    pub modules: std::collections::BTreeMap<String, ModuleConfig>,
+}
+
+/// Mouse actions added to a module: a command to run, or `kestrel:<command>` for kestrel's own
+/// (`kestrel:toggle control`, `kestrel:volume +5%`). They fill buttons the module itself does
+/// not use; its own click stays.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ModuleConfig {
+    pub right: Option<String>,
+    pub middle: Option<String>,
+    pub scroll_up: Option<String>,
+    pub scroll_down: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -114,6 +128,7 @@ impl Default for Config {
             weather_longitude: None,
             night_light_temperature: 4500,
             bar: BarConfig::default(),
+            modules: std::collections::BTreeMap::new(),
         }
     }
 }
