@@ -44,20 +44,12 @@ fn msg(m: Message) -> AppMessage {
 static INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("emoji-input"));
 
-fn recent_path() -> std::path::PathBuf {
-    crate::config::state_dir().join("emoji-recent")
-}
-
 pub fn open(app: &mut App) -> Task<AppMessage> {
     let st = &mut app.panels.emoji;
     st.query.clear();
     st.selected = 0;
     st.top = 0;
-    st.recent = std::fs::read_to_string(recent_path())
-        .unwrap_or_default()
-        .lines()
-        .map(String::from)
-        .collect();
+    st.recent = crate::state::get(|s| s.emoji.recent.clone());
     Task::Iced(iced::widget::focus(INPUT_ID.clone()))
 }
 
@@ -124,8 +116,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.recent.retain(|r| *r != e);
             st.recent.insert(0, e.clone());
             st.recent.truncate(RECENT_MAX);
-            let _ = std::fs::create_dir_all(crate::config::state_dir());
-            let _ = std::fs::write(recent_path(), st.recent.join("\n"));
+            let recent = st.recent.clone();
+            crate::state::update(|s| s.emoji.recent = recent);
             // Copy it, and type it into the window that gets the keyboard back.
             let typed = format!("sleep 0.2; wtype {e}");
             return Task::batch([

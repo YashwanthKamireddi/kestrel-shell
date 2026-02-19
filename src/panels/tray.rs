@@ -61,31 +61,12 @@ pub fn pin_key(item: &tray::Item) -> String {
     }
 }
 
-fn pins_path() -> std::path::PathBuf {
-    crate::config::state_dir().join("tray-pins")
-}
-
 fn load_pins() -> BTreeSet<String> {
-    std::fs::read_to_string(pins_path())
-        .map(|s| {
-            s.lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default()
+    crate::state::get(|s| s.tray.pinned.clone())
 }
 
 fn save_pins(pins: &BTreeSet<String>) {
-    let path = pins_path();
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    let body: String = pins.iter().map(|p| format!("{p}\n")).collect();
-    if let Err(e) = std::fs::write(&path, body) {
-        log::warn!("tray: saving pins: {e}");
-    }
+    crate::state::update(|s| s.tray.pinned = pins.clone());
 }
 
 fn load(st: &mut State, item: tray::Item) -> Task<AppMessage> {
