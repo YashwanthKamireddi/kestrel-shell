@@ -27,7 +27,29 @@ pub fn slot_count(h: &hyprland::State, min: u32) -> usize {
     max_id.max(min) as usize
 }
 
+/// The bar surface: the bar itself (its band in the full style, the pills) and the frame's top
+/// corners under it. Only as tall as that, so the bar's own motion (visualiser, workspaces,
+/// clock) repaints a strip, not the screen.
 pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
+    build(app, o, false)
+}
+
+/// The overlay surface: panels, toasts and pop-ups over the whole output, and a click catcher
+/// outside the bar while a panel is open. Draws nothing (and repaints nothing) when idle.
+pub fn overlay<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
+    build(app, o, true)
+}
+
+/// Whether the overlay has anything to show on `o`.
+pub fn overlay_busy(app: &App, o: &Output) -> bool {
+    let focused = app.focused_output() == Some(o.id) && app.panel.is_none();
+    let island = crate::modules::island::hosts_osd(app);
+    app.panel.as_ref().is_some_and(|p| p.output == o.id)
+        || (focused && !island && (app.toast_sheet.visible() || !app.toasts.is_empty()))
+        || (focused && !island && app.osd.is_some())
+}
+
+fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message> {
     let s = app.scheme;
     let t = app.frame().thickness;
     let pills = app.config.bar.style == crate::config::BarStyle::Pills;
@@ -78,67 +100,79 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
         drops.push(drop(osd_x, OSD_WIDTH, app.osd_sheet.h.value));
     }
 
+    // The bar surface draws the band (and the frame's top corners); the overlay draws the
+    // toasts' and pop-ups' boxes, joined to the band where it is.
     let shape = canvas(BarShape {
         color: s.base,
         bar: size::BAR,
         frame: t,
-        corner: app.frame().radius,
-        band: !pills,
-        drops,
+        corner: if overlay { 0.0 } else { app.frame().radius },
+        band: !pills && !overlay,
+        drops: if overlay { drops } else { Vec::new() },
     })
     .width(Length::Fill)
     .height(Length::Fill);
 
-    let open = panel.filter(|p| p.open).map(|p| p.kind);
-    // The time sits at the exact centre of the screen, always: the centre items listed before it
-    // line up to its left, the ones after to its right, so switching items on or off never
-    // moves it (the island, which is the time pill; else a clock).
-    let center = &app.config.bar.center;
-    let anchor = center
-        .iter()
-        .position(|m| m == "island")
-        .or_else(|| center.iter().position(|m| m == "clock"));
-    let sides = row![
-        container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
-        container(section(&app.config.bar.right, app, o, s, open, pills))
-            .width(Length::Fill)
-            .align_x(Alignment::End),
-    ]
-    .align_y(Alignment::Center);
-    let middle: Element<'a, Message> = match anchor {
-        Some(i) => {
-            let before = section(&center[..i], app, o, s, open, pills);
-            row![
-                container(before)
-                    .width(Length::Fill)
-                    .align_x(Alignment::End),
-                section(&center[i..=i], app, o, s, open, pills),
-                container(section(&center[i + 1..], app, o, s, open, pills))
-                    .width(Length::Fill)
-                    .align_x(Alignment::Start),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center)
-            .into()
-        }
-        None => container(section(center, app, o, s, open, pills))
-            .center_x(Length::Fill)
-            .into(),
-    };
-    // The side margin goes on each layer: the stack does not pass a container's padding on
-    // (the pills ended up touching the screen's edges).
-    let margin = if pills { PILL_MARGIN } else { t + 6.0 };
-    let layer = |e: Element<'a, Message>| {
-        container(e)
-            .padding([0.0, margin])
+    // The bar's contents: built for the bar surface only.
+    let bar: Option<Element<'a, Message>> = (!overlay).then(|| {
+        let open = panel.filter(|p| p.open).map(|p| p.kind);
+        // The time sits at the exact centre of the screen, always: the centre items listed before it
+        // line up to its left, the ones after to its right, so switching items on or off never
+        // moves it (the island, which is the time pill; else a clock).
+        let center = &app.config.bar.center;
+        let anchor = center
+            .iter()
+            .position(|m| m == "island")
+            .or_else(|| center.iter().position(|m| m == "clock"));
+        let sides = row![
+            container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
+            container(section(&app.config.bar.right, app, o, s, open, pills))
+                .width(Length::Fill)
+                .align_x(Alignment::End),
+        ]
+        .align_y(Alignment::Center);
+        let middle: Element<'a, Message> = match anchor {
+            Some(i) => {
+                let before = section(&center[..i], app, o, s, open, pills);
+                row![
+                    container(before)
+                        .width(Length::Fill)
+                        .align_x(Alignment::End),
+                    section(&center[i..=i], app, o, s, open, pills),
+                    container(section(&center[i + 1..], app, o, s, open, pills))
+                        .width(Length::Fill)
+                        .align_x(Alignment::Start),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center)
+                .into()
+            }
+            None => container(section(center, app, o, s, open, pills))
+                .center_x(Length::Fill)
+                .into(),
+        };
+        // The side margin goes on each layer: the stack does not pass a container's padding on
+        // (the pills ended up touching the screen's edges).
+        let margin = if pills { PILL_MARGIN } else { t + 6.0 };
+        let layer = |e: Element<'a, Message>| {
+            container(e)
+                .padding([0.0, margin])
+                .width(Length::Fill)
+                .height(size::BAR)
+                .center_y(size::BAR)
+        };
+        stack![layer(sides.into()), layer(middle)]
             .width(Length::Fill)
             .height(size::BAR)
-            .center_y(size::BAR)
-    };
-    let bar = stack![layer(sides.into()), layer(middle)]
-        .width(Length::Fill)
-        .height(size::BAR);
+            .into()
+    });
 
+    if let Some(bar) = bar {
+        return stack![shape, bar]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
+    }
     let mut layers: Vec<Element<'a, Message>> = Vec::new();
     let panel_shape = panel_drop.map(|(d, k, _)| {
         canvas(BarShape {
@@ -171,7 +205,6 @@ pub fn view<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     if let Some(ps) = panel_shape {
         layers.push(ps.into());
     }
-    layers.push(bar.into());
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);

@@ -126,3 +126,7 @@ Nothing is installed that fails it.
   patches), tiny-skia CPU renderer.
 - 2026-11-12: one process with per-module crash guards (not one process per applet).
 - 2026-11-12: customisation = config + Lua layer (not WASM plugins, not QML).
+- 2026-11-13: the bar surface is only the bar's strip (+ room for the frame's corners); panels,
+  toasts and pop-ups draw on a separate full-output overlay surface (Noctalia: every panel its
+  own surface). Both are created once and never resized. The bar's motion (visualiser,
+  workspaces) repaints a strip, and the idle overlay repaints nothing. See docs/RESEARCH.md.
