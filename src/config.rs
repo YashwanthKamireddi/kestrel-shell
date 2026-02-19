@@ -127,14 +127,29 @@ pub fn path() -> PathBuf {
 }
 
 pub fn load() -> Config {
+    read().unwrap_or_else(|e| {
+        log::warn!("{e}");
+        Config::default()
+    })
+}
+
+/// The config, or what is wrong with it: "config.toml, line 12: unknown variant `pils`,
+/// expected `full` or `pills`". A missing file is the defaults, not an error.
+pub fn read() -> Result<Config, String> {
     let p = path();
-    match std::fs::read_to_string(&p) {
-        Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
-            log::warn!("{}: {e}", p.display());
-            Config::default()
-        }),
-        Err(_) => Config::default(),
-    }
+    let Ok(s) = std::fs::read_to_string(&p) else {
+        return Ok(Config::default());
+    };
+    toml::from_str(&s).map_err(|e| {
+        let line = e
+            .span()
+            .map(|r| s[..r.start.min(s.len())].lines().count().max(1));
+        let what = e.message().trim().to_string();
+        match line {
+            Some(l) => format!("config.toml, line {l}: {what}"),
+            None => format!("config.toml: {what}"),
+        }
+    })
 }
 
 /// Saves the wallpaper choice, keeping the rest of the file (and its comments) as it is.
