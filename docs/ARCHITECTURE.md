@@ -121,6 +121,10 @@ its own globals and its settings as `config` (defaults overridden by `[plugins.<
 config.toml; `enabled = false` turns one off). They load after init.lua; a failing plugin is
 reported by name and the rest still load; editing a plugin or its settings reloads them.
 
+App theming goes further with templates: every `~/.config/kestrel/templates/*.toml`
+(`input`, `output`, optional `hook`) is filled in (`{{accent}}`, `{{ink.rgb}}`, `{{wallpaper}}`, …)
+when the colours change, and its hook runs when the output changed.
+
 Both files are watched (the directory, since editors replace files) and apply on save:
 config changes rebuild only what they touch (surfaces when the frame changes, the wallpaper when
 its path changes). The script runs on its own thread with its own Lua state; every call has a

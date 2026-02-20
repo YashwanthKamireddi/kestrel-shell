@@ -354,6 +354,95 @@ pub fn apply(s: Scheme, wallpaper: Option<String>) {
     if gtk_changed {
         log::info!("theme: GTK colours updated (open apps pick them up when restarted)");
     }
+    templates(&s, wallpaper.as_deref());
+}
+
+/// The colour placeholders a template may use, as `{{name}}` (hex `#rrggbb`), plus
+/// `{{name.rgb}}` (`r, g, b`) and `{{wallpaper}}`.
+fn placeholders(s: &Scheme, wallpaper: Option<&str>) -> Vec<(String, String)> {
+    let mut v = Vec::new();
+    for (name, c) in [
+        ("base", s.base),
+        ("surface", s.raised),
+        ("surface_high", s.raised_hi),
+        ("line", s.line),
+        ("ink", s.ink),
+        ("ink_dim", s.ink_dim),
+        ("ink_faint", s.ink_faint),
+        ("accent", s.accent),
+        ("on_accent", s.on_accent),
+        ("accent_soft", s.accent_soft),
+        ("good", s.good),
+        ("warn", s.warn),
+        ("bad", s.bad),
+        ("info", s.info),
+    ] {
+        v.push((format!("{{{{{name}}}}}"), hex(c)));
+        let [r, g, b] = [c.r, c.g, c.b].map(|x| (x.clamp(0.0, 1.0) * 255.0).round() as u8);
+        v.push((format!("{{{{{name}.rgb}}}}"), format!("{r}, {g}, {b}")));
+    }
+    v.push(("{{wallpaper}}".into(), wallpaper.unwrap_or("").to_string()));
+    v
+}
+
+/// Your own apps, themed like the shell: every `~/.config/kestrel/templates/*.toml`
+///
+/// ```toml
+/// input = "foot.ini"                       # beside this file, or a full path
+/// output = "~/.config/foot/kestrel.ini"    # where the filled-in copy goes
+/// hook = "pkill -USR1 foot"                # optional: run after it changed
+/// ```
+///
+/// is filled in (`{{accent}}`, `{{ink.rgb}}`, …) whenever the colours change, and its hook
+/// runs when the output really changed.
+fn templates(s: &Scheme, wallpaper: Option<&str>) {
+    let dir = config().join("kestrel/templates");
+    let Ok(rd) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let values = placeholders(s, wallpaper);
+    let expand = |p: &str| match p.strip_prefix("~/") {
+        Some(rest) => home().join(rest),
+        None if p.starts_with('/') => PathBuf::from(p),
+        None => dir.join(p),
+    };
+    for e in rd.flatten() {
+        let path = e.path();
+        if path.extension().is_none_or(|x| x != "toml") {
+            continue;
+        }
+        let Some(spec) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| t.parse::<toml::Table>().ok())
+        else {
+            log::warn!("theme template {}: not valid TOML", path.display());
+            continue;
+        };
+        let field = |k: &str| spec.get(k).and_then(|v| v.as_str()).map(str::to_string);
+        let (Some(input), Some(output)) = (field("input"), field("output")) else {
+            log::warn!("theme template {}: needs input and output", path.display());
+            continue;
+        };
+        let Ok(mut body) = std::fs::read_to_string(expand(&input)) else {
+            log::warn!("theme template {}: cannot read {input}", path.display());
+            continue;
+        };
+        for (k, v) in &values {
+            body = body.replace(k, v);
+        }
+        if write(&expand(&output), &body)
+            && let Some(hook) = field("hook")
+        {
+            // Waited for on a thread of its own: never a zombie, never blocking theming.
+            std::thread::spawn(move || {
+                let _ = std::process::Command::new("sh")
+                    .args(["-c", &hook])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status();
+            });
+        }
+    }
 }
 
 /// Tells running Qt/KDE apps that kdeglobals changed (KGlobalSettings::notifyChange).
