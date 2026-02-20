@@ -538,6 +538,41 @@ struct Plugin {
     settings: toml::Table,
 }
 
+/// An installed plugin as Settings shows it: (id, name, description, on).
+pub fn installed() -> Vec<(String, String, String, bool)> {
+    let overrides: toml::Table = std::fs::read_to_string(crate::config::path())
+        .ok()
+        .and_then(|s| s.parse::<toml::Table>().ok())
+        .and_then(|t| t.get("plugins").and_then(|p| p.as_table()).cloned())
+        .unwrap_or_default();
+    let mut out: Vec<_> = std::fs::read_dir(plugins_dir())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let id = e.file_name().to_string_lossy().into_owned();
+            let m: toml::Table = std::fs::read_to_string(e.path().join("plugin.toml"))
+                .ok()?
+                .parse()
+                .ok()?;
+            let s = |k: &str| m.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let on = overrides
+                .get(&id)
+                .and_then(|u| u.get("enabled"))
+                .and_then(toml::Value::as_bool)
+                != Some(false);
+            let name = if s("name").is_empty() {
+                id.clone()
+            } else {
+                s("name")
+            };
+            Some((id, name, s("description"), on))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 pub fn plugins_dir() -> PathBuf {
     crate::config::path().with_file_name("plugins")
 }
