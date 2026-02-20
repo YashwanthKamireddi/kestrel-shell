@@ -348,7 +348,7 @@ impl Session {
         k.set(
             "widget",
             lua.create_function(move |_, (name, t): (String, Table)| {
-                if crate::modules::KNOWN.contains(&name.as_str()) {
+                if crate::modules::known(&name) {
                     return Err(mlua::Error::runtime(format!(
                         "widget {name:?}: that name belongs to a built-in module"
                     )));

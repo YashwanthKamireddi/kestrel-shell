@@ -14,23 +14,54 @@ use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, container, image, pin, row, stack};
 use iced::{Alignment, Color, Element};
 
-/// Every module the bar knows, in their default order.
-pub const KNOWN: &[&str] = &[
-    "workspaces",
-    "app",
-    "island",
-    "clock",
-    "media",
-    "tray",
-    "weather",
-    "airpods",
-    "system",
-    "updates",
-    "privacy",
-    "status",
-    "notifications",
-    "power",
+/// Where a module lives in the bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Home {
+    Left,
+    /// The middle, in the order of `MODULES` (so switching one never shuffles the others).
+    Center,
+    Right,
+}
+
+/// What the shell knows about a module: its id (as in config.toml), where it goes, and the
+/// label of its switch in Settings (None: part of the bar's structure, always there).
+pub struct Info {
+    pub id: &'static str,
+    pub home: Home,
+    pub setting: Option<&'static str>,
+}
+
+/// Every built-in module, the one list the bar, Settings and the Lua layer read.
+#[rustfmt::skip]
+pub const MODULES: &[Info] = &[
+    Info { id: "workspaces", home: Home::Left, setting: None },
+    Info { id: "app", home: Home::Left, setting: Some("Focused app name") },
+    Info { id: "media", home: Home::Center, setting: Some("Music as its own bubble") },
+    Info { id: "island", home: Home::Center, setting: None },
+    Info { id: "clock", home: Home::Center, setting: None },
+    Info { id: "weather", home: Home::Center, setting: Some("Weather as its own circle") },
+    Info { id: "airpods", home: Home::Center, setting: Some("AirPods battery circle") },
+    Info { id: "tray", home: Home::Right, setting: Some("Tray icons") },
+    Info { id: "system", home: Home::Right, setting: Some("CPU and memory") },
+    Info { id: "updates", home: Home::Right, setting: Some("Pending updates") },
+    Info { id: "privacy", home: Home::Right, setting: Some("Microphone in use") },
+    Info { id: "status", home: Home::Right, setting: Some("Network, sound and battery") },
+    Info { id: "notifications", home: Home::Right, setting: None },
+    Info { id: "power", home: Home::Right, setting: Some("Power") },
 ];
+
+/// Whether `id` is a built-in module.
+pub fn known(id: &str) -> bool {
+    MODULES.iter().any(|m| m.id == id)
+}
+
+/// Where `id` sorts among its section's built-in modules.
+pub fn rank(id: &str) -> usize {
+    MODULES
+        .iter()
+        .position(|m| m.id == id)
+        .unwrap_or(MODULES.len())
+}
 
 /// Which optional services the configured layout needs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
