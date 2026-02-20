@@ -266,6 +266,15 @@ pub fn subscription(app: &App) -> Subscription<Message> {
 }
 
 pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
+    // A panel that panics shows nothing (and stays off); the shell carries on.
+    crate::guard::run(
+        &format!("panel {kind:?}"),
+        || view_unguarded(app, kind, s),
+        || iced::widget::Space::new().into(),
+    )
+}
+
+fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     match kind {
         PanelKind::Calendar => calendar::view(app, s),
         PanelKind::Power => power::view(app, s),

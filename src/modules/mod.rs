@@ -68,6 +68,21 @@ pub fn items<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
+    // A module that panics is switched off; the rest of the bar keeps drawing.
+    crate::guard::run(
+        &format!("module {id}"),
+        || items_unguarded(id, app, o, s, open),
+        Vec::new,
+    )
+}
+
+fn items_unguarded<'a>(
+    id: &str,
+    app: &'a App,
+    o: &'a Output,
+    s: Scheme,
+    open: Option<PanelKind>,
+) -> Vec<Element<'a, Message>> {
     match id {
         "workspaces" => vec![workspaces(app, o, s)],
         // Nothing focused: no pill at all, not an empty one.

@@ -3,6 +3,7 @@
 mod app;
 mod apptheme;
 mod config;
+mod guard;
 mod ipc;
 mod lua;
 mod modules;

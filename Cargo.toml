@@ -45,4 +45,5 @@ softbuffer = { git = "https://github.com/MalpenZibo/softbuffer", branch = "wayla
 lto = "thin"
 strip = true
 opt-level = 3
-panic = "abort"
+# Unwind, so a bug in one module is caught (guard::run) instead of ending the shell.
+panic = "unwind"
