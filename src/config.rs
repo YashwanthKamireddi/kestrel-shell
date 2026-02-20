@@ -176,6 +176,15 @@ pub fn read() -> Result<Config, String> {
     })
 }
 
+/// The `[plugins]` part of config.toml, as text (to notice when it changes).
+pub fn plugin_settings() -> String {
+    std::fs::read_to_string(path())
+        .ok()
+        .and_then(|s| s.parse::<toml::Table>().ok())
+        .and_then(|t| t.get("plugins").map(ToString::to_string))
+        .unwrap_or_default()
+}
+
 /// Saves the wallpaper choice, keeping the rest of the file (and its comments) as it is.
 pub fn set_wallpaper(path: &str) {
     set(&[], "wallpaper", toml_edit::value(path));

@@ -115,6 +115,12 @@ modules share a pill, and `[modules.<id>]` adds mouse actions to a module (`righ
 buttons the module does not use. A mistake in the file keeps the running settings and is
 reported once with its line.
 
+Plugins are folders in `~/.config/kestrel/plugins/<id>/`: a `plugin.toml` (name, description,
+`main` script, default `[settings]`) and its Lua script, which gets the same `kestrel` API with
+its own globals and its settings as `config` (defaults overridden by `[plugins.<id>]` in
+config.toml; `enabled = false` turns one off). They load after init.lua; a failing plugin is
+reported by name and the rest still load; editing a plugin or its settings reloads them.
+
 Both files are watched (the directory, since editors replace files) and apply on save:
 config changes rebuild only what they touch (surfaces when the frame changes, the wallpaper when
 its path changes). The script runs on its own thread with its own Lua state; every call has a

@@ -1,4 +1,5 @@
-//! The Lua user layer: `~/.config/kestrel/init.lua`.
+//! The Lua user layer: `~/.config/kestrel/init.lua` and plugins in
+//! `~/.config/kestrel/plugins/<id>/` (see `Plugin`).
 //!
 //! The script runs on its own thread with its own Lua state, so a slow or broken script can
 //! never stall or crash the shell: every call has a time limit, errors come back as events
@@ -251,27 +252,25 @@ impl Session {
             handlers: Rc::new(RefCell::new(Vec::new())),
         };
         let file = path();
-        let Ok(source) = std::fs::read_to_string(&file) else {
-            // No script: nothing to do, and no layout of its own.
-            emit(Event::Loaded {
-                bar: Bar::default(),
-                widgets: Vec::new(),
-            });
-            return session;
-        };
         if let Err(e) = session.install_api(emit, bar.clone(), defined.clone()) {
             emit(Event::Error(format!("init.lua: {e}")));
             return session;
         }
-        session.deadline.set(Instant::now() + CALL_LIMIT);
-        let loaded = session.lua.load(source).set_name("@init.lua").exec();
-        if let Err(e) = loaded {
-            emit(Event::Error(short(&e)));
-            emit(Event::Loaded {
-                bar: Bar::default(),
-                widgets: Vec::new(),
-            });
-            return session;
+        // init.lua first (it may set the layout), then every plugin. A failing script is
+        // reported by name and the others still load.
+        if let Ok(source) = std::fs::read_to_string(&file) {
+            session.deadline.set(Instant::now() + CALL_LIMIT);
+            let loaded = session.lua.load(source).set_name("@init.lua").exec();
+            if let Err(e) = loaded {
+                emit(Event::Error(short(&e)));
+                *bar.borrow_mut() = Bar::default();
+            }
+        }
+        for plugin in plugins() {
+            session.deadline.set(Instant::now() + CALL_LIMIT);
+            if let Err(e) = session.load_plugin(&plugin) {
+                emit(Event::Error(format!("plugin {}: {}", plugin.id, short(&e))));
+            }
         }
         session.widgets = defined.take();
         emit(Event::Loaded {
@@ -284,6 +283,28 @@ impl Session {
             session.widgets.len()
         );
         session
+    }
+
+    /// Runs a plugin's script with its own globals (so plugins never collide) and its
+    /// settings as `kestrel.config`... available as the global `config` in its environment.
+    fn load_plugin(&self, p: &Plugin) -> mlua::Result<()> {
+        let lua = &self.lua;
+        let env = lua.create_table()?;
+        let meta = lua.create_table()?;
+        meta.set("__index", lua.globals())?;
+        env.set_metatable(Some(meta))?;
+        let config = lua.create_table()?;
+        for (k, v) in &p.settings {
+            config.set(k.as_str(), toml_to_lua(lua, v)?)?;
+        }
+        env.set("config", config)?;
+        env.set("plugin_dir", p.dir.to_string_lossy().into_owned())?;
+        let source = std::fs::read_to_string(p.dir.join(&p.main))
+            .map_err(|e| mlua::Error::runtime(format!("{}: {e}", p.main)))?;
+        lua.load(source)
+            .set_name(format!("@{}/{}", p.id, p.main))
+            .set_environment(env)
+            .exec()
     }
 
     fn install_api(
@@ -499,6 +520,105 @@ impl Session {
 }
 
 /// An update's return value as a chip: a table, a plain string, or nil.
+/// A plugin: `~/.config/kestrel/plugins/<id>/plugin.toml` and its script.
+///
+/// ```toml
+/// name = "Disk"
+/// description = "Free space on /"
+/// main = "main.lua"      # default
+/// [settings]             # defaults; `[plugins.<id>]` in config.toml overrides them
+/// path = "/"
+/// ```
+/// `[plugins.<id>] enabled = false` in config.toml turns a plugin off.
+#[derive(Debug)]
+struct Plugin {
+    id: String,
+    dir: PathBuf,
+    main: String,
+    settings: toml::Table,
+}
+
+pub fn plugins_dir() -> PathBuf {
+    crate::config::path().with_file_name("plugins")
+}
+
+/// The installed plugins that are on, in name order, with their settings resolved.
+fn plugins() -> Vec<Plugin> {
+    let overrides: toml::Table = std::fs::read_to_string(crate::config::path())
+        .ok()
+        .and_then(|s| s.parse::<toml::Table>().ok())
+        .and_then(|t| t.get("plugins").and_then(|p| p.as_table()).cloned())
+        .unwrap_or_default();
+    let Ok(rd) = std::fs::read_dir(plugins_dir()) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Plugin> = rd
+        .flatten()
+        .filter_map(|e| {
+            let dir = e.path();
+            let id = e.file_name().to_string_lossy().into_owned();
+            let manifest: toml::Table = std::fs::read_to_string(dir.join("plugin.toml"))
+                .ok()?
+                .parse()
+                .ok()?;
+            let user = overrides.get(&id).and_then(|v| v.as_table());
+            if user
+                .and_then(|u| u.get("enabled"))
+                .and_then(toml::Value::as_bool)
+                == Some(false)
+            {
+                return None;
+            }
+            let mut settings = manifest
+                .get("settings")
+                .and_then(|s| s.as_table())
+                .cloned()
+                .unwrap_or_default();
+            for (k, v) in user.into_iter().flatten() {
+                if k != "enabled" {
+                    settings.insert(k.clone(), v.clone());
+                }
+            }
+            Some(Plugin {
+                main: manifest
+                    .get("main")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("main.lua")
+                    .to_string(),
+                id,
+                dir,
+                settings,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out
+}
+
+fn toml_to_lua(lua: &Lua, v: &toml::Value) -> mlua::Result<Value> {
+    Ok(match v {
+        toml::Value::String(s) => Value::String(lua.create_string(s)?),
+        toml::Value::Integer(i) => Value::Integer(*i),
+        toml::Value::Float(f) => Value::Number(*f),
+        toml::Value::Boolean(b) => Value::Boolean(*b),
+        toml::Value::Datetime(d) => Value::String(lua.create_string(d.to_string())?),
+        toml::Value::Array(a) => {
+            let t = lua.create_table()?;
+            for (i, x) in a.iter().enumerate() {
+                t.set(i + 1, toml_to_lua(lua, x)?)?;
+            }
+            Value::Table(t)
+        }
+        toml::Value::Table(m) => {
+            let t = lua.create_table()?;
+            for (k, x) in m {
+                t.set(k.as_str(), toml_to_lua(lua, x)?)?;
+            }
+            Value::Table(t)
+        }
+    })
+}
+
 fn chip(v: Value) -> mlua::Result<Option<Chip>> {
     Ok(match v {
         Value::Nil => None,

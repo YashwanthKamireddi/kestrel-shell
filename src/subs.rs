@@ -113,6 +113,18 @@ fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
             log::warn!("config: watching {}: {e}", dir.display());
             return;
         }
+        // Plugins: their folder and each plugin's own (a new plugin is watched when it appears).
+        let plugins = crate::lua::plugins_dir();
+        let mut watches = ino.watches();
+        let watch_plugins = |w: &mut inotify::Watches| {
+            let _ = w.add(&plugins, mask);
+            if let Ok(rd) = std::fs::read_dir(&plugins) {
+                for e in rd.flatten().filter(|e| e.path().is_dir()) {
+                    let _ = w.add(e.path(), mask);
+                }
+            }
+        };
+        watch_plugins(&mut watches);
         let Ok(mut events) = ino.into_event_stream([0u8; 4096]) else {
             return;
         };
@@ -120,6 +132,16 @@ fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
             let file = match e.name.as_deref().and_then(|n| n.to_str()) {
                 Some("config.toml") => ConfigFile::Toml,
                 Some("init.lua") => ConfigFile::Lua,
+                Some("plugins") => {
+                    watch_plugins(&mut watches);
+                    ConfigFile::Lua
+                }
+                Some(n) if n.ends_with(".lua") || n == "plugin.toml" => ConfigFile::Lua,
+                // A plugin folder added or removed.
+                Some(_) if e.mask.contains(inotify::EventMask::ISDIR) => {
+                    watch_plugins(&mut watches);
+                    ConfigFile::Lua
+                }
                 _ => continue,
             };
             // An editor's save is several events; let it finish, then report once.
