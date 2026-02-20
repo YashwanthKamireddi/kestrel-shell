@@ -136,3 +136,6 @@ Nothing is installed that fails it.
   toasts and pop-ups draw on a separate full-output overlay surface (Noctalia: every panel its
   own surface). Both are created once and never resized. The bar's motion (visualiser,
   workspaces) repaints a strip, and the idle overlay repaints nothing. See docs/RESEARCH.md.
+- 2026-11-13: the shell asks the compositor for things as typed actions
+  (`services::compositor::Action`: focus workspace / window, cycle, exec); the Hyprland backend
+  turns them into its Lua dispatchers. Another compositor is one new backend there.

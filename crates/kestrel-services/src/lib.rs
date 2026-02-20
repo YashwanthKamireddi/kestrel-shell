@@ -11,6 +11,7 @@ pub mod bluetooth;
 pub mod browser_host;
 pub mod clipboard;
 pub mod clock;
+pub mod compositor;
 pub mod dbus;
 pub mod filechooser;
 pub mod hyprland;

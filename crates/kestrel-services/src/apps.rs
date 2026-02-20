@@ -179,12 +179,6 @@ pub fn command_line(app: &App) -> String {
     }
 }
 
-/// Launch through Hyprland so the app is a child of the compositor, not of kestrel.
-pub fn launch_lua(cmd: &str) -> String {
-    let escaped = cmd.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("hl.dsp.exec_cmd(\"{escaped}\")")
-}
-
 /// Fuzzy score of `query` against `text` (higher is better); None if not all characters match
 /// in order.
 pub fn score(query: &str, text: &str) -> Option<i32> {

@@ -327,7 +327,7 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
 fn action(cmd: &str) -> Message {
     match cmd.strip_prefix("kestrel:") {
         Some(c) => Message::Ipc(c.trim().to_string()),
-        None => Message::Dispatch(crate::services::apps::launch_lua(cmd)),
+        None => Message::Dispatch(crate::services::compositor::Action::Exec(String::from(cmd))),
     }
 }
 

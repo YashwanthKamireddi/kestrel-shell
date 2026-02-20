@@ -3,7 +3,6 @@
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
-use crate::services::apps;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, mouse_area, row, text_input};
@@ -123,7 +122,9 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             return Task::batch([
                 Task::Iced(iced::clipboard::write(e)),
                 Task::done(AppMessage::Close),
-                Task::done(AppMessage::Dispatch(apps::launch_lua(&typed))),
+                Task::done(AppMessage::Dispatch(
+                    crate::services::compositor::Action::Exec(String::from(&typed)),
+                )),
             ]);
         }
     }

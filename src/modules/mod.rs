@@ -7,7 +7,7 @@ pub mod island;
 use crate::app::{App, Message, Output};
 use crate::config::BarConfig;
 use crate::panels::{Message as PanelMessage, PanelKind, control, media};
-use crate::services::{hyprland, icons, tray as tray_service};
+use crate::services::{icons, tray as tray_service};
 use crate::shell::bar::{SLOT, SLOT_GAP};
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, icon, label, label_w};
@@ -380,9 +380,9 @@ fn system<'a>(
                 .height(size::CONTROL)
                 .radius(size::CONTROL / 2.0)
                 .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
-                .on_press(Message::Dispatch(crate::services::apps::launch_lua(
-                    "kitty -e btop",
-                )))
+                .on_press(Message::Dispatch(
+                    crate::services::compositor::Action::Exec(String::from("kitty -e btop")),
+                ))
                 .into(),
         );
     }
@@ -428,9 +428,9 @@ fn updates<'a>(
             .height(size::CONTROL)
             .radius(size::CONTROL / 2.0)
             .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
-            .on_press(Message::Dispatch(crate::services::apps::launch_lua(
+            .on_press(Message::Dispatch(crate::services::compositor::Action::Exec(String::from(
                 "kitty --title Updates sh -c 'yay -Syu; echo; read -p \"Done. Press Enter to close.\" _'",
-            )))
+            ))))
             .into(),
         );
     }
@@ -629,9 +629,13 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         ui::control(container(content).center(SLOT))
             .radius(SLOT / 2.0)
             .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
-            .on_press(Message::Dispatch(hyprland::focus_workspace(id)))
+            .on_press(Message::Dispatch(
+                crate::services::compositor::Action::FocusWorkspace(id),
+            ))
             .on_scroll(|lines| {
-                Message::Dispatch(hyprland::cycle_workspace(if lines > 0.0 { -1 } else { 1 }))
+                Message::Dispatch(crate::services::compositor::Action::CycleWorkspace(
+                    if lines > 0.0 { -1 } else { 1 },
+                ))
             })
             .into()
     }))

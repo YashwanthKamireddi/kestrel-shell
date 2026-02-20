@@ -173,7 +173,9 @@ fn order(app: &App) -> Vec<(usize, &hyprland::Window)> {
 
 fn focus(address: &str) -> Task<AppMessage> {
     Task::batch([
-        Task::done(AppMessage::Dispatch(hyprland::focus_window(address))),
+        Task::done(AppMessage::Dispatch(
+            crate::services::compositor::Action::FocusWindow(String::from(address)),
+        )),
         Task::done(AppMessage::Close),
     ])
 }
@@ -374,7 +376,7 @@ fn card<'a>(
             .radius(10.0)
             .no_press_scale()
             .on_press(AppMessage::Batch(vec![
-                AppMessage::Dispatch(hyprland::focus_workspace(id)),
+                AppMessage::Dispatch(crate::services::compositor::Action::FocusWorkspace(id)),
                 AppMessage::Close,
             ]))
     ]
@@ -453,7 +455,9 @@ fn card<'a>(
 
 fn focus_msg(address: &str) -> AppMessage {
     AppMessage::Batch(vec![
-        AppMessage::Dispatch(hyprland::focus_window(address)),
+        AppMessage::Dispatch(crate::services::compositor::Action::FocusWindow(
+            String::from(address),
+        )),
         AppMessage::Close,
     ])
 }
