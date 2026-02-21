@@ -168,6 +168,16 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     });
 
     if let Some(bar) = bar {
+        // While a panel or menu is open, a click on the bar anywhere but a button closes it
+        // (the overlay's catcher covers the rest of the screen).
+        let shape: Element<'a, Message> = if panel.is_some_and(|p| p.open) {
+            mouse_area(shape)
+                .on_press(Message::Close)
+                .on_right_press(Message::Close)
+                .into()
+        } else {
+            shape.into()
+        };
         return stack![shape, bar]
             .width(Length::Fill)
             .height(Length::Fill)
