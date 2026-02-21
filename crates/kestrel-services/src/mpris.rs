@@ -129,20 +129,36 @@ fn join_browser_players(players: &mut Vec<Player>) {
     // kestrel's own browser player (the "kestrel media" extension) reads the page itself and
     // is exact: with it there, the browser's generic player and the integration's go.
     // Only one that knows what is playing counts (a freshly started helper has nothing yet).
+    // It is stale when the browser says something plays and it says nothing does: the
+    // playing tab is one it does not follow (an old Apple Music tab paused, YouTube playing in
+    // another). Then the browser's own player is the truth.
+    let stale = |helper: &Player, all: &[Player]| {
+        !helper.playing
+            && all
+                .iter()
+                .any(|p| !p.bus.contains(".kestrel_browser.") && p.pid == helper.pid && p.playing)
+    };
+    let snapshot = players.clone();
+    let trusted = |p: &Player| {
+        p.bus.contains(".kestrel_browser.") && !p.title.trim().is_empty() && !stale(p, &snapshot)
+    };
     let own: Vec<u32> = players
         .iter()
-        .filter(|p| p.bus.contains(".kestrel_browser.") && !p.title.trim().is_empty())
+        .filter(|p| trusted(p))
         .filter_map(|p| p.pid)
         .collect();
     if !own.is_empty() {
         players.retain(|p| {
-            (p.bus.contains(".kestrel_browser.") && !p.title.trim().is_empty())
+            trusted(p)
                 || !(p.pid.is_some_and(|pid| own.contains(&pid))
+                    || p.bus.contains(".kestrel_browser.")
                     || p.bus.contains("browser-integration")
                     || p.bus.contains("browser_integration"))
         });
         return;
     }
+    // No helper to trust: its stale entries go, the browser's own players stay.
+    players.retain(|p| !p.bus.contains(".kestrel_browser.") || trusted(p));
     let integration: Vec<Player> = players
         .iter()
         .filter(|p| p.bus.contains("browser_integration") || p.bus.contains("browser-integration"))
@@ -342,6 +358,29 @@ pub fn stream() -> impl Stream<Item = State> {
 #[cfg(test)]
 mod join_tests {
     use super::*;
+
+    #[test]
+    fn a_stale_helper_loses_to_the_browser_playing() {
+        let native = Player {
+            bus: "org.mpris.MediaPlayer2.chromium.instance1".into(),
+            title: "A YouTube video".into(),
+            playing: true,
+            pid: Some(1),
+            ..Player::default()
+        };
+        let helper = Player {
+            bus: "org.mpris.MediaPlayer2.kestrel_browser.instance1".into(),
+            title: "Monday".into(),
+            playing: false,
+            pid: Some(1),
+            ..Player::default()
+        };
+        let mut v = vec![native, helper];
+        join_browser_players(&mut v);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].title, "A YouTube video");
+        assert!(v[0].playing);
+    }
 
     #[test]
     fn a_tab_reported_twice_becomes_one_player() {
