@@ -52,13 +52,32 @@ fn main() {
             p.button(t(), btn, ButtonState::Released);
             p.frame();
         }
+        "drag" => {
+            // Press at X1 Y1, move to X2 Y2 in steps, release.
+            let (x1, y1, x2, y2) = (num(1) as f64, num(2) as f64, num(3) as f64, num(4) as f64);
+            mv(x1 as u32, y1 as u32);
+            conn.flush().ok();
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            p.button(t(), 0x110, ButtonState::Pressed);
+            p.frame();
+            for i in 1..=12 {
+                let k = f64::from(i) / 12.0;
+                conn.flush().ok();
+                std::thread::sleep(std::time::Duration::from_millis(30));
+                mv((x1 + (x2 - x1) * k) as u32, (y1 + (y2 - y1) * k) as u32);
+            }
+            conn.flush().ok();
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            p.button(t(), 0x110, ButtonState::Released);
+            p.frame();
+        }
         "scroll" => {
             mv(num(1), num(2));
             let lines: f64 = a[3].parse().unwrap();
             p.axis(t(), Axis::VerticalScroll, lines * 15.0);
             p.frame();
         }
-        _ => eprintln!("rig-pointer move X Y | click X Y [right] | scroll X Y LINES"),
+        _ => eprintln!("rig-pointer move X Y | click X Y [right] | drag X1 Y1 X2 Y2 | scroll X Y LINES"),
     }
     q.roundtrip(&mut S).ok();
     std::thread::sleep(std::time::Duration::from_millis(50));

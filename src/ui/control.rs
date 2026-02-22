@@ -11,7 +11,8 @@ use iced::event::Event;
 use iced::{Border, Color, Element, Length, Padding, Rectangle, Size, Transformation, window};
 use std::time::Instant;
 
-const HOVER_SECS: f32 = 0.11;
+/// How long a hover highlight takes to leave.
+const HOVER_SECS: f32 = 0.07;
 const PRESSED_SCALE: f32 = 0.96;
 
 pub struct Control<'a, M> {
@@ -290,6 +291,9 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
 
         if state.hovered != over {
             state.hovered = over;
+            if over {
+                state.hover_t = 1.0;
+            }
             if over && let Some(m) = &self.on_enter {
                 shell.publish(m.clone());
             }
@@ -305,16 +309,12 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             });
             state.last = Some(*now);
             let want = if state.hovered { 1.0 } else { 0.0 };
-            // Game mode: hover changes at once, no fade frames.
-            let step = if crate::motion::still() {
-                1.0
+            // The highlight is there the moment the pointer arrives (no fade-in: it read as
+            // lag) and leaves with a very short fade. Game mode: no fade at all.
+            state.hover_t = if state.hover_t < want || crate::motion::still() {
+                want
             } else {
-                dt / HOVER_SECS
-            };
-            state.hover_t = if state.hover_t < want {
-                (state.hover_t + step).min(want)
-            } else {
-                (state.hover_t - step).max(want)
+                (state.hover_t - dt / HOVER_SECS).max(want)
             };
             state.scale.step(dt);
             if state.animating() {

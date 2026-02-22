@@ -212,7 +212,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     } else {
                         Color::TRANSPARENT
                     },
-                    if selected { s.selected() } else { s.hover() },
+                    if selected {
+                        s.selected()
+                    } else {
+                        Color::TRANSPARENT
+                    },
                     s.raised_press,
                 )
                 .on_enter(msg(Message::Hover(i)))

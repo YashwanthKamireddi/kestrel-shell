@@ -11,7 +11,6 @@ use std::time::Duration;
 
 const PSM: u16 = 0x1001;
 const HANDSHAKE: &[u8] = &[0, 0, 4, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-const FEATURES: &[u8] = &[4, 0, 4, 0, 0x4d, 0, 0xd7, 0, 0, 0, 0, 0, 0, 0];
 const NOTIFY: &[u8] = &[4, 0, 4, 0, 0x0f, 0, 0xff, 0xff, 0xff, 0xff, 0xff];
 const HANDSHAKE_ACK: &[u8] = &[1, 0, 4, 0];
 const BATTERY: &[u8] = &[4, 0, 4, 0, 4, 0];
@@ -152,7 +151,9 @@ fn session(fd: i32, out: &futures::channel::mpsc::UnboundedSender<Option<Pods>>)
         let d = &buf[..n as usize];
         let before = pods.clone();
         if d.starts_with(HANDSHAKE_ACK) {
-            if !(send(fd, FEATURES) && send(fd, NOTIFY)) {
+            // Only notifications (battery, ear detection). No "set features" request: that
+            // switches on extras the AirPods then keep running, which costs their battery.
+            if !send(fd, NOTIFY) {
                 return;
             }
         } else if d.starts_with(BATTERY) && d.len() >= 7 {
