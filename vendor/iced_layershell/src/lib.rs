@@ -121,7 +121,9 @@ pub mod overlay {
 
 pub mod widget {
     pub use crate::blur::{BlurContainer, blur, blur_container};
-    pub use iced_runtime::widget::operation::{focus, focus_next, focus_previous, is_focused};
+    pub use iced_runtime::widget::operation::{
+        focus, focus_next, focus_previous, is_focused, move_cursor_to_end,
+    };
     pub use iced_widget::*;
 }
 

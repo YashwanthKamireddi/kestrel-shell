@@ -144,6 +144,7 @@ pub enum Key {
     Home,
     End,
     Delete,
+    Backspace,
     Enter,
     Space,
 }
@@ -255,6 +256,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::Home => Key::Home,
                 N::End => Key::End,
                 N::Delete => Key::Delete,
+                N::Backspace => Key::Backspace,
                 N::Enter => Key::Enter,
                 N::Space => Key::Space,
                 _ => return None,
