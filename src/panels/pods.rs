@@ -18,7 +18,7 @@ pub fn device(app: &App) -> Option<&bluetooth::Device> {
         .find(|d| crate::services::airpods::is_airpods(&d.modalias, &d.icon))
 }
 
-/// The colour for a charge: green charging, red low, amber getting low, else white.
+/// The colour for a charge: the theme's accent; green charging, amber then red when low.
 pub fn tint(s: Scheme, c: Charge) -> Color {
     if c.charging {
         s.good
@@ -27,7 +27,7 @@ pub fn tint(s: Scheme, c: Charge) -> Color {
     } else if c.level <= 30 {
         s.warn
     } else {
-        s.ink
+        s.accent
     }
 }
 
