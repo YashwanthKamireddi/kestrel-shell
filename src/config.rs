@@ -25,8 +25,46 @@ pub struct Config {
     pub night_light_temperature: u32,
     /// What the bar shows, where, and in which style.
     pub bar: BarConfig,
+    /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
+    pub clock: ClockConfig,
+    /// Temperatures in "celsius" or "fahrenheit".
+    pub weather_units: Units,
     /// Per-module extras: `[modules.clock] middle = "kitty -e khal interactive"`.
     pub modules: std::collections::BTreeMap<String, ModuleConfig>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+pub enum ClockFormat {
+    #[default]
+    #[serde(rename = "24h")]
+    H24,
+    #[serde(rename = "12h")]
+    H12,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct ClockConfig {
+    pub format: ClockFormat,
+    /// The date beside the time in the bar.
+    pub date: bool,
+}
+
+impl Default for ClockConfig {
+    fn default() -> Self {
+        Self {
+            format: ClockFormat::H24,
+            date: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Units {
+    #[default]
+    Celsius,
+    Fahrenheit,
 }
 
 /// Mouse actions added to a module: a command to run, or `kestrel:<command>` for kestrel's own
@@ -62,6 +100,8 @@ pub struct BarConfig {
     /// Pill style: modules that share one pill when they sit next to each other, e.g.
     /// `groups = [["privacy", "status", "power"]]`. Everything else stands alone.
     pub groups: Vec<Vec<String>>,
+    /// The music visualiser in the time pill.
+    pub visualiser: bool,
 }
 
 impl Default for BarConfig {
@@ -80,6 +120,7 @@ impl Default for BarConfig {
                 "power",
             ]),
             groups: vec![v(&["tray", "privacy", "status", "notifications", "power"])],
+            visualiser: true,
         }
     }
 }
@@ -129,6 +170,8 @@ impl Default for Config {
             night_light_temperature: 4500,
             bar: BarConfig::default(),
             modules: std::collections::BTreeMap::new(),
+            clock: ClockConfig::default(),
+            weather_units: Units::Celsius,
         }
     }
 }

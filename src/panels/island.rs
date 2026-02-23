@@ -40,7 +40,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             row![
                 icon(ui::weather_icon(w), 28.0, s.fade(ui::weather_tint(w))),
                 label_w(
-                    format!("{:.0}°", w.temp),
+                    app.temp(w.temp),
                     theme::text::DISPLAY,
                     white,
                     theme::SEMIBOLD
@@ -50,7 +50,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .align_y(Alignment::Center),
             label(w.describe(), text::SMALL, soft),
             label(
-                format!("H {:.0}°  L {:.0}°", w.high, w.low),
+                format!("H {}  L {}", app.temp(w.high), app.temp(w.low)),
                 text::CAPTION,
                 soft
             ),
@@ -79,12 +79,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
 fn clock(app: &App, ink: Color, dim: Color) -> Element<'_, AppMessage> {
     column![
-        label_w(
-            app.now.format("%H:%M").to_string(),
-            theme::text::DISPLAY,
-            ink,
-            theme::SEMIBOLD
-        ),
+        label_w(app.time_text(), theme::text::DISPLAY, ink, theme::SEMIBOLD),
         label(app.now.format("%A, %-d %B").to_string(), text::BODY, dim),
     ]
     .spacing(2)

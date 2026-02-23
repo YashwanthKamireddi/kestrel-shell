@@ -44,7 +44,7 @@ const CELL_H: f32 = 34.0;
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = column![
         label_w(
-            app.now.format("%H:%M").to_string(),
+            app.time_text(),
             theme::text::DISPLAY,
             s.ink,
             theme::SEMIBOLD

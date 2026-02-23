@@ -351,7 +351,7 @@ fn weather<'a>(
                 iced::widget::column![
                     icon(crate::ui::weather_icon(w), 13.0, crate::ui::weather_tint(w)),
                     label_w(
-                        format!("{:.0}°", w.temp),
+                        app.temp(w.temp),
                         9.5,
                         crate::ui::temperature_tint(w.temp),
                         theme::SEMIBOLD
@@ -727,15 +727,15 @@ fn clock<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Calendar);
-    let time = app.now.format("%H:%M").to_string();
+    let time = app.time_text();
     let date = app.now.format("%a %-d %b").to_string();
     let id = o.id;
-    let mut r = row![
-        label_w(time, text::BODY, s.ink, theme::SEMIBOLD),
-        label(date, text::SMALL, s.ink),
-    ]
-    .spacing(8)
-    .align_y(Alignment::Center);
+    let mut r = row![label_w(time, text::BODY, s.ink, theme::SEMIBOLD)]
+        .spacing(8)
+        .align_y(Alignment::Center);
+    if app.config.clock.date {
+        r = r.push(label(date, text::SMALL, s.ink));
+    }
     if let Some(v) = island::visualiser(app, s) {
         r = r.push(v);
     }

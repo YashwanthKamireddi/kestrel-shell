@@ -29,18 +29,18 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .padding(28)
         .into();
     };
-    let mut col = column![now(w, s), details(w, s)].spacing(14);
+    let mut col = column![now(app, w, s), details(app, w, s)].spacing(14);
     if w.hours.len() > 1 {
-        col = col.push(hours(w, s));
+        col = col.push(hours(app, w, s));
     }
     if w.days.len() > 1 {
-        col = col.push(days(w, s));
+        col = col.push(days(app, w, s));
     }
     container(col).padding(12).into()
 }
 
 /// Now: place, temperature, condition and today's range, on the sky.
-fn now(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
+fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
     let soft = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC).scale_alpha(0.78));
     let left = column![
@@ -50,9 +50,9 @@ fn now(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
             white,
             theme::SEMIBOLD
         ),
-        label_w(format!("{:.0}°", w.temp), 48.0, white, theme::MEDIUM),
+        label_w(app.temp(w.temp), 48.0, white, theme::MEDIUM),
         label(
-            format!("H {:.0}°  L {:.0}°", w.high, w.low),
+            format!("H {}  L {}", app.temp(w.high), app.temp(w.low)),
             text::SMALL,
             soft
         ),
@@ -84,7 +84,7 @@ fn now(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 /// Feels like, humidity, wind, and the sun: four even columns.
-fn details(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
+fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cell = |i: Icon, tint: Color, value: String, name: &'static str| {
         column![
             icon(i, 18.0, s.fade(tint)),
@@ -101,7 +101,7 @@ fn details(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
         cell(
             Icon::Thermometer,
             ui::temperature_tint(w.feels),
-            format!("{:.0}°", w.feels),
+            app.temp(w.feels),
             "Feels like"
         ),
         cell(
@@ -113,7 +113,10 @@ fn details(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
         cell(
             Icon::Air,
             rgb(0xB8, 0xE0, 0xD2),
-            format!("{:.0} km/h", w.wind),
+            match app.config.weather_units {
+                crate::config::Units::Celsius => format!("{:.0} km/h", w.wind),
+                crate::config::Units::Fahrenheit => format!("{:.0} mph", w.wind * 0.621_371),
+            },
             "Wind"
         ),
         cell(sun_icon, rgb(0xFF, 0xB0, 0x6B), sun_time, sun_name),
@@ -141,7 +144,7 @@ fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
 }
 
 /// The next hours: time, condition, temperature.
-fn hours(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
+fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cells = w
         .hours
         .iter()
@@ -151,7 +154,12 @@ fn hours(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
             let when = if i == 0 {
                 "Now".to_string()
             } else {
-                format!("{h:02}")
+                match app.config.clock.format {
+                    crate::config::ClockFormat::H24 => format!("{h:02}"),
+                    crate::config::ClockFormat::H12 => {
+                        format!("{} {}", (h + 11) % 12 + 1, if h < 12 { "AM" } else { "PM" })
+                    }
+                }
             };
             column![
                 label(when, text::CAPTION, if i == 0 { s.ink } else { s.ink_dim }),
@@ -160,7 +168,7 @@ fn hours(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
                     18.0,
                     s.fade(ui::weather_tint_for(c, day))
                 ),
-                label_w(format!("{t:.0}°"), text::SMALL, s.ink, theme::MEDIUM),
+                label_w(app.temp(t), text::SMALL, s.ink, theme::MEDIUM),
             ]
             .spacing(6)
             .align_x(Alignment::Center)
@@ -173,7 +181,7 @@ fn hours(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 /// The coming days: name, condition, and the range as a bar on the week's scale.
-fn days(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
+fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let lo = w.days.iter().map(|d| d.3).fold(f32::INFINITY, f32::min);
     let hi = w.days.iter().map(|d| d.2).fold(f32::NEG_INFINITY, f32::max);
     let span = (hi - lo).max(1.0);
@@ -224,11 +232,11 @@ fn days(w: &Weather, s: Scheme) -> Element<'_, AppMessage> {
                         s.fade(ui::weather_tint_for(*code, true))
                     ))
                     .width(Length::Fill),
-                    label(format!("{min:.0}°"), text::BODY, s.ink_dim)
+                    label(app.temp(*min), text::BODY, s.ink_dim)
                         .width(34)
                         .align_x(Alignment::End),
                     track,
-                    label_w(format!("{max:.0}°"), text::BODY, s.ink, theme::MEDIUM).width(34),
+                    label_w(app.temp(*max), text::BODY, s.ink, theme::MEDIUM).width(34),
                 ]
                 .spacing(10)
                 .align_y(Alignment::Center),

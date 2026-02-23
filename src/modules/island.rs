@@ -32,7 +32,7 @@ pub fn items<'a>(
 /// with the music (never in game mode).
 pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
     let p = app.media.main()?;
-    if crate::motion::still() || !p.playing {
+    if crate::motion::still() || !p.playing || !app.config.bar.visualiser {
         return None;
     }
     // The artwork's colour, made bright enough to read on black; else the accent.
@@ -107,12 +107,7 @@ pub fn bar<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Island);
-    let time = label_w(
-        app.now.format("%H:%M").to_string(),
-        text::BODY,
-        s.ink,
-        theme::SEMIBOLD,
-    );
+    let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(10).align_y(Alignment::Center);
     // A pop-up (volume, brightness, a device) takes the island while it lasts.
@@ -198,7 +193,11 @@ pub fn bar<'a>(
             .align_y(Alignment::Center),
         );
     }
-    content = content.push(row![time, date].spacing(8).align_y(Alignment::Center));
+    content = content.push(if app.config.clock.date {
+        row![time, date].spacing(8).align_y(Alignment::Center)
+    } else {
+        row![time].align_y(Alignment::Center)
+    });
     // While music plays: the visualiser, inside the time pill.
     if let Some(v) = visualiser(app, s) {
         content = content.push(v);
@@ -210,7 +209,7 @@ pub fn bar<'a>(
             row![
                 icon(ui::weather_icon(w), 15.0, ui::weather_tint(w)),
                 label_w(
-                    format!("{:.0}°", w.temp),
+                    app.temp(w.temp),
                     text::SMALL,
                     ui::temperature_tint(w.temp),
                     theme::MEDIUM
