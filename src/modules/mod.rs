@@ -693,7 +693,8 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         .width(span)
         .height(SLOT)
         .style(move |_| container::Style {
-            background: Some(s.accent.scale_alpha(0.24 * s.opacity).into()),
+            // Neutral, like every selection (an accent tint read as muddy on black).
+            background: Some(s.selected().into()),
             border: iced::Border::default().rounded(SLOT / 2.0),
             ..container::Style::default()
         });
@@ -781,7 +782,7 @@ fn pods<'a>(
     };
     Some(
         ui::control(stack![
-            ui::ring::ring(value, d, 2.0, tint, s.ink.scale_alpha(0.16 * s.opacity)),
+            ui::ring::ring(value, d, 3.0, tint, s.ink.scale_alpha(0.16 * s.opacity)),
             container(icon(Icon::Headphones, 15.0, s.ink)).center(d),
         ])
         .width(d)

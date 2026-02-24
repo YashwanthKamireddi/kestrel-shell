@@ -69,8 +69,9 @@ pub const BUBBLE: f32 = size::BAR - 6.0;
 /// The music bubble: a black pill circle with the cover inside, dimmed while paused. Opens the
 /// media panel. None when there is no player.
 pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
-    // Stays while paused: the bubble is the player, not just the sound.
-    let p = app.media.main()?;
+    // Stays while paused: the bubble is the player, not just the sound. A browser playing
+    // something with no picture (a hover preview) gets none.
+    let p = app.media.main().filter(|p| !media::is_bare_browser(p))?;
     let id = o.id;
     let art = BUBBLE - 8.0;
     // Snapped as one piece: the circle and the cover land on the same pixels, so the cover

@@ -148,6 +148,19 @@ fn join_browser_players(players: &mut Vec<Player>) {
         .filter_map(|p| p.pid)
         .collect();
     if !own.is_empty() {
+        // The page may not give a picture (YouTube live, some Shorts); the browser's own player
+        // for the same tab usually has its thumbnail: borrow it rather than show none.
+        for helper in players.iter_mut() {
+            if trusted(helper) && helper.art.is_none() {
+                let pid = helper.pid;
+                helper.art = snapshot
+                    .iter()
+                    .find(|p| {
+                        !p.bus.contains(".kestrel_browser.") && p.pid == pid && p.art.is_some()
+                    })
+                    .and_then(|p| p.art.clone());
+            }
+        }
         players.retain(|p| {
             trusted(p)
                 || !(p.pid.is_some_and(|pid| own.contains(&pid))
@@ -358,6 +371,30 @@ pub fn stream() -> impl Stream<Item = State> {
 #[cfg(test)]
 mod join_tests {
     use super::*;
+
+    #[test]
+    fn a_helper_without_a_picture_borrows_the_browsers() {
+        let native = Player {
+            bus: "org.mpris.MediaPlayer2.chromium.instance1".into(),
+            title: "Video".into(),
+            playing: true,
+            pid: Some(1),
+            art: Some("/tmp/thumb".into()),
+            ..Player::default()
+        };
+        let helper = Player {
+            bus: "org.mpris.MediaPlayer2.kestrel_browser.instance1".into(),
+            title: "Video, exact title".into(),
+            playing: true,
+            pid: Some(1),
+            ..Player::default()
+        };
+        let mut v = vec![native, helper];
+        join_browser_players(&mut v);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].title, "Video, exact title");
+        assert_eq!(v[0].art.as_deref(), Some("/tmp/thumb"));
+    }
 
     #[test]
     fn a_stale_helper_loses_to_the_browser_playing() {

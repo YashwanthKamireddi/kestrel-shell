@@ -163,9 +163,81 @@ fn art_pixels(path: &str) -> Option<::image::RgbaImage> {
     art_data(path).map(|(img, _)| img)
 }
 
+/// Whether the player shows real artwork (a file that decodes and is not a browser's icon).
+pub fn has_art(p: &Player) -> bool {
+    p.art.as_deref().is_some_and(|a| art_data(a).is_some())
+}
+
+/// Something a browser plays with no picture of its own (a muted hover preview, a page with no
+/// artwork): not worth a music bubble.
+pub fn is_bare_browser(p: &Player) -> bool {
+    let b = p.bus.to_lowercase();
+    [
+        "chromium",
+        "chrome",
+        "brave",
+        "firefox",
+        "edge",
+        "vivaldi",
+        "kestrel_browser",
+    ]
+    .iter()
+    .any(|n| b.contains(n))
+        && !has_art(p)
+}
+
 /// The artwork's average colour, for tinting what surrounds it.
 pub fn art_colour(p: &Player) -> Option<Color> {
     art_data(p.art.as_deref()?).map(|(_, c)| c)
+}
+
+/// Whether `img` is a browser's own icon rather than artwork: compared, small and blurred, with
+/// the installed icons of the browsers that do this.
+fn is_browser_logo(img: &::image::RgbaImage) -> bool {
+    use std::sync::LazyLock;
+    const N: u32 = 24;
+    let shrink = |i: &::image::RgbaImage| {
+        ::image::imageops::resize(i, N, N, ::image::imageops::FilterType::Triangle)
+    };
+    static LOGOS: LazyLock<Vec<::image::RgbaImage>> = LazyLock::new(|| {
+        [
+            "chromium",
+            "google-chrome",
+            "brave-browser",
+            "microsoft-edge",
+        ]
+        .iter()
+        .filter_map(|name| {
+            let p = format!("/usr/share/icons/hicolor/256x256/apps/{name}.png");
+            ::image::open(p).ok().map(|i| {
+                ::image::imageops::resize(
+                    &i.into_rgba8(),
+                    N,
+                    N,
+                    ::image::imageops::FilterType::Triangle,
+                )
+            })
+        })
+        .collect()
+    });
+    // A logo is square-ish; artwork of other shapes is never one.
+    let (w, h) = img.dimensions();
+    if w.abs_diff(h) > w.max(h) / 8 {
+        return false;
+    }
+    let small = shrink(img);
+    LOGOS.iter().any(|logo| {
+        // Mean colour difference over the opaque parts of the logo.
+        let (mut diff, mut n) = (0u64, 0u64);
+        for (a, b) in small.pixels().zip(logo.pixels()) {
+            if b[3] < 128 {
+                continue;
+            }
+            n += 1;
+            diff += (0..3).map(|c| u64::from(a[c].abs_diff(b[c]))).sum::<u64>();
+        }
+        n > 0 && diff / (n * 3) < 28
+    })
 }
 
 fn art_data(path: &str) -> Option<(::image::RgbaImage, Color)> {
@@ -187,6 +259,11 @@ fn art_data(path: &str) -> Option<(::image::RgbaImage, Color)> {
             .thumbnail(512, 512)
             .into_rgba8();
         if img.width() == 0 || img.height() == 0 {
+            return None;
+        }
+        // A browser with nothing to show (a muted hover preview, a page without artwork) hands
+        // over its own app icon as the "cover": that is not artwork, so none is shown.
+        if is_browser_logo(&img) {
             return None;
         }
         let (x, y, w, h) = content_box(&img);
@@ -463,5 +540,21 @@ mod tests {
         let (x, y, w, h) = content_box(&img);
         assert_eq!((x, w), (50, 60));
         assert_eq!((y, h), (0, 90));
+    }
+}
+
+#[cfg(test)]
+mod logo_tests {
+    #[test]
+    fn the_browsers_icon_is_not_artwork() {
+        let Ok(logo) = ::image::open("/usr/share/icons/hicolor/128x128/apps/chromium.png") else {
+            return; // Not installed here.
+        };
+        assert!(super::is_browser_logo(&logo.into_rgba8()));
+        let mut photo = ::image::RgbaImage::new(64, 64);
+        for (x, y, p) in photo.enumerate_pixels_mut() {
+            *p = ::image::Rgba([(x * 4) as u8, (y * 4) as u8, 90, 255]);
+        }
+        assert!(!super::is_browser_logo(&photo));
     }
 }

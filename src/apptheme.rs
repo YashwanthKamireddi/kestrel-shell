@@ -316,6 +316,91 @@ fn starship(s: &Scheme, old: &str) -> String {
     format!("{body}\n\n{table}")
 }
 
+/// qt6ct's colour scheme: one line per state, the QPalette roles in their order.
+fn qt6ct_colors(s: &Scheme) -> String {
+    let link = Oklch::new(0.78, 0.10, 240.0).to_color();
+    let visited = Oklch::new(0.78, 0.10, 310.0).to_color();
+    let line = |text: Color, faint: bool| {
+        let fg = if faint { s.ink_faint } else { text };
+        [
+            fg,                                         // WindowText
+            s.raised,                                   // Button
+            s.raised_hi,                                // Light
+            s.raised_hi,                                // Midlight
+            s.base,                                     // Dark
+            s.raised,                                   // Mid
+            fg,                                         // Text
+            s.ink,                                      // BrightText
+            fg,                                         // ButtonText
+            s.base,                                     // Base
+            s.base,                                     // Window
+            Color::BLACK,                               // Shadow
+            if faint { s.raised_hi } else { s.accent }, // Highlight
+            s.on_accent,                                // HighlightedText
+            link,                                       // Link
+            visited,                                    // LinkVisited
+            s.raised,                                   // AlternateBase
+            s.base,                                     // NoRole
+            s.raised,                                   // ToolTipBase
+            s.ink,                                      // ToolTipText
+            s.ink_faint,                                // PlaceholderText
+            s.accent,                                   // Accent
+        ]
+        .iter()
+        .map(|c| hex(*c))
+        .collect::<Vec<_>>()
+        .join(", ")
+    };
+    format!(
+        "[ColorScheme]\nactive_colors={}\ninactive_colors={}\ndisabled_colors={}\n",
+        line(s.ink, false),
+        line(s.ink, false),
+        line(s.ink, true)
+    )
+}
+
+/// qt6ct's settings: kestrel's colours and font; the icon theme and widget style the user
+/// already chose in kdeglobals are kept.
+fn qt6ct_conf(dir: &Path, old: &str) -> String {
+    let kde = std::fs::read_to_string(config().join("kdeglobals")).unwrap_or_default();
+    let pick = |section: &str, key: &str| {
+        let mut in_section = false;
+        for l in kde.lines() {
+            let l = l.trim();
+            if l.starts_with('[') {
+                in_section = l == section;
+            } else if in_section && let Some(v) = l.strip_prefix(&format!("{key}=")) {
+                return Some(v.to_string());
+            }
+        }
+        None
+    };
+    let icons = pick("[Icons]", "Theme").unwrap_or_else(|| "breeze-dark".into());
+    let style = pick("[KDE]", "widgetStyle").unwrap_or_else(|| "Fusion".into());
+    // Keep anything else the user set in qt6ct (its other sections).
+    let rest: String = old
+        .split("\n[")
+        .filter(|s| {
+            !s.starts_with("[Appearance]")
+                && !s.starts_with("Appearance]")
+                && !s.starts_with("Fonts]")
+                && !s.starts_with("[Fonts]")
+        })
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| {
+            if s.starts_with('[') {
+                format!("{s}\n")
+            } else {
+                format!("[{s}\n")
+            }
+        })
+        .collect();
+    format!(
+        "[Appearance]\ncolor_scheme_path={}\ncustom_palette=true\nicon_theme={icons}\nstandard_dialogs=xdgdesktopportal\nstyle={style}\n\n[Fonts]\nfixed=\"JetBrainsMono Nerd Font,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\"\ngeneral=\"Rubik,11,-1,5,500,0,0,0,0,0,0,0,0,0,0,1\"\n\n{rest}",
+        dir.join("colors/kestrel.conf").display()
+    )
+}
+
 pub fn apply(s: Scheme, wallpaper: Option<String>) {
     let cfg = config();
     let css = gtk_css(&s);
@@ -341,6 +426,13 @@ pub fn apply(s: Scheme, wallpaper: Option<String>) {
     if let Ok(old) = std::fs::read_to_string(&kde) {
         write(&kde, &kdeglobals(&s, &old));
     }
+
+    // Qt apps (Dolphin, Easy Effects, …) take their palette from qt6ct (QT_QPA_PLATFORMTHEME):
+    // the same colours as kdeglobals, the shell's font, the icon theme and style kept.
+    let qt = cfg.join("qt6ct");
+    write(&qt.join("colors/kestrel.conf"), &qt6ct_colors(&s));
+    let old_qt = std::fs::read_to_string(qt.join("qt6ct.conf")).unwrap_or_default();
+    write(&qt.join("qt6ct.conf"), &qt6ct_conf(&qt, &old_qt));
 
     let prompt = cfg.join("starship.toml");
     if let Ok(old) = std::fs::read_to_string(&prompt) {
