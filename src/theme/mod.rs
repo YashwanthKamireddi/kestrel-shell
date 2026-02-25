@@ -15,6 +15,9 @@ pub struct Seed {
     pub chroma: f32,
     /// How much of the picture carries that colour (weighted share of pixels).
     pub coverage: f32,
+    /// The wallpaper's source colour as Material You picks it (quantized and scored, the
+    /// material-color-utilities way), 0xRRGGBB; the scheme is built from it when present.
+    pub source: Option<u32>,
 }
 
 impl Default for Seed {
@@ -23,6 +26,7 @@ impl Default for Seed {
             hue: 255.0,
             chroma: 0.06,
             coverage: 0.1,
+            source: None,
         }
     }
 }
@@ -52,6 +56,47 @@ pub struct Scheme {
 
 impl Scheme {
     pub fn dark(seed: Seed) -> Self {
+        if let Some(src) = seed.source {
+            return Self::material(src);
+        }
+        Self::oklch(seed)
+    }
+
+    /// Material 3's dark scheme from the wallpaper's source colour (Vibrant variant, spec 2025):
+    /// tone ladders made for contrast, an accent that stays clear on any wallpaper, surfaces
+    /// tinted towards it. The base stays true black (AMOLED, design call).
+    fn material(source: u32) -> Self {
+        use material_colors::color::Rgb;
+        use material_colors::dynamic_color::Variant;
+        use material_colors::dynamic_color::color_spec::SpecVersion;
+        use material_colors::theme::ThemeBuilder;
+        let theme = ThemeBuilder::with_source(Rgb::from_u32(source))
+            .variant(Variant::Vibrant)
+            .spec_version(SpecVersion::Spec2025)
+            .build();
+        let d = theme.schemes.dark;
+        let c = |x: Rgb| Color::from_rgb8(x.red, x.green, x.blue);
+        let fallback = Self::oklch(Seed::default());
+        Self {
+            base: Color::BLACK,
+            raised: c(d.surface_container),
+            raised_hi: c(d.surface_container_high),
+            raised_press: Color {
+                a: 0.16,
+                ..c(d.on_surface)
+            },
+            line: c(d.outline_variant),
+            ink: c(d.on_surface),
+            ink_dim: c(d.on_surface_variant),
+            ink_faint: c(d.outline),
+            accent: c(d.primary),
+            on_accent: c(d.on_primary),
+            accent_soft: c(d.primary_container),
+            ..fallback
+        }
+    }
+
+    fn oklch(seed: Seed) -> Self {
         // Surfaces take the wallpaper's hue only when the picture is broadly that colour; a
         // grey picture with one red stripe gets neutral surfaces and a red accent.
         let h = seed.hue;
@@ -203,6 +248,22 @@ mod tests {
     use color::contrast;
 
     #[test]
+    fn material_schemes_stay_readable() {
+        for source in [
+            0xff_3355, 0x33_cc66, 0x2266ff, 0xffcc00, 0x808080, 0x111111, 0xfafafa, 0xe991b0,
+        ] {
+            let s = Scheme::dark(Seed {
+                source: Some(source),
+                ..Seed::default()
+            });
+            assert!(contrast(s.ink, s.base) > 12.0, "{source:06x}");
+            assert!(contrast(s.ink_dim, s.raised) > 5.0, "{source:06x}");
+            assert!(contrast(s.on_accent, s.accent) > 4.5, "{source:06x}");
+            assert!(contrast(s.accent, s.base) > 6.0, "{source:06x}");
+        }
+    }
+
+    #[test]
     fn text_stays_readable_for_every_hue() {
         for hue in (0..360).step_by(15) {
             for chroma in [0.0, 0.05, 0.12, 0.3] {
@@ -210,6 +271,7 @@ mod tests {
                     hue: hue as f32,
                     chroma,
                     coverage: 0.05,
+                    source: None,
                 });
                 assert!(contrast(s.ink, s.base) > 12.0);
                 assert!(contrast(s.ink, s.raised) > 10.0);

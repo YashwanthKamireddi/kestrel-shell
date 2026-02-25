@@ -6,7 +6,19 @@ use super::color::Oklch;
 
 const BUCKETS: usize = 36;
 
+/// The source colour Material You would pick for this picture (Celebi quantizer + score).
+fn material_source(img: &image::DynamicImage) -> u32 {
+    use material_colors::color::Rgb;
+    let small = img
+        .resize(128, 128, image::imageops::FilterType::Triangle)
+        .to_rgb8();
+    let pixels: Vec<Rgb> = small.pixels().map(|p| Rgb::new(p[0], p[1], p[2])).collect();
+    let s = material_colors::image::extract_color(&pixels);
+    (u32::from(s.red) << 16) | (u32::from(s.green) << 8) | u32::from(s.blue)
+}
+
 pub fn seed_from_image(img: &image::DynamicImage) -> Option<Seed> {
+    let source = material_source(img);
     let img = img.thumbnail(96, 96).to_rgb8();
     let mut weight = [0f32; BUCKETS];
     let mut hue_x = [0f32; BUCKETS];
@@ -54,5 +66,6 @@ pub fn seed_from_image(img: &image::DynamicImage) -> Option<Seed> {
         hue: y.atan2(x).to_degrees().rem_euclid(360.0),
         chroma: if w > 0.0 { c / w } else { 0.0 },
         coverage,
+        source: Some(source),
     })
 }

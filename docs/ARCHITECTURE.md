@@ -149,3 +149,6 @@ Nothing is installed that fails it.
 - 2026-11-13: the shell asks the compositor for things as typed actions
   (`services::compositor::Action`: focus workspace / window, cycle, exec); the Hyprland backend
   turns them into its Lua dispatchers. Another compositor is one new backend there.
+- 2026-11-13: colours from the wallpaper the Material You way (material-colors, a port of
+  Google's material-color-utilities): Celebi quantizer + score pick the source colour, a
+  Material 3 Vibrant dark scheme (spec 2025) gives the roles; the base stays true black.
