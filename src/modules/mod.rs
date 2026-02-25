@@ -784,12 +784,13 @@ fn pods<'a>(
         // Inset from the circle's edge: a band of the pill's black keeps the ring apart from
         // the wallpaper (a ring on the very edge melted into a wallpaper of the same colour).
         ui::control(stack![
-            container(ui::ring::ring(
+            container(ui::ring::ring_on(
                 value,
                 d - 6.0,
                 3.0,
                 tint,
-                s.ink.scale_alpha(0.16 * s.opacity)
+                s.ink.scale_alpha(0.16 * s.opacity),
+                s.base,
             ))
             .center(d),
             container(icon(Icon::Headphones, 14.0, s.ink)).center(d),
