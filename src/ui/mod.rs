@@ -2,6 +2,7 @@
 
 pub mod control;
 pub mod icon;
+pub mod icon_sf;
 pub mod morph;
 pub mod reveal;
 pub mod ring;
@@ -106,8 +107,9 @@ pub fn ellipsize(s: &str, max: usize) -> String {
 
 /// An icon in `color` (its alpha included, so it fades with a panel), `size` px square.
 pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
-    iced::widget::text(i.glyph().to_string())
-        .font(icon::FONT)
+    let (font, glyph) = i.draw();
+    iced::widget::text(glyph.to_string())
+        .font(font)
         .size(size)
         .color(color)
         .line_height(iced::widget::text::LineHeight::Relative(1.0))

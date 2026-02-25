@@ -6,6 +6,25 @@
 
 use iced::Font;
 
+/// Apple SF Symbols in use (the font was found and loaded at start).
+static SF_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub const SF_FONT: Font = Font::with_name("kestrel SF");
+
+/// Where the SF Symbols font is looked for.
+pub fn sf_path() -> std::path::PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share"))
+        })
+        .unwrap_or_default()
+        .join("kestrel/sf-symbols.otf")
+}
+
+pub fn set_sf(on: bool) {
+    SF_ON.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// The embedded icon font.
 pub const BYTES: &[u8] = include_bytes!("../../assets/fonts/kestrel-symbols.ttf");
 pub const FONT: Font = Font::with_name("kestrel Symbols");
@@ -166,6 +185,20 @@ impl Icon {
             .iter()
             .find(|(n, _, _)| *n == name)
             .map(|(_, i, _)| *i)
+    }
+
+    /// The font and character it is drawn with: SF Symbols when loaded, else Material.
+    pub fn draw(self) -> (Font, char) {
+        if SF_ON.load(std::sync::atomic::Ordering::Relaxed)
+            && let Some(name) = NAMES
+                .iter()
+                .find(|(_, i, _)| *i == self)
+                .map(|(n, _, _)| *n)
+            && let Some((_, c)) = super::icon_sf::SF.iter().find(|(n, _)| *n == name)
+        {
+            return (SF_FONT, *c);
+        }
+        (FONT, self.glyph())
     }
 
     /// Its glyph in `FONT`.

@@ -473,6 +473,20 @@ fn placeholders(s: &Scheme, wallpaper: Option<&str>) -> Vec<(String, String)> {
         let [r, g, b] = [c.r, c.g, c.b].map(|x| (x.clamp(0.0, 1.0) * 255.0).round() as u8);
         v.push((format!("{{{{{name}.rgb}}}}"), format!("{r}, {g}, {b}")));
     }
+    // Extra shades templates often need: the accent under the pointer, and a dark surface
+    // with a hint of accent (one's own chat bubbles, a selected row).
+    for (name, c) in [
+        (
+            "accent_hover",
+            crate::theme::color::mix(s.accent, s.ink, 0.15),
+        ),
+        (
+            "accent_tint",
+            crate::theme::color::mix(s.raised_hi, s.accent, 0.18),
+        ),
+    ] {
+        v.push((format!("{{{{{name}}}}}"), hex(c)));
+    }
     v.push(("{{wallpaper}}".into(), wallpaper.unwrap_or("").to_string()));
     v
 }

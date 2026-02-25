@@ -76,23 +76,20 @@ impl Scheme {
             .build();
         let d = theme.schemes.dark;
         let c = |x: Rgb| Color::from_rgb8(x.red, x.green, x.blue);
-        let fallback = Self::oklch(Seed::default());
+        // Only the accent comes from the wallpaper. Text and surfaces stay neutral greys (the user's
+        // call 2026-11-13: tinted text and surfaces read as too much colour).
+        let neutral = Self::oklch(Seed {
+            chroma: 0.0,
+            ..Seed::default()
+        });
+        let accent = c(d.primary);
+        // Soft accent: the accent a little way into the dark surface (Material's container is
+        // too bright to put light text on with vivid sources like yellow).
         Self {
-            base: Color::BLACK,
-            raised: c(d.surface_container),
-            raised_hi: c(d.surface_container_high),
-            raised_press: Color {
-                a: 0.16,
-                ..c(d.on_surface)
-            },
-            line: c(d.outline_variant),
-            ink: c(d.on_surface),
-            ink_dim: c(d.on_surface_variant),
-            ink_faint: c(d.outline),
-            accent: c(d.primary),
+            accent,
             on_accent: c(d.on_primary),
-            accent_soft: c(d.primary_container),
-            ..fallback
+            accent_soft: color::mix(neutral.raised, accent, 0.28),
+            ..neutral
         }
     }
 
