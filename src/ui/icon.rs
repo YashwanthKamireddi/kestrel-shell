@@ -1,50 +1,13 @@
-//! The icon set: Material Symbols Rounded, filled, weight 500, drawn as glyphs from an
-//! embedded font (assets/fonts/kestrel-symbols.ttf, made from Google's variable font and cut
-//! down to these icons; Apache-2.0, assets/fonts/LICENSE-material-symbols). Glyphs are
-//! rendered like text, so they are crisp and evenly sized at bar sizes (the SVGs were thin and
-//! grainy). Kept under kestrel's own names (wifi, battery-frame-3, …) for code and Lua.
+//! The icon set: Microsoft's Fluent UI System Icons, filled, 20 px designs, drawn as glyphs
+//! from an embedded font (assets/fonts/kestrel-icons.ttf, cut down from Fluent's font to these
+//! icons; MIT, assets/fonts/LICENSE-fluent-icons). Glyphs render like text, so they stay crisp
+//! and evenly sized. Kept under kestrel's own names (wifi, battery-frame-3, …) for code and Lua.
 
 use iced::Font;
 
-/// Apple SF Symbols in use (the font was found and loaded at start).
-static SF_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-pub const SF_FONT: Font = Font::with_name("kestrel SF");
-
-/// Where the SF Symbols font is looked for.
-pub fn sf_path() -> std::path::PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share"))
-        })
-        .unwrap_or_default()
-        .join("kestrel/sf-symbols.otf")
-}
-
-/// Whether SF Symbols are in use (icons without an SF symbol are then sized to sit with them).
-pub fn sf_on() -> bool {
-    SF_ON.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// The SF Symbols font is installed (and registered at start).
-static SF_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-pub fn set_sf_available(on: bool) {
-    SF_AVAILABLE.store(on, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub fn sf_available() -> bool {
-    SF_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// Draws with SF Symbols (only if the font is installed).
-pub fn set_sf(on: bool) {
-    SF_ON.store(on && sf_available(), std::sync::atomic::Ordering::Relaxed);
-}
-
 /// The embedded icon font.
-pub const BYTES: &[u8] = include_bytes!("../../assets/fonts/kestrel-symbols.ttf");
-pub const FONT: Font = Font::with_name("kestrel Symbols");
+pub const BYTES: &[u8] = include_bytes!("../../assets/fonts/kestrel-icons.ttf");
+pub const FONT: Font = Font::with_name("kestrel Icons");
 
 macro_rules! icons {
     ($($variant:ident => $name:literal, $glyph:literal,)*) => {
@@ -55,144 +18,144 @@ macro_rules! icons {
 }
 
 icons! {
-    Activity => "activity", '\u{f190}',
-    Air => "air", '\u{efd8}',
-    AppWindow => "app-window", '\u{e069}',
-    ArrowDownToLine => "arrow-down-to-line", '\u{f090}',
-    ArrowLeft => "arrow-left", '\u{e5c4}',
-    AudioLines => "audio-lines", '\u{e1b8}',
-    Battery => "battery", '\u{f0a0}',
-    BatteryCharging => "battery-charging", '\u{e1a3}',
-    BatteryFrame1 => "battery-frame-1", '\u{f257}',
-    BatteryFrame2 => "battery-frame-2", '\u{f256}',
-    BatteryFrame3 => "battery-frame-3", '\u{f255}',
-    BatteryFrame4 => "battery-frame-4", '\u{f254}',
-    BatteryFrame5 => "battery-frame-5", '\u{f253}',
-    BatteryFrame6 => "battery-frame-6", '\u{f252}',
-    BatteryFrameAlert => "battery-frame-alert", '\u{f251}',
-    BatteryFrameBolt => "battery-frame-bolt", '\u{f250}',
-    BatteryFrameFull => "battery-frame-full", '\u{f24f}',
-    BatteryFull => "battery-full", '\u{e1a5}',
-    BatteryLow => "battery-low", '\u{f09d}',
-    BatteryMedium => "battery-medium", '\u{f09f}',
-    BatteryWarning => "battery-warning", '\u{e19c}',
-    Bell => "bell", '\u{e7f5}',
-    BellDot => "bell-dot", '\u{f4fe}',
-    BellOff => "bell-off", '\u{e7f6}',
-    BellRing => "bell-ring", '\u{e7f7}',
-    Bitcoin => "bitcoin", '\u{ebc5}',
-    Bluetooth => "bluetooth", '\u{e1a7}',
-    BluetoothConnected => "bluetooth-connected", '\u{e1a8}',
-    BluetoothOff => "bluetooth-off", '\u{e1a9}',
-    Cable => "cable", '\u{efe6}',
-    Calculator => "calculator", '\u{ea5f}',
-    CalendarClock => "calendar-clock", '\u{f540}',
-    Camera => "camera", '\u{e412}',
-    Check => "check", '\u{e668}',
-    ChevronDown => "chevron-down", '\u{e313}',
-    ChevronLeft => "chevron-left", '\u{e5cb}',
-    ChevronRight => "chevron-right", '\u{e5cc}',
-    ChevronUp => "chevron-up", '\u{e316}',
-    CircleDot => "circle-dot", '\u{e837}',
-    Clipboard => "clipboard", '\u{e14f}',
-    Cloud => "cloud", '\u{f15c}',
-    CloudDrizzle => "cloud-drizzle", '\u{f61e}',
-    CloudFog => "cloud-fog", '\u{e818}',
-    CloudLightning => "cloud-lightning", '\u{ebdb}',
-    CloudMoon => "cloud-moon", '\u{f174}',
-    CloudRain => "cloud-rain", '\u{f176}',
-    CloudSnow => "cloud-snow", '\u{e2cd}',
-    CloudSun => "cloud-sun", '\u{f172}',
-    Code => "code", '\u{e86f}',
-    Coffee => "coffee", '\u{efef}',
-    Container => "container", '\u{f720}',
-    Cpu => "cpu", '\u{e322}',
-    Download => "download", '\u{f090}',
-    Droplet => "droplet", '\u{e798}',
-    EarbudCase => "earbud-case", '\u{f327}',
-    EarbudLeft => "earbud-left", '\u{f326}',
-    EarbudRight => "earbud-right", '\u{f325}',
-    Earbuds => "earbuds", '\u{f324}',
-    EarbudsBattery => "earbuds-battery", '\u{f004}',
-    Ellipsis => "ellipsis", '\u{e5d3}',
-    File => "file", '\u{e873}',
-    Flame => "flame", '\u{ef55}',
-    Folder => "folder", '\u{e2c7}',
-    Gamepad2 => "gamepad-2", '\u{ea28}',
-    Gauge => "gauge", '\u{e9e4}',
-    GitBranch => "git-branch", '\u{e97a}',
-    Globe => "globe", '\u{ea07}',
-    HardDrive => "hard-drive", '\u{f80e}',
-    Headphones => "headphones", '\u{f01f}',
-    House => "house", '\u{e9b2}',
-    Humidity => "humidity", '\u{f87e}',
-    Image => "image", '\u{e3f4}',
-    Keyboard => "keyboard", '\u{e312}',
-    Laptop => "laptop", '\u{e320}',
-    LayoutGrid => "layout-grid", '\u{e9b0}',
-    Leaf => "leaf", '\u{ea35}',
-    Lock => "lock", '\u{e899}',
-    LogOut => "log-out", '\u{e9ba}',
-    Mail => "mail", '\u{e159}',
-    MemoryStick => "memory-stick", '\u{f7a3}',
-    Mic => "mic", '\u{e31d}',
-    MicOff => "mic-off", '\u{e02b}',
-    Monitor => "monitor", '\u{e30c}',
-    Moon => "moon", '\u{f036}',
-    MoonStar => "moon-star", '\u{f159}',
-    Mouse => "mouse", '\u{e323}',
-    Music => "music", '\u{e405}',
-    Network => "network", '\u{eb2f}',
-    Package => "package", '\u{f569}',
-    Pause => "pause", '\u{e034}',
-    Pin => "pin", '\u{f027}',
-    PinOff => "pin-off", '\u{e6f9}',
-    Play => "play", '\u{e037}',
-    PlugZap => "plug-zap", '\u{e63c}',
-    Power => "power", '\u{f8c7}',
-    Printer => "printer", '\u{e8ad}',
-    Repeat => "repeat", '\u{e040}',
-    Rocket => "rocket", '\u{eb9b}',
-    RotateCcw => "rotate-ccw", '\u{f053}',
-    Rss => "rss", '\u{e0e5}',
-    ScreenShare => "screen-share", '\u{e0e2}',
-    Search => "search", '\u{ef7a}',
-    Server => "server", '\u{e875}',
-    Settings => "settings", '\u{e8b8}',
-    Shield => "shield", '\u{e9e0}',
-    Shuffle => "shuffle", '\u{e043}',
-    SkipBack => "skip-back", '\u{e045}',
-    SkipForward => "skip-forward", '\u{e044}',
-    Smartphone => "smartphone", '\u{e7ba}',
-    Smile => "smile", '\u{ea22}',
-    Snowflake => "snowflake", '\u{eb3b}',
-    Sparkles => "sparkles", '\u{f31d}',
-    Speaker => "speaker", '\u{e32d}',
-    Sun => "sun", '\u{e81a}',
-    SunDim => "sun-dim", '\u{e3aa}',
-    SunMedium => "sun-medium", '\u{e1ae}',
-    Sunset => "sunset", '\u{e1c6}',
-    Terminal => "terminal", '\u{eb8e}',
-    Thermometer => "thermometer", '\u{f076}',
-    Timer => "timer", '\u{e425}',
-    Trash2 => "trash-2", '\u{e92e}',
-    Trophy => "trophy", '\u{ea23}',
-    Video => "video", '\u{e04b}',
-    Volume => "volume", '\u{e04e}',
-    Volume1 => "volume-1", '\u{e04d}',
-    Volume2 => "volume-2", '\u{e050}',
-    VolumeX => "volume-x", '\u{e04f}',
-    Watch => "watch", '\u{e334}',
-    Wifi => "wifi", '\u{e1ba}',
-    Wifi1 => "wifi-1", '\u{ebe4}',
-    Wifi2 => "wifi-2", '\u{ebd6}',
-    Wifi3 => "wifi-3", '\u{ebe1}',
-    WifiHigh => "wifi-high", '\u{ebe1}',
-    WifiLow => "wifi-low", '\u{ebe4}',
-    WifiOff => "wifi-off", '\u{e648}',
-    WifiZero => "wifi-zero", '\u{f0b0}',
-    X => "x", '\u{e5cd}',
-    Zap => "zap", '\u{ea0b}',
+    Activity => "activity", '\u{e9e4}',
+    Air => "air", '\u{f8b6}',
+    AppWindow => "app-window", '\u{f8cd}',
+    ArrowDownToLine => "arrow-down-to-line", '\u{f150}',
+    ArrowLeft => "arrow-left", '\u{f15b}',
+    AudioLines => "audio-lines", '\u{eb38}',
+    Battery => "battery", '\u{e000}',
+    BatteryCharging => "battery-charging", '\u{e001}',
+    BatteryFrame1 => "battery-frame-1", '\u{e002}',
+    BatteryFrame2 => "battery-frame-2", '\u{e003}',
+    BatteryFrame3 => "battery-frame-3", '\u{e004}',
+    BatteryFrame4 => "battery-frame-4", '\u{e005}',
+    BatteryFrame5 => "battery-frame-5", '\u{e006}',
+    BatteryFrame6 => "battery-frame-6", '\u{e007}',
+    BatteryFrameAlert => "battery-frame-alert", '\u{e008}',
+    BatteryFrameBolt => "battery-frame-bolt", '\u{e001}',
+    BatteryFrameFull => "battery-frame-full", '\u{e000}',
+    BatteryFull => "battery-full", '\u{e000}',
+    BatteryLow => "battery-low", '\u{e009}',
+    BatteryMedium => "battery-medium", '\u{e00a}',
+    BatteryWarning => "battery-warning", '\u{e008}',
+    Bell => "bell", '\u{f114}',
+    BellDot => "bell-dot", '\u{e018}',
+    BellOff => "bell-off", '\u{f118}',
+    BellRing => "bell-ring", '\u{e01a}',
+    Bitcoin => "bitcoin", '\u{f559}',
+    Bluetooth => "bluetooth", '\u{f1de}',
+    BluetoothConnected => "bluetooth-connected", '\u{e15f}',
+    BluetoothOff => "bluetooth-off", '\u{e160}',
+    Cable => "cable", '\u{e9ab}',
+    Calculator => "calculator", '\u{f20a}',
+    CalendarClock => "calendar-clock", '\u{f21d}',
+    Camera => "camera", '\u{f254}',
+    Check => "check", '\u{f294}',
+    ChevronDown => "chevron-down", '\u{f2a3}',
+    ChevronLeft => "chevron-left", '\u{f2aa}',
+    ChevronRight => "chevron-right", '\u{f2b0}',
+    ChevronUp => "chevron-up", '\u{f2b6}',
+    CircleDot => "circle-dot", '\u{f66b}',
+    Clipboard => "clipboard", '\u{f2c9}',
+    Cloud => "cloud", '\u{f886}',
+    CloudDrizzle => "cloud-drizzle", '\u{ee3e}',
+    CloudFog => "cloud-fog", '\u{f88c}',
+    CloudLightning => "cloud-lightning", '\u{f8bc}',
+    CloudMoon => "cloud-moon", '\u{f89b}',
+    CloudRain => "cloud-rain", '\u{f89e}',
+    CloudSnow => "cloud-snow", '\u{f8aa}',
+    CloudSun => "cloud-sun", '\u{f898}',
+    Code => "code", '\u{f2ef}',
+    Coffee => "coffee", '\u{f3c4}',
+    Container => "container", '\u{f335}',
+    Cpu => "cpu", '\u{e4b8}',
+    Download => "download", '\u{f150}',
+    Droplet => "droplet", '\u{e59c}',
+    EarbudCase => "earbud-case", '\u{e1cf}',
+    EarbudLeft => "earbud-left", '\u{f750}',
+    EarbudRight => "earbud-right", '\u{f750}',
+    Earbuds => "earbuds", '\u{f750}',
+    EarbudsBattery => "earbuds-battery", '\u{f750}',
+    Ellipsis => "ellipsis", '\u{e832}',
+    File => "file", '\u{f378}',
+    Flame => "flame", '\u{ef69}',
+    Folder => "folder", '\u{f41c}',
+    Gamepad2 => "gamepad-2", '\u{e697}',
+    Gauge => "gauge", '\u{f4d1}',
+    GitBranch => "git-branch", '\u{e1ed}',
+    Globe => "globe", '\u{f45e}',
+    HardDrive => "hard-drive", '\u{e6f0}',
+    Headphones => "headphones", '\u{e6fb}',
+    House => "house", '\u{f487}',
+    Humidity => "humidity", '\u{f0ccd}',
+    Image => "image", '\u{f48f}',
+    Keyboard => "keyboard", '\u{f4c2}',
+    Laptop => "laptop", '\u{f4cd}',
+    LayoutGrid => "layout-grid", '\u{f466}',
+    Leaf => "leaf", '\u{f4db}',
+    Lock => "lock", '\u{e79d}',
+    LogOut => "log-out", '\u{eb03}',
+    Mail => "mail", '\u{f510}',
+    MemoryStick => "memory-stick", '\u{e9fb}',
+    Mic => "mic", '\u{e807}',
+    MicOff => "mic-off", '\u{e80c}',
+    Monitor => "monitor", '\u{f359}',
+    Moon => "moon", '\u{f895}',
+    MoonStar => "moon-star", '\u{e45e}',
+    Mouse => "mouse", '\u{e44f}',
+    Music => "music", '\u{e862}',
+    Network => "network", '\u{e872}',
+    Package => "package", '\u{e1cf}',
+    Pause => "pause", '\u{f5ab}',
+    Pin => "pin", '\u{f60b}',
+    PinOff => "pin-off", '\u{f60d}',
+    Play => "play", '\u{f60f}',
+    PlugZap => "plug-zap", '\u{e9ab}',
+    Power => "power", '\u{f618}',
+    Printer => "printer", '\u{f634}',
+    Repeat => "repeat", '\u{f171}',
+    Rocket => "rocket", '\u{f681}',
+    RotateCcw => "rotate-ccw", '\u{f13f}',
+    Rss => "rss", '\u{ea45}',
+    ScreenShare => "screen-share", '\u{eac3}',
+    Search => "search", '\u{f699}',
+    Server => "server", '\u{f781}',
+    Settings => "settings", '\u{f6b2}',
+    Shield => "shield", '\u{f6c7}',
+    Shuffle => "shuffle", '\u{ef36}',
+    SkipBack => "skip-back", '\u{f632}',
+    SkipForward => "skip-forward", '\u{f573}',
+    Smartphone => "smartphone", '\u{f5ea}',
+    Smile => "smile", '\u{f3df}',
+    Snowflake => "snowflake", '\u{f8b3}',
+    Sparkles => "sparkles", '\u{eb3c}',
+    Speaker => "speaker", '\u{f0559}',
+    Sun => "sun", '\u{f8b9}',
+    SunDim => "sun-dim", '\u{e211}',
+    SunMedium => "sun-medium", '\u{e20b}',
+    Sunset => "sunset", '\u{ee52}',
+    Terminal => "terminal", '\u{ee6f}',
+    Thermometer => "thermometer", '\u{f7a7}',
+    Timer => "timer", '\u{ed88}',
+    Trash2 => "trash-2", '\u{f34c}',
+    Trophy => "trophy", '\u{f84e}',
+    Video => "video", '\u{f864}',
+    Volume => "volume", '\u{eb41}',
+    Volume1 => "volume-1", '\u{eb46}',
+    Volume2 => "volume-2", '\u{eb4b}',
+    VolumeX => "volume-x", '\u{eb53}',
+    Watch => "watch", '\u{f78d}',
+    Wifi => "wifi", '\u{f8c4}',
+    Wifi1 => "wifi-1", '\u{f8c8}',
+    Wifi2 => "wifi-2", '\u{f8c6}',
+    Wifi3 => "wifi-3", '\u{f8c6}',
+    WifiHigh => "wifi-high", '\u{f8c6}',
+    WifiLow => "wifi-low", '\u{f8c8}',
+    WifiOff => "wifi-off", '\u{ee59}',
+    WifiZero => "wifi-zero", '\u{ee5c}',
+    X => "x", '\u{f369}',
+    Zap => "zap", '\u{e625}',
 }
 
 impl Icon {
@@ -204,18 +167,15 @@ impl Icon {
             .map(|(_, i, _)| *i)
     }
 
-    /// The font and character it is drawn with: SF Symbols when loaded, else Material.
-    pub fn draw(self) -> (Font, char) {
-        if SF_ON.load(std::sync::atomic::Ordering::Relaxed)
-            && let Some(name) = NAMES
-                .iter()
-                .find(|(_, i, _)| *i == self)
-                .map(|(n, _, _)| *n)
-            && let Some((_, c)) = super::icon_sf::SF.iter().find(|(n, _)| *n == name)
-        {
-            return (SF_FONT, *c);
+    /// What a partial level is drawn over, dimmed: the full Wi-Fi fan behind its bars (Fluent's
+    /// weaker levels are only the lower arcs, which alone read as a smaller icon).
+    pub fn backdrop(self) -> Option<Icon> {
+        match self {
+            Icon::Wifi1 | Icon::Wifi2 | Icon::Wifi3 | Icon::WifiHigh | Icon::WifiLow => {
+                Some(Icon::Wifi)
+            }
+            _ => None,
         }
-        (FONT, self.glyph())
     }
 
     /// Its glyph in `FONT`.

@@ -60,10 +60,6 @@ fn main() -> anyhow::Result<()> {
         .font(theme::RUBIK_MEDIUM)
         .font(theme::RUBIK_SEMIBOLD)
         .font(theme::RUBIK_BOLD)
-        // Apple's SF Symbols, when installed (~/.local/share/kestrel/sf-symbols.otf; it is not
-        // part of kestrel): icons are drawn with it, else with the embedded Material Symbols
-        // (then this registers the Material font a second time, harmlessly).
-        .font(sf_symbols())
         .antialiasing(true)
         // The first surface is a 1 px placeholder; real surfaces are made per monitor.
         .layer_shell(LayerShellSettings {
@@ -101,18 +97,4 @@ fn env_logger() {
     };
     let _ = log::set_boxed_logger(Box::new(L(level)));
     log::set_max_level(level);
-}
-
-/// The SF Symbols font's bytes (kept for the program's life), or nothing.
-fn sf_symbols() -> &'static [u8] {
-    // Registered whenever installed; which set is drawn follows `icons` in config.toml, live
-    // (Material Symbols, built in, is the default).
-    match std::fs::read(ui::icon::sf_path()) {
-        Ok(bytes) if !bytes.is_empty() => {
-            ui::icon::set_sf_available(true);
-            ui::icon::set_sf(config::load().icons == "sf");
-            Box::leak(bytes.into_boxed_slice())
-        }
-        _ => ui::icon::BYTES,
-    }
 }

@@ -27,9 +27,6 @@ pub struct Config {
     pub bar: BarConfig,
     /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
     pub clock: ClockConfig,
-    /// The icon set: "material" (built in, the default) or "sf" (Apple SF Symbols, when
-    /// ~/.local/share/kestrel/sf-symbols.otf is installed; personal use only).
-    pub icons: String,
     /// Temperatures in "celsius" or "fahrenheit".
     pub weather_units: Units,
     /// Per-module extras: `[modules.clock] middle = "kitty -e khal interactive"`.
@@ -178,7 +175,6 @@ impl Default for Config {
             modules: std::collections::BTreeMap::new(),
             clock: ClockConfig::default(),
             weather_units: Units::Celsius,
-            icons: "material".into(),
         }
     }
 }
