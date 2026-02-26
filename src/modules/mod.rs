@@ -183,7 +183,9 @@ fn power<'a>(o: &'a Output, s: Scheme, open: Option<PanelKind>) -> Element<'a, M
         Icon::Power,
         Message::Close,
         open == Some(PanelKind::Power),
-        s.bad,
+        // Plain like the other status icons; the power menu itself asks before anything
+        // destructive.
+        s.ink,
     )
     .on_press_at(move |b| Message::Toggle(PanelKind::Power, id, b))
     .into()
@@ -587,18 +589,17 @@ fn status<'a>(
         let low = app.power.percent < 15.0 && !app.power.charging;
         let charging = app.power.charging && app.power.percent < 99.5;
         let c = if low { s.bad } else { alive(charging) };
-        status = status.push(
-            row![
-                icon(control::battery_icon(&app.power), size::ICON, c),
-                label(
-                    format!("{:.0}%", app.power.percent),
-                    text::SMALL,
-                    if low { s.bad } else { fg }
-                ),
-            ]
-            .spacing(4)
-            .align_y(Alignment::Center),
-        );
+        let mut battery = row![icon(control::battery_icon(&app.power), size::ICON, c)]
+            .spacing(5)
+            .align_y(Alignment::Center);
+        if app.config.bar.battery_percent {
+            battery = battery.push(label(
+                format!("{:.0}%", app.power.percent),
+                text::SMALL,
+                if low { s.bad } else { fg },
+            ));
+        }
+        status = status.push(battery);
     }
     // Notifications are part of the control centre: a bell joins its pill when something
     // arrived unseen (with the count), or while Do not disturb is on.

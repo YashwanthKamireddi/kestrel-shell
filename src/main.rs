@@ -105,15 +105,14 @@ fn env_logger() {
 
 /// The SF Symbols font's bytes (kept for the program's life), or nothing.
 fn sf_symbols() -> &'static [u8] {
+    // Registered whenever installed; which set is drawn follows `icons` in config.toml, live
+    // (Material Symbols, built in, is the default).
     match std::fs::read(ui::icon::sf_path()) {
         Ok(bytes) if !bytes.is_empty() => {
-            ui::icon::set_sf(true);
-            log::info!("icons: SF Symbols");
+            ui::icon::set_sf_available(true);
+            ui::icon::set_sf(config::load().icons == "sf");
             Box::leak(bytes.into_boxed_slice())
         }
-        _ => {
-            log::info!("icons: Material Symbols (no SF Symbols font)");
-            ui::icon::BYTES
-        }
+        _ => ui::icon::BYTES,
     }
 }

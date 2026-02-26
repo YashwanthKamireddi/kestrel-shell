@@ -21,8 +21,25 @@ pub fn sf_path() -> std::path::PathBuf {
         .join("kestrel/sf-symbols.otf")
 }
 
+/// Whether SF Symbols are in use (icons without an SF symbol are then sized to sit with them).
+pub fn sf_on() -> bool {
+    SF_ON.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The SF Symbols font is installed (and registered at start).
+static SF_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_sf_available(on: bool) {
+    SF_AVAILABLE.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn sf_available() -> bool {
+    SF_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Draws with SF Symbols (only if the font is installed).
 pub fn set_sf(on: bool) {
-    SF_ON.store(on, std::sync::atomic::Ordering::Relaxed);
+    SF_ON.store(on && sf_available(), std::sync::atomic::Ordering::Relaxed);
 }
 
 /// The embedded icon font.

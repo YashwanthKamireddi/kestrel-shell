@@ -108,13 +108,22 @@ pub fn ellipsize(s: &str, max: usize) -> String {
 /// An icon in `color` (its alpha included, so it fades with a panel), `size` px square.
 pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
     let (font, glyph) = i.draw();
-    iced::widget::text(glyph.to_string())
+    let sf = font == icon::SF_FONT;
+    // SF Symbols are drawn a little smaller than their text size (Apple sizes them to sit with
+    // text) and keep their own width: a battery is wider than a bell, so a square box made
+    // their gaps uneven. Material glyphs fill a square.
+    let t = iced::widget::text(glyph.to_string())
         .font(font)
-        .size(size)
+        // A Material glyph among SF Symbols (Bluetooth) is drawn at their optical size.
+        .size(if sf || icon::sf_on() {
+            size * 0.92
+        } else {
+            size
+        })
         .color(color)
-        .line_height(iced::widget::text::LineHeight::Relative(1.0))
-        .width(size)
-        .height(size)
+        .line_height(iced::widget::text::LineHeight::Relative(1.0));
+    let t = if sf { t } else { t.width(size) };
+    t.height(size)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center)
 }
