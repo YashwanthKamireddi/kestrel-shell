@@ -12,7 +12,7 @@ use crate::shell::bar::{SLOT, SLOT_GAP};
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, container, image, pin, row, stack};
-use iced::{Alignment, Color, Element};
+use iced::{Alignment, Element};
 
 /// Where a module lives in the bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,7 +171,7 @@ fn lua_chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, M
         .padding([0, 10])
         .height(size::CONTROL)
         .radius(size::CONTROL / 2.0)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .bar(s, false)
         .on_press(Message::LuaClick(name.to_string()))
         .into()
 }
@@ -187,6 +187,7 @@ fn power<'a>(o: &'a Output, s: Scheme, open: Option<PanelKind>) -> Element<'a, M
         // destructive.
         s.ink,
     )
+    .bar(s, open == Some(PanelKind::Power))
     .on_press_at(move |b| Message::Toggle(PanelKind::Power, id, b))
     .into()
 }
@@ -222,27 +223,14 @@ fn media_chip<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
     if let Some(p) = app.media.main() {
         let active = open == Some(PanelKind::Media);
-        let (a, b, c) = pill(active);
         items.push(
             ui::control(media::chip(s, p, active))
                 .padding([0, 10])
                 .height(size::CONTROL)
                 .radius(size::CONTROL / 2.0)
-                .colors(a, b, c)
+                .bar(s, active)
                 .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
                 .into(),
         );
@@ -278,15 +266,7 @@ fn tray<'a>(
         let mut ctl =
             ui::control(iced::widget::container(tray_icon(s, item)).center(size::CONTROL))
                 .radius(size::CONTROL / 2.0)
-                .colors(
-                    if active {
-                        s.selected()
-                    } else {
-                        Color::TRANSPARENT
-                    },
-                    if active { s.selected() } else { s.hover() },
-                    s.raised_press,
-                )
+                .bar(s, active)
                 .on_right_press(Message::TrayMenu(Some(menu), id, None));
         ctl = if item.item_is_menu {
             let it = item.clone();
@@ -313,7 +293,7 @@ fn tray<'a>(
             )
             .width(22)
             .radius(size::CONTROL / 2.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .bar(s, false)
             .on_press(Message::TrayExpand)
             .into(),
         );
@@ -331,18 +311,6 @@ fn weather<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
     // Weather now, as a circle: the condition's icon over the temperature. It opens the
     // dashboard, which has the full weather.
     if let Some(w) = &app.weather {
@@ -366,15 +334,7 @@ fn weather<'a>(
             .height(d)
             .center_x()
             .radius(d / 2.0)
-            .colors(
-                if active {
-                    s.selected()
-                } else {
-                    Color::TRANSPARENT
-                },
-                if active { s.selected() } else { s.hover() },
-                s.raised_press,
-            )
+            .bar(s, active)
             .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
             .into(),
         );
@@ -393,18 +353,6 @@ fn system<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
     // System load: CPU, memory, temperature. Click for the full monitor.
     {
         let sys = app.system;
@@ -427,7 +375,7 @@ fn system<'a>(
                 .padding([0, 10])
                 .height(size::CONTROL)
                 .radius(size::CONTROL / 2.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .bar(s, false)
                 .on_press(Message::Dispatch(
                     crate::services::compositor::Action::Exec(String::from("kitty -e btop")),
                 ))
@@ -448,18 +396,6 @@ fn updates<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
     // Pending updates: click to run them in a terminal.
     if app.updates.total() > 0 {
         let u = app.updates;
@@ -475,7 +411,7 @@ fn updates<'a>(
             .padding([0, 10])
             .height(size::CONTROL)
             .radius(size::CONTROL / 2.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .bar(s, false)
             .on_press(Message::Dispatch(crate::services::compositor::Action::Exec(String::from(
                 "kitty --title Updates sh -c 'yay -Syu; echo; read -p \"Done. Press Enter to close.\" _'",
             ))))
@@ -496,18 +432,6 @@ fn privacy<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
         let who = app.audio.recording.join(", ");
@@ -550,18 +474,6 @@ fn status<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    let pill = |active: bool| {
-        (
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
-    };
-    let _ = pill(false);
     // Status cluster → control centre.
     let active = open == Some(PanelKind::Control);
     let fg = s.ink;
@@ -624,13 +536,12 @@ fn status<'a>(
             .align_y(Alignment::Center),
         );
     }
-    let (a, b, c) = pill(active);
     items.push(
         ui::control(status)
             .padding([0, 10])
             .height(size::CONTROL)
             .radius(size::CONTROL / 2.0)
-            .colors(a, b, c)
+            .bar(s, active)
             .on_press_at(move |r| Message::Toggle(PanelKind::Control, id, r))
             .on_scroll(Message::VolumeStep)
             .into(),
@@ -675,7 +586,7 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         };
         ui::control(container(content).center(SLOT))
             .radius(SLOT / 2.0)
-            .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
+            .bar(s, false)
             .on_press(Message::Dispatch(
                 crate::services::compositor::Action::FocusWorkspace(id),
             ))
@@ -745,15 +656,7 @@ fn clock<'a>(
         .padding([0, 12])
         .height(size::CONTROL)
         .radius(size::CONTROL / 2.0)
-        .colors(
-            if active {
-                s.selected()
-            } else {
-                iced::Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
+        .bar(s, active)
         .on_press_at(move |b| Message::Toggle(PanelKind::Calendar, id, b))
         .into()
 }
@@ -800,15 +703,7 @@ fn pods<'a>(
         .height(d)
         .center_x()
         .radius(d / 2.0)
-        .colors(
-            if active {
-                s.selected()
-            } else {
-                Color::TRANSPARENT
-            },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
+        .bar(s, active)
         .on_press_at(move |r| Message::Toggle(PanelKind::Pods, id, r))
         .into(),
     )

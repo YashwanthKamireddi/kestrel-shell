@@ -33,6 +33,9 @@ pub struct Control<'a, M> {
     border: Option<Color>,
     press_scale: bool,
     center_x: bool,
+    /// Bar style: drawn over the content at rest and lifted on hover, so the pointer brightens
+    /// what is there instead of laying a grey block over it.
+    veil: Color,
 }
 
 pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
@@ -53,6 +56,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         border: None,
         press_scale: false,
         center_x: false,
+        veil: Color::TRANSPARENT,
     }
 }
 
@@ -105,6 +109,26 @@ impl<'a, M> Control<'a, M> {
         self.rest = rest;
         self.hover = hover;
         self.press = press;
+        self
+    }
+    /// A bar item: no fill on hover or press (design call 2026-11-13: the grey highlight looked
+    /// cheap). At rest the content sits a little dimmed under a veil of the bar's own black;
+    /// the pointer lifts the veil, so the icons and text brighten to full white, and a press
+    /// dims them again. An open panel keeps the neutral selected fill.
+    pub fn bar(mut self, s: crate::theme::Scheme, active: bool) -> Self {
+        let fill = if active {
+            s.selected()
+        } else {
+            Color::TRANSPARENT
+        };
+        self.rest = fill;
+        self.hover = fill;
+        self.press = fill;
+        self.veil = if active {
+            Color::TRANSPARENT
+        } else {
+            s.base.scale_alpha(0.16 * s.opacity)
+        };
         self
     }
     pub fn border(mut self, c: Color) -> Self {
@@ -374,6 +398,27 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                     &clip,
                 );
             });
+            let veil = if state.pressed {
+                self.veil.a
+            } else {
+                self.veil.a * (1.0 - ease(state.hover_t))
+            };
+            // Its own layer, so it lies over the content's layer rather than under it.
+            if veil > 0.0 {
+                renderer.with_layer(clip, |renderer| {
+                    renderer.fill_quad(
+                        renderer::Quad {
+                            bounds,
+                            border: Border::default().rounded(self.radius.min(bounds.height / 2.0)),
+                            ..renderer::Quad::default()
+                        },
+                        Color {
+                            a: veil,
+                            ..self.veil
+                        },
+                    );
+                });
+            }
         };
         if (s - 1.0).abs() > 1e-3 {
             let t = Transformation::translate(center.x, center.y)
