@@ -22,6 +22,10 @@ pub struct State {
     query: String,
     /// Address of the selected window.
     selected: Option<String>,
+    /// The window the selection just left, and how far the change has gone (0 → 1): the
+    /// two cross-fade instead of the selection jumping.
+    left: Option<String>,
+    pub fade: crate::motion::Spring,
     /// Live pictures of the windows, by address, ready at their tile's size (kept between
     /// opens so the overview shows them at once; refreshed on each open, off the UI thread).
     previews: std::collections::HashMap<String, Ready>,
@@ -53,6 +57,8 @@ fn msg(m: Message) -> AppMessage {
 pub fn open(app: &mut App) -> Task<AppMessage> {
     let st = &mut app.panels.overview;
     st.query.clear();
+    st.left = None;
+    st.fade.snap(1.0);
     // Start on the window you were in.
     st.selected = app
         .hypr
@@ -216,6 +222,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             if !still {
                 let first = list.first().map(|(_, w)| w.address.clone());
                 app.panels.overview.selected = first;
+                app.panels.overview.left = None;
             }
         }
         Message::Submit => {
@@ -273,7 +280,17 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         Key::End => n - 1,
         _ => return Task::none(),
     };
-    app.panels.overview.selected = Some(list[next].1.address.clone());
+    let new = list[next].1.address.clone();
+    let st = &mut app.panels.overview;
+    if st.selected.as_deref() != Some(new.as_str()) {
+        st.left = st.selected.replace(new);
+        st.fade.snap(0.0);
+        if crate::motion::still() {
+            st.fade.snap(1.0);
+        } else {
+            st.fade.to(1.0, crate::motion::Spring::SHOW);
+        }
+    }
     Task::none()
 }
 
@@ -388,9 +405,15 @@ fn card<'a>(
         let sel = selected == Some(w.address.as_str());
         // No borders or rings (design call): the selected window at full strength, the others
         // back, the ones a search does not match far back.
+        let f = app.panels.overview.fade.value.clamp(0.0, 1.0);
+        let left = app.panels.overview.left.as_deref() == Some(w.address.as_str());
         let alpha = if !hit {
             0.25
-        } else if selected.is_some() && !sel {
+        } else if sel {
+            0.5 + 0.5 * f
+        } else if left {
+            1.0 - 0.5 * f
+        } else if selected.is_some() {
             0.5
         } else {
             1.0
