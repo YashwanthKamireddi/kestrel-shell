@@ -235,8 +235,8 @@ pub mod size {
     pub const CARD_RADIUS: f32 = PANEL_RADIUS - PANEL_PAD;
     pub const ROW_RADIUS: f32 = 10.0;
     pub const CONTROL_RADIUS: f32 = 8.0;
-    pub const ICON: f32 = 20.0;
-    pub const ICON_TILE: f32 = 20.0;
+    pub const ICON: f32 = 16.0;
+    pub const ICON_TILE: f32 = 18.0;
 }
 
 #[cfg(test)]

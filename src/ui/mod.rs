@@ -117,16 +117,6 @@ pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
         .align_y(iced::alignment::Vertical::Center)
 }
 
-/// An icon that may show a level over its full shape (Wi-Fi bars over the dimmed fan).
-pub fn level_icon<'a, M: 'a>(i: Icon, size: f32, color: Color) -> Element<'a, M> {
-    match i.backdrop() {
-        Some(b) => {
-            iced::widget::stack![icon(b, size, color.scale_alpha(0.3)), icon(i, size, color)].into()
-        }
-        None => icon(i, size, color).into(),
-    }
-}
-
 /// A round icon button for the bar and panel headers. `active` marks an open panel or an
 /// enabled state.
 pub fn icon_button<'a, M: Clone + 'static>(
@@ -220,7 +210,7 @@ pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
     } else {
         (s.ink.scale_alpha(0.1 * s.opacity), s.ink)
     };
-    let circle = control(container(level_icon(i, size::ICON_TILE, dot_fg)).center(DOT))
+    let circle = control(container(icon(i, size::ICON_TILE, dot_fg)).center(DOT))
         .radius(DOT / 2.0)
         .colors(
             dot_bg,

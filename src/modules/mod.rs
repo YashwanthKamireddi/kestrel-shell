@@ -570,7 +570,7 @@ fn status<'a>(
     // breathes (charging, Wi-Fi connecting).
     let alive = |on: bool| if on { fg.scale_alpha(app.breath()) } else { fg };
     if app.net.available {
-        status = status.push(ui::level_icon(
+        status = status.push(icon(
             control::wifi_icon(&app.net),
             size::ICON,
             alive(app.net.connecting),

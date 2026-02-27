@@ -60,7 +60,7 @@ Rubik (the typeface the user liked in ii; chosen 2026-11-12). Sizes 11 (caption)
 | Card / tile | radius 12 (= 24 − 12), padding 12 |
 | Row | radius 10, height 40 (lists) or 32 (menus) |
 | Control | radius 8, or fully round (pill) |
-| Icons | Fluent UI System Icons, filled, 20 px designs, drawn as glyphs from an embedded subset font (assets/fonts/kestrel-icons.ttf, MIT): one set, crisp and even. Status icons show real levels and are coloured by situation |
+| Icons | Material Symbols Rounded, filled, weight 500 (as in ii and Caelestia), drawn as glyphs from an embedded subset font (assets/fonts/kestrel-icons.ttf, built by tools/icons): crisp and even. Status icons show real levels and are coloured by situation |
 
 ### Motion
 
