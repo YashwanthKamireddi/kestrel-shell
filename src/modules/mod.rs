@@ -44,7 +44,7 @@ pub const MODULES: &[Info] = &[
     Info { id: "tray", home: Home::Right, setting: Some("Tray icons") },
     Info { id: "system", home: Home::Right, setting: Some("CPU and memory") },
     Info { id: "updates", home: Home::Right, setting: Some("Pending updates") },
-    Info { id: "privacy", home: Home::Right, setting: Some("Microphone in use") },
+    Info { id: "privacy", home: Home::Right, setting: Some("Microphone and screen in use") },
     Info { id: "status", home: Home::Right, setting: Some("Network, sound and battery") },
     Info { id: "notifications", home: Home::Right, setting: None },
     Info { id: "power", home: Home::Right, setting: Some("Power") },
@@ -421,7 +421,7 @@ fn updates<'a>(
 
     items
 }
-/// Shown while an app records from a microphone.
+/// Shown while an app records from a microphone, or the screen is recorded or shared.
 fn privacy<'a>(
     app: &'a App,
     o: &'a Output,
@@ -432,37 +432,45 @@ fn privacy<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
+    // Privacy: the screen is being recorded or shared.
+    if app.hypr.screencast {
+        items.push(indicator(
+            s,
+            Icon::ScreenShare,
+            "Screen being recorded or shared".into(),
+        ));
+    }
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
         let who = app.audio.recording.join(", ");
-        items.push(
-            iced::widget::tooltip(
-                iced::widget::container(icon(Icon::Mic, 14.0, s.on_accent))
-                    .center(22)
-                    .style(move |_| iced::widget::container::Style {
-                        background: Some(s.accent.into()),
-                        border: iced::Border::default().rounded(11),
-                        ..iced::widget::container::Style::default()
-                    }),
-                iced::widget::container(label(
-                    format!("Microphone in use: {who}"),
-                    text::SMALL,
-                    s.ink,
-                ))
-                .padding([6, 10])
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(s.raised.into()),
-                    border: iced::Border::default().rounded(size::CONTROL_RADIUS),
-                    ..iced::widget::container::Style::default()
-                }),
-                iced::widget::tooltip::Position::Left,
-            )
-            .into(),
-        );
+        items.push(indicator(s, Icon::Mic, format!("Microphone in use: {who}")));
     }
 
     items
 }
+
+/// A privacy dot: an accent circle with what is in use, its name on hover.
+fn indicator<'a>(s: Scheme, i: Icon, tip: String) -> Element<'a, Message> {
+    iced::widget::tooltip(
+        iced::widget::container(icon(i, 14.0, s.on_accent))
+            .center(22)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(s.accent.into()),
+                border: iced::Border::default().rounded(11),
+                ..iced::widget::container::Style::default()
+            }),
+        iced::widget::container(label(tip, text::SMALL, s.ink))
+            .padding([6, 10])
+            .style(move |_| iced::widget::container::Style {
+                background: Some(s.raised.into()),
+                border: iced::Border::default().rounded(size::CONTROL_RADIUS),
+                ..iced::widget::container::Style::default()
+            }),
+        iced::widget::tooltip::Position::Left,
+    )
+    .into()
+}
+
 /// Network, Bluetooth, volume and battery; opens the control centre.
 fn status<'a>(
     app: &'a App,

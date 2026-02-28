@@ -3,6 +3,10 @@ Description=kestrel desktop shell
 PartOf=graphical-session.target
 After=graphical-session.target
 Requisite=graphical-session.target
+# No start limit: restarting from the key several times in a row hit systemd's default
+# (5 starts in 10 s) and left the desktop without a shell. A crash loop is still paced by
+# RestartSec below (one start a second at most).
+StartLimitIntervalSec=0
 # The shell has no authentication dialog of its own; this agent provides it.
 Wants=plasma-polkit-agent.service
 

@@ -111,19 +111,14 @@ impl<'a, M> Control<'a, M> {
         self.press = press;
         self
     }
-    /// A bar item: no fill on hover or press (design call 2026-11-13: the grey highlight looked
-    /// cheap). At rest the content sits a little dimmed under a veil of the bar's own black;
-    /// the pointer lifts the veil, so the icons and text brighten to full white, and a press
-    /// dims them again. An open panel keeps the neutral selected fill.
+    /// A bar item: never a fill (design call 2026-11-13: grey highlights looked cheap). At rest
+    /// the content sits a little dimmed under a veil of the bar's own black; under the pointer,
+    /// and while its panel is open, the veil is gone and it shows at full white. A press
+    /// changes nothing (dimming on press flickered as the panel opened).
     pub fn bar(mut self, s: crate::theme::Scheme, active: bool) -> Self {
-        let fill = if active {
-            s.selected()
-        } else {
-            Color::TRANSPARENT
-        };
-        self.rest = fill;
-        self.hover = fill;
-        self.press = fill;
+        self.rest = Color::TRANSPARENT;
+        self.hover = Color::TRANSPARENT;
+        self.press = Color::TRANSPARENT;
         self.veil = if active {
             Color::TRANSPARENT
         } else {
@@ -399,7 +394,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 );
             });
             let veil = if state.pressed {
-                self.veil.a
+                0.0
             } else {
                 self.veil.a * (1.0 - ease(state.hover_t))
             };
