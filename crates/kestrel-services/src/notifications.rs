@@ -233,8 +233,15 @@ fn clean_body(s: &str) -> String {
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
-        .trim()
-        .to_string()
+        // Chat apps send Markdown (Discord's **bold**): the marks are noise as plain text.
+        .replace("**", "")
+        .replace("~~", "")
+        .replace('`', "")
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 async fn emitter() -> Option<SignalEmitter<'static>> {
@@ -288,4 +295,15 @@ pub fn stream() -> impl Stream<Item = Event> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn bodies_are_plain_text() {
+        assert_eq!(
+            super::clean_body("<b>Hi</b> &amp; **Daily Digest**\n\n  `x` my__file  "),
+            "Hi & Daily Digest\nx my__file"
+        );
+    }
 }

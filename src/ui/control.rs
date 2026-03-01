@@ -310,9 +310,9 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
 
         if state.hovered != over {
             state.hovered = over;
-            if over {
-                state.hover_t = 1.0;
-            }
+            // On and off at once, with no fade: a fade-out waits on later frames, and when
+            // the bar had none to draw the highlight stayed after the pointer had gone.
+            state.hover_t = if over { 1.0 } else { 0.0 };
             if over && let Some(m) = &self.on_enter {
                 shell.publish(m.clone());
             }

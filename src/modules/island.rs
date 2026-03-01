@@ -121,37 +121,6 @@ pub fn bar<'a>(
         content = content.push(osd_row(osd, s));
         return finish(content, o, s, active);
     }
-    // A notification, while it is fresh: who, what, and the start of it. A click opens the
-    // notification centre.
-    if hosts_osd(app)
-        && let Some(n) = app
-            .toasts
-            .last()
-            .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
-    {
-        let lead: Element<'a, Message> = match crate::services::icons::lookup(&n.app_icon) {
-            Some(p) => ui::image_file(&p, 18.0),
-            None => icon(ui::Icon::BellRing, 16.0, s.accent).into(),
-        };
-        let mut words = row![label_w(
-            ui::fit(&n.summary, text::SMALL, 220.0),
-            text::SMALL,
-            s.ink,
-            theme::SEMIBOLD
-        )]
-        .spacing(8)
-        .align_y(Alignment::Center);
-        let body = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
-        if !body.is_empty() {
-            words = words.push(label(
-                ui::fit(&body, text::SMALL, 260.0),
-                text::SMALL,
-                s.ink_dim,
-            ));
-        }
-        content = content.push(row![lead, words].spacing(10).align_y(Alignment::Center));
-        return finish_to(content, o, s, active, PanelKind::Control);
-    }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
         let lead: Element<'a, Message> = match &f.thumb {

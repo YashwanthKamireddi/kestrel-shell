@@ -311,29 +311,26 @@ fn weather<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    // Weather now, as a circle: the condition's icon over the temperature. It opens the
-    // dashboard, which has the full weather.
+    // Weather now: the condition's icon in its colour and the temperature beside it in white
+    // (design call 2026-11-13: the tiny stacked circle looked basic). Opens the weather panel.
     if let Some(w) = &app.weather {
-        let d = size::BAR - 6.0;
         let active = open == Some(PanelKind::Weather);
         items.push(
             ui::control(
-                iced::widget::column![
-                    icon(crate::ui::weather_icon(w), 13.0, crate::ui::weather_tint(w)),
-                    label_w(
-                        app.temp(w.temp),
-                        9.5,
-                        crate::ui::temperature_tint(w.temp),
-                        theme::SEMIBOLD
+                row![
+                    icon(
+                        crate::ui::weather_icon(w),
+                        size::ICON,
+                        crate::ui::weather_tint(w)
                     ),
+                    label_w(app.temp(w.temp), text::BODY, s.ink, theme::SEMIBOLD),
                 ]
-                .spacing(0)
-                .align_x(Alignment::Center),
+                .spacing(6)
+                .align_y(Alignment::Center),
             )
-            .width(d)
-            .height(d)
-            .center_x()
-            .radius(d / 2.0)
+            .padding([0, 12])
+            .height(size::CONTROL)
+            .radius(size::CONTROL / 2.0)
             .bar(s, active)
             .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
             .into(),
@@ -433,12 +430,20 @@ fn privacy<'a>(
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
     // Privacy: the screen is being recorded or shared.
+    // A click stops a recording made with wf-recorder (as the record key does again).
     if app.hypr.screencast {
-        items.push(indicator(
-            s,
-            Icon::ScreenShare,
-            "Screen being recorded or shared".into(),
-        ));
+        items.push(
+            ui::control(indicator(
+                s,
+                Icon::ScreenShare,
+                "Recording the screen · click to stop".into(),
+            ))
+            .radius(11.0)
+            .on_press(Message::Dispatch(
+                crate::services::compositor::Action::Exec("pkill -INT -x wf-recorder".into()),
+            ))
+            .into(),
+        );
     }
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {

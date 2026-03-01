@@ -100,11 +100,15 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     .width(Length::Fill);
     if !n.body.is_empty() {
         texts = texts.push(
-            iced::widget::text(ui::ellipsize(&n.body, 180))
-                .size(text::SMALL)
-                .color(s.ink_dim)
-                .font(theme::FONT)
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            // Up to four lines of it, wrapped: enough to read without opening the app.
+            iced::widget::text(ui::ellipsize(
+                &n.body.lines().take(4).collect::<Vec<_>>().join("\n"),
+                320,
+            ))
+            .size(text::SMALL)
+            .color(s.ink_dim)
+            .font(theme::FONT)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         );
     }
     let mut body = row![texts].spacing(12).align_y(Alignment::Start);
