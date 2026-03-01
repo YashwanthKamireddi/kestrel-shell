@@ -55,10 +55,25 @@ fn ago(t: SystemTime) -> String {
     }
 }
 
+/// The app's own icon, large enough to tell at a glance who it is from (its name is tried
+/// when it sent no icon: "vesktop", "kitty").
 fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
-    match icons::lookup(&n.app_icon) {
-        Some(p) => ui::image_file_faded(&p, 16.0, s.opacity),
-        None => icon(Icon::Bell, 14.0, s.ink_dim).into(),
+    const D: f32 = 34.0;
+    let found = icons::lookup(&n.app_icon)
+        .or_else(|| icons::lookup(&n.app.to_lowercase()))
+        .or_else(|| icons::lookup(&n.app.to_lowercase().replace(' ', "-")));
+    match found {
+        Some(p) => container(ui::image_file_faded(&p, D, s.opacity))
+            .center(D)
+            .into(),
+        None => container(icon(Icon::Bell, 18.0, s.ink))
+            .center(D)
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                border: iced::Border::default().rounded(D / 2.0),
+                ..container::Style::default()
+            })
+            .into(),
     }
 }
 
@@ -76,26 +91,34 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
 /// One notification. `toast` cards show a close button always; centre cards on hover would
 /// need hover state, so they show it always too, dimmed.
 pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
-    let header = row![
-        app_icon(s, n),
-        label(ui::ellipsize(&n.app, 28), text::CAPTION, s.ink_dim),
-        label("·", text::CAPTION, s.ink_faint),
-        label(ago(n.time), text::CAPTION, s.ink_faint),
+    // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
+    // one quiet line, the title, then the message wrapped over up to four lines.
+    let top = row![
+        label_w(
+            ui::ellipsize(&n.app, 28),
+            text::CAPTION,
+            s.ink_dim,
+            theme::MEDIUM
+        ),
         Space::new().width(Length::Fill),
-        control(container(icon(Icon::X, 14.0, s.ink_dim)).center(22))
-            .radius(11.0)
+        label(ago(n.time), text::CAPTION, s.ink_faint),
+        control(container(icon(Icon::X, 13.0, s.ink_dim)).center(20))
+            .radius(10.0)
             .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
             .on_press(msg(Message::Dismiss(n.id))),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
 
-    let mut texts = column![label_w(
-        ui::ellipsize(&n.summary, 48),
-        text::BODY,
-        s.ink,
-        theme::MEDIUM
-    )]
+    let mut texts = column![
+        top,
+        label_w(
+            ui::ellipsize(&n.summary, 60),
+            text::BODY,
+            s.ink,
+            theme::SEMIBOLD
+        )
+    ]
     .spacing(2)
     .width(Length::Fill);
     if !n.body.is_empty() {
@@ -106,17 +129,20 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
                 320,
             ))
             .size(text::SMALL)
+            .line_height(iced::widget::text::LineHeight::Relative(1.35))
             .color(s.ink_dim)
             .font(theme::FONT)
             .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         );
     }
-    let mut body = row![texts].spacing(12).align_y(Alignment::Start);
+    let mut body = row![app_icon(s, n), texts]
+        .spacing(12)
+        .align_y(Alignment::Start);
     if let Some(pic) = picture(n) {
         body = body.push(pic);
     }
 
-    let mut col = column![header, body].spacing(8);
+    let mut col = column![body].spacing(10);
     let actions: Vec<_> = n
         .actions
         .iter()

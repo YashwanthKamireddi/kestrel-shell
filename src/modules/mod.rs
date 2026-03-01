@@ -311,29 +311,46 @@ fn weather<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    // Weather now: the condition's icon in its colour and the temperature beside it in white
-    // (design call 2026-11-13: the tiny stacked circle looked basic). Opens the weather panel.
+    // Weather now, on a small sky in the condition's colours (day blue, night indigo, grey
+    // cloud), the icon in its own colour and the temperature in white: a glanceable widget
+    // rather than one more black pill (design call 2026-11-13). Opens the weather panel.
     if let Some(w) = &app.weather {
         let active = open == Some(PanelKind::Weather);
+        let (top, bottom) = crate::ui::weather_sky(w);
+        let (top, bottom) = (s.fade(top), s.fade(bottom));
+        let white = s.fade(iced::Color::from_rgb8(0xF7, 0xF8, 0xFC));
+        let sky = iced::widget::container(
+            row![
+                icon(
+                    crate::ui::weather_icon(w),
+                    size::ICON,
+                    s.fade(crate::ui::weather_tint(w))
+                ),
+                label_w(app.temp(w.temp), text::BODY, white, theme::SEMIBOLD),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        )
+        .padding([0, 12])
+        .height(size::CONTROL)
+        .align_y(Alignment::Center)
+        .style(move |_| iced::widget::container::Style {
+            background: Some(
+                iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2 * 0.6))
+                    .add_stop(0.0, bottom)
+                    .add_stop(1.0, top)
+                    .into(),
+            ),
+            border: iced::Border::default().rounded(size::CONTROL / 2.0),
+            ..iced::widget::container::Style::default()
+        });
         items.push(
-            ui::control(
-                row![
-                    icon(
-                        crate::ui::weather_icon(w),
-                        size::ICON,
-                        crate::ui::weather_tint(w)
-                    ),
-                    label_w(app.temp(w.temp), text::BODY, s.ink, theme::SEMIBOLD),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-            )
-            .padding([0, 12])
-            .height(size::CONTROL)
-            .radius(size::CONTROL / 2.0)
-            .bar(s, active)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
-            .into(),
+            ui::control(sky)
+                .height(size::CONTROL)
+                .radius(size::CONTROL / 2.0)
+                .bar(s, active)
+                .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
+                .into(),
         );
     }
 
@@ -433,47 +450,32 @@ fn privacy<'a>(
     // A click stops a recording made with wf-recorder (as the record key does again).
     if app.hypr.screencast {
         items.push(
-            ui::control(indicator(
-                s,
-                Icon::ScreenShare,
-                "Recording the screen · click to stop".into(),
-            ))
-            .radius(11.0)
-            .on_press(Message::Dispatch(
-                crate::services::compositor::Action::Exec("pkill -INT -x wf-recorder".into()),
-            ))
-            .into(),
+            ui::control(indicator(s, Icon::ScreenShare))
+                .radius(11.0)
+                .on_press(Message::Dispatch(
+                    crate::services::compositor::Action::Exec("pkill -INT -x wf-recorder".into()),
+                ))
+                .into(),
         );
     }
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
-        let who = app.audio.recording.join(", ");
-        items.push(indicator(s, Icon::Mic, format!("Microphone in use: {who}")));
+        items.push(indicator(s, Icon::Mic));
     }
 
     items
 }
 
-/// A privacy dot: an accent circle with what is in use, its name on hover.
-fn indicator<'a>(s: Scheme, i: Icon, tip: String) -> Element<'a, Message> {
-    iced::widget::tooltip(
-        iced::widget::container(icon(i, 14.0, s.on_accent))
-            .center(22)
-            .style(move |_| iced::widget::container::Style {
-                background: Some(s.accent.into()),
-                border: iced::Border::default().rounded(11),
-                ..iced::widget::container::Style::default()
-            }),
-        iced::widget::container(label(tip, text::SMALL, s.ink))
-            .padding([6, 10])
-            .style(move |_| iced::widget::container::Style {
-                background: Some(s.raised.into()),
-                border: iced::Border::default().rounded(size::CONTROL_RADIUS),
-                ..iced::widget::container::Style::default()
-            }),
-        iced::widget::tooltip::Position::Left,
-    )
-    .into()
+/// A privacy dot: an accent circle with what is in use. No hover text (design call 2026-11-13).
+fn indicator<'a>(s: Scheme, i: Icon) -> Element<'a, Message> {
+    iced::widget::container(icon(i, 14.0, s.on_accent))
+        .center(22)
+        .style(move |_| iced::widget::container::Style {
+            background: Some(s.accent.into()),
+            border: iced::Border::default().rounded(11),
+            ..iced::widget::container::Style::default()
+        })
+        .into()
 }
 
 /// Network, Bluetooth, volume and battery; opens the control centre.
@@ -579,13 +581,26 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
                 match crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
                 {
                     Some(p) => ui::image_file(&p, 16.0),
-                    None => label(id.to_string(), text::SMALL, s.ink).into(),
+                    None => label(
+                        id.to_string(),
+                        text::SMALL,
+                        if active == Some(id) {
+                            s.on_accent
+                        } else {
+                            s.ink
+                        },
+                    )
+                    .into(),
                 }
             }
+            // On the accent capsule a number is dark; elsewhere white.
+            Some(_) if active == Some(id) => {
+                label_w(id.to_string(), text::SMALL, s.on_accent, theme::SEMIBOLD).into()
+            }
             Some(_) => label(id.to_string(), text::SMALL, s.ink).into(),
-            // Empty: the current one shows its number in the accent, the rest a quiet dot.
+            // Empty: the current one shows its number, the rest a quiet dot.
             None if active == Some(id) => {
-                label_w(id.to_string(), text::SMALL, s.accent, theme::SEMIBOLD).into()
+                label_w(id.to_string(), text::SMALL, s.on_accent, theme::SEMIBOLD).into()
             }
             None => container(Space::new())
                 .width(4)
@@ -611,15 +626,16 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             .into()
     }))
     .spacing(SLOT_GAP);
-    // The current workspace: a soft accent capsule that stretches to the next one as you move
+    // The current workspace: a solid accent capsule that stretches to the next one as you move
     // (its two edges are separate springs) and settles round on it. Inside the pill always.
     let span = (o.pill_r.value - o.pill_x.value).max(SLOT);
     let highlight = container(Space::new())
         .width(span)
         .height(SLOT)
         .style(move |_| container::Style {
-            // Neutral, like every selection (an accent tint read as muddy on black).
-            background: Some(s.selected().into()),
+            // Solid accent (design call 2026-11-13: the grey disc was hard to find). A pale
+            // accent tint read as muddy on black; the full colour does not.
+            background: Some(s.accent.into()),
             border: iced::Border::default().rounded(SLOT / 2.0),
             ..container::Style::default()
         });
