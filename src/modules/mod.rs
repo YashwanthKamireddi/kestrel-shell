@@ -446,17 +446,52 @@ fn privacy<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    // Privacy: the screen is being recorded or shared.
-    // A click stops a recording made with wf-recorder (as the record key does again).
-    if app.hypr.screencast {
+    // Recording (wf-recorder): its own pill, a red dot and the time it has run, like a
+    // phone's; a click stops it and the island says where it was saved.
+    if app.hypr.screencast && app.hypr.recording.is_some() {
+        let secs = app
+            .hypr
+            .recording_since
+            .and_then(|t| t.elapsed().ok())
+            .map_or(0, |d| d.as_secs());
+        let time = if secs >= 3600 {
+            format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
+        } else {
+            format!("{}:{:02}", secs / 60, secs % 60)
+        };
+        let red = s.fade(iced::Color::from_rgb8(0xFF, 0x45, 0x3A));
+        let dot = iced::widget::container(Space::new())
+            .width(8)
+            .height(8)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(red.into()),
+                border: iced::Border::default().rounded(4),
+                ..iced::widget::container::Style::default()
+            });
+        // Digits keep their place as they count (a fixed width per length).
+        let digits = time.len() as f32 * 7.6;
         items.push(
-            ui::control(indicator(s, Icon::ScreenShare))
-                .radius(11.0)
-                .on_press(Message::Dispatch(
-                    crate::services::compositor::Action::Exec("pkill -INT -x wf-recorder".into()),
-                ))
-                .into(),
+            ui::control(
+                row![
+                    dot,
+                    iced::widget::container(label_w(time, text::BODY, s.ink, theme::SEMIBOLD))
+                        .width(digits)
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            )
+            .padding([0, 12])
+            .height(size::CONTROL)
+            .radius(size::CONTROL / 2.0)
+            .bar(s, true)
+            .on_press(Message::Dispatch(
+                crate::services::compositor::Action::Exec("pkill -INT -x wf-recorder".into()),
+            ))
+            .into(),
         );
+    } else if app.hypr.screencast {
+        // Shared (a call or a browser showing the screen): the accent mark.
+        items.push(indicator(s, Icon::ScreenShare));
     }
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
