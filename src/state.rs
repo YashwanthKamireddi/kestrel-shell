@@ -1,5 +1,5 @@
 //! What the shell remembers between runs, in one file: `$XDG_STATE_HOME/kestrel/state.toml`,
-//! one table per owner (`[tray]`, `[emoji]`, `[files]`, `[launcher]`). Never the user's
+//! one table per owner (`[tray]`, `[emoji]`, `[files]`, `[launcher]`, `[toggles]`). Never the user's
 //! settings: those are config.toml. Written whole and atomically (a temporary file renamed
 //! over it), so a crash mid-write never leaves it half written. The loose files kestrel used
 //! before are read once and removed.
@@ -16,6 +16,17 @@ pub struct State {
     pub emoji: Emoji,
     pub files: Files,
     pub launcher: Launcher,
+    pub toggles: Toggles,
+}
+
+/// Control-centre switches kestrel itself holds, so a restarted shell puts them back as they
+/// were (Wi-Fi, Bluetooth, power mode and VPNs live in the system and keep themselves).
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct Toggles {
+    pub dnd: bool,
+    pub caffeine: bool,
+    pub night_light: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]

@@ -567,10 +567,16 @@ fn status<'a>(
 /// Workspace slots: app icon or faint number, with a gliding highlight on the active one.
 fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let n = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces);
-    let active = app.hypr.active_on(&o.name);
     // One slot per workspace: the icon of the app last used there, or a faint number when the
     // workspace is empty. A soft highlight glides to the active one.
+    let (cap_l, cap_r) = (o.pill_x.value, o.pill_r.value.max(o.pill_x.value + SLOT));
     let slots = row((1..=n as i32).map(|id| {
+        // How much of the moving capsule is over this slot (0 to 1): its number turns dark as
+        // the capsule arrives and white as it leaves, in step with the motion rather than
+        // flipping the moment a key is pressed.
+        let left = (id - 1) as f32 * (SLOT + SLOT_GAP);
+        let over = ((cap_r.min(left + SLOT) - cap_l.max(left)) / SLOT).clamp(0.0, 1.0);
+        let ink = crate::theme::color::mix(s.ink, s.on_accent, over);
         let ws = app
             .hypr
             .workspaces
@@ -581,26 +587,13 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
                 match crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
                 {
                     Some(p) => ui::image_file(&p, 16.0),
-                    None => label(
-                        id.to_string(),
-                        text::SMALL,
-                        if active == Some(id) {
-                            s.on_accent
-                        } else {
-                            s.ink
-                        },
-                    )
-                    .into(),
+                    None => label(id.to_string(), text::SMALL, ink).into(),
                 }
             }
-            // On the accent capsule a number is dark; elsewhere white.
-            Some(_) if active == Some(id) => {
-                label_w(id.to_string(), text::SMALL, s.on_accent, theme::SEMIBOLD).into()
-            }
-            Some(_) => label(id.to_string(), text::SMALL, s.ink).into(),
-            // Empty: the current one shows its number, the rest a quiet dot.
-            None if active == Some(id) => {
-                label_w(id.to_string(), text::SMALL, s.on_accent, theme::SEMIBOLD).into()
+            Some(_) => label_w(id.to_string(), text::SMALL, ink, theme::SEMIBOLD).into(),
+            // Empty: under the capsule its number, elsewhere a quiet dot.
+            None if over > 0.35 => {
+                label_w(id.to_string(), text::SMALL, ink, theme::SEMIBOLD).into()
             }
             None => container(Space::new())
                 .width(4)
@@ -612,9 +605,11 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
                 })
                 .into(),
         };
+        // No dimming film over the slots: it lay over the capsule too and made it two-toned
+        // while moving and dull at rest.
         ui::control(container(content).center(SLOT))
             .radius(SLOT / 2.0)
-            .bar(s, false)
+            .bar(s, true)
             .on_press(Message::Dispatch(
                 crate::services::compositor::Action::FocusWorkspace(id),
             ))
