@@ -15,6 +15,9 @@ pub struct Config {
     pub workspaces: u32,
     /// Theme GTK, Qt, kitty, Hyprland borders and hyprlock with the shell's colours.
     pub theme_apps: bool,
+    /// What the bar's pills and the panels are made of: "black" (solid), "frosted" (dark
+    /// glass over a blur of what is behind) or "glass" (clearer, with a sheen and a rim).
+    pub material: Material,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
     /// Exact place for the weather (a neighbourhood the city search can't find); the city
@@ -57,6 +60,15 @@ impl Default for ClockConfig {
             date: true,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Material {
+    #[default]
+    Black,
+    Frosted,
+    Glass,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -167,6 +179,7 @@ impl Default for Config {
             frame: Frame::default(),
             workspaces: 5,
             theme_apps: true,
+            material: Material::Black,
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,

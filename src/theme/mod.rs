@@ -187,6 +187,17 @@ impl Scheme {
     }
 }
 
+/// The pills and panels are see-through glass (config `material` is not "black").
+static GLASS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_glass(on: bool) {
+    GLASS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn glass() -> bool {
+    GLASS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 impl Default for Scheme {
     fn default() -> Self {
         Self::dark(Seed::default())

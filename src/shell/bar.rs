@@ -102,7 +102,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // The bar surface draws the band (and the frame's top corners); the overlay draws the
     // toasts' and pop-ups' boxes, joined to the band where it is.
     let shape = canvas(BarShape {
-        color: s.base,
+        color: s.base.scale_alpha(panel_alpha(app.config.material)),
         bar: size::BAR,
         frame: t,
         corner: if overlay { 0.0 } else { app.frame().radius },
@@ -186,11 +186,14 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     let panel_shape = panel_drop.map(|(d, k, _)| {
         canvas(BarShape {
             // Closing, the box goes with its content instead of lingering faintly after it.
-            color: s.base.scale_alpha(if panel.is_some_and(|p| p.open) {
-                k
-            } else {
-                crate::motion::range(k, 0.4, 1.0)
-            }),
+            color: s
+                .base
+                .scale_alpha(panel_alpha(app.config.material))
+                .scale_alpha(if panel.is_some_and(|p| p.open) {
+                    k
+                } else {
+                    crate::motion::range(k, 0.4, 1.0)
+                }),
             bar: size::BAR,
             frame: t,
             corner: 0.0,
@@ -393,6 +396,7 @@ fn section<'a>(
             .collect();
         return row(items).spacing(4).align_y(Alignment::Center).into();
     }
+    let material = app.config.material;
     // Neighbours of the same group share a pill; every other module is a pill alone.
     let mut groups: Vec<Vec<Element<'a, Message>>> = Vec::new();
     let mut last: Option<usize> = None;
@@ -418,12 +422,59 @@ fn section<'a>(
             .padding([0, if single { 0 } else { 4 }])
             .height(size::BAR - 6.0)
             .center_y(size::BAR - 6.0)
-            .style(move |_| container::Style {
-                background: Some(s.base.into()),
-                border: iced::Border::default().rounded((size::BAR - 6.0) / 2.0),
-                ..container::Style::default()
-            })
+            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0))
             .into()
     });
     row(pills_row).spacing(6).align_y(Alignment::Center).into()
+}
+
+/// A pill's look in each material. Frosted and glass are see-through; Hyprland blurs what is
+/// behind them (a layer rule for kestrel's surfaces), so they read as glass, not as tinted.
+pub fn pill_style(m: crate::config::Material, s: Scheme, radius: f32) -> container::Style {
+    use crate::config::Material;
+    let (background, border): (iced::Background, iced::Border) = match m {
+        Material::Black => (s.base.into(), iced::Border::default()),
+        // Dark smoked glass: most of the black kept, so white text stays easy to read over
+        // anything, and a faint rim so it does not melt into a dark wallpaper.
+        Material::Frosted => (
+            s.base.scale_alpha(0.55).into(),
+            iced::Border {
+                color: s.ink.scale_alpha(0.07 * s.opacity),
+                width: 1.0,
+                radius: radius.into(),
+            },
+        ),
+        // Clearer glass: a light sheen at the top fading into a light smoke, and a brighter
+        // rim, like light catching the edge.
+        Material::Glass => (
+            iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
+                .add_stop(0.0, s.ink.scale_alpha(0.13 * s.opacity))
+                .add_stop(0.5, s.base.scale_alpha(0.22 * s.opacity))
+                .add_stop(1.0, s.base.scale_alpha(0.32 * s.opacity))
+                .into(),
+            iced::Border {
+                color: s.ink.scale_alpha(0.18 * s.opacity),
+                width: 1.0,
+                radius: radius.into(),
+            },
+        ),
+    };
+    container::Style {
+        background: Some(background),
+        border: iced::Border {
+            radius: radius.into(),
+            ..border
+        },
+        ..container::Style::default()
+    }
+}
+
+/// How opaque the panels' and banners' boxes are in each material: more than the pills, since
+/// they hold more text.
+pub fn panel_alpha(m: crate::config::Material) -> f32 {
+    match m {
+        crate::config::Material::Black => 1.0,
+        crate::config::Material::Frosted => 0.72,
+        crate::config::Material::Glass => 0.55,
+    }
 }

@@ -116,6 +116,16 @@ impl<'a, M> Control<'a, M> {
     /// and while its panel is open, the veil is gone and it shows at full white. A press
     /// changes nothing (dimming on press flickered as the panel opened).
     pub fn bar(mut self, s: crate::theme::Scheme, active: bool) -> Self {
+        // On glass a dark film would show as a darker patch: there the pointer lightens the
+        // item a little instead, as light does on glass.
+        if crate::theme::glass() {
+            let lift = s.ink.scale_alpha(0.1 * s.opacity);
+            self.rest = if active { lift } else { Color::TRANSPARENT };
+            self.hover = lift;
+            self.press = lift;
+            self.veil = Color::TRANSPARENT;
+            return self;
+        }
         self.rest = Color::TRANSPARENT;
         self.hover = Color::TRANSPARENT;
         self.press = Color::TRANSPARENT;
