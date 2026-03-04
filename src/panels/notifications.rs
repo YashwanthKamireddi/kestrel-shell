@@ -28,6 +28,34 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             app.toasts.retain(|t| t.id != id);
             Task::future(notifications::closed(id, Reason::Dismissed)).discard()
         }
+        // Kestrel's own entries: open a file or folder, or save a copied picture.
+        Message::Action(id, key) if key.starts_with("kestrel-") => {
+            app.toasts.retain(|t| t.id != id);
+            if let Some(path) = key.strip_prefix("kestrel-open:") {
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(path)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+            } else if let Some(path) = key.strip_prefix("kestrel-save:")
+                && let Some(saved) = save_picture(path)
+            {
+                {
+                    // The entry now points at the saved file.
+                    if let Some(n) = app.notifications.iter_mut().find(|n| n.id == id) {
+                        n.body = format!(
+                            "Saved in {}",
+                            saved
+                                .parent()
+                                .map_or(String::new(), |p| p.display().to_string())
+                        );
+                        n.actions =
+                            vec![(format!("kestrel-open:{}", saved.display()), "Open".into())];
+                    }
+                }
+            }
+            Task::none()
+        }
         Message::Action(id, key) => {
             app.notifications.retain(|n| n.id != id);
             app.toasts.retain(|t| t.id != id);
@@ -43,6 +71,27 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             )
         }
     }
+}
+
+/// Copies a kept picture into Pictures/Screenshots under a dated name.
+fn save_picture(from: &str) -> Option<std::path::PathBuf> {
+    let pictures = std::process::Command::new("xdg-user-dir")
+        .arg("PICTURES")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|p| !p.is_empty())?;
+    let dir = std::path::Path::new(&pictures).join("Screenshots");
+    std::fs::create_dir_all(&dir).ok()?;
+    let ext = std::path::Path::new(from)
+        .extension()
+        .map_or("png".into(), |e| e.to_string_lossy().into_owned());
+    let to = dir.join(format!(
+        "Screenshot_{}.{ext}",
+        chrono::Local::now().format("%Y-%m-%d_%H.%M.%S")
+    ));
+    std::fs::copy(from, &to).ok()?;
+    Some(to)
 }
 
 fn ago(t: SystemTime) -> String {

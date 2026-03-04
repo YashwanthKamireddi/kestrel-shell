@@ -28,11 +28,13 @@ const THUMB: (u32, u32) = (112, 64);
 pub enum Copied {
     /// Text: its start, whitespace collapsed.
     Text(String),
-    /// An image: its size and a small RGBA thumbnail.
+    /// An image: its size, a small RGBA thumbnail, and a copy of it kept in the runtime
+    /// directory (memory-backed, gone at logout) so it can be opened after the clipboard moves on.
     Image {
         width: u32,
         height: u32,
         thumb: (u32, u32, Vec<u8>),
+        file: Option<String>,
     },
     /// Something marked secret, or a type with nothing to show.
     Other,
@@ -194,16 +196,17 @@ fn read_offer(
     let _ = conn.flush();
     drop(write);
     let is_image = mime.starts_with("image/");
+    let mime = mime.clone();
     std::thread::spawn(move || {
         let mut data = Vec::new();
         let _ = std::fs::File::from(read)
             .take(READ_LIMIT as u64)
             .read_to_end(&mut data);
-        let _ = out.unbounded_send(describe(&data, is_image));
+        let _ = out.unbounded_send(describe(&data, is_image, &mime));
     });
 }
 
-fn describe(data: &[u8], is_image: bool) -> Copied {
+fn describe(data: &[u8], is_image: bool, mime: &str) -> Copied {
     if is_image {
         return match image::load_from_memory(data) {
             Ok(img) => {
@@ -213,6 +216,7 @@ fn describe(data: &[u8], is_image: bool) -> Copied {
                     width,
                     height,
                     thumb: (t.width(), t.height(), t.into_raw()),
+                    file: keep(data, mime),
                 }
             }
             Err(_) => Copied::Other,
@@ -233,6 +237,32 @@ fn describe(data: &[u8], is_image: bool) -> Copied {
     }
 }
 
+/// Keeps a copied image in `$XDG_RUNTIME_DIR/kestrel/copied` (the newest ten), for opening it
+/// from the notification list.
+fn keep(data: &[u8], mime: &str) -> Option<String> {
+    let dir = std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?)
+        .join("kestrel")
+        .join("copied");
+    std::fs::create_dir_all(&dir).ok()?;
+    let ext = mime.strip_prefix("image/").unwrap_or("png");
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    let path = dir.join(format!("{ms}.{ext}"));
+    std::fs::write(&path, data).ok()?;
+    let mut old: Vec<_> = std::fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    old.sort();
+    for p in old.iter().rev().skip(10) {
+        let _ = std::fs::remove_file(p);
+    }
+    Some(path.to_string_lossy().into_owned())
+}
+
 fn digest(c: &Copied) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     match c {
@@ -241,6 +271,7 @@ fn digest(c: &Copied) -> u64 {
             width,
             height,
             thumb,
+            ..
         } => (width, height, &thumb.2).hash(&mut h),
         Copied::Other => 0u8.hash(&mut h),
     }
@@ -310,13 +341,13 @@ mod tests {
     #[test]
     fn text_is_collapsed_and_cut() {
         let long = "a  b\n\tc ".repeat(100);
-        match describe(long.as_bytes(), false) {
+        match describe(long.as_bytes(), false, "text/plain") {
             Copied::Text(t) => {
                 assert!(t.starts_with("a b c a b c"));
                 assert_eq!(t.chars().count(), 120);
             }
             other => panic!("{other:?}"),
         }
-        assert_eq!(describe(b"  \n", false), Copied::Other);
+        assert_eq!(describe(b"  \n", false, "text/plain"), Copied::Other);
     }
 }

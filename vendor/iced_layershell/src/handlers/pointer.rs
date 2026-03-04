@@ -32,6 +32,11 @@ impl PointerHandler for WaylandState {
             match event.kind {
                 PointerEventKind::Enter { serial, .. } => {
                     self.pointer_enter_serial = serial;
+                    // kestrel: Wayland wants the cursor's image set on every enter. Forget the
+                    // last shape so the next update sets it again with this enter's serial;
+                    // otherwise, entering with an unchanged shape (after a screenshot's
+                    // selection closes over the bar) left the pointer invisible.
+                    self.current_mouse_interaction = iced_core::mouse::Interaction::Hidden;
                     self.pointer_surface = Some(surface_id);
                     self.cursor_position =
                         iced_core::Point::new(event.position.0 as f32, event.position.1 as f32);

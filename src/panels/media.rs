@@ -483,8 +483,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .align_y(Alignment::Center),
     );
 
-    // The panel takes a deep tint of the artwork's own colour.
-    let tint = art_colour(p).map(|c| s.fade(mix(c, s.base, 0.72)));
+    // The panel takes a deep tint of the artwork's own colour; frosted, it sits on the frost
+    // like every other panel.
+    let tint = art_colour(p)
+        .filter(|_| !crate::theme::glass())
+        .map(|c| s.fade(mix(c, s.base, 0.72)));
     // Both ends fade with the panel (the bottom at full strength stayed behind on close).
     let base = s.fade(s.base);
     container(top)

@@ -311,46 +311,29 @@ fn weather<'a>(
     let id = o.id;
     let _ = id;
     let mut items: Vec<Element<'a, Message>> = Vec::new();
-    // Weather now, on a small sky in the condition's colours (day blue, night indigo, grey
-    // cloud), the icon in its own colour and the temperature in white: a glanceable widget
-    // rather than one more black pill (design call 2026-11-13). Opens the weather panel.
+    // Weather now: the condition's icon in its colour and the temperature in white, on the
+    // same pill as everything else (one look across the bar, design call 2026-11-13).
     if let Some(w) = &app.weather {
         let active = open == Some(PanelKind::Weather);
-        let (top, bottom) = crate::ui::weather_sky(w);
-        let (top, bottom) = (s.fade(top), s.fade(bottom));
-        let white = s.fade(iced::Color::from_rgb8(0xF7, 0xF8, 0xFC));
-        let sky = iced::widget::container(
-            row![
-                icon(
-                    crate::ui::weather_icon(w),
-                    size::ICON,
-                    s.fade(crate::ui::weather_tint(w))
-                ),
-                label_w(app.temp(w.temp), text::BODY, white, theme::SEMIBOLD),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
-        )
-        .padding([0, 12])
-        .height(size::CONTROL)
-        .align_y(Alignment::Center)
-        .style(move |_| iced::widget::container::Style {
-            background: Some(
-                iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2 * 0.6))
-                    .add_stop(0.0, bottom)
-                    .add_stop(1.0, top)
-                    .into(),
-            ),
-            border: iced::Border::default().rounded(size::CONTROL / 2.0),
-            ..iced::widget::container::Style::default()
-        });
         items.push(
-            ui::control(sky)
-                .height(size::CONTROL)
-                .radius(size::CONTROL / 2.0)
-                .bar(s, active)
-                .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
-                .into(),
+            ui::control(
+                row![
+                    icon(
+                        crate::ui::weather_icon(w),
+                        size::ICON,
+                        crate::ui::weather_tint(w)
+                    ),
+                    label_w(app.temp(w.temp), text::BODY, s.ink, theme::SEMIBOLD),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .padding([0, 12])
+            .height(size::CONTROL)
+            .radius(size::CONTROL / 2.0)
+            .bar(s, active)
+            .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
+            .into(),
         );
     }
 
@@ -600,7 +583,7 @@ fn status<'a>(
     items
 }
 /// How much wider the current workspace's capsule is than a slot.
-const WS_EXTRA: f32 = 22.0;
+const WS_EXTRA: f32 = 14.0;
 
 /// Workspaces, GNOME-style: a dot for each empty one, the app's icon where something is open,
 /// and the current one a wider accent capsule. As it moves, the slot it leaves narrows and the
@@ -617,7 +600,7 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         let i = (id - 1) as usize;
         let over = on(i);
         // Dark on the capsule, white off it, changing as it passes.
-        let ink = crate::theme::color::mix(s.ink, s.on_accent, over);
+        let ink = crate::theme::color::mix(s.ink, s.base, over);
         let ws = app
             .hypr
             .workspaces
@@ -635,7 +618,7 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             }
             // Empty: a small dot, brighter as the capsule nears.
             (None, None) => {
-                let dot = crate::theme::color::mix(s.ink_faint, s.on_accent, over);
+                let dot = crate::theme::color::mix(s.ink_faint, s.base, over);
                 container(Space::new())
                     .width(5)
                     .height(5)
@@ -669,7 +652,9 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         .width(SLOT + WS_EXTRA)
         .height(SLOT)
         .style(move |_| container::Style {
-            background: Some(s.accent.into()),
+            // White, like GNOME's: clear on any look without adding a colour (the accent
+            // capsule was "too much", design call 2026-11-13).
+            background: Some(s.ink.into()),
             border: iced::Border::default().rounded(SLOT / 2.0),
             ..container::Style::default()
         });
