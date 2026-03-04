@@ -87,7 +87,7 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
                 ))
                 .center(BUBBLE)
                 .style(move |_| iced::widget::container::Style {
-                    background: Some(s.base.into()),
+                    background: Some(crate::theme::surface(s).into()),
                     border: iced::Border::default().rounded(BUBBLE / 2.0),
                     ..iced::widget::container::Style::default()
                 }),
@@ -281,13 +281,8 @@ fn finish_to<'a>(
         .padding([0, 14])
         .height(h)
         .radius(h / 2.0)
-        .colors(
-            // The same states as every other pill: a faint lift on hover, a clear one while its
-            // panel is open.
-            if active { s.selected() } else { s.base },
-            if active { s.selected() } else { s.hover() },
-            s.raised_press,
-        )
+        // The same states as every other pill.
+        .bar(s, active)
         .on_press_at(move |r| Message::Toggle(kind, id, r))
         .into()
 }

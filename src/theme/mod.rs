@@ -198,6 +198,16 @@ pub fn glass() -> bool {
     GLASS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// A pill-shaped thing's own fill: the black in the Black look, none when frosted (the frost
+/// under the pill shows through).
+pub fn surface(s: Scheme) -> iced::Color {
+    if glass() {
+        iced::Color::TRANSPARENT
+    } else {
+        s.base
+    }
+}
+
 impl Default for Scheme {
     fn default() -> Self {
         Self::dark(Seed::default())

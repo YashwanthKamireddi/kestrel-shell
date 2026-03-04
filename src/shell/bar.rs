@@ -102,12 +102,12 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // The bar surface draws the band (and the frame's top corners); the overlay draws the
     // toasts' and pop-ups' boxes, joined to the band where it is.
     let shape = canvas(BarShape {
-        color: s.base.scale_alpha(panel_alpha(app.config.material)),
+        color: s.base.scale_alpha(panel_alpha(app)),
         bar: size::BAR,
         frame: t,
         corner: if overlay { 0.0 } else { app.frame().radius },
         band: !pills && !overlay,
-        drops: if overlay { drops } else { Vec::new() },
+        drops: if overlay { drops.clone() } else { Vec::new() },
     })
     .width(Length::Fill)
     .height(Length::Fill);
@@ -186,14 +186,13 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     let panel_shape = panel_drop.map(|(d, k, _)| {
         canvas(BarShape {
             // Closing, the box goes with its content instead of lingering faintly after it.
-            color: s
-                .base
-                .scale_alpha(panel_alpha(app.config.material))
-                .scale_alpha(if panel.is_some_and(|p| p.open) {
+            color: s.base.scale_alpha(panel_alpha(app)).scale_alpha(
+                if panel.is_some_and(|p| p.open) {
                     k
                 } else {
                     crate::motion::range(k, 0.4, 1.0)
-                }),
+                },
+            ),
             bar: size::BAR,
             frame: t,
             corner: 0.0,
@@ -216,6 +215,38 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     }
     if let Some(ps) = panel_shape {
         layers.push(ps.into());
+    }
+    // Frosted: the frost fills the boxes of the panel, banners and pop-ups (fading with them),
+    // under their content.
+    if app.config.material == crate::config::Material::Frosted {
+        let mut boxes: Vec<(crate::ui::shape::Drop, f32, f32)> = drops
+            .iter()
+            .filter(|d| d.height > 0.5)
+            .map(|d| (*d, d.height, 1.0))
+            .collect();
+        if let Some((d, k, h)) = panel_drop {
+            let a = if panel.is_some_and(|p| p.open) {
+                k
+            } else {
+                crate::motion::range(k, 0.4, 1.0)
+            };
+            boxes.push((d, h, a));
+        }
+        for (d, h, a) in boxes {
+            layers.push(
+                pin(frosted(
+                    app,
+                    o,
+                    d.radius,
+                    a * s.opacity,
+                    Space::new().width(d.width).height(h),
+                ))
+                .position(Point::new(d.x, d.top))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+            );
+        }
     }
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
@@ -418,63 +449,58 @@ fn section<'a>(
     let pills_row = groups.into_iter().map(|items| {
         // A pill with one item (the island) is that item: it fills the pill edge to edge.
         let single = items.len() == 1;
-        container(row(items).spacing(4).align_y(Alignment::Center))
+        let pill = container(row(items).spacing(4).align_y(Alignment::Center))
             .padding([0, if single { 0 } else { 4 }])
             .height(size::BAR - 6.0)
             .center_y(size::BAR - 6.0)
-            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0))
-            .into()
+            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
+        frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
     });
     row(pills_row).spacing(6).align_y(Alignment::Center).into()
 }
 
-/// A pill's look in each material. Frosted and glass are see-through; Hyprland blurs what is
-/// behind them (a layer rule for kestrel's surfaces), so they read as glass, not as tinted.
+/// A pill's box in each material. Frosted has no fill of its own: the frost (`ui::frost`) is
+/// drawn under it, and a faint rim keeps its edge on a dark wallpaper.
 pub fn pill_style(m: crate::config::Material, s: Scheme, radius: f32) -> container::Style {
     use crate::config::Material;
-    let (background, border): (iced::Background, iced::Border) = match m {
-        Material::Black => (s.base.into(), iced::Border::default()),
-        // Dark smoked glass: most of the black kept, so white text stays easy to read over
-        // anything, and a faint rim so it does not melt into a dark wallpaper.
-        Material::Frosted => (
-            s.base.scale_alpha(0.55).into(),
-            iced::Border {
-                color: s.ink.scale_alpha(0.07 * s.opacity),
-                width: 1.0,
-                radius: radius.into(),
-            },
-        ),
-        // Clearer glass: a light sheen at the top fading into a light smoke, and a brighter
-        // rim, like light catching the edge.
-        Material::Glass => (
-            iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
-                .add_stop(0.0, s.ink.scale_alpha(0.13 * s.opacity))
-                .add_stop(0.5, s.base.scale_alpha(0.22 * s.opacity))
-                .add_stop(1.0, s.base.scale_alpha(0.32 * s.opacity))
-                .into(),
-            iced::Border {
-                color: s.ink.scale_alpha(0.18 * s.opacity),
-                width: 1.0,
-                radius: radius.into(),
-            },
-        ),
-    };
     container::Style {
-        background: Some(background),
+        background: match m {
+            Material::Black => Some(s.base.into()),
+            Material::Frosted => None,
+        },
         border: iced::Border {
+            color: match m {
+                Material::Black => iced::Color::TRANSPARENT,
+                Material::Frosted => s.ink.scale_alpha(0.08 * s.opacity),
+            },
+            width: if m == Material::Black { 0.0 } else { 1.0 },
             radius: radius.into(),
-            ..border
         },
         ..container::Style::default()
     }
 }
 
-/// How opaque the panels' and banners' boxes are in each material: more than the pills, since
-/// they hold more text.
-pub fn panel_alpha(m: crate::config::Material) -> f32 {
-    match m {
-        crate::config::Material::Black => 1.0,
-        crate::config::Material::Frosted => 0.72,
-        crate::config::Material::Glass => 0.55,
+/// `content` on frost at `radius` when the look is Frosted and the wallpaper is in; else as is.
+pub fn frosted<'a>(
+    app: &App,
+    o: &Output,
+    radius: f32,
+    opacity: f32,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    match app.wallpaper.as_ref() {
+        Some(w) if app.config.material == crate::config::Material::Frosted => {
+            crate::ui::frost::frost(w.frost.clone(), o.size, radius, opacity, content).into()
+        }
+        _ => content.into(),
+    }
+}
+
+/// How opaque the panels' and banners' own fill is: none when frosted (the frost is under
+/// them), unless there is no wallpaper to frost.
+pub fn panel_alpha(app: &App) -> f32 {
+    match app.config.material {
+        crate::config::Material::Frosted if app.wallpaper.is_some() => 0.0,
+        _ => 1.0,
     }
 }

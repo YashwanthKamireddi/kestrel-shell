@@ -15,8 +15,8 @@ pub struct Config {
     pub workspaces: u32,
     /// Theme GTK, Qt, kitty, Hyprland borders and hyprlock with the shell's colours.
     pub theme_apps: bool,
-    /// What the bar's pills and the panels are made of: "black" (solid), "frosted" (dark
-    /// glass over a blur of what is behind) or "glass" (clearer, with a sheen and a rim).
+    /// What the bar's pills and the panels are made of: "black" (solid) or "frosted" (a heavy
+    /// blur of the wallpaper behind them, darkened so text stays easy to read).
     pub material: Material,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
@@ -67,8 +67,9 @@ impl Default for ClockConfig {
 pub enum Material {
     #[default]
     Black,
+    /// "glass" was a second, clearer look for a while; it reads as frosted now.
+    #[serde(alias = "glass")]
     Frosted,
-    Glass,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
