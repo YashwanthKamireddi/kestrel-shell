@@ -146,6 +146,8 @@ pub enum Key {
     Delete,
     Backspace,
     Enter,
+    /// Enter with Shift held.
+    ShiftEnter,
     Space,
 }
 
@@ -257,6 +259,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::End => Key::End,
                 N::Delete => Key::Delete,
                 N::Backspace => Key::Backspace,
+                N::Enter if modifiers.shift() => Key::ShiftEnter,
                 N::Enter => Key::Enter,
                 N::Space => Key::Space,
                 _ => return None,
