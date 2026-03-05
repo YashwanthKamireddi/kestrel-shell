@@ -3,8 +3,8 @@
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
-use crate::theme::{self, Scheme, size, text};
-use crate::ui::{Icon, control, icon, label, label_w};
+use crate::theme::{self, Scheme, text};
+use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, mouse_area, row, text_input};
 use iced::{Alignment, Color, Element, Length, Task};
 
@@ -182,11 +182,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .padding([0, 12])
     .height(44)
     .center_y(44)
-    .style(move |_| container::Style {
-        background: Some(s.raised.into()),
-        border: iced::Border::default().rounded(size::CARD_RADIUS),
-        ..container::Style::default()
-    });
+    .style(move |_| ui::field_style(s));
 
     let grid_h = ROWS as f32 * (CELL + 4.0);
     let mut grid = column![].spacing(4);

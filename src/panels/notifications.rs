@@ -137,9 +137,9 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
     }
 }
 
-/// One notification. `toast` cards show a close button always; centre cards on hover would
-/// need hover state, so they show it always too, dimmed.
-pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
+/// One notification. In the list it is a card of its own; as a banner (`boxed` false) the
+/// banner's box is its card, so there is no box inside a box.
+pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMessage> {
     // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
     // one quiet line, the title, then the message wrapped over up to four lines.
     let top = row![
@@ -151,9 +151,14 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         ),
         Space::new().width(Length::Fill),
         label(ago(n.time), text::CAPTION, s.ink_faint),
-        control(container(icon(Icon::X, 13.0, s.ink_dim)).center(20))
-            .radius(10.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        // A real button: a soft round fill, big enough to hit (it was a bare 13 px cross).
+        control(container(icon(Icon::X, 12.0, s.ink)).center(24))
+            .radius(12.0)
+            .colors(
+                s.ink.scale_alpha(0.08 * s.opacity),
+                s.ink.scale_alpha(0.16 * s.opacity),
+                s.ink.scale_alpha(0.22 * s.opacity),
+            )
             .on_press(msg(Message::Dismiss(n.id))),
     ]
     .spacing(6)
@@ -217,22 +222,34 @@ pub fn card<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
             .spacing(6),
         );
     }
-    let has_default = n.actions.iter().any(|(k, _)| k == "default");
+    // What a click on the card does: the app's default action, or for kestrel's own entries
+    // (a recording, a picture) opening it.
+    let default = n
+        .actions
+        .iter()
+        .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))
+        .map(|(k, _)| k.clone());
+    let has_default = default.is_some();
+    let rest = if boxed {
+        s.ink.scale_alpha(0.06 * s.opacity)
+    } else {
+        Color::TRANSPARENT
+    };
     control(col)
         .padding(12)
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
         .colors(
-            s.ink.scale_alpha(0.06 * s.opacity),
+            rest,
             if has_default {
-                s.ink.scale_alpha(0.1 * s.opacity)
+                s.ink.scale_alpha(0.08 * s.opacity)
             } else {
-                s.ink.scale_alpha(0.06 * s.opacity)
+                rest
             },
-            s.ink.scale_alpha(0.06 * s.opacity),
+            rest,
         )
         .no_press_scale()
-        .on_press_maybe(has_default.then(|| msg(Message::Action(n.id, "default".into()))))
+        .on_press_maybe(default.map(|k| msg(Message::Action(n.id, k))))
         .into()
 }
 
@@ -252,7 +269,7 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .align_y(Alignment::Center)
     .padding([0, 4]);
-    let list = column(app.notifications.iter().rev().map(|n| card(s, n))).spacing(8);
+    let list = column(app.notifications.iter().rev().map(|n| card(s, n, true))).spacing(8);
     let list = scrollable(list)
         .height(Length::Shrink)
         .direction(scrollable::Direction::Vertical(

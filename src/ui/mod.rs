@@ -118,6 +118,20 @@ pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
         .align_y(iced::alignment::Vertical::Center)
 }
 
+/// The box around a search field, the same in every panel: a light translucent fill that sits
+/// as well on the black look as on the frost (a solid dark slab looked sloppy on frost).
+pub fn field_style(s: Scheme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(s.ink.scale_alpha(0.07 * s.opacity).into()),
+        border: iced::Border {
+            color: s.ink.scale_alpha(0.06 * s.opacity),
+            width: 1.0,
+            radius: crate::theme::size::CARD_RADIUS.into(),
+        },
+        ..iced::widget::container::Style::default()
+    }
+}
+
 /// A round icon button for the bar and panel headers. `active` marks an open panel or an
 /// enabled state.
 pub fn icon_button<'a, M: Clone + 'static>(

@@ -273,10 +273,10 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             app.notifications
                 .iter()
                 .find(|n| n.id == t.id)
-                .map(|n| panels::notifications::card(fs, n))
+                .map(|n| panels::notifications::card(fs, n, false))
         }))
-        .spacing(8)
-        .padding(10);
+        .spacing(2)
+        .padding(4);
         layers.push(
             pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
                 .offset((1.0 - a) * 6.0)

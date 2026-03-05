@@ -326,11 +326,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .padding([0, 12])
     .height(44)
     .center_y(44)
-    .style(move |_| container::Style {
-        background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
-        border: iced::Border::default().rounded(22),
-        ..container::Style::default()
-    });
+    .style(move |_| ui::field_style(s));
 
     let card_w = (WIDTH - 2.0 * PAD - (COLUMNS as f32 - 1.0) * GAP) / COLUMNS as f32;
     let active = app.hypr.active_on(&app.hypr.focused_monitor);
@@ -373,7 +369,8 @@ fn card<'a>(
             .width(width)
             .height(height)
             .content_fit(iced::ContentFit::Fill)
-            .opacity(s.opacity)
+            // The one you are on at full strength, the rest a step back.
+            .opacity(s.opacity * if current { 1.0 } else { 0.6 })
             .into(),
         None => container(Space::new())
             .width(width)
@@ -451,19 +448,46 @@ fn card<'a>(
             .on_press(focus_msg(&w.address));
         layers = layers.push(pin(tile).x(x).y(y));
     }
-    // Under the card: its number (bright when it is the one you are on) and what is there.
+    // The workspace you are on: a white ring, like the bar's white capsule (neutral, so not a
+    // coloured outline), inside the card so nothing cuts it.
+    if current {
+        layers = layers.push(container(Space::new()).width(width).height(height).style(
+            move |_| container::Style {
+                border: iced::Border {
+                    color: s.ink.scale_alpha(0.9 * s.opacity),
+                    width: 2.0,
+                    radius: 10.0.into(),
+                },
+                ..container::Style::default()
+            },
+        ));
+    }
+    // Under the card: its number (in the bar's white capsule when it is the one you are on)
+    // and what is there.
     let summary = match windows.len() {
         0 => String::new(),
         1 => apps::name_for_class(&windows[0].class),
         n => format!("{n} windows"),
     };
-    let caption = row![
-        label_w(
+    let number: Element<'_, AppMessage> = if current {
+        container(label_w(
             id.to_string(),
             text::SMALL,
-            if current { s.ink } else { s.ink_dim },
-            theme::SEMIBOLD
-        ),
+            s.base,
+            theme::SEMIBOLD,
+        ))
+        .padding([1, 8])
+        .style(move |_| container::Style {
+            background: Some(s.ink.into()),
+            border: iced::Border::default().rounded(9),
+            ..container::Style::default()
+        })
+        .into()
+    } else {
+        label_w(id.to_string(), text::SMALL, s.ink_dim, theme::SEMIBOLD).into()
+    };
+    let caption = row![
+        number,
         label(
             ui::fit(&summary, text::CAPTION, width - 30.0),
             text::CAPTION,
