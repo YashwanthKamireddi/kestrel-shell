@@ -222,6 +222,19 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
+    // The clipboard's scrollbar, while held: follow the pointer wherever it goes and end the
+    // drag wherever the button is let go (inside the panel only, it stopped at its edge).
+    if open == Some(PanelKind::Clipboard) && app.panels.clipboard.dragging {
+        subs.push(iced::event::listen_raw(|e, _, _| match e {
+            iced::event::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                Some(Message::Clipboard(clipboard::Message::DragMove(position.y)))
+            }
+            iced::event::Event::Mouse(iced::mouse::Event::ButtonReleased(_)) => {
+                Some(Message::Clipboard(clipboard::Message::BarRelease))
+            }
+            _ => None,
+        }));
+    }
     // Media position is not signalled: read it while the panel shows it.
     if open == Some(PanelKind::Media) && media::current(app).is_some_and(|p| p.playing) {
         // Smooth progress: redrawn ten times a second from the last read, re-read every 2 s.

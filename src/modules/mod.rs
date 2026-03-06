@@ -582,25 +582,19 @@ fn status<'a>(
 
     items
 }
-/// How much wider the current workspace's capsule is than a slot.
-const WS_EXTRA: f32 = 14.0;
-
-/// Workspaces, GNOME-style: a dot for each empty one, the app's icon where something is open,
-/// and the current one a wider accent capsule. As it moves, the slot it leaves narrows and the
-/// one it reaches widens, both following one spring, so the row flows like liquid instead of
-/// a highlight jumping over fixed slots.
+/// Workspaces: a dot for each empty one, the app's icon where something is open. The one you
+/// are on is at full strength with a short white bar under it; the rest a step back. The bar
+/// glides from one to the next on one spring (design call 2026-11-13: no big highlight block).
 fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let n = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces);
-    // Where the capsule is, in slots (0 = the first), between two while it moves.
+    // Where the marker is, in slots (0 = the first), between two while it moves.
     let p = (o.pill_x.value / (SLOT + SLOT_GAP)).clamp(0.0, n.saturating_sub(1) as f32);
-    // How much of the capsule is on slot i (the two it is between share it).
-    let on = |i: usize| (1.0 - (i as f32 - p).abs()).clamp(0.0, 1.0);
-    let widths: Vec<f32> = (0..n).map(|i| SLOT + WS_EXTRA * on(i)).collect();
+    let near = |i: usize| (1.0 - (i as f32 - p).abs()).clamp(0.0, 1.0);
     let slots = row((1..=n as i32).map(|id| {
         let i = (id - 1) as usize;
-        let over = on(i);
-        // Dark on the capsule, white off it, changing as it passes.
-        let ink = crate::theme::color::mix(s.ink, s.base, over);
+        // Full strength on the current one, a step back elsewhere, blending as the marker
+        // passes.
+        let strength = 0.5 + 0.5 * near(i);
         let ws = app
             .hypr
             .workspaces
@@ -610,15 +604,16 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
         });
         let content: Element<'a, Message> = match (icon_of, ws) {
-            (Some(path), _) => ui::image_file(&path, 16.0),
-            // Something open without an icon, or the current empty one: its number.
-            (None, Some(_)) => label_w(id.to_string(), text::SMALL, ink, theme::SEMIBOLD).into(),
-            (None, None) if over > 0.5 => {
-                label_w(id.to_string(), text::SMALL, ink, theme::SEMIBOLD).into()
-            }
-            // Empty: a small dot, brighter as the capsule nears.
+            (Some(path), _) => ui::image_file_faded(&path, 16.0, strength * s.opacity),
+            (None, Some(_)) => label_w(
+                id.to_string(),
+                text::SMALL,
+                s.ink.scale_alpha(strength),
+                theme::SEMIBOLD,
+            )
+            .into(),
             (None, None) => {
-                let dot = crate::theme::color::mix(s.ink_faint, s.base, over);
+                let dot = s.ink.scale_alpha(0.25 + 0.75 * near(i));
                 container(Space::new())
                     .width(5)
                     .height(5)
@@ -630,8 +625,7 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
                     .into()
             }
         };
-        // No fill of its own on hover or press (the capsule is the only shape here).
-        ui::control(container(content).center_x(widths[i]).center_y(SLOT))
+        ui::control(container(content).center(SLOT))
             .radius(SLOT / 2.0)
             .on_press(Message::Dispatch(
                 crate::services::compositor::Action::FocusWorkspace(id),
@@ -644,25 +638,25 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             .into()
     }))
     .spacing(SLOT_GAP);
-    // The capsule's left edge: past the slots before it, part way into the one it leaves.
-    let i0 = p.floor() as usize;
-    let before: f32 = widths.iter().take(i0).map(|w| w + SLOT_GAP).sum();
-    let x = before + (p - i0 as f32) * (widths.get(i0).copied().unwrap_or(SLOT) + SLOT_GAP);
-    let capsule = container(Space::new())
-        .width(SLOT + WS_EXTRA)
-        .height(SLOT)
+    // The marker: a short white bar under the current slot.
+    const MARK_W: f32 = 12.0;
+    let marker = container(Space::new())
+        .width(MARK_W)
+        .height(3)
         .style(move |_| container::Style {
-            // White, like GNOME's: clear on any look without adding a colour (the accent
-            // capsule was "too much", design call 2026-11-13).
             background: Some(s.ink.into()),
-            border: iced::Border::default().rounded(SLOT / 2.0),
+            border: iced::Border::default().rounded(1.5),
             ..container::Style::default()
         });
-    let width = n as f32 * (SLOT + SLOT_GAP) - SLOT_GAP + WS_EXTRA;
-    stack![pin(capsule).x(x).width(width).height(SLOT), slots]
-        .width(width)
-        .height(SLOT)
-        .into()
+    let width = n as f32 * (SLOT + SLOT_GAP) - SLOT_GAP;
+    let x = p * (SLOT + SLOT_GAP) + (SLOT - MARK_W) / 2.0;
+    stack![
+        slots,
+        pin(marker).x(x).y(SLOT - 3.0).width(width).height(SLOT),
+    ]
+    .width(width)
+    .height(SLOT)
+    .into()
 }
 
 /// The focused window's app name (on the focused monitor only).

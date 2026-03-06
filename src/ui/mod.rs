@@ -118,15 +118,17 @@ pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
         .align_y(iced::alignment::Vertical::Center)
 }
 
-/// The box around a search field, the same in every panel: a light translucent fill that sits
-/// as well on the black look as on the frost (a solid dark slab looked sloppy on frost).
+/// The box around a search field (44 px high), the same in every panel: a light translucent
+/// fill that sits as well on the black look as on the frost.
 pub fn field_style(s: Scheme) -> iced::widget::container::Style {
     iced::widget::container::Style {
         background: Some(s.ink.scale_alpha(0.07 * s.opacity).into()),
         border: iced::Border {
             color: s.ink.scale_alpha(0.06 * s.opacity),
             width: 1.0,
-            radius: crate::theme::size::CARD_RADIUS.into(),
+            // A capsule, like the bar's pills: a rounded box inside the panel's rounded box
+            // never matched its corners (design call 2026-11-13).
+            radius: 22.0.into(),
         },
         ..iced::widget::container::Style::default()
     }

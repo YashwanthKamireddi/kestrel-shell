@@ -108,6 +108,22 @@ fn ago(t: SystemTime) -> String {
 /// when it sent no icon: "vesktop", "kitty").
 fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     const D: f32 = 34.0;
+    // Kestrel's own entries: its own glyph on a soft round, like its other icons.
+    if n.app == "kestrel" {
+        let glyph = if n.app_icon == "media-record" {
+            Icon::Video
+        } else {
+            Icon::Camera
+        };
+        return container(icon(glyph, 17.0, s.ink))
+            .center(D)
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                border: iced::Border::default().rounded(D / 2.0),
+                ..container::Style::default()
+            })
+            .into();
+    }
     let found = icons::lookup(&n.app_icon)
         .or_else(|| icons::lookup(&n.app.to_lowercase()))
         .or_else(|| icons::lookup(&n.app.to_lowercase().replace(' ', "-")));
@@ -130,10 +146,10 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
     match n.image.as_ref()? {
         // Decoded first: an app's unreadable file must never reach the renderer.
         Image::Path(p) => {
-            let h = ui::rounded_file(std::path::Path::new(p), 40.0, 40.0, 8.0)?;
-            Some(image(h).width(40.0).height(40.0).into())
+            let h = ui::rounded_file(std::path::Path::new(p), 52.0, 52.0, 10.0)?;
+            Some(image(h).width(52.0).height(52.0).into())
         }
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 40.0, 40.0, 8.0)),
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 52.0, 52.0, 10.0)),
     }
 }
 
@@ -164,19 +180,16 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
     .spacing(6)
     .align_y(Alignment::Center);
 
-    let mut texts = column![
-        top,
-        label_w(
-            ui::ellipsize(&n.summary, 60),
-            text::BODY,
-            s.ink,
-            theme::SEMIBOLD
-        )
-    ]
+    let mut words = column![label_w(
+        ui::ellipsize(&n.summary, 60),
+        text::BODY,
+        s.ink,
+        theme::SEMIBOLD
+    )]
     .spacing(2)
     .width(Length::Fill);
     if !n.body.is_empty() {
-        texts = texts.push(
+        words = words.push(
             // Up to four lines of it, wrapped: enough to read without opening the app.
             iced::widget::text(ui::ellipsize(
                 &n.body.lines().take(4).collect::<Vec<_>>().join("\n"),
@@ -189,14 +202,13 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         );
     }
-    let mut body = row![app_icon(s, n), texts]
-        .spacing(12)
-        .align_y(Alignment::Start);
+    // The picture beside the words, under the close button (not past it).
+    let mut main = row![words].spacing(10).align_y(Alignment::Start);
     if let Some(pic) = picture(n) {
-        body = body.push(pic);
+        main = main.push(pic);
     }
-
-    let mut col = column![body].spacing(10);
+    let mut texts = column![top, main].spacing(2).width(Length::Fill);
+    // Actions: small pills under the words, as wide as their names.
     let actions: Vec<_> = n
         .actions
         .iter()
@@ -204,24 +216,37 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         .take(3)
         .collect();
     if !actions.is_empty() {
-        col = col.push(
-            row(actions.into_iter().map(|(k, l)| {
-                control(label(ui::ellipsize(l, 20), text::SMALL, s.ink))
-                    .padding([6, 12])
-                    .radius(size::CONTROL_RADIUS)
+        texts = texts.push(
+            container(
+                row(actions.into_iter().map(|(k, l)| {
+                    control(label_w(
+                        ui::ellipsize(l, 24),
+                        text::SMALL,
+                        s.ink,
+                        theme::MEDIUM,
+                    ))
+                    .padding([5, 12])
+                    .radius(13.0)
                     .colors(
-                        s.ink.scale_alpha(0.08 * s.opacity),
-                        s.selected(),
-                        s.raised_press,
+                        s.ink.scale_alpha(0.09 * s.opacity),
+                        s.ink.scale_alpha(0.16 * s.opacity),
+                        s.ink.scale_alpha(0.22 * s.opacity),
                     )
-                    .center_x()
-                    .width(Length::Fill)
                     .on_press(msg(Message::Action(n.id, k.clone())))
                     .into()
-            }))
-            .spacing(6),
+                }))
+                .spacing(6),
+            )
+            .padding(iced::Padding {
+                top: 8.0,
+                ..iced::Padding::ZERO
+            }),
         );
     }
+    let body = row![app_icon(s, n), texts]
+        .spacing(12)
+        .align_y(Alignment::Start);
+    let col = column![body];
     // What a click on the card does: the app's default action, or for kestrel's own entries
     // (a recording, a picture) opening it.
     let default = n

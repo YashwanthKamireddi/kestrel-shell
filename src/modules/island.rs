@@ -119,7 +119,11 @@ pub fn bar<'a>(
             .filter(|o| o.until > std::time::Instant::now())
     {
         content = content.push(osd_row(osd, s));
-        return finish(content, o, s, active);
+        // A click acts on what it shows (the level's controls, say).
+        return match osd.action.clone() {
+            Some(a) => finish_with(content, o, s, active, a),
+            None => finish(content, o, s, active),
+        };
     }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
@@ -143,7 +147,12 @@ pub fn bar<'a>(
             ));
         }
         content = content.push(row![lead, words].spacing(8).align_y(Alignment::Center));
-        return finish(content, o, s, active);
+        // A click acts on it: opens the screenshot or recording, the clipboard, stops a
+        // recording.
+        return match f.action.clone() {
+            Some(a) => finish_with(content, o, s, active, a),
+            None => finish(content, o, s, active),
+        };
     }
     // Music without a bubble of its own: a small round cover and the title, before the time.
     if !app.config.bar.contains("media")
@@ -262,6 +271,27 @@ fn finish<'a>(
     active: bool,
 ) -> Element<'a, Message> {
     finish_to(content, o, s, active, PanelKind::Island)
+}
+
+/// `finish`, with a click doing `action` instead of opening a panel.
+fn finish_with<'a>(
+    content: iced::widget::Row<'a, Message>,
+    o: &'a Output,
+    s: Scheme,
+    active: bool,
+    action: Message,
+) -> Element<'a, Message> {
+    let id = o.id;
+    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
+        .on_measure(move |w| Message::IslandMeasured(id, w));
+    let h = size::BAR - 6.0;
+    ui::control(inner)
+        .padding([0, 14])
+        .height(h)
+        .radius(h / 2.0)
+        .bar(s, active)
+        .on_press(action)
+        .into()
 }
 
 /// `finish`, with a click opening `kind` (a notification in the island opens the centre).
