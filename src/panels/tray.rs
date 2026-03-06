@@ -22,6 +22,12 @@ pub struct State {
     pub from_list: bool,
     /// Items kept in the bar; the rest live behind the overflow button.
     pub pins: BTreeSet<String>,
+    /// Each app's menu as last read, so opening it again (or switching to it from another
+    /// menu) shows it at once while it is read again.
+    cache: std::collections::HashMap<String, Option<tray::MenuItem>>,
+    /// A menu asked for whose app is not in the cache yet: the panel opens here once it
+    /// arrives, whole (opening first showed "Loading…", jumped, then grew: a flicker).
+    pub pending: Option<(iced::OutputId, iced::Rectangle)>,
 }
 
 impl Default for State {
@@ -32,6 +38,8 @@ impl Default for State {
             path: Vec::new(),
             from_list: false,
             pins: load_pins(),
+            cache: std::collections::HashMap::new(),
+            pending: None,
         }
     }
 }
@@ -71,7 +79,7 @@ fn save_pins(pins: &BTreeSet<String>) {
 
 fn load(st: &mut State, item: tray::Item) -> Task<AppMessage> {
     st.path.clear();
-    st.menu = None;
+    st.menu = st.cache.get(&item.key).cloned().flatten();
     let key = item.key.clone();
     let task = match &item.menu {
         Some(m) => Task::perform(tray::menu(item.bus.clone(), m.clone()), move |m| {
@@ -98,6 +106,11 @@ pub fn open(app: &mut App, item: Option<tray::Item>) -> Task<AppMessage> {
     }
 }
 
+/// Whether `item`'s menu has been read before (so it can be shown at once).
+pub fn cached(app: &App, item: &tray::Item) -> bool {
+    item.menu.is_none() || app.panels.tray.cache.contains_key(&item.key)
+}
+
 /// Whether the panel currently shows `item` (None: the list).
 pub fn showing(app: &App, item: Option<&tray::Item>) -> bool {
     let st = &app.panels.tray;
@@ -111,8 +124,13 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     let st = &mut app.panels.tray;
     match m {
         Message::Loaded(key, m) => {
+            st.cache.insert(key.clone(), m.clone());
             if st.item.as_ref().is_some_and(|i| i.key == key) {
                 st.menu = m;
+                // Asked for before it was known: the panel opens now, with the menu in it.
+                if let Some((output, at)) = st.pending.take() {
+                    return app.open_panel(super::PanelKind::Tray, output, at);
+                }
             }
         }
         Message::Enter(id) => st.path.push(id),
