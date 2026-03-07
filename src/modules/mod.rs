@@ -582,19 +582,26 @@ fn status<'a>(
 
     items
 }
-/// Workspaces: a dot for each empty one, the app's icon where something is open. The one you
-/// are on is at full strength with a short white bar under it; the rest a step back. The bar
-/// glides from one to the next on one spring (design call 2026-11-13: no big highlight block).
+/// Workspaces, the way ii draws them: each occupied one sits on a soft background, and
+/// neighbours that are both occupied join into one shape; the one you are on is an accent
+/// circle that stretches toward the next as you move (its two edges are separate springs:
+/// the leading edge goes first, the trailing one follows) and settles round on it. Open
+/// workspaces show their app's icon, empty ones a quiet number.
 fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let n = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces);
-    // Where the marker is, in slots (0 = the first), between two while it moves.
-    let p = (o.pill_x.value / (SLOT + SLOT_GAP)).clamp(0.0, n.saturating_sub(1) as f32);
-    let near = |i: usize| (1.0 - (i as f32 - p).abs()).clamp(0.0, 1.0);
+    let stride = SLOT + SLOT_GAP;
+    let occupied = |id: i32| {
+        app.hypr
+            .workspaces
+            .iter()
+            .any(|w| w.id == id && w.windows > 0)
+    };
+    // The active circle's span (left and right edges, springing separately).
+    let (cap_l, cap_r) = (o.pill_x.value, o.pill_r.value.max(o.pill_x.value + SLOT));
     let slots = row((1..=n as i32).map(|id| {
-        let i = (id - 1) as usize;
-        // Full strength on the current one, a step back elsewhere, blending as the marker
-        // passes.
-        let strength = 0.5 + 0.5 * near(i);
+        let left = (id - 1) as f32 * stride;
+        // How much of the active circle covers this slot: its content turns dark as it does.
+        let over = ((cap_r.min(left + SLOT) - cap_l.max(left)) / SLOT).clamp(0.0, 1.0);
         let ws = app
             .hypr
             .workspaces
@@ -603,27 +610,14 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         let icon_of = ws.filter(|w| !w.app.is_empty()).and_then(|w| {
             crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
         });
-        let content: Element<'a, Message> = match (icon_of, ws) {
-            (Some(path), _) => ui::image_file_faded(&path, 16.0, strength * s.opacity),
-            (None, Some(_)) => label_w(
-                id.to_string(),
-                text::SMALL,
-                s.ink.scale_alpha(strength),
-                theme::SEMIBOLD,
-            )
-            .into(),
-            (None, None) => {
-                let dot = s.ink.scale_alpha(0.25 + 0.75 * near(i));
-                container(Space::new())
-                    .width(5)
-                    .height(5)
-                    .style(move |_| container::Style {
-                        background: Some(dot.into()),
-                        border: iced::Border::default().rounded(2.5),
-                        ..container::Style::default()
-                    })
-                    .into()
-            }
+        let ink = crate::theme::color::mix(
+            if ws.is_some() { s.ink } else { s.ink_faint },
+            s.on_accent,
+            over,
+        );
+        let content: Element<'a, Message> = match icon_of {
+            Some(path) => ui::image_file(&path, 16.0),
+            None => label_w(id.to_string(), text::SMALL, ink, theme::SEMIBOLD).into(),
         };
         ui::control(container(content).center(SLOT))
             .radius(SLOT / 2.0)
@@ -638,25 +632,44 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
             .into()
     }))
     .spacing(SLOT_GAP);
-    // The marker: a short white bar under the current slot.
-    const MARK_W: f32 = 12.0;
-    let marker = container(Space::new())
-        .width(MARK_W)
-        .height(3)
+    let width = n as f32 * stride - SLOT_GAP;
+    let mut layers = stack![].width(width).height(SLOT);
+    // Occupied runs: one rounded shape from the first to the last of each run.
+    let mut id = 1;
+    while id <= n as i32 {
+        if !occupied(id) {
+            id += 1;
+            continue;
+        }
+        let start = id;
+        while id < n as i32 && occupied(id + 1) {
+            id += 1;
+        }
+        let x = (start - 1) as f32 * stride;
+        let w = (id - start + 1) as f32 * stride - SLOT_GAP;
+        let blob = container(Space::new())
+            .width(w)
+            .height(SLOT)
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                border: iced::Border::default().rounded(SLOT / 2.0),
+                ..container::Style::default()
+            });
+        layers = layers.push(pin(blob).x(x).width(width).height(SLOT));
+        id += 1;
+    }
+    let active = container(Space::new())
+        .width(cap_r - cap_l)
+        .height(SLOT)
         .style(move |_| container::Style {
-            background: Some(s.ink.into()),
-            border: iced::Border::default().rounded(1.5),
+            background: Some(s.accent.into()),
+            border: iced::Border::default().rounded(SLOT / 2.0),
             ..container::Style::default()
         });
-    let width = n as f32 * (SLOT + SLOT_GAP) - SLOT_GAP;
-    let x = p * (SLOT + SLOT_GAP) + (SLOT - MARK_W) / 2.0;
-    stack![
-        slots,
-        pin(marker).x(x).y(SLOT - 3.0).width(width).height(SLOT),
-    ]
-    .width(width)
-    .height(SLOT)
-    .into()
+    layers
+        .push(pin(active).x(cap_l).width(width).height(SLOT))
+        .push(slots)
+        .into()
 }
 
 /// The focused window's app name (on the focused monitor only).
