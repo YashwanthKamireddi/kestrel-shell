@@ -590,6 +590,8 @@ fn status<'a>(
 fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let n = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces);
     let stride = SLOT + SLOT_GAP;
+    // The circle and the occupied shapes: a little smaller than a slot.
+    const DOT: f32 = 22.0;
     let occupied = |id: i32| {
         app.hypr
             .workspaces
@@ -610,9 +612,10 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         let icon_of = ws.filter(|w| !w.app.is_empty()).and_then(|w| {
             crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
         });
+        // Brighter under the circle; the circle is see-through, so no dark ink is needed.
         let ink = crate::theme::color::mix(
-            if ws.is_some() { s.ink } else { s.ink_faint },
-            s.on_accent,
+            if ws.is_some() { s.ink_dim } else { s.ink_faint },
+            s.ink,
             over,
         );
         let content: Element<'a, Message> = match icon_of {
@@ -648,26 +651,40 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         let x = (start - 1) as f32 * stride;
         let w = (id - start + 1) as f32 * stride - SLOT_GAP;
         let blob = container(Space::new())
-            .width(w)
-            .height(SLOT)
+            .width(w - (SLOT - DOT))
+            .height(DOT)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
-                border: iced::Border::default().rounded(SLOT / 2.0),
+                background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
+                border: iced::Border::default().rounded(DOT / 2.0),
                 ..container::Style::default()
             });
-        layers = layers.push(pin(blob).x(x).width(width).height(SLOT));
+        layers = layers.push(
+            pin(blob)
+                .x(x + (SLOT - DOT) / 2.0)
+                .y((SLOT - DOT) / 2.0)
+                .width(width)
+                .height(SLOT),
+        );
         id += 1;
     }
+    // Small and see-through (design call 2026-11-13: the full-size bright circle took over the
+    // workspace it marked): the accent at part strength, just behind the icon or number.
     let active = container(Space::new())
-        .width(cap_r - cap_l)
-        .height(SLOT)
+        .width(cap_r - cap_l - (SLOT - DOT))
+        .height(DOT)
         .style(move |_| container::Style {
-            background: Some(s.accent.into()),
-            border: iced::Border::default().rounded(SLOT / 2.0),
+            background: Some(s.accent.scale_alpha(0.42 * s.opacity).into()),
+            border: iced::Border::default().rounded(DOT / 2.0),
             ..container::Style::default()
         });
     layers
-        .push(pin(active).x(cap_l).width(width).height(SLOT))
+        .push(
+            pin(active)
+                .x(cap_l + (SLOT - DOT) / 2.0)
+                .y((SLOT - DOT) / 2.0)
+                .width(width)
+                .height(SLOT),
+        )
         .push(slots)
         .into()
 }
