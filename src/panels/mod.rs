@@ -76,7 +76,7 @@ impl PanelKind {
             Self::Power => 232.0,
             Self::Tray => 260.0,
             Self::Launcher => 560.0,
-            Self::Wallpaper => 560.0,
+            Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 720.0,
             Self::Island => 400.0,
             Self::Overview => overview::WIDTH,
