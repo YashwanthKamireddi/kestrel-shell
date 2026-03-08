@@ -211,6 +211,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Control) => control::key(app, k),
             Some(PanelKind::Power) => power::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
+            Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             _ => Task::none(),
         },
         Message::TrayActivate(item) => {

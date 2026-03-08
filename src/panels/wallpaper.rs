@@ -18,13 +18,18 @@ pub const WIDTH: f32 = 4.0 * (THUMB_W + 6.0) + 3.0 * 10.0 + 28.0;
 
 #[derive(Default)]
 pub struct State {
-    /// (original, thumbnail handle)
+    /// (original, thumbnail handle), kept between opens so the picker shows them at once.
     items: Option<Vec<(PathBuf, image::Handle)>>,
+    /// The tile the arrow keys are on.
+    sel: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Loaded(Vec<(PathBuf, PathBuf)>),
+    /// The folder's pictures with their thumbnails, made and rounded off the drawing thread.
+    Loaded(Vec<(PathBuf, image::Handle)>),
+    /// A random one other than the current.
+    Shuffle,
     Set(PathBuf),
     OpenFolder,
 }
@@ -85,7 +90,7 @@ fn thumbnail(src: &Path) -> Option<PathBuf> {
     Some(out)
 }
 
-async fn load(dir: PathBuf) -> Vec<(PathBuf, PathBuf)> {
+async fn load(dir: PathBuf) -> Vec<(PathBuf, image::Handle)> {
     tokio::task::spawn_blocking(move || {
         let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
             .map(|rd| {
@@ -105,7 +110,23 @@ async fn load(dir: PathBuf) -> Vec<(PathBuf, PathBuf)> {
         files.sort();
         let out = files
             .into_iter()
-            .filter_map(|f| thumbnail(&f).map(|t| (f, t)))
+            .filter_map(|f| {
+                let t = thumbnail(&f)?;
+                // Decoded and rounded here, not when the list arrives: done on the drawing
+                // thread it made the picker stutter as it opened.
+                let img = ::image::ImageReader::open(&t)
+                    .ok()?
+                    .with_guessed_format()
+                    .ok()?
+                    .decode()
+                    .ok()?;
+                let r =
+                    ui::rounded_cover(&img.into_rgba8(), THUMB_W, THUMB_H, size::ROW_RADIUS - 3.0);
+                Some((
+                    f,
+                    image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
+                ))
+            })
             .collect();
         unsafe {
             libc::malloc_trim(0);
@@ -117,41 +138,77 @@ async fn load(dir: PathBuf) -> Vec<(PathBuf, PathBuf)> {
 }
 
 pub fn open(app: &mut App) -> Task<AppMessage> {
-    if app.panels.wallpaper.items.is_some() {
-        return Task::none();
-    }
+    // The kept thumbnails show at once; the folder is read again behind them.
+    let current = app.config.wallpaper.as_deref().map(config::expand);
+    let st = &mut app.panels.wallpaper;
+    st.sel = st.items.as_ref().and_then(|v| {
+        v.iter()
+            .position(|(p, _)| Some(p.as_path()) == current.as_deref())
+    });
     let dir = folder(app);
     Task::perform(load(dir), |v| msg(Message::Loaded(v)))
+}
+
+/// Arrows move over the tiles, Enter sets the one they are on.
+pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+    use super::Key;
+    let n = app.panels.wallpaper.items.as_ref().map_or(0, Vec::len);
+    if n == 0 {
+        return Task::none();
+    }
+    let st = &mut app.panels.wallpaper;
+    let at = st.sel.unwrap_or(0) as i64;
+    let to = match k {
+        Key::Left => at - 1,
+        Key::Right | Key::Tab => at + 1,
+        Key::BackTab => at - 1,
+        Key::Up => at - COLS as i64,
+        Key::Down => at + COLS as i64,
+        Key::Home => 0,
+        Key::End => n as i64 - 1,
+        Key::Enter | Key::Space => {
+            let path = st
+                .items
+                .as_ref()
+                .and_then(|v| v.get(at as usize))
+                .map(|(p, _)| p.clone());
+            return match path {
+                Some(p) => update(app, Message::Set(p)),
+                None => Task::none(),
+            };
+        }
+        _ => return Task::none(),
+    };
+    st.sel = Some(to.clamp(0, n as i64 - 1) as usize);
+    Task::none()
 }
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
         Message::Loaded(v) => {
-            app.panels.wallpaper.items = Some(
-                v.into_iter()
-                    .filter_map(|(p, t)| {
-                        // Rounded in the pixels, so the selection ring meets round corners.
-                        // An unreadable picture is left out (never handed to the renderer).
-                        let h = ::image::ImageReader::open(&t)
-                            .ok()?
-                            .with_guessed_format()
-                            .ok()?
-                            .decode()
-                            .ok()
-                            .map(|img| {
-                                let r = ui::rounded_cover(
-                                    &img.into_rgba8(),
-                                    THUMB_W,
-                                    THUMB_H,
-                                    size::ROW_RADIUS - 3.0,
-                                );
-                                image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
-                            })?;
-                        Some((p, h))
-                    })
-                    .collect(),
-            );
+            app.panels.wallpaper.items = Some(v);
             Task::none()
+        }
+        Message::Shuffle => {
+            let current = app.config.wallpaper.as_deref().map(config::expand);
+            let pick = app.panels.wallpaper.items.as_ref().and_then(|v| {
+                let others: Vec<&PathBuf> = v
+                    .iter()
+                    .map(|(p, _)| p)
+                    .filter(|p| Some(p.as_path()) != current.as_deref())
+                    .collect();
+                if others.is_empty() {
+                    return None;
+                }
+                let n = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.subsec_nanos() as usize);
+                Some(others[n % others.len()].clone())
+            });
+            match pick {
+                Some(p) => update(app, Message::Set(p)),
+                None => Task::none(),
+            }
         }
         Message::OpenFolder => {
             let _ = std::process::Command::new("xdg-open")
@@ -162,6 +219,9 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             Task::done(AppMessage::Close)
         }
         Message::Set(p) => {
+            if let Some(v) = &app.panels.wallpaper.items {
+                app.panels.wallpaper.sel = v.iter().position(|(q, _)| *q == p);
+            }
             let s = p.to_string_lossy().into_owned();
             config::set_wallpaper(&s);
             app.config.wallpaper = Some(s);
@@ -193,7 +253,24 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s.ink.scale_alpha(0.2 * s.opacity),
         )
         .on_press(msg(Message::OpenFolder)),
+        control(
+            row![
+                ui::icon(Icon::Shuffle, 14.0, s.ink_dim),
+                ui::label("Shuffle", text::SMALL, s.ink)
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center)
+        )
+        .padding([5, 12])
+        .radius(14.0)
+        .colors(
+            s.ink.scale_alpha(0.08 * s.opacity),
+            s.ink.scale_alpha(0.14 * s.opacity),
+            s.ink.scale_alpha(0.2 * s.opacity),
+        )
+        .on_press(msg(Message::Shuffle)),
     ]
+    .spacing(8)
     .align_y(Alignment::Center)
     .height(size::CONTROL + 4.0);
     let current = app.config.wallpaper.as_deref().map(config::expand);
@@ -202,10 +279,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         Some(v) if v.is_empty() => empty(s, Icon::Image, "No pictures in this folder"),
         Some(v) => {
             let mut grid = column![].spacing(10);
-            for chunk in v.chunks(COLS) {
+            let sel = app.panels.wallpaper.sel;
+            for (ci, chunk) in v.chunks(COLS).enumerate() {
                 let mut r = row![].spacing(10);
-                for (path, thumb) in chunk {
+                for (ti, (path, thumb)) in chunk.iter().enumerate() {
                     let on = current.as_deref() == Some(path.as_path());
+                    let keyed = sel == Some(ci * COLS + ti);
                     let picture = iced::widget::image(thumb.clone())
                         .width(THUMB_W)
                         .height(THUMB_H)
@@ -238,7 +317,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                             .padding(3)
                             .radius(size::ROW_RADIUS)
                             .colors(
-                                if on { s.ink } else { Color::TRANSPARENT },
+                                if on {
+                                    s.ink
+                                } else if keyed {
+                                    s.ink.scale_alpha(0.4 * s.opacity)
+                                } else {
+                                    Color::TRANSPARENT
+                                },
                                 if on {
                                     s.ink
                                 } else {
