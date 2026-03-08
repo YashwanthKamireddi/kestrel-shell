@@ -245,13 +245,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .spacing(6)
             .align_y(Alignment::Center)
         )
-        .padding([5, 12])
-        .radius(14.0)
-        .colors(
-            s.ink.scale_alpha(0.08 * s.opacity),
-            s.ink.scale_alpha(0.14 * s.opacity),
-            s.ink.scale_alpha(0.2 * s.opacity),
-        )
+        .pill(s, crate::ui::control::Pill::Plain)
         .on_press(msg(Message::OpenFolder)),
         control(
             row![
@@ -261,13 +255,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .spacing(6)
             .align_y(Alignment::Center)
         )
-        .padding([5, 12])
-        .radius(14.0)
-        .colors(
-            s.ink.scale_alpha(0.08 * s.opacity),
-            s.ink.scale_alpha(0.14 * s.opacity),
-            s.ink.scale_alpha(0.2 * s.opacity),
-        )
+        .pill(s, crate::ui::control::Pill::Plain)
         .on_press(msg(Message::Shuffle)),
     ]
     .spacing(8)

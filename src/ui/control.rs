@@ -15,6 +15,14 @@ use std::time::Instant;
 const HOVER_SECS: f32 = 0.07;
 const PRESSED_SCALE: f32 = 0.96;
 
+/// What kind of small pill button (`Control::pill`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pill {
+    Plain,
+    Quiet,
+    Primary,
+}
+
 pub struct Control<'a, M> {
     content: Element<'a, M>,
     on_press: Option<M>,
@@ -134,6 +142,31 @@ impl<'a, M> Control<'a, M> {
         } else {
             s.base.scale_alpha(0.16 * s.opacity)
         };
+        self
+    }
+    /// The one small pill button, the same everywhere (26 px high, round ends): `Plain` a
+    /// soft fill, `Quiet` only text until hovered, `Primary` the accent.
+    pub fn pill(mut self, s: crate::theme::Scheme, kind: Pill) -> Self {
+        self.padding = Padding::from([5, 12]);
+        self.radius = 13.0;
+        let (rest, hover, press) = match kind {
+            Pill::Plain => (0.08, 0.14, 0.2),
+            Pill::Quiet => (0.0, 0.08, 0.14),
+            Pill::Primary => {
+                self.rest = s.accent;
+                self.hover = s.accent;
+                self.press = s.accent;
+                return self;
+            }
+        };
+        let a = |x: f32| s.ink.scale_alpha(x * s.opacity);
+        self.rest = if rest > 0.0 {
+            a(rest)
+        } else {
+            Color::TRANSPARENT
+        };
+        self.hover = a(hover);
+        self.press = a(press);
         self
     }
     pub fn border(mut self, c: Color) -> Self {

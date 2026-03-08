@@ -62,13 +62,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .spacing(1)
         .width(Length::Fill),
         control(label("Disconnect", text::CAPTION, s.ink))
-            .padding([5, 12])
-            .radius(13.0)
-            .colors(
-                s.ink.scale_alpha(0.08 * s.opacity),
-                s.hover(),
-                s.raised_press
-            )
+            .pill(s, crate::ui::control::Pill::Plain)
             .on_press_maybe(disconnect),
     ]
     .spacing(10)

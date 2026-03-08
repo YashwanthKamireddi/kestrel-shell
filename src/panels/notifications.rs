@@ -225,13 +225,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
                         s.ink,
                         theme::MEDIUM,
                     ))
-                    .padding([5, 12])
-                    .radius(13.0)
-                    .colors(
-                        s.ink.scale_alpha(0.09 * s.opacity),
-                        s.ink.scale_alpha(0.16 * s.opacity),
-                        s.ink.scale_alpha(0.22 * s.opacity),
-                    )
+                    .pill(s, crate::ui::control::Pill::Plain)
                     .on_press(msg(Message::Action(n.id, k.clone())))
                     .into()
                 }))
@@ -287,9 +281,7 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = row![
         label_w("Notifications", text::BODY, s.ink, theme::SEMIBOLD).width(Length::Fill),
         control(label("Clear all", text::SMALL, s.ink_dim))
-            .padding([4, 10])
-            .radius(12.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .pill(s, crate::ui::control::Pill::Quiet)
             .on_press(msg(Message::ClearAll)),
     ]
     .align_y(Alignment::Center)
