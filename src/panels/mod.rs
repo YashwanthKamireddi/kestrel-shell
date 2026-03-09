@@ -46,7 +46,7 @@ pub enum PanelKind {
 impl PanelKind {
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
-            "control" | "control-centre" | "control-center" => Self::Control,
+            "control" | "control-centre" | "control-center" | "sound" | "mixer" => Self::Control,
             "media" => Self::Media,
             "calendar" => Self::Calendar,
             // Notifications live in the control centre.
