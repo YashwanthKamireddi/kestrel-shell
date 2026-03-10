@@ -117,7 +117,8 @@ fn gtk_css(s: &Scheme) -> String {
     out.push_str(&format!(
         "\n.sidebar row:selected, .navigation-sidebar row:selected, treeview.view:selected,\n\
          .view:selected, iconview:selected, .view text selection, flowboxchild:selected,\n\
-         row:selected {{ background-color: {}; color: {}; }}\n",
+         row:selected, .view text:selected, iconview text:selected,\n\
+         .view text selection, iconview text selection {{ background-color: {}; color: {}; }}\n",
         rgba(s.ink, 0.14),
         hex(s.ink)
     ));
@@ -137,13 +138,14 @@ fn gtk_css(s: &Scheme) -> String {
          window.thunar .view:selected, window.thunar .view:selected:focus,\n\
          window.thunar iconview:selected, window.thunar iconview.view:selected,\n\
          window.thunar treeview.view:selected, window.thunar .sidebar .view:selected,\n\
-         window.thunar .sidebar row:selected, window.thunar placessidebar row:selected {{\n\
+         window.thunar .sidebar row:selected, window.thunar placessidebar row:selected,\n\
+         window.thunar *:selected {{\n\
          background-color: {}; color: {}; }}\n",
         rgba(s.base, 0.88),
         rgba(s.base, 0.88),
         rgba(s.ink, 0.06),
         rgba(s.ink, 0.08),
-        rgba(s.ink, 0.18),
+        rgba(s.ink, 0.13),
         hex(s.ink)
     ));
     out
