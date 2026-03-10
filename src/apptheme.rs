@@ -480,9 +480,37 @@ pub fn apply(s: Scheme, wallpaper: Option<String>) {
     write(&lock, &hyprlock(&s, wallpaper.as_deref(), &old));
 
     if gtk_changed {
-        log::info!("theme: GTK colours updated (open apps pick them up when restarted)");
+        reload_gtk();
     }
     templates(&s, wallpaper.as_deref());
+}
+
+/// Running GTK apps read gtk.css only when they start or when the GTK theme changes: the
+/// theme name is switched away and back (through gsettings, which the settings portal passes
+/// to every app), so open windows (Thunar, ZapFast) take the new colours at once.
+fn reload_gtk() {
+    let get = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "gtk-theme"])
+        .output();
+    let Ok(out) = get else {
+        return;
+    };
+    let theme = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .trim_matches('\'')
+        .to_string();
+    if theme.is_empty() {
+        return;
+    }
+    let set = |t: &str| {
+        let _ = std::process::Command::new("gsettings")
+            .args(["set", "org.gnome.desktop.interface", "gtk-theme", t])
+            .status();
+    };
+    set("Default");
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    set(&theme);
+    log::info!("theme: GTK colours updated and reloaded in open apps");
 }
 
 /// The colour placeholders a template may use, as `{{name}}` (hex `#rrggbb`), plus
