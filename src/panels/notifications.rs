@@ -146,10 +146,10 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
     match n.image.as_ref()? {
         // Decoded first: an app's unreadable file must never reach the renderer.
         Image::Path(p) => {
-            let h = ui::rounded_file(std::path::Path::new(p), 44.0, 44.0, 9.0)?;
-            Some(image(h).width(44.0).height(44.0).into())
+            let h = ui::rounded_file(std::path::Path::new(p), 40.0, 40.0, 8.0)?;
+            Some(image(h).width(40.0).height(40.0).into())
         }
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 44.0, 44.0, 9.0)),
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 40.0, 40.0, 8.0)),
     }
 }
 
@@ -207,7 +207,8 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
     if let Some(pic) = picture(n) {
         main = main.push(pic);
     }
-    let mut texts = column![top, main].spacing(2).width(Length::Fill);
+    // Clear room under the top line, so the close button and the picture never touch.
+    let mut texts = column![top, main].spacing(6).width(Length::Fill);
     // Actions: small pills under the words, as wide as their names.
     let actions: Vec<_> = n
         .actions

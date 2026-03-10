@@ -112,6 +112,17 @@ fn gtk_css(s: &Scheme) -> String {
     ] {
         out.push_str(&v(name, c));
     }
+    // The theme's named selection colours (adw-gtk3 sets them to the accent at full strength;
+    // Thunar's icon view paints its selection with them directly, a bright block that hid the
+    // file name): a soft white, with readable text.
+    out.push_str(&format!(
+        "\n@define-color theme_selected_bg_color {sel};\n\
+         @define-color theme_unfocused_selected_bg_color {sel};\n\
+         @define-color theme_selected_fg_color {fg};\n\
+         @define-color theme_unfocused_selected_fg_color {fg};\n",
+        sel = rgba(s.ink, 0.16),
+        fg = hex(s.ink)
+    ));
     // Selected rows and files a soft white, like the shell's selections: the theme's accent
     // mixed into black read as a muddy brown in file managers (the user's rule: neutral selection).
     out.push_str(&format!(
@@ -138,8 +149,7 @@ fn gtk_css(s: &Scheme) -> String {
          window.thunar .view:selected, window.thunar .view:selected:focus,\n\
          window.thunar iconview:selected, window.thunar iconview.view:selected,\n\
          window.thunar treeview.view:selected, window.thunar .sidebar .view:selected,\n\
-         window.thunar .sidebar row:selected, window.thunar placessidebar row:selected,\n\
-         window.thunar *:selected {{\n\
+         window.thunar .sidebar row:selected, window.thunar placessidebar row:selected {{\n\
          background-color: {}; color: {}; }}\n",
         rgba(s.base, 0.88),
         rgba(s.base, 0.88),

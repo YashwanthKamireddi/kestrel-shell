@@ -157,7 +157,9 @@ async fn read_item(c: &Connection, key: &str) -> Option<Item> {
         async move { p.get_property::<OwnedValue>(n).await.ok() }
     };
     let s = |v: Option<OwnedValue>| v.and_then(|v| String::try_from(v).ok()).unwrap_or_default();
-    let id = s(get("Id").await);
+    // An app that no longer answers (it restarted under a new bus name, or quit) is gone:
+    // reading it "worked" with every field empty and left a blank icon in the bar.
+    let id = s(Some(get("Id").await?));
     let status = s(get("Status").await);
     let icon_name = s(get("IconName").await);
     let theme_path = s(get("IconThemePath").await);
