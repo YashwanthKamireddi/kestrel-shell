@@ -107,7 +107,7 @@ fn ago(t: SystemTime) -> String {
 /// The app's own icon, large enough to tell at a glance who it is from (its name is tried
 /// when it sent no icon: "vesktop", "kitty").
 fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
-    const D: f32 = 34.0;
+    const D: f32 = 32.0;
     // Kestrel's own entries: its own glyph on a soft round, like its other icons.
     if n.app == "kestrel" {
         let glyph = if n.app_icon == "media-record" {
@@ -146,10 +146,10 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
     match n.image.as_ref()? {
         // Decoded first: an app's unreadable file must never reach the renderer.
         Image::Path(p) => {
-            let h = ui::rounded_file(std::path::Path::new(p), 52.0, 52.0, 10.0)?;
-            Some(image(h).width(52.0).height(52.0).into())
+            let h = ui::rounded_file(std::path::Path::new(p), 44.0, 44.0, 9.0)?;
+            Some(image(h).width(44.0).height(44.0).into())
         }
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 52.0, 52.0, 10.0)),
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 44.0, 44.0, 9.0)),
     }
 }
 
@@ -168,12 +168,12 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         Space::new().width(Length::Fill),
         label(ago(n.time), text::CAPTION, s.ink_faint),
         // A real button: a soft round fill, big enough to hit (it was a bare 13 px cross).
-        control(container(icon(Icon::X, 12.0, s.ink)).center(24))
-            .radius(12.0)
+        control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
+            .radius(10.0)
             .colors(
-                s.ink.scale_alpha(0.08 * s.opacity),
-                s.ink.scale_alpha(0.16 * s.opacity),
-                s.ink.scale_alpha(0.22 * s.opacity),
+                s.ink.scale_alpha(0.06 * s.opacity),
+                s.ink.scale_alpha(0.14 * s.opacity),
+                s.ink.scale_alpha(0.2 * s.opacity),
             )
             .on_press(msg(Message::Dismiss(n.id))),
     ]

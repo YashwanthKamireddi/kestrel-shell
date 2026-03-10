@@ -121,6 +121,31 @@ fn gtk_css(s: &Scheme) -> String {
         rgba(s.ink, 0.14),
         hex(s.ink)
     ));
+    // Thunar like kitty: the window's background at kitty's opacity (0.88) so Hyprland's blur
+    // frosts what is behind it; its views, sidebar and header bar draw no background of their
+    // own over that. Text and icons stay fully solid.
+    out.push_str(&format!(
+        "\nwindow.thunar {{ background-color: {}; }}\n\
+         window.thunar headerbar, window.thunar .titlebar, window.thunar .view,\n\
+         window.thunar iconview, window.thunar treeview, window.thunar .sidebar,\n\
+         window.thunar placessidebar, window.thunar list, window.thunar scrolledwindow,\n\
+         window.thunar viewport, window.thunar statusbar, window.thunar .standard-view,\n\
+         window.thunar paned, window.thunar notebook, window.thunar notebook > stack {{\n\
+         background-color: transparent; background-image: none; }}\n\
+         window.thunar headerbar {{ background-color: {}; box-shadow: none; border-color: {}; }}\n\
+         window.thunar entry {{ background-color: {}; border-color: transparent; }}\n\
+         window.thunar .view:selected, window.thunar .view:selected:focus,\n\
+         window.thunar iconview:selected, window.thunar iconview.view:selected,\n\
+         window.thunar treeview.view:selected, window.thunar .sidebar .view:selected,\n\
+         window.thunar .sidebar row:selected, window.thunar placessidebar row:selected {{\n\
+         background-color: {}; color: {}; }}\n",
+        rgba(s.base, 0.88),
+        rgba(s.base, 0.88),
+        rgba(s.ink, 0.06),
+        rgba(s.ink, 0.08),
+        rgba(s.ink, 0.18),
+        hex(s.ink)
+    ));
     out
 }
 

@@ -196,8 +196,24 @@ pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Messag
     tray_icon_at(s, item, 16.0)
 }
 
-/// A tray app's icon at `px`.
+/// A tray app's icon at `px`. Apps that send a picture instead of an icon name (Electron
+/// apps: Vesktop, ZapFast) usually send a plain white silhouette, which read as a generic
+/// window; their own app icon (as in the launcher) is used when one is found.
 pub fn tray_icon_at<'a>(s: Scheme, item: &tray_service::Item, px: f32) -> Element<'a, Message> {
+    if matches!(item.icon, Some(tray_service::TrayIcon::Rgba(_)) | None) {
+        let id = item.id.to_lowercase();
+        let found = [
+            id.clone(),
+            id.split(['_', '-']).next().unwrap_or_default().to_string(),
+            item.title.to_lowercase(),
+        ]
+        .into_iter()
+        .filter(|c| !c.is_empty())
+        .find_map(|c| icons::lookup(&crate::services::apps::icon_for_class(&c)));
+        if let Some(p) = found {
+            return ui::image_file_faded(&p, px, s.opacity);
+        }
+    }
     match &item.icon {
         Some(tray_service::TrayIcon::Name(n)) => match icons::lookup(n) {
             Some(p) => ui::image_file_faded(&p, px, s.opacity),
