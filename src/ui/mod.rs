@@ -661,7 +661,7 @@ pub fn rounded_file(
             iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
         });
     let mut cache = CACHE.lock().ok()?;
-    if cache.len() > 256 {
+    if cache.len() > 96 {
         cache.clear();
     }
     cache.insert(key, made.clone());
@@ -704,7 +704,8 @@ pub fn fitted_file(
             )
         });
     let mut cache = CACHE.lock().ok()?;
-    if cache.len() > 256 {
+    // Clipboard previews are large (up to ~1 MB each): a smaller ceiling keeps memory flat.
+    if cache.len() > 64 {
         cache.clear();
     }
     cache.insert(key, made.clone());
