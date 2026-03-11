@@ -382,8 +382,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     const ART: f32 = 136.0;
     let text_w = WIDTH - 2.0 * 16.0 - ART - 16.0;
     let mut meta = column![].spacing(4);
+    // Where it plays, and the music moving at the far end (the bar's visualiser, the same
+    // bands, while it plays).
+    let mut source = row![].align_y(Alignment::Center);
     if !p.identity.is_empty() {
-        meta = meta.push(
+        source = source.push(
             container(label(p.identity.clone(), text::CAPTION, s.ink_dim))
                 .padding([2, 8])
                 .style(move |_| container::Style {
@@ -393,6 +396,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 }),
         );
     }
+    if let Some(v) = crate::modules::island::visualiser(app, s) {
+        source = source.push(Space::new().width(Length::Fill)).push(v);
+    }
+    meta = meta.push(source);
     meta = meta.push(label_w(
         ui::two_lines(&p.title, text::TITLE, text_w),
         text::TITLE,

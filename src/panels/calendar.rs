@@ -130,12 +130,14 @@ fn day<'a>(
         return Space::new().width(Length::Fill).height(CELL_H).into();
     }
     let is_today = date == today;
+    // Weekends a step back, like macOS's calendar.
+    let weekend = date.weekday().number_from_monday() >= 6;
     let color = if is_today {
         s.on_accent
-    } else if in_month {
-        s.ink
+    } else if weekend {
+        s.ink_dim
     } else {
-        s.ink_faint
+        s.ink
     };
     let weight = if is_today {
         theme::SEMIBOLD
