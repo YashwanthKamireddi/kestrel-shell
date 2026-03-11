@@ -138,13 +138,14 @@ fn gtk_css(s: &Scheme) -> String {
     // own over that. Text and icons stay fully solid.
     out.push_str(&format!(
         "\nwindow.thunar {{ background-color: {}; }}\n\
-         window.thunar headerbar, window.thunar .titlebar, window.thunar .view,\n\
+         window.thunar .view,\n\
          window.thunar iconview, window.thunar treeview, window.thunar .sidebar,\n\
          window.thunar placessidebar, window.thunar list, window.thunar scrolledwindow,\n\
          window.thunar viewport, window.thunar statusbar, window.thunar .standard-view,\n\
          window.thunar paned, window.thunar notebook, window.thunar notebook > stack {{\n\
          background-color: transparent; background-image: none; }}\n\
-         window.thunar headerbar {{ background-color: {}; box-shadow: none; border-color: {}; }}\n\
+         window.thunar headerbar.titlebar, window.thunar .titlebar, window.thunar headerbar {{\n\
+         background-color: {}; background-image: none; box-shadow: none; border-color: {}; }}\n\
          window.thunar entry {{ background-color: {}; border-color: transparent; }}\n\
          window.thunar .view:selected, window.thunar .view:selected:focus,\n\
          window.thunar iconview:selected, window.thunar iconview.view:selected,\n\
