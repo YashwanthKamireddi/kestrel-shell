@@ -36,6 +36,12 @@ fn config() -> PathBuf {
         .unwrap_or_else(|| home().join(".config"))
 }
 
+fn data() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home().join(".local/share"))
+}
+
 fn state() -> PathBuf {
     crate::config::state_dir()
 }
@@ -451,8 +457,26 @@ fn qt6ct_conf(dir: &Path, old: &str) -> String {
 pub fn apply(s: Scheme, wallpaper: Option<String>) {
     let cfg = config();
     let css = gtk_css(&s);
-    let gtk_changed =
-        write(&cfg.join("gtk-3.0/gtk.css"), &css) | write(&cfg.join("gtk-4.0/gtk.css"), &css);
+    // GTK 3 apps get kestrel's colours as a theme of their own ("kestrel", adw-gtk3-dark with
+    // them on top): a running GTK 3 app reloads its theme when the theme name changes, but
+    // never re-reads ~/.config/gtk-3.0/gtk.css, so colours written there reached an open
+    // Thunar only after a restart. GTK 4 / libadwaita apps read ~/.config/gtk-4.0/gtk.css.
+    let theme_css = format!(
+        "/* kestrel: adw-gtk3-dark in the wallpaper's colours. Generated; edits are overwritten. */\n\
+         @import url(\"file:///usr/share/themes/adw-gtk3-dark/gtk-3.0/gtk.css\");\n{css}"
+    );
+    let themes = data().join("themes/kestrel");
+    let _ = write(
+        &themes.join("index.theme"),
+        "[X-GNOME-Metatheme]\nName=kestrel\nType=X-GNOME-Metatheme\nComment=adw-gtk3-dark in kestrel's colours\nEncoding=UTF-8\nGtkTheme=kestrel\n",
+    );
+    let gtk_changed = write(&themes.join("gtk-3.0/gtk.css"), &theme_css)
+        | write(&cfg.join("gtk-4.0/gtk.css"), &css);
+    // The user stylesheet no longer carries the colours (they would apply twice).
+    let _ = write(
+        &cfg.join("gtk-3.0/gtk.css"),
+        "/* kestrel's colours for GTK 3 live in its theme (~/.local/share/themes/kestrel). */\n",
+    );
 
     let kitty_file = state().join("kitty.conf");
     if write(&kitty_file, &kitty(&s)) {
@@ -496,32 +520,36 @@ pub fn apply(s: Scheme, wallpaper: Option<String>) {
     templates(&s, wallpaper.as_deref());
 }
 
-/// Running GTK apps read gtk.css only when they start or when the GTK theme changes: the
-/// theme name is switched away and back (through gsettings, which the settings portal passes
-/// to every app), so open windows (Thunar, ZapFast) take the new colours at once.
+/// Makes running GTK 3 apps take the new colours: they reload their theme when its name
+/// changes, so the name goes to adw-gtk3-dark and back to "kestrel" (through gsettings, which
+/// the settings portal passes to every app). Also makes "kestrel" the GTK theme.
 fn reload_gtk() {
-    let get = std::process::Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "gtk-theme"])
-        .output();
-    let Ok(out) = get else {
-        return;
-    };
-    let theme = String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .trim_matches('\'')
-        .to_string();
-    if theme.is_empty() {
-        return;
-    }
     let set = |t: &str| {
         let _ = std::process::Command::new("gsettings")
             .args(["set", "org.gnome.desktop.interface", "gtk-theme", t])
             .status();
     };
-    set("Default");
-    std::thread::sleep(std::time::Duration::from_millis(60));
-    set(&theme);
-    log::info!("theme: GTK colours updated and reloaded in open apps");
+    set("adw-gtk3-dark");
+    std::thread::sleep(std::time::Duration::from_millis(80));
+    set("kestrel");
+    // Apps that read settings.ini instead (no portal) use the same theme.
+    let ini = config().join("gtk-3.0/settings.ini");
+    if let Ok(old) = std::fs::read_to_string(&ini) {
+        let new: String = old
+            .lines()
+            .map(|l| {
+                if l.starts_with("gtk-theme-name=") {
+                    "gtk-theme-name=kestrel".to_string()
+                } else {
+                    l.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        write(&ini, &new);
+    }
+    log::info!("theme: GTK colours updated; open GTK 3 apps reloaded their theme");
 }
 
 /// The colour placeholders a template may use, as `{{name}}` (hex `#rrggbb`), plus
