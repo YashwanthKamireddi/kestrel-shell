@@ -19,6 +19,7 @@ pub mod hyprland;
 pub mod icons;
 pub mod level;
 pub mod logind;
+pub mod meters;
 pub mod mpris;
 pub mod network;
 pub mod notifications;

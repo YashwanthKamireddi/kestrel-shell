@@ -157,6 +157,13 @@ pub fn lua() -> Subscription<crate::lua::Event> {
     Subscription::run(crate::lua::stream)
 }
 
+/// Live levels for the Sound page: output, microphone, and `apps` (stream index, its output).
+pub fn meters(apps: Vec<(u32, String)>) -> Subscription<crate::services::meters::Meters> {
+    Subscription::run_with(apps, |a: &Vec<(u32, String)>| {
+        crate::services::meters::stream(a.clone())
+    })
+}
+
 pub fn level() -> Subscription<crate::services::level::Bands> {
     Subscription::run(crate::services::level::stream)
 }
