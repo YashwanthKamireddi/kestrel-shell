@@ -7,8 +7,7 @@ Requisite=graphical-session.target
 # (5 starts in 10 s) and left the desktop without a shell. A crash loop is still paced by
 # RestartSec below (one start a second at most).
 StartLimitIntervalSec=0
-# The shell has no authentication dialog of its own; this agent provides it.
-Wants=plasma-polkit-agent.service
+# kestrel is its own polkit authentication agent (src/panels/auth.rs); no KDE agent.
 
 [Service]
 Type=simple

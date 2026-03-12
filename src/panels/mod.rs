@@ -1,5 +1,6 @@
 //! Panels: what hangs from the bar. Each panel is a view built only from the component kit.
 
+pub mod auth;
 pub mod calendar;
 pub mod clipboard;
 pub mod control;
@@ -41,6 +42,8 @@ pub enum PanelKind {
     Weather,
     Pods,
     Files,
+    /// The password prompt for administrator rights (kestrel's polkit agent).
+    Auth,
 }
 
 impl PanelKind {
@@ -86,6 +89,7 @@ impl PanelKind {
             Self::Weather => weather::WIDTH,
             Self::Pods => pods::WIDTH,
             Self::Files => files::WIDTH,
+            Self::Auth => auth::WIDTH,
         }
     }
 }
@@ -106,6 +110,7 @@ pub struct State {
     pub emoji: emoji::State,
     pub settings: settings::State,
     pub files: files::State,
+    pub auth: auth::State,
 }
 
 #[derive(Clone, Debug)]
@@ -124,6 +129,7 @@ pub enum Message {
     Emoji(emoji::Message),
     Settings(settings::Message),
     Files(files::Message),
+    Auth(auth::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
     /// Left click on a tray icon.
@@ -179,7 +185,11 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
-        PanelKind::Tray | PanelKind::Weather | PanelKind::Pods | PanelKind::Files => {}
+        PanelKind::Tray
+        | PanelKind::Weather
+        | PanelKind::Pods
+        | PanelKind::Files
+        | PanelKind::Auth => {}
     }
     Task::none()
 }
@@ -203,6 +213,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Emoji(m) => emoji::update(app, m),
         Message::Settings(m) => settings::update(app, m),
         Message::Files(m) => files::update(app, m),
+        Message::Auth(m) => auth::update(app, m),
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
@@ -311,5 +322,6 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Weather => weather::view(app, s),
         PanelKind::Pods => pods::view(app, s),
         PanelKind::Files => files::view(app, s),
+        PanelKind::Auth => auth::view(app, s),
     }
 }
