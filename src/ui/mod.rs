@@ -712,22 +712,6 @@ pub fn fitted_file(
     made
 }
 
-#[cfg(test)]
-mod text_tests {
-    #[test]
-    fn titles_break_between_words() {
-        let t = super::two_lines(
-            "Warriors vs. Rockets Reaction Houston rolling with",
-            13.0,
-            160.0,
-        );
-        let lines: Vec<&str> = t.lines().collect();
-        assert_eq!(lines.len(), 2);
-        assert!(!lines[0].ends_with(' '));
-        assert_eq!(super::two_lines("Short", 13.0, 160.0), "Short");
-    }
-}
-
 /// A canvas program's drawing, kept until the program or its size changes. The renderer can
 /// only tell an unchanged drawing from a changed one when it is cached: an uncached canvas is
 /// repainted, over all of its bounds, on every frame (a full-screen canvas cost ~8 ms a frame).
@@ -759,5 +743,21 @@ impl<T: Clone + PartialEq> Memo<T> {
             *last = Some((of.clone(), size));
         }
         self.cache.draw(renderer, size, paint)
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    #[test]
+    fn titles_break_between_words() {
+        let t = super::two_lines(
+            "Warriors vs. Rockets Reaction Houston rolling with",
+            13.0,
+            160.0,
+        );
+        let lines: Vec<&str> = t.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(!lines[0].ends_with(' '));
+        assert_eq!(super::two_lines("Short", 13.0, 160.0), "Short");
     }
 }
