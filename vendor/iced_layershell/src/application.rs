@@ -788,7 +788,9 @@ where
                 let style = iced_core::renderer::Style {
                     text_color: theme.palette().text,
                 };
+                let t_draw = std::time::Instant::now();
                 ui.draw(&mut renderer, &theme, &style, cursor);
+                let draw_us = t_draw.elapsed().as_micros();
 
                 // Before present, so the buffer commit applies region and content
                 // together.
@@ -815,13 +817,21 @@ where
                         iced_s.viewport.physical_size(),
                         data.size
                     );
-                    match compositor.present(
+                    let t_present = std::time::Instant::now();
+                    let presented = compositor.present(
                         &mut renderer,
                         &mut iced_s.surface,
                         &iced_s.viewport,
                         bg,
                         || {},
-                    ) {
+                    );
+                    crate::ktrace!(
+                        "frame {:?} draw {}us raster {}us",
+                        surface_id,
+                        draw_us,
+                        t_present.elapsed().as_micros()
+                    );
+                    match presented {
                         Ok(()) => {
                             iced_s.redraw_key = key;
                             iced_s.forced = false;

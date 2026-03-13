@@ -1,9 +1,10 @@
 //! A ring gauge: a quiet track and an arc for the value, with round ends. Drawn by the canvas
 //! (cached by iced while the value is unchanged), so it is cheap.
 
-use iced::widget::canvas::{self, Frame, Geometry, LineCap, Path, Stroke};
+use iced::widget::canvas::{self, Geometry, LineCap, Path, Stroke};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
+#[derive(Clone, Debug, PartialEq)]
 struct Ring {
     value: f32,
     color: Color,
@@ -15,54 +16,54 @@ struct Ring {
 }
 
 impl<M> canvas::Program<M> for Ring {
-    type State = ();
+    type State = crate::ui::Memo<Self>;
 
     fn draw(
         &self,
-        _state: &(),
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let c = frame.center();
-        if let Some(fill) = self.fill {
-            frame.fill(
-                &Path::circle(c, bounds.width.min(bounds.height) / 2.0),
-                fill,
-            );
-        }
-        let r = bounds.width.min(bounds.height) / 2.0 - self.width / 2.0 - 0.5;
-        let stroke = |color: Color| Stroke::default().with_width(self.width).with_color(color);
-        frame.stroke(&Path::circle(c, r), stroke(self.track));
-        let v = self.value.clamp(0.0, 1.0);
-        if v > 0.002 {
-            // Many short straight steps instead of one arc: a nearly full arc was drawn with
-            // a visible glitch where it met its own start.
-            let start = -std::f32::consts::FRAC_PI_2;
-            let sweep = v.min(0.995) * std::f32::consts::TAU;
-            let steps = ((sweep / std::f32::consts::TAU) * 120.0).ceil().max(2.0) as usize;
-            let arc = Path::new(|b| {
-                for i in 0..=steps {
-                    let a = start + sweep * i as f32 / steps as f32;
-                    let p = Point::new(c.x + r * a.cos(), c.y + r * a.sin());
-                    if i == 0 {
-                        b.move_to(p);
-                    } else {
-                        b.line_to(p);
+        vec![state.draw(self, renderer, bounds.size(), |frame| {
+            let c = frame.center();
+            if let Some(fill) = self.fill {
+                frame.fill(
+                    &Path::circle(c, bounds.width.min(bounds.height) / 2.0),
+                    fill,
+                );
+            }
+            let r = bounds.width.min(bounds.height) / 2.0 - self.width / 2.0 - 0.5;
+            let stroke = |color: Color| Stroke::default().with_width(self.width).with_color(color);
+            frame.stroke(&Path::circle(c, r), stroke(self.track));
+            let v = self.value.clamp(0.0, 1.0);
+            if v > 0.002 {
+                // Many short straight steps instead of one arc: a nearly full arc was drawn with
+                // a visible glitch where it met its own start.
+                let start = -std::f32::consts::FRAC_PI_2;
+                let sweep = v.min(0.995) * std::f32::consts::TAU;
+                let steps = ((sweep / std::f32::consts::TAU) * 120.0).ceil().max(2.0) as usize;
+                let arc = Path::new(|b| {
+                    for i in 0..=steps {
+                        let a = start + sweep * i as f32 / steps as f32;
+                        let p = Point::new(c.x + r * a.cos(), c.y + r * a.sin());
+                        if i == 0 {
+                            b.move_to(p);
+                        } else {
+                            b.line_to(p);
+                        }
                     }
-                }
-            });
-            frame.stroke(
-                &arc,
-                Stroke {
-                    line_cap: LineCap::Round,
-                    ..stroke(self.color)
-                },
-            );
-        }
-        vec![frame.into_geometry()]
+                });
+                frame.stroke(
+                    &arc,
+                    Stroke {
+                        line_cap: LineCap::Round,
+                        ..stroke(self.color)
+                    },
+                );
+            }
+        })]
     }
 }
 

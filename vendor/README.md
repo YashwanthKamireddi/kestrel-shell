@@ -15,3 +15,15 @@ wallpaper; a compositor request (configure, scale, resize) always draws.
 with wall-clock times, for correlating flicker in a screen recording with what was committed.
 Measured: CPU during panel animations went from ~43 % to ~15 % of a core, because the
 full-screen wallpaper was being re-rasterised on every animation frame.
+
+`iced_tiny_skia/` is iced_tiny_skia 0.14.1 (MIT) with one kestrel patch (search "kestrel
+patch"): `adjust_clip_mask` touches only the pixels that change. The original wiped and refilled
+a screen-sized mask for every layer and primitive group; with a layer per control that rewrote
+tens of megabytes per frame on the full-screen overlay.
+
+`softbuffer/` is MalpenZibo's softbuffer `wayland-argb` branch (MIT/Apache-2.0) with one kestrel
+patch: a third buffer, so drawing never waits for Hyprland to release the previous frame's.
+
+Measured 2026-11-13 in the rig (overview selection, control centre open/close): overlay frame
+time 8.4 ms -> 5.1 ms on average. Canvas drawings are also cached now (`ui::Memo`): an uncached
+canvas was repainted over all its bounds every frame.

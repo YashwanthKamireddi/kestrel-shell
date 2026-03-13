@@ -39,11 +39,13 @@ mlua = { version = "0.11", features = ["lua54", "vendored"] }
 material-colors = { version = "0.5", features = ["quantize"] }
 
 [patch.crates-io]
-# wl_shm Argb8888 so the CPU renderer keeps alpha on Wayland.
-softbuffer = { git = "https://github.com/MalpenZibo/softbuffer", branch = "wayland-argb" }
+# wl_shm Argb8888 so the CPU renderer keeps alpha on Wayland (MalpenZibo's wayland-argb
+# branch, vendored), plus a third buffer so a frame never waits for the compositor.
+softbuffer = { path = "vendor/softbuffer" }
 # 8×8 anti-aliasing samples per pixel instead of 4×4 (vendor/tiny-skia, one constant): curves
 # on 1x screens (pills, circles, rings) get 64 shades along their edge instead of 16.
 tiny-skia = { path = "vendor/tiny-skia" }
+iced_tiny_skia = { path = "vendor/iced_tiny_skia" }
 
 [profile.release]
 lto = "thin"

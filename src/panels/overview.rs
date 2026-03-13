@@ -365,10 +365,13 @@ fn card<'a>(
     let (_, height) = card_size();
 
     let backdrop: Element<'_, AppMessage> = match &app.wallpaper {
+        // Made at the card's size: drawn pixel for pixel (smooth scaling at 1:1 took the
+        // renderer's slow path on every frame and only blurred it).
         Some(w) => iced::widget::image(w.thumb_soft.clone())
             .width(width)
             .height(height)
             .content_fit(iced::ContentFit::Fill)
+            .filter_method(iced::widget::image::FilterMethod::Nearest)
             // The one you are on at full strength, the rest a step back.
             .opacity(s.opacity * if current { 1.0 } else { 0.6 })
             .into(),
@@ -425,6 +428,7 @@ fn card<'a>(
             Some(r) => iced::widget::image(r.handle.clone())
                 .width(bw)
                 .height(bh)
+                .filter_method(iced::widget::image::FilterMethod::Nearest)
                 .opacity(alpha * s.opacity)
                 .into(),
             // No picture yet: the app's icon on a quiet card.

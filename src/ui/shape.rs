@@ -2,7 +2,7 @@
 //! A panel leaves the bar through two concave curves, so it reads as the bar extruding
 //! rather than a card placed under it.
 
-use iced::widget::canvas::{self, Frame, Geometry, Path, path::Builder};
+use iced::widget::canvas::{self, Geometry, Path, path::Builder};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
 /// Circle approximation constant for a quarter arc drawn with one cubic.
@@ -30,7 +30,7 @@ pub struct Drop {
 pub const FLOAT_GAP: f32 = 6.0;
 
 /// The bar surface: the bar band, the screen's two top inner corners and any panels.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BarShape {
     pub color: Color,
     pub bar: f32,
@@ -42,65 +42,65 @@ pub struct BarShape {
 }
 
 impl<M> canvas::Program<M> for BarShape {
-    type State = ();
+    type State = crate::ui::Memo<Self>;
 
     fn draw(
         &self,
-        _state: &(),
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let w = bounds.width;
-        if self.band {
-            frame.fill_rectangle(Point::ORIGIN, iced::Size::new(w, self.bar), self.color);
-            // Separate fills: the mirrored right corner winds the other way, so in one path
-            // its half-pixel overlap with the band cancels out (non-zero rule) and leaves a
-            // see-through line under the bar.
-            for right in [false, true] {
-                frame.fill(
-                    &Path::new(|b| top_corner(b, self.frame, self.bar, self.corner, right, w)),
-                    self.color,
-                );
+        vec![state.draw(self, renderer, bounds.size(), |frame| {
+            let w = bounds.width;
+            if self.band {
+                frame.fill_rectangle(Point::ORIGIN, iced::Size::new(w, self.bar), self.color);
+                // Separate fills: the mirrored right corner winds the other way, so in one path
+                // its half-pixel overlap with the band cancels out (non-zero rule) and leaves a
+                // see-through line under the bar.
+                for right in [false, true] {
+                    frame.fill(
+                        &Path::new(|b| top_corner(b, self.frame, self.bar, self.corner, right, w)),
+                        self.color,
+                    );
+                }
             }
-        }
-        // Each panel is its own fill, so only the area it covers is redrawn while it moves.
-        for d in &self.drops {
-            if d.height < 0.5 {
-                continue;
-            }
-            // The renderer redraws only the bounds of what changed, and a path's bounds leave
-            // out its anti-aliased edge; a near-invisible box 2 px larger makes sure the edge
-            // pixels of the previous frame are repainted too.
-            let pad = 2.0;
-            frame.fill_rectangle(
-                Point::new(
-                    d.x - d.join - pad,
-                    if d.floating { d.top } else { self.bar } - pad,
-                ),
-                iced::Size::new(
-                    d.width + 2.0 * (d.join + pad),
-                    d.height + d.join + 2.0 * pad,
-                ),
-                Color::from_rgba8(0, 0, 0, 1.0 / 255.0),
-            );
-            if d.floating {
-                let r = d.radius.min(d.height / 2.0).min(d.width / 2.0);
-                frame.fill(
-                    &Path::rounded_rectangle(
-                        Point::new(d.x, d.top),
-                        iced::Size::new(d.width, d.height),
-                        r.into(),
+            // Each panel is its own fill, so only the area it covers is redrawn while it moves.
+            for d in &self.drops {
+                if d.height < 0.5 {
+                    continue;
+                }
+                // The renderer redraws only the bounds of what changed, and a path's bounds leave
+                // out its anti-aliased edge; a near-invisible box 2 px larger makes sure the edge
+                // pixels of the previous frame are repainted too.
+                let pad = 2.0;
+                frame.fill_rectangle(
+                    Point::new(
+                        d.x - d.join - pad,
+                        if d.floating { d.top } else { self.bar } - pad,
                     ),
-                    self.color,
+                    iced::Size::new(
+                        d.width + 2.0 * (d.join + pad),
+                        d.height + d.join + 2.0 * pad,
+                    ),
+                    Color::from_rgba8(0, 0, 0, 1.0 / 255.0),
                 );
-            } else {
-                frame.fill(&Path::new(|b| drop_path(b, self.bar, d)), self.color);
+                if d.floating {
+                    let r = d.radius.min(d.height / 2.0).min(d.width / 2.0);
+                    frame.fill(
+                        &Path::rounded_rectangle(
+                            Point::new(d.x, d.top),
+                            iced::Size::new(d.width, d.height),
+                            r.into(),
+                        ),
+                        self.color,
+                    );
+                } else {
+                    frame.fill(&Path::new(|b| drop_path(b, self.bar, d)), self.color);
+                }
             }
-        }
-        vec![frame.into_geometry()]
+        })]
     }
 }
 
@@ -189,7 +189,7 @@ pub enum Edge {
     Bottom,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FrameShape {
     pub color: Color,
     pub edge: Edge,
@@ -198,47 +198,47 @@ pub struct FrameShape {
 }
 
 impl<M> canvas::Program<M> for FrameShape {
-    type State = ();
+    type State = crate::ui::Memo<Self>;
 
     fn draw(
         &self,
-        _state: &(),
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let (w, h, t, r) = (bounds.width, bounds.height, self.frame, self.corner);
-        match self.edge {
-            Edge::Left | Edge::Right => {
-                frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.color);
-            }
-            Edge::Bottom => {
-                frame.fill_rectangle(Point::new(0.0, h - t), iced::Size::new(w, t), self.color);
-                // One fill per corner: mirrored corners wind the other way and would cancel
-                // their overlap with the band (see `BarShape`).
-                if r > 0.0 {
-                    for right in [false, true] {
-                        let path = Path::new(|b| {
-                            let fx = |x: f32| if right { w - x } else { x };
-                            let base = h - t;
-                            b.move_to(Point::new(fx(t - 0.5), base + 0.5));
-                            b.line_to(Point::new(fx(t - 0.5), base - r));
-                            b.line_to(Point::new(fx(t), base - r));
-                            b.bezier_curve_to(
-                                Point::new(fx(t), base - r + r * K),
-                                Point::new(fx(t + r - r * K), base),
-                                Point::new(fx(t + r), base),
-                            );
-                            b.line_to(Point::new(fx(t + r), base + 0.5));
-                            b.close();
-                        });
-                        frame.fill(&path, self.color);
+        vec![state.draw(self, renderer, bounds.size(), |frame| {
+            let (w, h, t, r) = (bounds.width, bounds.height, self.frame, self.corner);
+            match self.edge {
+                Edge::Left | Edge::Right => {
+                    frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.color);
+                }
+                Edge::Bottom => {
+                    frame.fill_rectangle(Point::new(0.0, h - t), iced::Size::new(w, t), self.color);
+                    // One fill per corner: mirrored corners wind the other way and would cancel
+                    // their overlap with the band (see `BarShape`).
+                    if r > 0.0 {
+                        for right in [false, true] {
+                            let path = Path::new(|b| {
+                                let fx = |x: f32| if right { w - x } else { x };
+                                let base = h - t;
+                                b.move_to(Point::new(fx(t - 0.5), base + 0.5));
+                                b.line_to(Point::new(fx(t - 0.5), base - r));
+                                b.line_to(Point::new(fx(t), base - r));
+                                b.bezier_curve_to(
+                                    Point::new(fx(t), base - r + r * K),
+                                    Point::new(fx(t + r - r * K), base),
+                                    Point::new(fx(t + r), base),
+                                );
+                                b.line_to(Point::new(fx(t + r), base + 0.5));
+                                b.close();
+                            });
+                            frame.fill(&path, self.color);
+                        }
                     }
                 }
             }
-        }
-        vec![frame.into_geometry()]
+        })]
     }
 }

@@ -727,3 +727,37 @@ mod text_tests {
         assert_eq!(super::two_lines("Short", 13.0, 160.0), "Short");
     }
 }
+
+/// A canvas program's drawing, kept until the program or its size changes. The renderer can
+/// only tell an unchanged drawing from a changed one when it is cached: an uncached canvas is
+/// repainted, over all of its bounds, on every frame (a full-screen canvas cost ~8 ms a frame).
+pub struct Memo<T> {
+    cache: iced::widget::canvas::Cache,
+    last: std::cell::RefCell<Option<(T, iced::Size)>>,
+}
+
+impl<T> Default for Memo<T> {
+    fn default() -> Self {
+        Self {
+            cache: iced::widget::canvas::Cache::new(),
+            last: std::cell::RefCell::new(None),
+        }
+    }
+}
+
+impl<T: Clone + PartialEq> Memo<T> {
+    pub fn draw(
+        &self,
+        of: &T,
+        renderer: &iced::Renderer,
+        size: iced::Size,
+        paint: impl Fn(&mut iced::widget::canvas::Frame),
+    ) -> iced::widget::canvas::Geometry {
+        let mut last = self.last.borrow_mut();
+        if last.as_ref().is_none_or(|(t, s)| t != of || *s != size) {
+            self.cache.clear();
+            *last = Some((of.clone(), size));
+        }
+        self.cache.draw(renderer, size, paint)
+    }
+}
