@@ -251,7 +251,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);
-        let width = p.kind.width();
+        let width = p.kind.width_for(app);
         let content = panels::view(app, p.kind, s.faded(alpha));
         let x = p.x.value + (p.w.value - width) / 2.0;
         let kind = p.kind;

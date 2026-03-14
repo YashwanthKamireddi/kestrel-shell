@@ -1,16 +1,16 @@
-//! Overview (Super+Tab): the workspaces that have windows (and the one you are on), each a
-//! plain card with its windows drawn where they are, as live pictures. One crisp white ring
-//! marks the selected window; the pointer moves it at once, as do Tab and the arrows; Enter
-//! or a click goes there. Under the cards, the selected window's app and title. Type to find
-//! a window (the rest step back). Nothing fades or glides: it answers instantly.
+//! Overview (Super+Tab): where everything is open. The workspaces that have windows (and the
+//! one you are on), each a plain card with its windows drawn where they are, as live
+//! pictures; the panel is only as wide as its cards (no search, no title line: design call).
+//! One crisp white ring marks the selected window; the pointer moves it at once, as do Tab and
+//! the arrows; Enter or a click goes there. Nothing fades or glides.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{apps, hyprland, icons};
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
-use iced::widget::{Space, column, container, pin, row, stack, text_input};
-use iced::{Alignment, Color, Element, Task};
+use iced::widget::{Space, column, container, pin, row, stack};
+use iced::{Alignment, Element, Task};
 
 /// All workspaces in one compact row.
 const COLUMNS: usize = 5;
@@ -20,7 +20,6 @@ const PAD: f32 = 16.0;
 
 #[derive(Default)]
 pub struct State {
-    query: String,
     /// Address of the selected window.
     selected: Option<String>,
     /// Live pictures of the windows, by address, ready at their tile's size (kept between
@@ -40,14 +39,10 @@ type Made = (String, (u32, u32), u32, u32, Vec<u8>);
 #[derive(Clone, Debug)]
 pub enum Message {
     Previews(Vec<Made>),
-    Query(String),
     Submit,
     /// The pointer came onto a window: it becomes the selection.
     Hover(String),
 }
-
-static INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
-    std::sync::LazyLock::new(|| iced::widget::Id::new("overview-input"));
 
 fn msg(m: Message) -> AppMessage {
     AppMessage::Panel(PanelMessage::Overview(m))
@@ -55,7 +50,6 @@ fn msg(m: Message) -> AppMessage {
 
 pub fn open(app: &mut App) -> Task<AppMessage> {
     let st = &mut app.panels.overview;
-    st.query.clear();
     // Start on the window you were in.
     st.selected = app
         .hypr
@@ -64,7 +58,6 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
         .min_by_key(|w| w.focus)
         .map(|w| w.address.clone());
     Task::batch([
-        Task::Iced(iced::widget::focus(INPUT_ID.clone())),
         // Fresh pictures of every window: captured, scaled and rounded to their tiles off the
         // UI thread, so opening never stutters.
         Task::perform(
@@ -93,13 +86,6 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
             None => AppMessage::Batch(Vec::new()),
         }),
     ])
-}
-
-fn matches(w: &hyprland::Window, q: &str) -> bool {
-    q.is_empty()
-        || w.title.to_lowercase().contains(q)
-        || w.class.to_lowercase().contains(q)
-        || apps::name_for_class(&w.class).to_lowercase().contains(q)
 }
 
 fn make_previews(jobs: &[(String, (f32, f32))]) -> Vec<Made> {
@@ -177,12 +163,10 @@ fn windows_on(app: &App, id: i32) -> Vec<&hyprland::Window> {
 
 /// Every matching window in on-screen order, with its card index.
 fn order(app: &App) -> Vec<(usize, &hyprland::Window)> {
-    let q = app.panels.overview.query.trim().to_lowercase();
     workspace_ids(app)
         .into_iter()
         .enumerate()
         .flat_map(|(card, id)| windows_on(app, id).into_iter().map(move |w| (card, w)))
-        .filter(|(_, w)| matches(w, &q))
         .collect()
 }
 
@@ -219,20 +203,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .previews
                 .retain(|a, _| live.contains(a.as_str()));
         }
-        Message::Query(q) => {
-            app.panels.overview.query = q;
-            // Keep the selection on a match.
-            let list = order(app);
-            let st = &app.panels.overview;
-            let still = st
-                .selected
-                .as_ref()
-                .is_some_and(|a| list.iter().any(|(_, w)| &w.address == a));
-            if !still {
-                let first = list.first().map(|(_, w)| w.address.clone());
-                app.panels.overview.selected = first;
-            }
-        }
         Message::Hover(a) => app.panels.overview.selected = Some(a),
         Message::Submit => {
             let list = order(app);
@@ -251,8 +221,18 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     Task::none()
 }
 
+/// The panel's width: its cards side by side (up to a row of five).
+pub fn width(app: &App) -> f32 {
+    let (cw, _) = card_size();
+    let n = workspace_ids(app).len().clamp(1, COLUMNS) as f32;
+    2.0 * PAD + n * cw + (n - 1.0) * GAP
+}
+
 pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
     use super::Key;
+    if k == Key::Enter {
+        return update(app, Message::Submit);
+    }
     let list = order(app);
     if list.is_empty() {
         return Task::none();
@@ -301,80 +281,25 @@ fn app_icon<'a>(class: &str, px: f32, s: Scheme) -> Element<'a, AppMessage> {
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let st = &app.panels.overview;
-    let input = text_input("Find a window", &st.query)
-        .id(INPUT_ID.clone())
-        .on_input(|q| msg(Message::Query(q)))
-        .on_submit(msg(Message::Submit))
-        .padding([10, 12])
-        .size(text::TITLE)
-        .font(theme::FONT)
-        .style(move |_, _| text_input::Style {
-            background: Color::TRANSPARENT.into(),
-            border: iced::Border::default(),
-            icon: s.ink_dim,
-            placeholder: s.ink_faint,
-            value: s.ink,
-            selection: s.accent_soft,
-        });
-    let field = container(
-        row![icon(Icon::Search, 18.0, s.ink_dim), input,]
-            .spacing(4)
-            .align_y(Alignment::Center),
-    )
-    .padding([0, 12])
-    .height(44)
-    .center_y(44)
-    .style(move |_| ui::field_style(s));
-
     let card_w = (WIDTH - 2.0 * PAD - (COLUMNS as f32 - 1.0) * GAP) / COLUMNS as f32;
     let active = app.hypr.active_on(&app.hypr.focused_monitor);
-    let q = st.query.trim().to_lowercase();
     let cards: Vec<Element<'_, AppMessage>> = workspace_ids(app)
         .into_iter()
-        .map(|id| card(app, s, id, active == Some(id), &q, card_w))
+        .map(|id| card(app, s, id, active == Some(id), card_w))
         .collect();
     let mut grid = column![].spacing(GAP);
     let mut it = cards.into_iter().peekable();
     while it.peek().is_some() {
         let mut r = row![].spacing(GAP);
+        // A short last row stays short (no blank cards pad it out).
         for _ in 0..COLUMNS {
-            r = r.push(
-                it.next()
-                    .unwrap_or_else(|| Space::new().width(card_w).into()),
-            );
+            if let Some(c) = it.next() {
+                r = r.push(c);
+            }
         }
         grid = grid.push(r);
     }
-    // The selected window, named: its app's icon, app and title.
-    let named: Element<'_, AppMessage> = match st
-        .selected
-        .as_deref()
-        .and_then(|a| app.hypr.windows.iter().find(|w| w.address == a))
-    {
-        Some(w) => row![
-            app_icon(&w.class, 18.0, s),
-            label_w(
-                apps::name_for_class(&w.class),
-                text::BODY,
-                s.ink,
-                theme::SEMIBOLD
-            ),
-            label(
-                ui::fit(&w.title, text::BODY, WIDTH - 300.0),
-                text::BODY,
-                s.ink_dim
-            ),
-        ]
-        .spacing(10)
-        .align_y(Alignment::Center)
-        .height(22)
-        .into(),
-        None => Space::new().height(22).into(),
-    };
-    container(column![field, grid, named].spacing(PAD))
-        .padding(PAD)
-        .into()
+    container(grid).padding(PAD).into()
 }
 
 fn card<'a>(
@@ -382,7 +307,6 @@ fn card<'a>(
     s: Scheme,
     id: i32,
     current: bool,
-    q: &str,
     width: f32,
 ) -> Element<'a, AppMessage> {
     let windows = windows_on(app, id);
@@ -412,10 +336,8 @@ fn card<'a>(
     .height(height);
     for w in &windows {
         let (x, y, bw, bh) = tile_rect(w, width, height);
-        let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
-        // Every window at full strength; only those a search leaves out step back.
-        let alpha = if hit { 1.0 } else { 0.3 };
+        let alpha = 1.0;
         let ready = app
             .panels
             .overview

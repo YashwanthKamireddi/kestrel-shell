@@ -71,6 +71,14 @@ impl PanelKind {
         })
     }
 
+    /// The panel's width for what it shows now (the overview fits its cards).
+    pub fn width_for(self, app: &App) -> f32 {
+        match self {
+            Self::Overview => overview::width(app),
+            _ => self.width(),
+        }
+    }
+
     pub fn width(self) -> f32 {
         match self {
             Self::Control => 392.0,
