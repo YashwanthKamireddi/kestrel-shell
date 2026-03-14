@@ -23,31 +23,101 @@ pub enum Home {
     Right,
 }
 
-/// What the shell knows about a module: its id (as in config.toml), where it goes, and the
-/// label of its switch in Settings (None: part of the bar's structure, always there).
+/// What the shell knows about a module: its id (as in config.toml), where it goes, the label
+/// of its switch in Settings (None: part of the bar's structure, always there), and its own
+/// options. Settings is built from this list, so a module's settings are declared once, here.
 pub struct Info {
     pub id: &'static str,
     pub home: Home,
     pub setting: Option<&'static str>,
+    pub options: &'static [Opt],
 }
+
+/// One option of a module, as it is kept in config.toml.
+pub struct Opt {
+    /// Its table (`["bar"]`, `["clock"]`, `[]` for the top level) and key.
+    pub table: &'static [&'static str],
+    pub key: &'static str,
+    pub label: &'static str,
+    pub kind: OptKind,
+}
+
+pub enum OptKind {
+    /// On or off, with its default.
+    Switch(bool),
+    /// One of some values: (value written, label shown); the first is the default.
+    Choice(&'static [(&'static str, &'static str)]),
+}
+
+impl Opt {
+    /// Its value in the parsed config file, else its default.
+    pub fn value(&self, doc: &toml::Table) -> toml::Value {
+        let mut t = doc;
+        for name in self.table {
+            match t.get(*name).and_then(toml::Value::as_table) {
+                Some(next) => t = next,
+                None => return self.default(),
+            }
+        }
+        t.get(self.key).cloned().unwrap_or_else(|| self.default())
+    }
+
+    fn default(&self) -> toml::Value {
+        match self.kind {
+            OptKind::Switch(on) => toml::Value::Boolean(on),
+            OptKind::Choice(c) => toml::Value::String(c[0].0.to_string()),
+        }
+    }
+}
+
+const BATTERY_PERCENT: Opt = Opt {
+    table: &["bar"],
+    key: "battery_percent",
+    label: "Battery percentage",
+    kind: OptKind::Switch(true),
+};
+const CLOCK_FORMAT: Opt = Opt {
+    table: &["clock"],
+    key: "format",
+    label: "Clock",
+    kind: OptKind::Choice(&[("24h", "24-hour"), ("12h", "12-hour")]),
+};
+const CLOCK_DATE: Opt = Opt {
+    table: &["clock"],
+    key: "date",
+    label: "Date",
+    kind: OptKind::Switch(true),
+};
+const VISUALISER: Opt = Opt {
+    table: &["bar"],
+    key: "visualiser",
+    label: "Music visualiser",
+    kind: OptKind::Switch(true),
+};
+const UNITS: Opt = Opt {
+    table: &[],
+    key: "weather_units",
+    label: "Temperature",
+    kind: OptKind::Choice(&[("celsius", "°C"), ("fahrenheit", "°F")]),
+};
 
 /// Every built-in module, the one list the bar, Settings and the Lua layer read.
 #[rustfmt::skip]
 pub const MODULES: &[Info] = &[
-    Info { id: "workspaces", home: Home::Left, setting: None },
-    Info { id: "app", home: Home::Left, setting: Some("Focused app name") },
-    Info { id: "media", home: Home::Center, setting: Some("Music as its own bubble") },
-    Info { id: "island", home: Home::Center, setting: None },
-    Info { id: "clock", home: Home::Center, setting: None },
-    Info { id: "weather", home: Home::Center, setting: Some("Weather as its own circle") },
-    Info { id: "airpods", home: Home::Center, setting: Some("AirPods battery circle") },
-    Info { id: "tray", home: Home::Right, setting: Some("Tray icons") },
-    Info { id: "system", home: Home::Right, setting: Some("CPU and memory") },
-    Info { id: "updates", home: Home::Right, setting: Some("Pending updates") },
-    Info { id: "privacy", home: Home::Right, setting: Some("Microphone and screen in use") },
-    Info { id: "status", home: Home::Right, setting: Some("Network, sound and battery") },
-    Info { id: "notifications", home: Home::Right, setting: None },
-    Info { id: "power", home: Home::Right, setting: Some("Power") },
+    Info { id: "workspaces", home: Home::Left, setting: None, options: &[] },
+    Info { id: "app", home: Home::Left, setting: Some("Focused app name"), options: &[] },
+    Info { id: "media", home: Home::Center, setting: Some("Music as its own bubble"), options: &[] },
+    Info { id: "island", home: Home::Center, setting: None, options: &[CLOCK_FORMAT, CLOCK_DATE, VISUALISER] },
+    Info { id: "clock", home: Home::Center, setting: None, options: &[] },
+    Info { id: "weather", home: Home::Center, setting: Some("Weather"), options: &[UNITS] },
+    Info { id: "airpods", home: Home::Center, setting: Some("AirPods battery circle"), options: &[] },
+    Info { id: "tray", home: Home::Right, setting: Some("Tray icons"), options: &[] },
+    Info { id: "system", home: Home::Right, setting: Some("CPU and memory"), options: &[] },
+    Info { id: "updates", home: Home::Right, setting: Some("Pending updates"), options: &[] },
+    Info { id: "privacy", home: Home::Right, setting: Some("Microphone and screen in use"), options: &[] },
+    Info { id: "status", home: Home::Right, setting: Some("Network, sound and battery"), options: &[BATTERY_PERCENT] },
+    Info { id: "notifications", home: Home::Right, setting: None, options: &[] },
+    Info { id: "power", home: Home::Right, setting: Some("Power"), options: &[] },
 ];
 
 /// Whether `id` is a built-in module.
