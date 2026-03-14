@@ -1,7 +1,8 @@
-//! Overview (Super+Tab): every workspace as a small picture of its screen, each window drawn
-//! where it really is with its app's icon. Type to find a window (the rest dim); Tab or the
-//! arrows move between windows; Enter goes to the selected one; a click focuses a window, or
-//! a workspace when it lands on the background.
+//! Overview (Super+Tab): the workspaces that have windows (and the one you are on), each a
+//! plain card with its windows drawn where they are, as live pictures. One crisp white ring
+//! marks the selected window; the pointer moves it at once, as do Tab and the arrows; Enter
+//! or a click goes there. Under the cards, the selected window's app and title. Type to find
+//! a window (the rest step back). Nothing fades or glides: it answers instantly.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
@@ -22,10 +23,6 @@ pub struct State {
     query: String,
     /// Address of the selected window.
     selected: Option<String>,
-    /// The window the selection just left, and how far the change has gone (0 → 1): the
-    /// two cross-fade instead of the selection jumping.
-    left: Option<String>,
-    pub fade: crate::motion::Spring,
     /// Live pictures of the windows, by address, ready at their tile's size (kept between
     /// opens so the overview shows them at once; refreshed on each open, off the UI thread).
     previews: std::collections::HashMap<String, Ready>,
@@ -45,6 +42,8 @@ pub enum Message {
     Previews(Vec<Made>),
     Query(String),
     Submit,
+    /// The pointer came onto a window: it becomes the selection.
+    Hover(String),
 }
 
 static INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
@@ -57,8 +56,6 @@ fn msg(m: Message) -> AppMessage {
 pub fn open(app: &mut App) -> Task<AppMessage> {
     let st = &mut app.panels.overview;
     st.query.clear();
-    st.left = None;
-    st.fade.snap(1.0);
     // Start on the window you were in.
     st.selected = app
         .hypr
@@ -147,9 +144,21 @@ pub fn card_size() -> (f32, f32) {
     (w, w * 9.0 / 16.0)
 }
 
+/// The workspaces shown: those with windows, and the one you are on (empty ones are left
+/// out: a row of blank cards was noise).
 fn workspace_ids(app: &App) -> Vec<i32> {
-    let count = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces) as i32;
-    (1..=count).collect()
+    let current = app.hypr.active_on(&app.hypr.focused_monitor);
+    let mut ids: Vec<i32> = app
+        .hypr
+        .windows
+        .iter()
+        .map(|w| w.workspace)
+        .filter(|id| *id > 0)
+        .chain(current)
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
 }
 
 /// Windows of a workspace in reading order: tiled top-left first, floating ones last.
@@ -222,9 +231,9 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             if !still {
                 let first = list.first().map(|(_, w)| w.address.clone());
                 app.panels.overview.selected = first;
-                app.panels.overview.left = None;
             }
         }
+        Message::Hover(a) => app.panels.overview.selected = Some(a),
         Message::Submit => {
             let list = order(app);
             let st = &app.panels.overview;
@@ -280,17 +289,7 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         Key::End => n - 1,
         _ => return Task::none(),
     };
-    let new = list[next].1.address.clone();
-    let st = &mut app.panels.overview;
-    if st.selected.as_deref() != Some(new.as_str()) {
-        st.left = st.selected.replace(new);
-        st.fade.snap(0.0);
-        if crate::motion::still() {
-            st.fade.snap(1.0);
-        } else {
-            st.fade.to(1.0, crate::motion::Spring::SHOW);
-        }
-    }
+    app.panels.overview.selected = Some(list[next].1.address.clone());
     Task::none()
 }
 
@@ -347,7 +346,33 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         grid = grid.push(r);
     }
-    container(column![field, grid].spacing(PAD))
+    // The selected window, named: its app's icon, app and title.
+    let named: Element<'_, AppMessage> = match st
+        .selected
+        .as_deref()
+        .and_then(|a| app.hypr.windows.iter().find(|w| w.address == a))
+    {
+        Some(w) => row![
+            app_icon(&w.class, 18.0, s),
+            label_w(
+                apps::name_for_class(&w.class),
+                text::BODY,
+                s.ink,
+                theme::SEMIBOLD
+            ),
+            label(
+                ui::fit(&w.title, text::BODY, WIDTH - 300.0),
+                text::BODY,
+                s.ink_dim
+            ),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center)
+        .height(22)
+        .into(),
+        None => Space::new().height(22).into(),
+    };
+    container(column![field, grid, named].spacing(PAD))
         .padding(PAD)
         .into()
 }
@@ -364,33 +389,19 @@ fn card<'a>(
     let selected = app.panels.overview.selected.as_deref();
     let (_, height) = card_size();
 
-    let backdrop: Element<'_, AppMessage> = match &app.wallpaper {
-        // Made at the card's size: drawn pixel for pixel (smooth scaling at 1:1 took the
-        // renderer's slow path on every frame and only blurred it).
-        Some(w) => iced::widget::image(w.thumb_soft.clone())
-            .width(width)
-            .height(height)
-            .content_fit(iced::ContentFit::Fill)
-            .filter_method(iced::widget::image::FilterMethod::Nearest)
-            // The one you are on at full strength, the rest a step back.
-            .opacity(s.opacity * if current { 1.0 } else { 0.6 })
-            .into(),
-        None => container(Space::new())
-            .width(width)
-            .height(height)
-            .style(move |_| container::Style {
-                background: Some(s.raised.into()),
-                border: iced::Border::default().rounded(10),
-                ..container::Style::default()
-            })
-            .into(),
-    };
-    // Clicking the background switches to the workspace.
+    // A plain card (the blurred wallpaper behind each one was the heaviest thing drawn and
+    // only added noise); a click on it switches to the workspace.
     let mut layers = stack![
-        control(backdrop)
+        control(Space::new().width(width).height(height))
             .width(width)
             .height(height)
-            .radius(10.0)
+            .radius(12.0)
+            .colors(
+                s.ink
+                    .scale_alpha(if current { 0.08 } else { 0.05 } * s.opacity),
+                s.ink.scale_alpha(0.1 * s.opacity),
+                s.ink.scale_alpha(0.12 * s.opacity),
+            )
             .no_press_scale()
             .on_press(AppMessage::Batch(vec![
                 AppMessage::Dispatch(crate::services::compositor::Action::FocusWorkspace(id)),
@@ -403,21 +414,8 @@ fn card<'a>(
         let (x, y, bw, bh) = tile_rect(w, width, height);
         let hit = matches(w, q);
         let sel = selected == Some(w.address.as_str());
-        // No borders or rings (design call): the selected window at full strength, the others
-        // back, the ones a search does not match far back.
-        let f = app.panels.overview.fade.value.clamp(0.0, 1.0);
-        let left = app.panels.overview.left.as_deref() == Some(w.address.as_str());
-        let alpha = if !hit {
-            0.25
-        } else if sel {
-            0.5 + 0.5 * f
-        } else if left {
-            1.0 - 0.5 * f
-        } else if selected.is_some() {
-            0.5
-        } else {
-            1.0
-        };
+        // Every window at full strength; only those a search leaves out step back.
+        let alpha = if hit { 1.0 } else { 0.3 };
         let ready = app
             .panels
             .overview
@@ -431,40 +429,42 @@ fn card<'a>(
                 .filter_method(iced::widget::image::FilterMethod::Nearest)
                 .opacity(alpha * s.opacity)
                 .into(),
-            // No picture yet: the app's icon on a quiet card.
+            // No picture yet: the app's icon on a quiet tile.
             None => container(app_icon(&w.class, (bw.min(bh) * 0.4).clamp(14.0, 28.0), s))
                 .center_x(bw)
                 .center_y(bh)
                 .style(move |_| container::Style {
-                    background: Some(s.raised.scale_alpha(0.9 * alpha).into()),
+                    background: Some(s.ink.scale_alpha(0.08 * alpha * s.opacity).into()),
                     border: iced::Border::default().rounded(7),
                     ..container::Style::default()
                 })
                 .into(),
         };
-        let tile = stack![body];
+        let mut tile = stack![body];
+        // The selection: one crisp white ring, at once (no fade).
+        if sel {
+            tile = tile.push(
+                container(Space::new())
+                    .width(bw)
+                    .height(bh)
+                    .style(move |_| container::Style {
+                        border: iced::Border {
+                            color: s.ink.scale_alpha(s.opacity),
+                            width: 2.0,
+                            radius: 7.0.into(),
+                        },
+                        ..container::Style::default()
+                    }),
+            );
+        }
         let tile = control(tile)
             .width(bw)
             .height(bh)
             .radius(7.0)
-            .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.08), s.raised_press)
             .no_press_scale()
+            .on_enter(msg(Message::Hover(w.address.clone())))
             .on_press(focus_msg(&w.address));
         layers = layers.push(pin(tile).x(x).y(y));
-    }
-    // The workspace you are on: a white ring, like the bar's white capsule (neutral, so not a
-    // coloured outline), inside the card so nothing cuts it.
-    if current {
-        layers = layers.push(container(Space::new()).width(width).height(height).style(
-            move |_| container::Style {
-                border: iced::Border {
-                    color: s.ink.scale_alpha(0.9 * s.opacity),
-                    width: 2.0,
-                    radius: 10.0.into(),
-                },
-                ..container::Style::default()
-            },
-        ));
     }
     // Under the card: its number (in the bar's white capsule when it is the one you are on)
     // and what is there.
