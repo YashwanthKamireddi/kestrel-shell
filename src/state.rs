@@ -17,6 +17,14 @@ pub struct State {
     pub files: Files,
     pub launcher: Launcher,
     pub toggles: Toggles,
+    pub clipboard: Clipboard,
+}
+
+/// Clipboard entries kept at the top (cliphist ids), surviving "Clear all".
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct Clipboard {
+    pub pinned: Vec<String>,
 }
 
 /// Control-centre switches kestrel itself holds, so a restarted shell puts them back as they
