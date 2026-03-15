@@ -56,7 +56,12 @@ pub struct Scheme {
 
 impl Scheme {
     pub fn dark(seed: Seed) -> Self {
-        if let Some(src) = seed.source {
+        // A wallpaper with (next to) no colour gets a neutral accent: Material's colour picker
+        // falls back to Google's blue when a picture has none, which gave a black-and-white
+        // wallpaper a blue shell.
+        if let Some(src) = seed.source
+            && seed.chroma >= 0.02
+        {
             return Self::material(src);
         }
         Self::oklch(seed)
@@ -272,6 +277,7 @@ mod tests {
         ] {
             let s = Scheme::dark(Seed {
                 source: Some(source),
+                chroma: 0.1,
                 ..Seed::default()
             });
             assert!(contrast(s.ink, s.base) > 12.0, "{source:06x}");
@@ -279,6 +285,18 @@ mod tests {
             assert!(contrast(s.on_accent, s.accent) > 4.5, "{source:06x}");
             assert!(contrast(s.accent, s.base) > 6.0, "{source:06x}");
         }
+    }
+
+    #[test]
+    fn a_colourless_wallpaper_gets_a_neutral_accent() {
+        // Material's picker hands back Google blue for a grey picture; the accent must not.
+        let s = Scheme::dark(Seed {
+            source: Some(0x4285f4),
+            chroma: 0.0,
+            ..Seed::default()
+        });
+        let o = color::Oklch::from_srgb(s.accent.r, s.accent.g, s.accent.b);
+        assert!(o.c < 0.03, "accent chroma {}", o.c);
     }
 
     #[test]

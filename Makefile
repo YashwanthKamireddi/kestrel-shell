@@ -1,5 +1,5 @@
-# kestrel quality gate and install. Builds run at background priority so the desktop stays smooth.
-SCOPE = systemd-run --user --scope -q -p CPUWeight=1 -p IOWeight=1 --
+# kestrel quality gate and install. Builds run at full speed (design call 2026-11-14: never low priority).
+SCOPE =
 
 .PHONY: check build install restart dev
 

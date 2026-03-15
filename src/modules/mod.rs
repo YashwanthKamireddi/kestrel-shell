@@ -698,10 +698,10 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         let icon_of = ws.filter(|w| !w.app.is_empty()).and_then(|w| {
             crate::services::icons::lookup(&crate::services::apps::icon_for_class(&w.app))
         });
-        // Brighter under the circle; the circle is see-through, so no dark ink is needed.
+        // On the accent circle the number is in the accent's own dark ink, as on the toggles.
         let ink = crate::theme::color::mix(
             if ws.is_some() { s.ink_dim } else { s.ink_faint },
-            s.ink,
+            s.on_accent,
             over,
         );
         let content: Element<'a, Message> = match icon_of {
@@ -759,7 +759,9 @@ fn workspaces<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message
         .width(cap_r - cap_l - (SLOT - DOT))
         .height(DOT)
         .style(move |_| container::Style {
-            background: Some(s.accent.scale_alpha(0.42 * s.opacity).into()),
+            // The same solid accent as the control centre's toggles and sliders (a faded one
+            // looked dull and unlike them); small, so it marks without taking over.
+            background: Some(s.fade(s.accent).into()),
             border: iced::Border::default().rounded(DOT / 2.0),
             ..container::Style::default()
         });
