@@ -661,7 +661,12 @@ pub fn rounded_file(
             iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
         });
     let mut cache = CACHE.lock().ok()?;
-    if cache.len() > 96 {
+    // Capped by size: ~24 MB of pictures at most, then it starts over.
+    let bytes: u64 = cache
+        .iter()
+        .map(|((_, w, h, _), _)| u64::from(*w) * u64::from(*h) * 4)
+        .sum();
+    if bytes > 24 * 1024 * 1024 {
         cache.clear();
     }
     cache.insert(key, made.clone());
@@ -704,8 +709,14 @@ pub fn fitted_file(
             )
         });
     let mut cache = CACHE.lock().ok()?;
-    // Clipboard previews are large (up to ~1 MB each): a smaller ceiling keeps memory flat.
-    if cache.len() > 64 {
+    // Capped by size, not count: a clipboard preview is up to ~1 MB, a row thumbnail ~10 KB.
+    // At most ~24 MB of pictures; then it starts over (pictures are cheap to make again).
+    let bytes: f32 = cache
+        .iter()
+        .filter_map(|(_, v)| v.as_ref())
+        .map(|(_, w, h)| w * h * 4.0)
+        .sum();
+    if bytes > 24.0 * 1024.0 * 1024.0 {
         cache.clear();
     }
     cache.insert(key, made.clone());
