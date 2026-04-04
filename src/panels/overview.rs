@@ -338,17 +338,20 @@ fn card<'a>(
         let (x, y, bw, bh) = tile_rect(w, width, height);
         let sel = selected == Some(w.address.as_str());
         let alpha = 1.0;
-        let ready = app
-            .panels
-            .overview
-            .previews
-            .get(&w.address)
-            .filter(|r| r.size == (bw as u32, bh as u32));
+        // The window's last picture, even if its tile changed size since (scaled to fit until
+        // the fresh one arrives): an icon flashed for a second before.
+        let ready = app.panels.overview.previews.get(&w.address);
+        let exact = ready.is_some_and(|r| r.size == (bw as u32, bh as u32));
         let body: Element<'_, AppMessage> = match ready {
             Some(r) => iced::widget::image(r.handle.clone())
                 .width(bw)
                 .height(bh)
-                .filter_method(iced::widget::image::FilterMethod::Nearest)
+                .content_fit(iced::ContentFit::Fill)
+                .filter_method(if exact {
+                    iced::widget::image::FilterMethod::Nearest
+                } else {
+                    iced::widget::image::FilterMethod::Linear
+                })
                 .opacity(alpha * s.opacity)
                 .into(),
             // No picture yet: the app's icon on a quiet tile.
@@ -371,7 +374,7 @@ fn card<'a>(
                     .height(bh)
                     .style(move |_| container::Style {
                         border: iced::Border {
-                            color: s.ink.scale_alpha(s.opacity),
+                            color: s.fade(s.accent),
                             width: 2.0,
                             radius: 7.0.into(),
                         },
@@ -399,12 +402,12 @@ fn card<'a>(
         container(label_w(
             id.to_string(),
             text::SMALL,
-            s.base,
+            s.on_accent,
             theme::SEMIBOLD,
         ))
         .padding([1, 8])
         .style(move |_| container::Style {
-            background: Some(s.ink.into()),
+            background: Some(s.fade(s.accent).into()),
             border: iced::Border::default().rounded(9),
             ..container::Style::default()
         })
