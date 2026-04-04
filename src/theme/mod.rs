@@ -59,8 +59,11 @@ impl Scheme {
         // A wallpaper with (next to) no colour gets a neutral accent: Material's colour picker
         // falls back to Google's blue when a picture has none, which gave a black-and-white
         // wallpaper a blue shell.
+        // Colour has to cover some of the picture too: a monochrome photo with a little yellow
+        // lettering has saturated pixels but no colour to speak of.
         if let Some(src) = seed.source
             && seed.chroma >= 0.02
+            && seed.coverage > 0.0008
         {
             return Self::material(src);
         }
@@ -285,6 +288,18 @@ mod tests {
             assert!(contrast(s.on_accent, s.accent) > 4.5, "{source:06x}");
             assert!(contrast(s.accent, s.base) > 6.0, "{source:06x}");
         }
+    }
+
+    #[test]
+    fn a_monochrome_wallpaper_with_a_speck_of_colour_gets_a_neutral_accent() {
+        let s = Scheme::dark(Seed {
+            source: Some(0x4285f4),
+            hue: 97.0,
+            chroma: 0.036,
+            coverage: 0.0,
+        });
+        let o = color::Oklch::from_srgb(s.accent.r, s.accent.g, s.accent.b);
+        assert!(o.c < 0.03, "accent chroma {}", o.c);
     }
 
     #[test]

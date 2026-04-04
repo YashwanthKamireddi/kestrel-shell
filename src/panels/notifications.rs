@@ -158,13 +158,25 @@ fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
 pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMessage> {
     // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
     // one quiet line, the title, then the message wrapped over up to four lines.
+    // kestrel's own entries (a screenshot, a recording) need no app line: the title says it.
+    let own = n.app == "kestrel";
     let top = row![
-        label_w(
-            ui::ellipsize(&n.app, 28),
-            text::CAPTION,
-            s.ink_dim,
-            theme::MEDIUM
-        ),
+        // kestrel's own: the title on this line (no app name, no empty line).
+        if own {
+            label_w(
+                ui::ellipsize(&n.summary, 40),
+                text::BODY,
+                s.ink,
+                theme::SEMIBOLD,
+            )
+        } else {
+            label_w(
+                ui::ellipsize(&n.app, 28),
+                text::CAPTION,
+                s.ink_dim,
+                theme::MEDIUM,
+            )
+        },
         Space::new().width(Length::Fill),
         label(ago(n.time), text::CAPTION, s.ink_faint),
         // A real button: a soft round fill, big enough to hit (it was a bare 13 px cross).
@@ -180,14 +192,15 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
     .spacing(6)
     .align_y(Alignment::Center);
 
-    let mut words = column![label_w(
-        ui::ellipsize(&n.summary, 60),
-        text::BODY,
-        s.ink,
-        theme::SEMIBOLD
-    )]
-    .spacing(2)
-    .width(Length::Fill);
+    let mut words = column![].spacing(2).width(Length::Fill);
+    if !own {
+        words = words.push(label_w(
+            ui::ellipsize(&n.summary, 60),
+            text::BODY,
+            s.ink,
+            theme::SEMIBOLD,
+        ));
+    }
     if !n.body.is_empty() {
         words = words.push(
             // Up to four lines of it, wrapped: enough to read without opening the app.
@@ -204,7 +217,8 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
     }
     // The picture beside the words, under the close button (not past it).
     let mut main = row![words].spacing(10).align_y(Alignment::Start);
-    if let Some(pic) = picture(n) {
+    // (kestrel's own pictures lead the card instead.)
+    if !own && let Some(pic) = picture(n) {
         main = main.push(pic);
     }
     // Clear room under the top line, so the close button and the picture never touch.
@@ -238,9 +252,18 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             }),
         );
     }
-    let body = row![app_icon(s, n), texts]
-        .spacing(12)
-        .align_y(Alignment::Start);
+    // A screenshot's card leads with the picture itself (not a camera icon beside a small
+    // copy); everything else with its app's icon.
+    let lead: Element<'a, AppMessage> = match (own, n.image.as_ref()) {
+        (true, Some(Image::Path(p))) => {
+            match ui::rounded_file(std::path::Path::new(p), 88.0, 56.0, 8.0) {
+                Some(h) => image(h).width(88.0).height(56.0).into(),
+                None => app_icon(s, n),
+            }
+        }
+        _ => app_icon(s, n),
+    };
+    let body = row![lead, texts].spacing(12).align_y(Alignment::Start);
     let col = column![body];
     // What a click on the card does: the app's default action, or for kestrel's own entries
     // (a recording, a picture) opening it.
