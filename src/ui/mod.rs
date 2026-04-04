@@ -712,8 +712,8 @@ pub fn fitted_file(
     // Capped by size, not count: a clipboard preview is up to ~1 MB, a row thumbnail ~10 KB.
     // At most ~24 MB of pictures; then it starts over (pictures are cheap to make again).
     let bytes: f32 = cache
-        .iter()
-        .filter_map(|(_, v)| v.as_ref())
+        .values()
+        .filter_map(Option::as_ref)
         .map(|(_, w, h)| w * h * 4.0)
         .sum();
     if bytes > 24.0 * 1024.0 * 1024.0 {
