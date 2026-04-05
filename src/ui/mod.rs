@@ -1,7 +1,6 @@
 //! kestrel's component kit. Screens are assembled only from these.
 
 pub mod control;
-pub mod frost;
 pub mod icon;
 pub mod morph;
 pub mod reveal;

@@ -216,7 +216,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if let Some(ps) = panel_shape {
         layers.push(ps.into());
     }
-    // Frosted: the frost fills the boxes of the panel, banners and pop-ups (fading with them),
+    // Frosted: real blur (and its tint) fills the boxes of the panel, banners and pop-ups,
     // under their content.
     if app.config.material == crate::config::Material::Frosted {
         let mut boxes: Vec<(crate::ui::shape::Drop, f32, f32)> = drops
@@ -483,24 +483,32 @@ pub fn pill_style(m: crate::config::Material, s: Scheme, radius: f32) -> contain
 /// `content` on frost at `radius` when the look is Frosted and the wallpaper is in; else as is.
 pub fn frosted<'a>(
     app: &App,
-    o: &Output,
+    _o: &Output,
     radius: f32,
     opacity: f32,
     content: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    match app.wallpaper.as_ref() {
-        Some(w) if app.config.material == crate::config::Material::Frosted => {
-            crate::ui::frost::frost(w.frost.clone(), o.size, radius, opacity, content).into()
-        }
-        _ => content.into(),
+    if app.config.material != crate::config::Material::Frosted {
+        return content.into();
     }
+    // Real frosted glass: the compositor blurs whatever is behind (windows, the wallpaper)
+    // in this shape (ext-background-effect-v1), and a dark tint on top keeps white text
+    // readable on anything. Not a copy of the wallpaper: it is what is really there.
+    let s = app.scheme;
+    iced::blur_container(content)
+        .style(move |_| iced::widget::container::Style {
+            background: Some(s.base.scale_alpha(0.42 * opacity).into()),
+            border: iced::Border::default().rounded(radius),
+            ..iced::widget::container::Style::default()
+        })
+        .into()
 }
 
-/// How opaque the panels' and banners' own fill is: none when frosted (the frost is under
-/// them), unless there is no wallpaper to frost.
+/// How opaque the panels' and banners' own fill is: none when frosted (the compositor's blur
+/// and its tint are under them).
 pub fn panel_alpha(app: &App) -> f32 {
     match app.config.material {
-        crate::config::Material::Frosted if app.wallpaper.is_some() => 0.0,
+        crate::config::Material::Frosted => 0.0,
         _ => 1.0,
     }
 }
