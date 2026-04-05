@@ -37,6 +37,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .spawn();
+            } else if let Some(path) = key.strip_prefix("kestrel-copy:") {
+                copy_file(path);
             } else if let Some(path) = key.strip_prefix("kestrel-save:")
                 && let Some(saved) = save_picture(path)
             {
@@ -70,6 +72,56 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     .map(|id| Task::future(notifications::closed(id, Reason::Dismissed)).discard()),
             )
         }
+    }
+}
+
+/// Puts a file on the clipboard: a picture as the picture itself (pastes into any chat or
+/// editor), anything else (a recording) as the file (pastes into a chat, a folder, an upload).
+fn copy_file(path: &str) {
+    use std::io::Write;
+    let p = std::path::Path::new(path);
+    let picture = matches!(
+        p.extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_lowercase)
+            .as_deref(),
+        Some("png" | "jpg" | "jpeg" | "webp")
+    );
+    let (mime, data) = if picture {
+        let mime = match p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_lowercase)
+            .as_deref()
+        {
+            Some("png") => "image/png",
+            Some("webp") => "image/webp",
+            _ => "image/jpeg",
+        };
+        match std::fs::read(p) {
+            Ok(d) => (mime, d),
+            Err(_) => return,
+        }
+    } else {
+        (
+            "text/uri-list",
+            format!("{}\r\n", crate::services::filechooser::uri(p)).into_bytes(),
+        )
+    };
+    if let Ok(mut child) = std::process::Command::new("wl-copy")
+        .args(["--type", mime])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    {
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(&data);
+        }
+        // Reaped in the background (wl-copy stays to serve the clipboard).
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
     }
 }
 

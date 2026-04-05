@@ -675,17 +675,31 @@ pub fn rounded_file(
 /// A picture file shown whole (never cropped) inside `max_w` × `max_h`, its corners rounded:
 /// the handle and the size it takes. For previews where the whole picture matters (a
 /// screenshot in the clipboard).
+type FittedKey = (std::path::PathBuf, u32, u32);
+type FittedHit = Option<(iced::widget::image::Handle, f32, f32)>;
+static FITTED: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<FittedKey, FittedHit>>,
+> = std::sync::LazyLock::new(Default::default);
+
+/// `fitted_file`, only if it is already made (never decodes: safe to call from `view`).
+/// `None` = not made yet; `Some(None)` = made, and the file could not be read.
+pub fn fitted_file_ready(path: &std::path::Path, max_w: f32, max_h: f32) -> Option<FittedHit> {
+    FITTED
+        .lock()
+        .ok()?
+        .get(&(path.to_path_buf(), max_w as u32, max_h as u32))
+        .cloned()
+}
+
 pub fn fitted_file(
     path: &std::path::Path,
     max_w: f32,
     max_h: f32,
     radius: f32,
 ) -> Option<(iced::widget::image::Handle, f32, f32)> {
-    use std::collections::HashMap;
-    use std::sync::{LazyLock, Mutex};
-    type Key = (std::path::PathBuf, u32, u32);
-    type Hit = Option<(iced::widget::image::Handle, f32, f32)>;
-    static CACHE: LazyLock<Mutex<HashMap<Key, Hit>>> = LazyLock::new(Default::default);
+    static CACHE: &std::sync::LazyLock<
+        std::sync::Mutex<std::collections::HashMap<FittedKey, FittedHit>>,
+    > = &FITTED;
     let key = (path.to_path_buf(), max_w as u32, max_h as u32);
     if let Some(hit) = CACHE.lock().ok()?.get(&key) {
         return hit.clone();
