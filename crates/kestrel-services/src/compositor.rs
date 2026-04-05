@@ -13,6 +13,10 @@ pub enum Action {
     FocusWindow(String),
     /// A command line, run by the user's shell.
     Exec(String),
+    /// A key with modifiers ("CTRL SHIFT", "V") sent straight to the focused window by the
+    /// compositor (no virtual keyboard: wtype's own keymap put "v" on the keycode that is
+    /// Escape in the real layout, so Ctrl+Shift+V reached Hyprland as Ctrl+Shift+Escape).
+    Shortcut(String, String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,6 +60,11 @@ fn hyprland_lua(a: &Action) -> String {
             format!("hl.dsp.focus({{ window = \"address:{}\" }})", quote(addr))
         }
         Action::Exec(cmd) => format!("hl.dsp.exec_cmd(\"{}\")", quote(cmd)),
+        Action::Shortcut(mods, key) => format!(
+            "hl.dsp.send_shortcut({{ mods = \"{}\", key = \"{}\" }})",
+            quote(mods),
+            quote(key)
+        ),
     }
 }
 
