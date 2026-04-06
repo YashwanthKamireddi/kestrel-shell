@@ -42,6 +42,8 @@ pub enum Message {
     Submit,
     /// The pointer came onto a window: it becomes the selection.
     Hover(String),
+    /// Take fresh pictures (every second while open).
+    Refresh,
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -58,34 +60,42 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
         .min_by_key(|w| w.focus)
         .map(|w| w.address.clone());
     Task::batch([
-        // Fresh pictures of every window: captured, scaled and rounded to their tiles off the
-        // UI thread, so opening never stutters.
-        Task::perform(
-            {
-                let (cw, ch) = card_size();
-                let jobs: Vec<(String, (f32, f32))> = app
-                    .hypr
-                    .windows
-                    .iter()
-                    .map(|w| {
-                        let (_, _, bw, bh) = tile_rect(w, cw, ch);
-                        (w.address.clone(), (bw, bh))
-                    })
-                    .collect();
-                async move {
-                    tokio::task::spawn_blocking(move || make_previews(&jobs))
-                        .await
-                        .unwrap_or_default()
-                }
-            },
-            |v| msg(Message::Previews(v)),
-        ),
+        // Fresh pictures of every window, off the UI thread.
+        refresh(app),
         // Positions change without an event (resizing); read them fresh.
         Task::perform(hyprland::snapshot(), |s| match s {
             Some(s) => AppMessage::Hypr(s),
             None => AppMessage::Batch(Vec::new()),
         }),
     ])
+}
+
+/// Fresh pictures of every window: captured, scaled and rounded to their tiles off the UI
+/// thread. Taken when the overview opens, every second while it is open (so a playing video
+/// moves), and in the background whenever the set of windows changes (so the first open has
+/// pictures, not icons).
+pub fn refresh(app: &App) -> Task<AppMessage> {
+    if app.hypr.windows.is_empty() {
+        return Task::none();
+    }
+    let (cw, ch) = card_size();
+    let jobs: Vec<(String, (f32, f32))> = app
+        .hypr
+        .windows
+        .iter()
+        .map(|w| {
+            let (_, _, bw, bh) = tile_rect(w, cw, ch);
+            (w.address.clone(), (bw, bh))
+        })
+        .collect();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || make_previews(&jobs))
+                .await
+                .unwrap_or_default()
+        },
+        |v| msg(Message::Previews(v)),
+    )
 }
 
 fn make_previews(jobs: &[(String, (f32, f32))]) -> Vec<Made> {
@@ -204,6 +214,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .retain(|a, _| live.contains(a.as_str()));
         }
         Message::Hover(a) => app.panels.overview.selected = Some(a),
+        Message::Refresh => return refresh(app),
         Message::Submit => {
             let list = order(app);
             let st = &app.panels.overview;

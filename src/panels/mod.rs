@@ -242,6 +242,13 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
+    // The overview's pictures stay live while it is open (a playing video moves).
+    if open == Some(PanelKind::Overview) {
+        subs.push(
+            iced::time::every(std::time::Duration::from_secs(1))
+                .map(|_| Message::Overview(overview::Message::Refresh)),
+        );
+    }
     // The clipboard's scrollbar, while held: follow the pointer wherever it goes and end the
     // drag wherever the button is let go (inside the panel only, it stopped at its edge).
     if open == Some(PanelKind::Clipboard) && app.panels.clipboard.dragging {
