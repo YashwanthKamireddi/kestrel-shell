@@ -185,7 +185,8 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let lo = w.days.iter().map(|d| d.3).fold(f32::INFINITY, f32::min);
     let hi = w.days.iter().map(|d| d.2).fold(f32::NEG_INFINITY, f32::max);
     let span = (hi - lo).max(1.0);
-    const TRACK: f32 = 130.0;
+    // Day, icon, low, range, high in tight columns (the icon floated in a wide gap before).
+    const TRACK: f32 = 190.0;
     let mut list = column![heading(s, "This week")].spacing(2);
     for (i, (date, code, max, min)) in w.days.iter().enumerate() {
         let name = if i == 0 {
@@ -231,7 +232,8 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                         18.0,
                         s.fade(ui::weather_tint_for(*code, true))
                     ))
-                    .width(Length::Fill),
+                    .center_x(28),
+                    Space::new().width(Length::Fill),
                     label(app.temp(*min), text::BODY, s.ink_dim)
                         .width(34)
                         .align_x(Alignment::End),

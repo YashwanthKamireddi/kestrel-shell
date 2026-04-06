@@ -434,7 +434,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let bar = crate::ui::slider::slider(
             Space::new(),
             frac,
-            4.0,
+            6.0,
             (s.ink.scale_alpha(0.14), s.accent),
             move |f| msg(Message::Seek(b2.clone(), f)),
         );
@@ -461,12 +461,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let play = control(
         container(icon(
             if p.playing { Icon::Pause } else { Icon::Play },
-            18.0,
+            20.0,
             s.on_accent,
         ))
-        .center(42),
+        .center(48),
     )
-    .radius(21.0)
+    .radius(24.0)
     .colors(s.accent, s.accent, s.accent)
     .on_press(msg(Message::PlayPause(bus.clone())));
     let transport = row![
@@ -492,11 +492,20 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
     // The panel takes a deep tint of the artwork's own colour; frosted, it sits on the frost
     // like every other panel.
-    let tint = art_colour(p)
-        .filter(|_| !crate::theme::glass())
-        .map(|c| s.fade(mix(c, s.base, 0.72)));
+    // On the frosted look the artwork's colour is a soft wash over the real blur.
+    let tint = art_colour(p).map(|c| {
+        if crate::theme::glass() {
+            s.fade(c.scale_alpha(0.32))
+        } else {
+            s.fade(mix(c, s.base, 0.72))
+        }
+    });
     // Both ends fade with the panel (the bottom at full strength stayed behind on close).
-    let base = s.fade(s.base);
+    let base = if crate::theme::glass() {
+        Color::TRANSPARENT
+    } else {
+        s.fade(s.base)
+    };
     container(top)
         .padding(16)
         .style(move |_| container::Style {
