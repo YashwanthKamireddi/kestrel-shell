@@ -30,6 +30,7 @@ pub struct Control<'a, M> {
     on_right_press: Option<M>,
     /// Sent when the pointer comes onto it (lists: the pointer moves the selection).
     on_enter: Option<M>,
+    on_exit: Option<M>,
     on_scroll: Option<Box<dyn Fn(f32) -> M + 'a>>,
     padding: Padding,
     width: Length,
@@ -53,6 +54,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         on_press_at: None,
         on_right_press: None,
         on_enter: None,
+        on_exit: None,
         on_scroll: None,
         padding: Padding::ZERO,
         width: Length::Shrink,
@@ -75,6 +77,10 @@ impl<'a, M> Control<'a, M> {
     }
     pub fn on_enter(mut self, m: M) -> Self {
         self.on_enter = Some(m);
+        self
+    }
+    pub fn on_exit(mut self, m: M) -> Self {
+        self.on_exit = Some(m);
         self
     }
 
@@ -357,6 +363,9 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             // the bar had none to draw the highlight stayed after the pointer had gone.
             state.hover_t = if over { 1.0 } else { 0.0 };
             if over && let Some(m) = &self.on_enter {
+                shell.publish(m.clone());
+            }
+            if !over && let Some(m) = &self.on_exit {
                 shell.publish(m.clone());
             }
             if !over && state.pressed {

@@ -1,8 +1,8 @@
 //! Overview (Super+Tab): where everything is open. The workspaces that have windows (and the
 //! one you are on), each a plain card with its windows drawn where they are, as live
 //! pictures; the panel is only as wide as its cards (no search, no title line: design call).
-//! One crisp white ring marks the selected window; the pointer moves it at once, as do Tab and
-//! the arrows; Enter or a click goes there. Nothing fades or glides.
+//! Nothing is marked until you choose: a thin ring shows the window under the pointer (gone
+//! when it leaves) or the one Tab and the arrows reached; Enter or a click goes there. Nothing fades or glides.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
@@ -42,8 +42,10 @@ pub enum Message {
     Submit,
     /// The pointer came onto a window: it becomes the selection.
     Hover(String),
-    /// Take fresh pictures (every second while open).
-    Refresh,
+    /// The pointer left a window: it is no longer marked.
+    Unhover(String),
+    /// New pictures of windows that changed, from the live stream while open.
+    Live(Vec<crate::services::previews::Frame>),
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -52,13 +54,9 @@ fn msg(m: Message) -> AppMessage {
 
 pub fn open(app: &mut App) -> Task<AppMessage> {
     let st = &mut app.panels.overview;
-    // Start on the window you were in.
-    st.selected = app
-        .hypr
-        .windows
-        .iter()
-        .min_by_key(|w| w.focus)
-        .map(|w| w.address.clone());
+    // Nothing marked until the pointer or a key chooses (a ring on the current window
+    // before you did anything read as a heavy border: design call).
+    st.selected = None;
     Task::batch([
         // Fresh pictures of every window, off the UI thread.
         refresh(app),
@@ -71,9 +69,9 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
 }
 
 /// Fresh pictures of every window: captured, scaled and rounded to their tiles off the UI
-/// thread. Taken when the overview opens, every second while it is open (so a playing video
-/// moves), and in the background whenever the set of windows changes (so the first open has
-/// pictures, not icons).
+/// thread. Taken when the overview opens and in the background whenever the set of windows
+/// changes (so the first open has pictures, not icons); while it is open, `live_jobs` keeps
+/// each picture moving with its window.
 pub fn refresh(app: &App) -> Task<AppMessage> {
     if app.hypr.windows.is_empty() {
         return Task::none();
@@ -96,6 +94,24 @@ pub fn refresh(app: &App) -> Task<AppMessage> {
         },
         |v| msg(Message::Previews(v)),
     )
+}
+
+/// The windows to keep live while the overview is open, each at its tile's size.
+pub fn live_jobs(app: &App) -> Vec<crate::services::previews::Job> {
+    let (cw, ch) = card_size();
+    app.hypr
+        .windows
+        .iter()
+        .map(|w| {
+            let (_, _, bw, bh) = tile_rect(w, cw, ch);
+            crate::services::previews::Job {
+                address: w.address.clone(),
+                width: bw as u32,
+                height: bh as u32,
+                radius: 7,
+            }
+        })
+        .collect()
 }
 
 fn make_previews(jobs: &[(String, (f32, f32))]) -> Vec<Made> {
@@ -180,6 +196,15 @@ fn order(app: &App) -> Vec<(usize, &hyprland::Window)> {
         .collect()
 }
 
+/// The window you were in.
+fn focused(app: &App) -> Option<String> {
+    app.hypr
+        .windows
+        .iter()
+        .min_by_key(|w| w.focus)
+        .map(|w| w.address.clone())
+}
+
 fn focus(address: &str) -> Task<AppMessage> {
     Task::batch([
         Task::done(AppMessage::Dispatch(
@@ -213,8 +238,25 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .previews
                 .retain(|a, _| live.contains(a.as_str()));
         }
+        Message::Live(frames) => {
+            let st = &mut app.panels.overview;
+            for f in frames {
+                st.previews.insert(
+                    f.address,
+                    Ready {
+                        size: (f.width, f.height),
+                        handle: iced::widget::image::Handle::from_rgba(f.width, f.height, f.rgba),
+                    },
+                );
+            }
+        }
         Message::Hover(a) => app.panels.overview.selected = Some(a),
-        Message::Refresh => return refresh(app),
+        Message::Unhover(a) => {
+            let st = &mut app.panels.overview;
+            if st.selected.as_deref() == Some(a.as_str()) {
+                st.selected = None;
+            }
+        }
         Message::Submit => {
             let list = order(app);
             let st = &app.panels.overview;
@@ -223,6 +265,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .as_ref()
                 .filter(|a| list.iter().any(|(_, w)| &w.address == *a))
                 .cloned()
+                .or_else(|| focused(app))
                 .or_else(|| list.first().map(|(_, w)| w.address.clone()));
             if let Some(a) = target {
                 return focus(&a);
@@ -252,9 +295,18 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         .panels
         .overview
         .selected
-        .as_ref()
-        .and_then(|a| list.iter().position(|(_, w)| &w.address == a))
-        .unwrap_or(0);
+        .clone()
+        .or_else(|| focused(app))
+        .and_then(|a| list.iter().position(|(_, w)| w.address == a));
+    // The first key marks the window you are in; the next ones move from there.
+    let Some(cur) = cur else {
+        app.panels.overview.selected = list.first().map(|(_, w)| w.address.clone());
+        return Task::none();
+    };
+    if app.panels.overview.selected.is_none() && !matches!(k, Key::Home | Key::End) {
+        app.panels.overview.selected = Some(list[cur].1.address.clone());
+        return Task::none();
+    }
     let n = list.len();
     let next = match k {
         Key::Right | Key::Tab => (cur + 1) % n,
@@ -377,7 +429,7 @@ fn card<'a>(
                 .into(),
         };
         let mut tile = stack![body];
-        // The selection: one crisp white ring, at once (no fade).
+        // The selection: a thin quiet ring, at once (no fade).
         if sel {
             tile = tile.push(
                 container(Space::new())
@@ -385,8 +437,8 @@ fn card<'a>(
                     .height(bh)
                     .style(move |_| container::Style {
                         border: iced::Border {
-                            color: s.fade(s.accent),
-                            width: 2.0,
+                            color: s.ink.scale_alpha(0.55 * s.opacity),
+                            width: 1.5,
                             radius: 7.0.into(),
                         },
                         ..container::Style::default()
@@ -399,6 +451,7 @@ fn card<'a>(
             .radius(7.0)
             .no_press_scale()
             .on_enter(msg(Message::Hover(w.address.clone())))
+            .on_exit(msg(Message::Unhover(w.address.clone())))
             .on_press(focus_msg(&w.address));
         layers = layers.push(pin(tile).x(x).y(y));
     }
