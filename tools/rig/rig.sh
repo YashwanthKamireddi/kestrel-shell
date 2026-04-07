@@ -21,7 +21,16 @@ mkdir -p "$WORK/home/.config/kestrel"
 
 sig() { cat "$WORK/sig"; }
 display() { cat "$WORK/display"; }
-nested() { HYPRLAND_INSTANCE_SIGNATURE=$(sig) timeout 5 hyprctl "$@"; }
+# Never the desktop's own compositor: a wrong signature once put a headless output on the
+# live session and windows opened on it, out of sight.
+nested() {
+    local s; s=$(sig)
+    if [ -z "$s" ] || [ "$s" = "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+        echo "rig: no nested compositor (refusing to touch the desktop's)" >&2
+        return 1
+    fi
+    HYPRLAND_INSTANCE_SIGNATURE=$s timeout 5 hyprctl "$@"
+}
 kill_kestrel() {
     for p in $(pgrep -x kestrel || true); do
         if tr '\0' '\n' </proc/$p/environ 2>/dev/null | grep -q "^HOME=$WORK/home$"; then kill "$p"; fi
@@ -32,11 +41,27 @@ case "${1:-}" in
 start)
     hyprctl eval 'hl.window_rule({name="kestrel-rig", match={class="^aquamarine$"}, workspace="special:rig silent", float=true, size="1920 1080"})' >/dev/null
     before=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort)
+    : >"$WORK/sig"
     setsid Hyprland -c "$HERE/hyprland.lua" >"$WORK/hypr.log" 2>&1 </dev/null &
-    sleep 4
+    pid=$!
+    # Its instance is the one whose lock file names its process (not simply the newest).
+    for _ in $(seq 40); do
+        for d in "$XDG_RUNTIME_DIR"/hypr/*/; do
+            if [ "$(head -1 "$d/hyprland.lock" 2>/dev/null)" = "$pid" ]; then
+                basename "$d" >"$WORK/sig"
+            fi
+        done
+        [ -s "$WORK/sig" ] && break
+        sleep 0.2
+    done
+    if [ ! -s "$WORK/sig" ]; then
+        echo "rig: nested compositor did not start (see $WORK/hypr.log)" >&2
+        kill "$pid" 2>/dev/null || true
+        exit 1
+    fi
+    sleep 1
     after=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort)
     comm -13 <(echo "$before") <(echo "$after") | head -1 >"$WORK/display"
-    ls -t "$XDG_RUNTIME_DIR/hypr/" | head -1 >"$WORK/sig"
     nested output create headless KRIG >/dev/null
     nested output remove WAYLAND-1 >/dev/null || true
     nested eval 'hl.monitor({ output = "KRIG", mode = "1920x1080@60", position = "0x0", scale = 1 })' >/dev/null
@@ -68,6 +93,7 @@ msg) shift; KESTREL_SOCKET="$WORK/kestrel.sock" "$BIN" "$@" ;;
 stop)
     kill_kestrel
     pkill -f "Hyprland -c $HERE/hyprland.lua" || true
+    : >"$WORK/sig"
     hyprctl reload >/dev/null
     ;;
 *) sed -n '2,15p' "$0"; exit 1 ;;
