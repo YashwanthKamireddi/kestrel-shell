@@ -79,6 +79,15 @@ impl PanelKind {
         }
     }
 
+    /// The panel's height when it can be worked out before drawing (the overview, from its
+    /// rows); others are measured.
+    pub fn height_for(self, app: &App) -> Option<f32> {
+        match self {
+            Self::Overview => Some(overview::height(app)),
+            _ => None,
+        }
+    }
+
     pub fn width(self) -> f32 {
         match self {
             Self::Control => 392.0,

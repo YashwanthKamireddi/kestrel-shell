@@ -82,7 +82,12 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let k = p.progress(natural);
-        let h = if p.h.value > 0.0 { p.h.value } else { natural };
+        // Known before drawing (the overview): that, so frame and content change together.
+        let h = match p.kind.height_for(app) {
+            Some(h) => h,
+            None if p.h.value > 0.0 => p.h.value,
+            None => natural,
+        };
         // Its size follows its content while open (the overview gains a card when you switch
         // to an empty workspace): the frame and the content share one live width, centred
         // where the panel opened and kept on screen.

@@ -17,6 +17,11 @@ const COLUMNS: usize = 5;
 const GAP: f32 = 14.0;
 pub const WIDTH: f32 = 1300.0;
 const PAD: f32 = 16.0;
+/// The line under each card (number and what is there), a fixed height so the panel's height
+/// is known before it is drawn.
+const CAPTION: f32 = 20.0;
+/// Between a card and its caption.
+const CAPTION_GAP: f32 = 8.0;
 
 #[derive(Default)]
 pub struct State {
@@ -275,6 +280,15 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     Task::none()
 }
 
+/// The panel's height, worked out from its rows (not measured after drawing): opening after
+/// the number of rows changed showed the old height for a frame or two, a tall empty frame
+/// snapping shut.
+pub fn height(app: &App) -> f32 {
+    let (_, ch) = card_size();
+    let rows = workspace_ids(app).len().div_ceil(COLUMNS).max(1) as f32;
+    2.0 * PAD + rows * (ch + CAPTION_GAP + CAPTION) + (rows - 1.0) * GAP
+}
+
 /// The panel's width: its cards side by side (up to a row of five).
 pub fn width(app: &App) -> f32 {
     let (cw, _) = card_size();
@@ -490,7 +504,10 @@ fn card<'a>(
     .spacing(8)
     .align_y(Alignment::Center)
     .padding([0, 2]);
-    column![layers, caption].spacing(8).width(width).into()
+    column![layers, container(caption).height(CAPTION).center_y(CAPTION)]
+        .spacing(CAPTION_GAP)
+        .width(width)
+        .into()
 }
 
 fn focus_msg(address: &str) -> AppMessage {
