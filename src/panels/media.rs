@@ -382,8 +382,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     const ART: f32 = 136.0;
     let text_w = WIDTH - 2.0 * 16.0 - ART - 16.0;
     let mut meta = column![].spacing(4);
-    // Where it plays, and the music moving at the far end (the bar's visualiser, the same
-    // bands, while it plays).
+    // Where it plays (no visualiser here: the bar's pill already shows one).
     let mut source = row![].align_y(Alignment::Center);
     if !p.identity.is_empty() {
         source = source.push(
@@ -395,9 +394,6 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     ..container::Style::default()
                 }),
         );
-    }
-    if let Some(v) = crate::modules::island::visualiser(app, s) {
-        source = source.push(Space::new().width(Length::Fill)).push(v);
     }
     meta = meta.push(source);
     meta = meta.push(label_w(
