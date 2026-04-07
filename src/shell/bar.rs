@@ -83,9 +83,11 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let k = p.progress(natural);
         let h = if p.h.value > 0.0 { p.h.value } else { natural };
-        // It fades in and out where it stands: moving it would put text and icons between
-        // pixels for a few frames (soft, shaky).
-        panel_drop = Some((drop(p.x.value, p.w.value, h), k, h));
+        // Its size follows its content while open (the overview gains a card when you switch
+        // to an empty workspace): the frame and the content share one live width, centred
+        // where the panel opened and kept on screen.
+        let (x, w) = panel_span(app, p, o.size.width, edge);
+        panel_drop = Some((drop(x, w, h), k, h));
     }
     // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
     // one line in the island they were hard to read); the island keeps the short pop-ups.
@@ -251,9 +253,8 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);
-        let width = p.kind.width_for(app);
+        let (x, width) = panel_span(app, p, o.size.width, edge);
         let content = panels::view(app, p.kind, s.faded(alpha));
-        let x = p.x.value + (p.w.value - width) / 2.0;
         let kind = p.kind;
         layers.push(
             pin(
@@ -306,6 +307,15 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+/// Where an open panel stands and how wide it is now: its content's current width, centred on
+/// where it opened, never past the screen's edges.
+fn panel_span(app: &App, p: &crate::app::Panel, screen_w: f32, edge: f32) -> (f32, f32) {
+    let w = p.kind.width_for(app).min(screen_w - 2.0 * edge);
+    let centre = p.x.value + p.w.value / 2.0;
+    let x = (centre - w / 2.0).clamp(edge, (screen_w - edge - w).max(edge));
+    (x.round(), w)
 }
 
 /// Icon, level bar, value.
