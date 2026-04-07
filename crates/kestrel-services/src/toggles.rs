@@ -10,6 +10,9 @@ use std::sync::Mutex;
 
 static SUNSET: Mutex<Option<Child>> = Mutex::new(None);
 static INHIBIT: Mutex<Option<OwnedFd>> = Mutex::new(None);
+/// A hyprsunset kestrel did not start but looks after (one left running by the shell before a
+/// restart): watched like its own.
+static ADOPTED: Mutex<Option<u32>> = Mutex::new(None);
 
 /// The screen's tint: night light's warmth (None while off) and the dimming of screens that
 /// have no backlight kestrel can set (an external monitor), in percent of full. Both are done
@@ -27,12 +30,17 @@ static TINT: Mutex<Tint> = Mutex::new(Tint {
 /// Dimming never goes below this, so the screen can't be made unreadably dark.
 pub const MIN_GAMMA: u32 = 30;
 
-fn hyprsunset_running() -> bool {
-    std::fs::read_dir("/proc").is_ok_and(|d| {
-        d.flatten().any(|e| {
-            std::fs::read_to_string(e.path().join("comm")).is_ok_and(|c| c.trim() == "hyprsunset")
-        })
+fn hyprsunset_pid() -> Option<u32> {
+    std::fs::read_dir("/proc").ok()?.flatten().find_map(|e| {
+        let pid = e.file_name().to_str()?.parse::<u32>().ok()?;
+        std::fs::read_to_string(e.path().join("comm"))
+            .is_ok_and(|c| c.trim() == "hyprsunset")
+            .then_some(pid)
     })
+}
+
+fn hyprsunset_running() -> bool {
+    hyprsunset_pid().is_some()
 }
 
 fn hyprctl(args: &[&str]) {
@@ -60,12 +68,22 @@ fn apply(t: &Tint) {
             let _ = c.wait();
         }
         // One started elsewhere (e.g. before kestrel) is stopped too.
+        *ADOPTED.lock().unwrap() = None;
         if hyprsunset_running() {
             let _ = Command::new("pkill").args(["-x", "hyprsunset"]).status();
         }
         return;
     }
     if running {
+        if g.is_none()
+            && let Some(pid) = hyprsunset_pid()
+        {
+            let mut a = ADOPTED.lock().unwrap();
+            if *a != Some(pid) {
+                *a = Some(pid);
+                watch(pid);
+            }
+        }
         match t.night {
             Some(k) => hyprctl(&["temperature", &k.to_string()]),
             None => hyprctl(&["identity"]),
@@ -80,9 +98,51 @@ fn apply(t: &Tint) {
     };
     cmd.args(["-g", &t.gamma.to_string()]);
     match cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
-        Ok(c) => *g = Some(c),
+        Ok(c) => {
+            watch(c.id());
+            *g = Some(c);
+        }
         Err(e) => log::warn!("screen tint: {e}"),
     }
+}
+
+/// Waits (blocked on a pidfd: no polling) for hyprsunset `pid` (its own or adopted) to end. If it ends on its own
+/// while the tint is still wanted (it crashed: one segfaulted 2026-11-14 during a burst of
+/// shell restarts), it is started again a second later, so the tint never silently vanishes.
+fn watch(pid: u32) {
+    let _ = std::thread::Builder::new()
+        .name("kestrel-sunset".into())
+        .spawn(move || {
+            // Safety: pidfd_open on our own child; the fd is owned and closed below.
+            let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::pid_t, 0) };
+            if fd < 0 {
+                return;
+            }
+            let fd = unsafe { <OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd as i32) };
+            let mut pfd = libc::pollfd {
+                fd: std::os::fd::AsRawFd::as_raw_fd(&fd),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // Safety: one valid pollfd; blocks until the process ends.
+            while unsafe { libc::poll(&mut pfd, 1, -1) } < 0 {}
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let t = TINT.lock().unwrap();
+            let ours = SUNSET
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|c| c.id() == pid)
+                || {
+                    let mut a = ADOPTED.lock().unwrap();
+                    (*a == Some(pid)).then(|| *a = None).is_some()
+                };
+            // Stopped on purpose (taken out of SUNSET first) or replaced: nothing to do.
+            if ours && (t.night.is_some() || t.gamma < 100) {
+                log::warn!("screen tint: hyprsunset ended on its own; starting it again");
+                apply(&t);
+            }
+        });
 }
 
 /// Whether night light is on (also when a hyprsunset was already running at start).
