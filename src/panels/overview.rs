@@ -86,6 +86,7 @@ pub fn refresh(app: &App) -> Task<AppMessage> {
         .hypr
         .windows
         .iter()
+        .filter(|w| w.workspace > 0)
         .map(|w| {
             let (_, _, bw, bh) = tile_rect(w, cw, ch);
             (w.address.clone(), (bw, bh))
@@ -107,6 +108,8 @@ pub fn live_jobs(app: &App) -> Vec<crate::services::previews::Job> {
     app.hypr
         .windows
         .iter()
+        // Only windows the overview draws (special workspaces are never shown).
+        .filter(|w| w.workspace > 0)
         .map(|w| {
             let (_, _, bw, bh) = tile_rect(w, cw, ch);
             crate::services::previews::Job {
