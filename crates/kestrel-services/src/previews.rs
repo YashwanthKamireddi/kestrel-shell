@@ -453,35 +453,55 @@ fn compose(src: &[u8], key: (wl_shm::Format, u32, u32, u32), job: &Job, mask: &[
     } else {
         (sw, (u64::from(sw) * u64::from(th) / u64::from(tw)) as u32)
     };
-    let (ox, oy) = ((sw - cw.min(sw)) / 2, (sh - ch.min(sh)) / 2);
+    let (cw, ch) = (cw.clamp(1, sw.max(1)), ch.clamp(1, sh.max(1)));
+    let (ox, oy) = ((sw - cw) / 2, (sh - ch) / 2);
     let (fx, fy) = (cw as f32 / tw as f32, ch as f32 / th as f32);
-    let n = (fx.max(fy).ceil() as u32).clamp(1, 4);
-    let mut out = Vec::with_capacity((tw * th * 4) as usize);
-    for y in 0..th {
-        for x in 0..tw {
+    // Samples per output pixel: up to 4 across, 2 down. Every sampled source row is a full
+    // trip through memory (the buffer is fresh from the compositor, never in cache), so rows
+    // are the cost; columns in the same rows are nearly free.
+    let nx = (fx.ceil() as usize).clamp(1, 4);
+    let ny = (fy.ceil() as usize).clamp(1, 2);
+    // Where every sample falls, worked out once: byte offsets of the sampled columns and rows.
+    let place = |o: u32, f: f32, len: u32, k: u32, i: usize, n: usize| {
+        o + (((k as f32 + (i as f32 + 0.5) / n as f32) * f) as u32).min(len - 1)
+    };
+    let cols: Vec<usize> = (0..tw)
+        .flat_map(|x| (0..nx).map(move |i| place(ox, fx, cw, x, i, nx) as usize * 4))
+        .collect();
+    let rows: Vec<usize> = (0..th)
+        .flat_map(|y| (0..ny).map(move |j| place(oy, fy, ch, y, j, ny) as usize * stride as usize))
+        .collect();
+    let need =
+        rows.iter().max().copied().unwrap_or(0) + cols.iter().max().copied().unwrap_or(0) + 4;
+    if src.len() < need {
+        return vec![0; (tw * th * 4) as usize];
+    }
+    let c = (nx * ny) as u32;
+    let mut out = vec![0u8; (tw * th * 4) as usize];
+    for (y, ry) in rows.chunks_exact(ny).enumerate() {
+        let line = &mut out[y * tw as usize * 4..(y + 1) * tw as usize * 4];
+        for (x, (px, cx)) in line
+            .chunks_exact_mut(4)
+            .zip(cols.chunks_exact(nx))
+            .enumerate()
+        {
             let (mut b, mut g, mut r, mut a) = (0u32, 0u32, 0u32, 0u32);
-            for j in 0..n {
-                let sy = oy + (((y as f32 + (j as f32 + 0.5) / n as f32) * fy) as u32).min(ch - 1);
-                let row = sy as usize * stride as usize;
-                for i in 0..n {
-                    let sx =
-                        ox + (((x as f32 + (i as f32 + 0.5) / n as f32) * fx) as u32).min(cw - 1);
-                    let p = row + sx as usize * 4;
-                    if let Some(px) = src.get(p..p + 4) {
-                        b += u32::from(px[0]);
-                        g += u32::from(px[1]);
-                        r += u32::from(px[2]);
-                        a += if alpha { u32::from(px[3]) } else { 255 };
-                    }
+            for &row in ry {
+                for &col in cx {
+                    let p = &src[row + col..row + col + 4];
+                    b += u32::from(p[0]);
+                    g += u32::from(p[1]);
+                    r += u32::from(p[2]);
+                    a += u32::from(p[3]);
                 }
             }
-            let c = n * n;
-            let cover = u32::from(mask.get((y * tw + x) as usize).copied().unwrap_or(255));
-            out.extend_from_slice(&[
+            let a = if alpha { a / c } else { 255 };
+            let cover = u32::from(mask.get(y * tw as usize + x).copied().unwrap_or(255));
+            px.copy_from_slice(&[
                 (r / c) as u8,
                 (g / c) as u8,
                 (b / c) as u8,
-                ((a / c) * cover / 255) as u8,
+                (a * cover / 255) as u8,
             ]);
         }
     }
@@ -629,5 +649,27 @@ mod tests {
     fn handles_are_the_low_32_bits() {
         assert_eq!(super::handle("0x55d1a2b3c4d5"), Some(0xa2b3_c4d5));
         assert_eq!(super::handle("nonsense"), None);
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    #[test]
+    #[ignore]
+    fn compose_speed() {
+        let key = (super::wl_shm::Format::Xrgb8888, 1920, 1080, 1920 * 4);
+        let src: Vec<u8> = (0..1920 * 1080 * 4).map(|i| (i % 251) as u8).collect();
+        let job = super::Job {
+            address: String::new(),
+            width: 236,
+            height: 126,
+            radius: 7,
+        };
+        let mask = super::corner_mask(236, 126, 7.0);
+        let t = std::time::Instant::now();
+        for _ in 0..100 {
+            std::hint::black_box(super::compose(&src, key, &job, &mask));
+        }
+        eprintln!("compose: {} us per frame", t.elapsed().as_micros() / 100);
     }
 }

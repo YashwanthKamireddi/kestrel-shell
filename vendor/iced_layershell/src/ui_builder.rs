@@ -38,10 +38,11 @@ pub(crate) fn build_user_interfaces<'a, State, Message: 'a>(
     let ids: Vec<SurfaceId> = iced_surfaces.keys().copied().collect();
     ids.into_iter()
         .map(|id| {
-            (
-                id,
-                build_single_ui(view, user_state, id, iced_surfaces, renderer),
-            )
+            let t = std::time::Instant::now();
+            let ui = build_single_ui(view, user_state, id, iced_surfaces, renderer);
+            // kestrel patch: view + layout time per surface, for KESTREL_TRACE.
+            crate::ktrace!("build {:?} {}us", id, t.elapsed().as_micros());
+            (id, ui)
         })
         .collect()
 }
