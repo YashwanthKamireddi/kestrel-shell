@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with three
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with five
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -13,6 +13,9 @@ place every redraw passes), so input events and redraw retries no longer re-rast
 wallpaper; a compositor request (configure, scale, resize) always draws.
 4. `KESTREL_TRACE=1` prints every surface size request, configure, present and deferred frame
 with wall-clock times, for correlating flicker in a screen recording with what was committed.
+5. A surface whose `RedrawRequested` produced messages is not presented on that pass; the retry
+that follows (same loop, no frame of delay) draws it with them applied. Before, a panel opened at
+its remembered height for a frame and then jumped to the one it reported (`redo` in the trace).
 Measured: CPU during panel animations went from ~43 % to ~15 % of a core, because the
 full-screen wallpaper was being re-rasterised on every animation frame.
 

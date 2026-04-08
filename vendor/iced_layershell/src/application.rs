@@ -761,6 +761,7 @@ where
                     event: redraw_event[0].clone(),
                     status: iced_core::event::Status::Ignored,
                 });
+                let before_update = all_messages.len();
                 let (ui_state, _statuses) = ui.update(
                     &redraw_event,
                     cursor,
@@ -768,6 +769,15 @@ where
                     &mut clipboard,
                     &mut all_messages,
                 );
+                // kestrel patch: the redraw produced messages (a panel reporting the height
+                // it really has): this frame would show the state from before them, a frame
+                // of the wrong size. Draw it on the retry below, with them applied. The last
+                // retry always draws, so nothing can hold a surface back.
+                if all_messages.len() > before_update && redraw_count < 2 {
+                    crate::ktrace!("redo {:?}", surface_id);
+                    iced_s.needs_redraw = true;
+                    continue;
+                }
 
                 // If the widget requested another frame (e.g. animation in progress),
                 // schedule a full redraw for after the compositor acknowledges this frame.
