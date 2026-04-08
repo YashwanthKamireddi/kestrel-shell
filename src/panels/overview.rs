@@ -38,12 +38,8 @@ struct Ready {
     handle: iced::widget::image::Handle,
 }
 
-/// (address, tile size, picture width, height, RGBA): made off the UI thread.
-type Made = (String, (u32, u32), u32, u32, Vec<u8>);
-
 #[derive(Clone, Debug)]
 pub enum Message {
-    Previews(Vec<Made>),
     Submit,
     /// The pointer came onto a window: it becomes the selection.
     Hover(String),
@@ -78,27 +74,17 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
 /// changes (so the first open has pictures, not icons); while it is open, `live_jobs` keeps
 /// each picture moving with its window.
 pub fn refresh(app: &App) -> Task<AppMessage> {
-    if app.hypr.windows.is_empty() {
+    let jobs = live_jobs(app);
+    if jobs.is_empty() {
         return Task::none();
     }
-    let (cw, ch) = card_size();
-    let jobs: Vec<(String, (f32, f32))> = app
-        .hypr
-        .windows
-        .iter()
-        .filter(|w| w.workspace > 0)
-        .map(|w| {
-            let (_, _, bw, bh) = tile_rect(w, cw, ch);
-            (w.address.clone(), (bw, bh))
-        })
-        .collect();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || make_previews(&jobs))
+            tokio::task::spawn_blocking(move || crate::services::previews::snapshot(&jobs))
                 .await
                 .unwrap_or_default()
         },
-        |v| msg(Message::Previews(v)),
+        |v| msg(Message::Live(v)),
     )
 }
 
@@ -118,27 +104,6 @@ pub fn live_jobs(app: &App) -> Vec<crate::services::previews::Job> {
                 height: bh as u32,
                 radius: 7,
             }
-        })
-        .collect()
-}
-
-fn make_previews(jobs: &[(String, (f32, f32))]) -> Vec<Made> {
-    let addrs: Vec<String> = jobs.iter().map(|(a, _)| a.clone()).collect();
-    let widest = jobs.iter().map(|(_, (w, _))| *w).fold(0.0, f32::max);
-    crate::services::previews::capture(&addrs, (widest * 2.0).max(64.0) as u32)
-        .into_iter()
-        .filter_map(|(a, p)| {
-            let p = p?;
-            let (bw, bh) = jobs.iter().find(|(j, _)| *j == a)?.1;
-            let img = image::RgbaImage::from_raw(p.width, p.height, p.rgba)?;
-            let r = ui::rounded_cover(&img, bw, bh, 7.0);
-            Some((
-                a,
-                (bw as u32, bh as u32),
-                r.width(),
-                r.height(),
-                r.into_raw(),
-            ))
         })
         .collect()
 }
@@ -224,28 +189,6 @@ fn focus(address: &str) -> Task<AppMessage> {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
-        Message::Previews(v) => {
-            let st = &mut app.panels.overview;
-            for (a, size, w, h, rgba) in v {
-                st.previews.insert(
-                    a,
-                    Ready {
-                        size,
-                        handle: iced::widget::image::Handle::from_rgba(w, h, rgba),
-                    },
-                );
-            }
-            let live: std::collections::HashSet<&str> = app
-                .hypr
-                .windows
-                .iter()
-                .map(|w| w.address.as_str())
-                .collect();
-            app.panels
-                .overview
-                .previews
-                .retain(|a, _| live.contains(a.as_str()));
-        }
         Message::Live(frames) => {
             let st = &mut app.panels.overview;
             for f in frames {
@@ -257,6 +200,17 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     },
                 );
             }
+            // Pictures of windows that have closed go.
+            let open: std::collections::HashSet<&str> = app
+                .hypr
+                .windows
+                .iter()
+                .map(|w| w.address.as_str())
+                .collect();
+            app.panels
+                .overview
+                .previews
+                .retain(|a, _| open.contains(a.as_str()));
         }
         Message::Hover(a) => app.panels.overview.selected = Some(a),
         Message::Unhover(a) => {

@@ -31,14 +31,6 @@ use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use wayland_client::protocol::{wl_buffer, wl_registry, wl_shm, wl_shm_pool};
 use wayland_client::{Connection, Dispatch, QueueHandle, WEnum};
 
-/// A window's picture, RGBA, at most the requested width.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Preview {
-    pub width: u32,
-    pub height: u32,
-    pub rgba: Vec<u8>,
-}
-
 #[derive(Default)]
 struct State {
     shm: Option<wl_shm::WlShm>,
@@ -119,9 +111,9 @@ impl Dispatch<HyprlandToplevelExportFrameV1, ()> for State {
     }
 }
 
-/// Pictures of the windows at `addresses` (Hyprland's "0x…" window addresses), each at most
-/// `max_width` wide. Blocking: run it off the UI thread.
-pub fn capture(addresses: &[String], max_width: u32) -> Vec<(String, Option<Preview>)> {
+/// One picture of each job's window, already cropped, scaled and rounded to its size (the same
+/// one-pass scaling as the live pictures). Blocking: run it off the UI thread.
+pub fn snapshot(jobs: &[Job]) -> Vec<Frame> {
     let Ok(conn) = Connection::connect_to_env() else {
         return Vec::new();
     };
@@ -136,11 +128,16 @@ pub fn capture(addresses: &[String], max_width: u32) -> Vec<(String, Option<Prev
         log::warn!("previews: the compositor has no toplevel export");
         return Vec::new();
     };
-    addresses
-        .iter()
-        .map(|a| {
-            let p = handle(a).and_then(|h| one(&conn, &mut queue, &qh, &mut st, &shm, &manager, h));
-            (a.clone(), p.map(|p| shrink(p, max_width)))
+    jobs.iter()
+        .filter_map(|job| {
+            let h = handle(&job.address)?;
+            let rgba = one(&conn, &mut queue, &qh, &mut st, &shm, &manager, h, job)?;
+            Some(Frame {
+                address: job.address.clone(),
+                width: job.width.max(1),
+                height: job.height.max(1),
+                rgba,
+            })
         })
         .collect()
 }
@@ -160,7 +157,8 @@ fn one(
     shm: &wl_shm::WlShm,
     manager: &HyprlandToplevelExportManagerV1,
     handle: u32,
-) -> Option<Preview> {
+    job: &Job,
+) -> Option<Vec<u8>> {
     st.offer = None;
     st.buffer_done = false;
     st.ready = false;
@@ -190,7 +188,7 @@ fn one(
             queue.blocking_dispatch(st).ok()?;
         }
         let out = if st.ready {
-            read(&fd, size, w, h, stride, format == wl_shm::Format::Argb8888)
+            read(&fd, size, (format, w, h, stride), job)
         } else {
             None
         };
@@ -203,8 +201,13 @@ fn one(
     result
 }
 
-/// The copied pixels (BGRA in memory) as RGBA.
-fn read(fd: &OwnedFd, size: usize, w: u32, h: u32, stride: u32, alpha: bool) -> Option<Preview> {
+/// The copied window (BGRA in shared memory) as the job's picture.
+fn read(
+    fd: &OwnedFd,
+    size: usize,
+    key: (wl_shm::Format, u32, u32, u32),
+    job: &Job,
+) -> Option<Vec<u8>> {
     use std::os::fd::AsRawFd;
     // Safety: maps the memory file just filled by the compositor, read-only, unmapped below.
     let ptr = unsafe {
@@ -221,41 +224,12 @@ fn read(fd: &OwnedFd, size: usize, w: u32, h: u32, stride: u32, alpha: bool) -> 
         return None;
     }
     let src = unsafe { std::slice::from_raw_parts(ptr as *const u8, size) };
-    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-    for y in 0..h as usize {
-        let row = &src[y * stride as usize..y * stride as usize + w as usize * 4];
-        for px in row.chunks_exact(4) {
-            rgba.extend_from_slice(&[px[2], px[1], px[0], if alpha { px[3] } else { 255 }]);
-        }
-    }
+    let mask = corner_mask(job.width.max(1), job.height.max(1), job.radius as f32);
+    let out = compose(src, key, job, &mask);
     unsafe {
         libc::munmap(ptr, size);
     }
-    Some(Preview {
-        width: w,
-        height: h,
-        rgba,
-    })
-}
-
-fn shrink(p: Preview, max_width: u32) -> Preview {
-    if p.width <= max_width {
-        return p;
-    }
-    let Some(img) = image::RgbaImage::from_raw(p.width, p.height, p.rgba) else {
-        return Preview {
-            width: 0,
-            height: 0,
-            rgba: Vec::new(),
-        };
-    };
-    let h = (u64::from(p.height) * u64::from(max_width) / u64::from(p.width)).max(1) as u32;
-    let small = image::imageops::resize(&img, max_width, h, image::imageops::FilterType::Triangle);
-    Preview {
-        width: small.width(),
-        height: small.height(),
-        rgba: small.into_raw(),
-    }
+    Some(out)
 }
 
 /// A window to keep live: its address and the picture's size on screen (pixels), with the
