@@ -47,7 +47,7 @@ fn chip<'a>(s: Scheme, k: &str) -> Element<'a, AppMessage> {
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
     let Some(groups) = &app.panels.keys.groups else {
-        return container(column![header, empty(s, Icon::Keyboard, "Loading…")].spacing(10))
+        return container(column![header, empty(s, Icon::Keyboard)].spacing(10))
             .padding(14)
             .into();
     };

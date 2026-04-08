@@ -380,7 +380,18 @@ pub fn subpage_header<'a, M: Clone + 'static>(
 }
 
 /// Muted centred message for empty lists.
-pub fn empty<'a, M: 'a>(s: Scheme, i: Icon, msg: impl text::IntoFragment<'a>) -> Element<'a, M> {
+/// Where a list or picture would be and there is nothing (yet): only a faint icon of what
+/// belongs there. No words: "Nothing here" labels were the user's first rule (2026-11-13).
+pub fn empty<'a, M: 'static>(s: Scheme, i: Icon) -> Element<'a, M> {
+    container(icon(i, 22.0, s.ink_faint))
+        .center_x(Length::Fill)
+        .padding([24, 0])
+        .into()
+}
+
+/// Something in progress where a list will be (looking for networks): its icon and what is
+/// happening, so the wait is visible.
+pub fn waiting<'a, M: 'a>(s: Scheme, i: Icon, msg: impl text::IntoFragment<'a>) -> Element<'a, M> {
     container(
         iced::widget::column![
             icon(i, 22.0, s.ink_faint),

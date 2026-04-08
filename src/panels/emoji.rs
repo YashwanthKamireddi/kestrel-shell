@@ -222,10 +222,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         grid = grid.push(line);
     }
     let body: Element<'_, AppMessage> = if list.is_empty() {
-        container(label("No matches", text::SMALL, s.ink_dim))
-            .center_x(Length::Fill)
-            .center_y(grid_h)
-            .into()
+        // Nothing found: the grid's space stays, empty (no "No matches" label).
+        iced::widget::Space::new().height(grid_h).into()
     } else {
         mouse_area(container(grid).height(grid_h))
             .on_scroll(|d| {

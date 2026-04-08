@@ -263,8 +263,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .height(size::CONTROL + 4.0);
     let current = app.config.wallpaper.as_deref().map(config::expand);
     let body: Element<'_, AppMessage> = match &app.panels.wallpaper.items {
-        None => empty(s, Icon::Image, "Loading…"),
-        Some(v) if v.is_empty() => empty(s, Icon::Image, "No pictures in this folder"),
+        None => empty(s, Icon::Image),
+        Some(v) if v.is_empty() => empty(s, Icon::Image),
         Some(v) => {
             let mut grid = column![].spacing(10);
             let sel = app.panels.wallpaper.sel;

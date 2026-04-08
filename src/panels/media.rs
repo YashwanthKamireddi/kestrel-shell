@@ -329,9 +329,7 @@ pub const WIDTH: f32 = 460.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(p) = current(app) else {
-        return container(empty(s, Icon::Music, "Nothing is playing"))
-            .padding(12)
-            .into();
+        return container(empty(s, Icon::Music)).padding(12).into();
     };
     let bus = p.bus.clone();
 

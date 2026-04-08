@@ -226,9 +226,38 @@ pub fn score(query: &str, text: &str) -> Option<i32> {
     Some(score)
 }
 
+/// Like `score`, but the text must contain `query` as typed (no letters picked out one by one):
+/// for descriptions and keyword lists, where a scattered match finds nearly anything ("zzqx"
+/// matched Xarchiver through its list of archive formats).
+pub fn score_contains(query: &str, text: &str) -> Option<i32> {
+    let (tl, ql) = (text.to_lowercase(), query.to_lowercase());
+    if ql.is_empty() {
+        return Some(0);
+    }
+    let i = tl.find(&ql)?;
+    let word = i == 0
+        || !tl[..i]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric);
+    Some(if word { 800 } else { 600 } - i.min(400) as i32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyword_lists_need_the_text_as_typed() {
+        let formats = "archive;zip;compression;bzip2;7z;tar;lzop;zpaq;rar;xz";
+        assert!(
+            score("zzqx", formats).is_some(),
+            "the scattered match is what went wrong"
+        );
+        assert!(score_contains("zzqx", formats).is_none());
+        assert!(score_contains("zip", formats).is_some());
+        assert!(score_contains("comp", formats) > score_contains("press", formats));
+    }
 
     #[test]
     fn prefix_beats_fuzzy() {

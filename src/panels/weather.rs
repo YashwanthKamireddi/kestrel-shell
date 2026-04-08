@@ -12,22 +12,8 @@ pub const WIDTH: f32 = 420.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(w) = &app.weather else {
-        return container(
-            column![
-                icon(Icon::Cloud, 28.0, s.ink_dim),
-                label("No weather yet", text::BODY, s.ink),
-                label(
-                    "Set a city in Settings, or wait for the connection",
-                    text::SMALL,
-                    s.ink_dim
-                ),
-            ]
-            .spacing(6)
-            .align_x(Alignment::Center),
-        )
-        .center_x(Length::Fill)
-        .padding(28)
-        .into();
+        // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
+        return crate::ui::empty(s, Icon::Cloud);
     };
     let mut col = column![now(app, w, s), details(app, w, s)].spacing(14);
     if w.hours.len() > 1 {
