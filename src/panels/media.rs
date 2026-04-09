@@ -326,6 +326,8 @@ fn content_box(img: &::image::RgbaImage) -> (u32, u32, u32, u32) {
 
 /// Panel width: room for a large cover beside the text.
 pub const WIDTH: f32 = 460.0;
+/// The panel's width with nothing playing.
+pub const EMPTY_WIDTH: f32 = 96.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(p) = current(app) else {
