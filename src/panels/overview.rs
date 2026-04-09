@@ -74,7 +74,26 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
 /// changes (so the first open has pictures, not icons); while it is open, `live_jobs` keeps
 /// each picture moving with its window.
 pub fn refresh(app: &App) -> Task<AppMessage> {
-    let jobs = live_jobs(app);
+    snapshot(live_jobs(app))
+}
+
+/// Pictures for windows that have none at their tile's size yet (a window opened or was
+/// resized), taken in the background while the overview is closed: the others keep theirs,
+/// so opening one window no longer copies every window on the desktop.
+pub fn refresh_missing(app: &App) -> Task<AppMessage> {
+    let have = &app.panels.overview.previews;
+    snapshot(
+        live_jobs(app)
+            .into_iter()
+            .filter(|j| {
+                have.get(&j.address)
+                    .is_none_or(|r| r.size != (j.width.max(1), j.height.max(1)))
+            })
+            .collect(),
+    )
+}
+
+fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Task<AppMessage> {
     if jobs.is_empty() {
         return Task::none();
     }
