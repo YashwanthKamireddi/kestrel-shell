@@ -46,7 +46,8 @@ fn chip<'a>(s: Scheme, k: &str) -> Element<'a, AppMessage> {
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
-    let Some(groups) = &app.panels.keys.groups else {
+    // Not read yet, or no bindings found: the title and a quiet icon, not 520 px of nothing.
+    let Some(groups) = app.panels.keys.groups.as_ref().filter(|g| !g.is_empty()) else {
         return container(column![header, empty(s, Icon::Keyboard)].spacing(10))
             .padding(14)
             .into();
