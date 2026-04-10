@@ -198,6 +198,19 @@ pub fn present(
             damage,
             Rectangle::with_size(viewport.logical_size()),
         );
+        // kestrel patch: what is redrawn, for KESTREL_TRACE (rectangles and their area).
+        if std::env::var_os("KESTREL_TRACE").is_some() {
+            let area: f32 = damage.iter().map(|r| r.width * r.height).sum();
+            eprintln!(
+                "TRACE damage {} rects {:.0} px2 {:?}",
+                damage.len(),
+                area,
+                damage
+                    .iter()
+                    .map(|r| (r.x as i32, r.y as i32, r.width as i32, r.height as i32))
+                    .collect::<Vec<_>>()
+            );
+        }
 
         let mut pixels = tiny_skia::PixmapMut::from_bytes(
             bytemuck::cast_slice_mut(&mut buffer),

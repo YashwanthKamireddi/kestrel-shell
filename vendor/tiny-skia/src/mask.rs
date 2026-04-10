@@ -41,6 +41,11 @@ pub enum MaskType {
 pub struct Mask {
     data: Vec<u8>,
     size: IntSize,
+    /// kestrel patch: the mask is known to be fully opaque inside this rectangle and empty
+    /// outside it. Fills then clip their scan to it and skip the per-pixel mask stage (iced's
+    /// clip masks are always rectangles; masking every pixel of every shape was ~half the
+    /// drawing time). Any change to the data drops the hint.
+    rect: Option<IntRect>,
 }
 
 impl Mask {
@@ -52,6 +57,7 @@ impl Mask {
         Some(Mask {
             data: vec![0; width as usize * height as usize],
             size,
+            rect: None,
         })
     }
 
@@ -61,6 +67,7 @@ impl Mask {
         let mut mask = Mask {
             data: vec![0; data_len],
             size: pixmap.size(),
+            rect: None,
         };
 
         // TODO: optimize
@@ -103,7 +110,11 @@ impl Mask {
             return None;
         }
 
-        Some(Mask { data, size })
+        Some(Mask {
+            data,
+            size,
+            rect: None,
+        })
     }
 
     /// Returns mask's width.
@@ -130,7 +141,19 @@ impl Mask {
     }
 
     /// Returns the mutable internal data.
+    /// kestrel patch: declares the mask to be exactly `rect` (opaque inside, empty outside);
+    /// the caller has filled the data that way. `None` drops the hint.
+    pub fn set_rect_hint(&mut self, rect: Option<IntRect>) {
+        self.rect = rect;
+    }
+
+    /// kestrel patch: the rectangle the mask is known to be, if any.
+    pub(crate) fn rect_hint(&self) -> Option<IntRect> {
+        self.rect
+    }
+
     pub fn data_mut(&mut self) -> &mut [u8] {
+        self.rect = None;
         self.data.as_mut_slice()
     }
 
@@ -155,6 +178,7 @@ impl Mask {
     }
 
     pub(crate) fn as_subpixmap(&mut self) -> SubPixmapMut<'_> {
+        self.rect = None;
         SubPixmapMut {
             size: self.size,
             real_width: self.size.width() as usize,
@@ -163,6 +187,7 @@ impl Mask {
     }
 
     pub(crate) fn subpixmap(&mut self, rect: IntRect) -> Option<SubPixmapMut<'_>> {
+        self.rect = None;
         let rect = self.size.to_int_rect(0, 0).intersect(&rect)?;
         let row_bytes = self.width() as usize;
         let offset = rect.top() as usize * row_bytes + rect.left() as usize;
@@ -257,6 +282,7 @@ impl Mask {
         anti_alias: bool,
         transform: Transform,
     ) {
+        self.rect = None;
         if transform.is_identity() {
             // This is sort of similar to SkDraw::drawPath
 
@@ -350,6 +376,7 @@ impl Mask {
         anti_alias: bool,
         transform: Transform,
     ) {
+        self.rect = None;
         let mut submask = Mask::new(self.width(), self.height()).unwrap();
         submask.fill_path(path, fill_rule, anti_alias, transform);
 
@@ -360,6 +387,7 @@ impl Mask {
 
     /// Inverts the mask.
     pub fn invert(&mut self) {
+        self.rect = None;
         self.data.iter_mut().for_each(|a| *a = 255 - *a);
     }
 
@@ -367,6 +395,7 @@ impl Mask {
     ///
     /// Zero-fills the internal data buffer.
     pub fn clear(&mut self) {
+        self.rect = None;
         self.data.fill(0);
     }
 }

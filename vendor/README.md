@@ -24,6 +24,13 @@ patch"): `adjust_clip_mask` touches only the pixels that change. The original wi
 a screen-sized mask for every layer and primitive group; with a layer per control that rewrote
 tens of megabytes per frame on the full-screen overlay.
 
+`tiny-skia/` (besides SUPERSAMPLE_SHIFT=3) carries a rectangle hint on `Mask`: iced_tiny_skia's
+`adjust_clip_mask` declares the mask to be exactly its rectangle, and `fill_rect` / `fill_path`
+then clip their scan to it with no per-pixel mask stage. Profiled 2026-11-14: `mask_u8` was 47%
+of drawing time (every shape crossing a damaged area was scanned whole and masked pixel by
+pixel). Clipboard key moves: ~12 ms -> ~3.8 ms raster per frame. iced_tiny_skia also prints the
+redrawn rectangles under `KESTREL_TRACE`.
+
 `softbuffer/` is MalpenZibo's softbuffer `wayland-argb` branch (MIT/Apache-2.0) with one kestrel
 patch: a third buffer, so drawing never waits for Hyprland to release the previous frame's.
 

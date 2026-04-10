@@ -854,6 +854,15 @@ pub fn adjust_clip_mask(clip_mask: &mut tiny_skia::Mask, bounds: Rectangle) {
     ];
     let id = clip_mask.data().as_ptr() as usize;
     let stride = w as usize;
+    // kestrel patch: tell tiny-skia the mask is exactly this rectangle, so fills clip their
+    // scan to it instead of masking every pixel (set again on every way out: touching the
+    // data drops it).
+    let hint = tiny_skia::IntRect::from_ltrb(
+        rect[0] as i32,
+        rect[1] as i32,
+        rect[2] as i32,
+        rect[3] as i32,
+    );
     let data = clip_mask.data_mut();
     let fill = |data: &mut [u8], [x0, y0, x1, y1]: [usize; 4], v: u8| {
         if x1 > x0 {
@@ -865,6 +874,7 @@ pub fn adjust_clip_mask(clip_mask: &mut tiny_skia::Mask, bounds: Rectangle) {
     match LAST.get() {
         Some((lid, lw, lh, last)) if lid == id && lw == w && lh == h => {
             if last == rect {
+                clip_mask.set_rect_hint(hint);
                 return;
             }
             fill(data, last, 0);
@@ -873,4 +883,5 @@ pub fn adjust_clip_mask(clip_mask: &mut tiny_skia::Mask, bounds: Rectangle) {
     }
     fill(data, rect, 255);
     LAST.set(Some((id, w, h, rect)));
+    clip_mask.set_rect_hint(hint);
 }

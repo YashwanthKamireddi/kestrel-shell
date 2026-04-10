@@ -14,7 +14,7 @@ use crate::pipeline::{RasterPipelineBlitter, RasterPipelineBuilder};
 use crate::pixmap::SubPixmapMut;
 use crate::scan;
 
-use crate::geom::IntSizeExt;
+use crate::geom::{IntRectExt, IntSizeExt};
 #[cfg(all(not(feature = "std"), feature = "no-std-float"))]
 use tiny_skia_path::NoStdFloat;
 
@@ -190,7 +190,15 @@ impl PixmapMut<'_> {
         if transform.is_identity() && !DrawTiler::required(self.width(), self.height()) {
             // TODO: ignore rects outside the pixmap
 
-            let clip = self.size().to_screen_int_rect(0, 0);
+            let full = self.size().to_screen_int_rect(0, 0);
+            // kestrel patch: a rectangle-only mask becomes the scan's clip, with no mask stage.
+            let (clip, mask) = match mask.and_then(|m| m.rect_hint().map(|r| (m, r))) {
+                Some((_, r)) => match r.intersect(&full.to_int_rect()).and_then(|r| r.to_screen_int_rect()) {
+                    Some(c) => (c, None),
+                    None => return,
+                },
+                None => (full, mask),
+            };
 
             let mask = mask.map(|mask| mask.as_submask());
             let mut subpix = self.as_subpixmap();
@@ -281,7 +289,21 @@ impl PixmapMut<'_> {
                     paint.shader.transform(ts);
                 }
             } else {
-                let clip_rect = self.size().to_screen_int_rect(0, 0);
+                let full = self.size().to_screen_int_rect(0, 0);
+                // kestrel patch: a rectangle-only mask becomes the scan's clip (see fill_rect).
+                let (clip_rect, mask) =
+                    match mask.and_then(|m| m.rect_hint().map(|r| (m, r))) {
+                        Some((_, r)) => {
+                            match r
+                                .intersect(&full.to_int_rect())
+                                .and_then(|r| r.to_screen_int_rect())
+                            {
+                                Some(c) => (c, None),
+                                None => return,
+                            }
+                        }
+                        None => (full, mask),
+                    };
                 let submask = mask.map(|mask| mask.as_submask());
                 let mut subpix = self.as_subpixmap();
                 let mut blitter = match RasterPipelineBlitter::new(paint, submask, &mut subpix) {
