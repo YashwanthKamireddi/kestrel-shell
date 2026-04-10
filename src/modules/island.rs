@@ -42,24 +42,29 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
         o.c = o.c.max(0.08);
         o.to_color()
     });
+    // Whole pixels only: 3.5 px bars with 2.5 px gaps sat on half pixels, and smoothing split
+    // each bar into a solid stripe and a faint one beside it (a "line" in every bar, the user's
+    // report 2026-11-14). Even heights keep the centred bars on whole pixels too.
     let bars = app.levels.iter().map(|v| {
-        let h = 4.0 + v.clamp(0.0, 1.0) * 13.0;
+        let h = (2.0 * (2.0 + v.clamp(0.0, 1.0) * 6.5)).round();
         iced::widget::container(iced::widget::Space::new())
-            .width(3.5)
+            .width(4)
             .height(h)
             .style(move |_| iced::widget::container::Style {
                 background: Some(tint.into()),
-                border: iced::Border::default().rounded(1.75),
+                border: iced::Border::default().rounded(2),
                 ..iced::widget::container::Style::default()
             })
             .into()
     });
     Some(
-        iced::widget::row(bars)
-            .spacing(2.5)
-            .height(18)
-            .align_y(Alignment::Center)
-            .into(),
+        ui::snap::snap(
+            iced::widget::row(bars)
+                .spacing(3)
+                .height(18)
+                .align_y(Alignment::Center),
+        )
+        .into(),
     )
 }
 
