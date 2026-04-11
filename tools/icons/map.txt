@@ -136,3 +136,5 @@ wifi-off wifi_off
 wifi-zero signal_wifi_0_bar
 x clear
 zap bolt
+info info
+plus add

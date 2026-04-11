@@ -123,6 +123,8 @@ icons! {
     Search => "search", '\u{ef7a}',
     Server => "server", '\u{e875}',
     Settings => "settings", '\u{e8b8}',
+    Info => "info", '\u{e88e}',
+    Plus => "plus", '\u{e145}',
     Shield => "shield", '\u{e9e0}',
     Shuffle => "shuffle", '\u{e043}',
     SkipBack => "skip-back", '\u{e045}',
