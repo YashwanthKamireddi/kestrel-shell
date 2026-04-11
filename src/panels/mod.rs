@@ -49,7 +49,8 @@ pub enum PanelKind {
 impl PanelKind {
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
-            "control" | "control-centre" | "control-center" | "sound" | "mixer" => Self::Control,
+            "control" | "control-centre" | "control-center" | "sound" | "mixer" | "bluetooth"
+            | "wifi" | "network" => Self::Control,
             "media" => Self::Media,
             "calendar" => Self::Calendar,
             // Notifications live in the control centre.
@@ -253,6 +254,17 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
+    // Searching for Bluetooth devices while the Bluetooth page is open (stopped when it
+    // closes, however it closes).
+    if open == Some(PanelKind::Control)
+        && app.panels.control.page == control::Page::Bluetooth
+        && app.bt.powered
+    {
+        subs.push(
+            crate::subs::bt_search()
+                .map(|()| Message::Control(control::Message::Page(control::Page::Bluetooth))),
+        );
+    }
     // The overview's pictures move with their windows while it is open (a playing video
     // plays): the compositor hands over a new picture each time a window changes.
     if open == Some(PanelKind::Overview) {

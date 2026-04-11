@@ -1,10 +1,12 @@
-//! The password prompt for administrator rights (kestrel's own polkit agent): what is asking,
-//! whose password, a password field, Cancel and Authenticate. A wrong password shakes nothing
-//! and asks again with one quiet line. Opened by the agent; the keyboard goes straight to it.
+//! The system's questions, one panel: the password prompt for administrator rights (kestrel's
+//! own polkit agent: what is asking, whose password, a password field, Cancel and
+//! Authenticate; a wrong password asks again with one quiet line), and Bluetooth pairing
+//! (kestrel's own BlueZ agent: confirm the code, type a PIN, or type a code on a keyboard).
+//! Opened by the agents; the keyboard goes straight to it.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
-use crate::services::polkit;
+use crate::services::{bluetooth, polkit};
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
@@ -18,6 +20,8 @@ pub struct State {
     password: String,
     /// The password was sent; waiting for polkit's answer.
     checking: bool,
+    /// A Bluetooth pairing question (when there is no password request).
+    pub bt: Option<bluetooth::Ask>,
 }
 
 #[derive(Clone, Debug)]
@@ -25,6 +29,29 @@ pub enum Message {
     Password(String),
     Submit,
     Cancel,
+}
+
+/// A pairing question arrived: shown (a PIN with the field focused).
+pub fn ask_bt(app: &mut App, a: bluetooth::Ask) -> Task<AppMessage> {
+    let st = &mut app.panels.auth;
+    st.password.clear();
+    let focus = matches!(a, bluetooth::Ask::Pin { .. });
+    st.bt = Some(a);
+    if focus {
+        Task::Iced(iced::widget::focus(INPUT_ID.clone()))
+    } else {
+        Task::none()
+    }
+}
+
+/// The pairing question's id, if one is shown.
+pub fn bt_id(st: &State) -> Option<u64> {
+    match st.bt.as_ref()? {
+        bluetooth::Ask::Confirm { id, .. }
+        | bluetooth::Ask::Pin { id, .. }
+        | bluetooth::Ask::Show { id, .. } => Some(*id),
+        bluetooth::Ask::Done(_) => None,
+    }
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -45,6 +72,30 @@ pub fn ask(app: &mut App, r: polkit::Request) -> Task<AppMessage> {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     let st = &mut app.panels.auth;
+    if st.request.is_none()
+        && let Some(a) = st.bt.clone()
+    {
+        match (m, a) {
+            (Message::Password(p), _) => st.password = p,
+            (Message::Submit, bluetooth::Ask::Confirm { id, .. }) => {
+                bluetooth::answer(id, true);
+                st.bt = None;
+                return Task::done(AppMessage::Close);
+            }
+            (Message::Submit, bluetooth::Ask::Pin { id, .. }) if !st.password.is_empty() => {
+                bluetooth::answer_pin(id, std::mem::take(&mut st.password));
+                st.bt = None;
+                return Task::done(AppMessage::Close);
+            }
+            (Message::Cancel, a) => {
+                bluetooth::answer(a.id(), false);
+                st.bt = None;
+                return Task::done(AppMessage::Close);
+            }
+            _ => {}
+        }
+        return Task::none();
+    }
     match m {
         Message::Password(p) => st.password = p,
         Message::Submit => {
@@ -71,13 +122,21 @@ pub fn closed(app: &mut App) {
     if let Some(r) = app.panels.auth.request.take() {
         polkit::cancel(&r.cookie);
     }
+    // A pairing question closed without an answer: declined.
+    if let Some(id) = bt_id(&app.panels.auth) {
+        bluetooth::answer(id, false);
+    }
+    app.panels.auth.bt = None;
     app.panels.auth.password.clear();
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let st = &app.panels.auth;
     let Some(r) = &st.request else {
-        return iced::widget::Space::new().into();
+        return match &st.bt {
+            Some(a) => bt_view(st, a, s),
+            None => iced::widget::Space::new().into(),
+        };
     };
     let head = row![
         container(icon(Icon::Lock, 20.0, s.ink))
@@ -149,6 +208,104 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .spacing(8)
     .align_y(Alignment::Center);
+    container(body.push(buttons))
+        .padding(20)
+        .width(Length::Fill)
+        .into()
+}
+
+/// A pairing question: the device, the code (large, to compare or type), and the answer.
+fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, AppMessage> {
+    let (title, code, pin, primary): (String, Option<&str>, bool, Option<&str>) = match a {
+        bluetooth::Ask::Confirm { device, code, .. } => (
+            format!("Pair with {device}?"),
+            code.as_deref(),
+            false,
+            Some("Pair"),
+        ),
+        bluetooth::Ask::Pin { device, .. } => {
+            (format!("PIN for {device}"), None, true, Some("Pair"))
+        }
+        bluetooth::Ask::Show { device, code, .. } => (
+            format!("Type this on {device}"),
+            Some(code.as_str()),
+            false,
+            None,
+        ),
+        bluetooth::Ask::Done(_) => return iced::widget::Space::new().into(),
+    };
+    let head = row![
+        container(icon(Icon::Bluetooth, 20.0, s.ink))
+            .center(40)
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                border: iced::Border::default().rounded(20),
+                ..container::Style::default()
+            }),
+        label_w(title, text::TITLE, s.ink, theme::SEMIBOLD),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center);
+    let mut body = column![head].spacing(14);
+    if let Some(c) = code {
+        // The code as it reads on the device: digits spaced, large.
+        body = body.push(
+            container(label_w(
+                c.chars()
+                    .map(|ch| format!("{ch} "))
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string(),
+                28.0,
+                s.ink,
+                theme::SEMIBOLD,
+            ))
+            .center_x(Length::Fill)
+            .padding([6, 0]),
+        );
+    }
+    if pin {
+        body = body.push(
+            container(
+                text_input("PIN", &st.password)
+                    .id(INPUT_ID.clone())
+                    .on_input(|p| msg(Message::Password(p)))
+                    .on_submit(msg(Message::Submit))
+                    .padding([10, 14])
+                    .size(text::BODY)
+                    .font(theme::FONT)
+                    .style(move |_, _| text_input::Style {
+                        background: Color::TRANSPARENT.into(),
+                        border: iced::Border::default(),
+                        icon: s.ink_dim,
+                        placeholder: s.ink_faint,
+                        value: s.ink,
+                        selection: s.accent_soft,
+                    }),
+            )
+            .style(move |_| ui::field_style(s)),
+        );
+    }
+    let mut buttons = row![
+        iced::widget::Space::new().width(Length::Fill),
+        control(label_w(
+            if primary.is_some() { "Cancel" } else { "Done" },
+            text::SMALL,
+            s.ink,
+            theme::MEDIUM
+        ))
+        .pill(s, crate::ui::control::Pill::Plain)
+        .on_press(msg(Message::Cancel)),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+    if let Some(p) = primary {
+        buttons = buttons.push(
+            control(label_w(p, text::SMALL, s.on_accent, theme::SEMIBOLD))
+                .pill(s, crate::ui::control::Pill::Primary)
+                .on_press_maybe((!pin || !st.password.is_empty()).then(|| msg(Message::Submit))),
+        );
+    }
     container(body.push(buttons))
         .padding(20)
         .width(Length::Fill)

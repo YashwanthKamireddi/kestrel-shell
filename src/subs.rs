@@ -32,6 +32,12 @@ pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods
         .replace('_', ":");
     Subscription::run_with(address, crate::services::airpods::stream)
 }
+pub fn bt_agent() -> Subscription<crate::services::bluetooth::Ask> {
+    Subscription::run(crate::services::bluetooth::agent)
+}
+pub fn bt_search() -> Subscription<()> {
+    Subscription::run(crate::services::bluetooth::search)
+}
 pub fn polkit() -> Subscription<crate::services::polkit::Event> {
     Subscription::run(crate::services::polkit::stream)
 }
