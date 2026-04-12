@@ -15,6 +15,8 @@ pub struct App {
     pub terminal: bool,
     /// The window class the app's windows carry, when the entry says so.
     pub wm_class: String,
+    /// The file and link types it opens ("text/html;x-scheme-handler/https;…").
+    pub mime: String,
 }
 
 fn dirs() -> Vec<PathBuf> {
@@ -76,6 +78,7 @@ fn parse(path: &Path, id: String) -> Option<App> {
         keywords: f.get("Keywords").unwrap_or(&"").to_string(),
         terminal: f.get("Terminal") == Some(&"true"),
         wm_class: f.get("StartupWMClass").unwrap_or(&"").to_string(),
+        mime: f.get("MimeType").unwrap_or(&"").to_string(),
     })
 }
 

@@ -15,6 +15,7 @@ pub mod clock;
 pub mod compositor;
 pub mod dbus;
 pub mod ddc;
+pub mod defaults;
 pub mod filechooser;
 pub mod hyprland;
 pub mod icons;
