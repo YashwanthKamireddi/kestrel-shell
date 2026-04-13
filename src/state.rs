@@ -37,6 +37,8 @@ pub struct Toggles {
     pub dnd: bool,
     pub caffeine: bool,
     pub night_light: bool,
+    /// Airplane mode: what was on before it (Wi-Fi, Bluetooth), put back when it ends.
+    pub airplane: Option<(bool, bool)>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]

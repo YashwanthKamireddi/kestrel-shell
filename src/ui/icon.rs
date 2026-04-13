@@ -125,6 +125,7 @@ icons! {
     Settings => "settings", '\u{e8b8}',
     Info => "info", '\u{e88e}',
     Plus => "plus", '\u{e145}',
+    Plane => "plane", '\u{e539}',
     Shield => "shield", '\u{e9e0}',
     Shuffle => "shuffle", '\u{e043}',
     SkipBack => "skip-back", '\u{e045}',
