@@ -18,6 +18,8 @@ pub struct State {
     pub launcher: Launcher,
     pub toggles: Toggles,
     pub clipboard: Clipboard,
+    /// Apps that have sent notifications (for Settings > Notifications).
+    pub notifiers: BTreeSet<String>,
 }
 
 /// Clipboard entries kept at the top (cliphist ids), surviving "Clear all".

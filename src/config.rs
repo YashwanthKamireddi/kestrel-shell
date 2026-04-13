@@ -34,6 +34,16 @@ pub struct Config {
     pub weather_units: Units,
     /// Per-module extras: `[modules.clock] middle = "kitty -e khal interactive"`.
     pub modules: std::collections::BTreeMap<String, ModuleConfig>,
+    /// Per-app notification rules: `[notifications] muted = ["Discord"]` (dropped),
+    /// `quiet = ["Steam"]` (kept in the list, no banner).
+    pub notifications: NotificationRules,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct NotificationRules {
+    pub muted: Vec<String>,
+    pub quiet: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -189,6 +199,7 @@ impl Default for Config {
             modules: std::collections::BTreeMap::new(),
             clock: ClockConfig::default(),
             weather_units: Units::Celsius,
+            notifications: NotificationRules::default(),
         }
     }
 }
