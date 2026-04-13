@@ -254,6 +254,13 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
+    // The display settings' "keep?" countdown moves while it runs.
+    if settings::display_countdown(&app.panels.settings).is_some() {
+        subs.push(
+            iced::time::every(std::time::Duration::from_secs(1))
+                .map(|_| Message::Settings(settings::Message::DisplayTick)),
+        );
+    }
     // Searching for Bluetooth devices while the Bluetooth page is open (stopped when it
     // closes, however it closes).
     if open == Some(PanelKind::Control)
