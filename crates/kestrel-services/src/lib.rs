@@ -19,6 +19,7 @@ pub mod defaults;
 pub mod filechooser;
 pub mod hyprland;
 pub mod icons;
+pub mod idle;
 pub mod level;
 pub mod logind;
 pub mod meters;

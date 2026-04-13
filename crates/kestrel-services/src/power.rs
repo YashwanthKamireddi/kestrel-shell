@@ -64,6 +64,41 @@ pub struct State {
     pub profile: Option<Profile>,
 }
 
+/// How worn the battery is: what it holds now as a share of when new, and charge cycles.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Health {
+    pub percent: u8,
+    pub cycles: Option<u32>,
+}
+
+/// The battery's health from the kernel (charge_full / charge_full_design, or the energy
+/// pair); None without a battery.
+pub fn health() -> Option<Health> {
+    let dir = std::fs::read_dir("/sys/class/power_supply")
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| std::fs::read_to_string(p.join("type")).is_ok_and(|t| t.trim() == "Battery"))?;
+    let num = |f: &str| -> Option<f64> {
+        std::fs::read_to_string(dir.join(f))
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
+    };
+    let (now, design) = match (num("charge_full"), num("charge_full_design")) {
+        (Some(n), Some(d)) => (n, d),
+        _ => (num("energy_full")?, num("energy_full_design")?),
+    };
+    if design <= 0.0 {
+        return None;
+    }
+    Some(Health {
+        percent: (now / design * 100.0).round().clamp(0.0, 100.0) as u8,
+        cycles: num("cycle_count").map(|c| c as u32).filter(|c| *c > 0),
+    })
+}
+
 async fn read(c: &Connection) -> State {
     let present: bool = dbus::get(c, UPOWER, DISPLAY, DEVICE, "IsPresent")
         .await
