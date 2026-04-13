@@ -99,6 +99,90 @@ pub fn health() -> Option<Health> {
     })
 }
 
+/// How the battery charges (the firmware's own modes, where the laptop has them).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Charging {
+    /// Up to full, the usual way.
+    Standard,
+    /// The firmware learns the routine and keeps the battery lower when on the charger.
+    Adaptive,
+    /// Stops at 80% (charges again below 75%): the battery wears much slower.
+    Limit80,
+}
+
+impl Charging {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standard => "Standard",
+            Self::Adaptive => "Adaptive",
+            Self::Limit80 => "Stop at 80%",
+        }
+    }
+}
+
+fn battery_dir() -> Option<std::path::PathBuf> {
+    std::fs::read_dir("/sys/class/power_supply")
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| std::fs::read_to_string(p.join("type")).is_ok_and(|t| t.trim() == "Battery"))
+}
+
+/// The charging modes this battery offers, and the one in use (None when the laptop has no
+/// such control, or it cannot be written: kestrel's udev rule makes it writable).
+pub fn charging() -> Option<(Vec<Charging>, Charging)> {
+    let dir = battery_dir()?;
+    let types = std::fs::read_to_string(dir.join("charge_types")).ok()?;
+    let writable = std::fs::OpenOptions::new()
+        .write(true)
+        .open(dir.join("charge_types"))
+        .is_ok();
+    if !writable {
+        return None;
+    }
+    let mut offered = vec![Charging::Standard];
+    if types
+        .split_whitespace()
+        .any(|t| t.trim_matches(['[', ']']) == "Adaptive")
+    {
+        offered.push(Charging::Adaptive);
+    }
+    let custom = types
+        .split_whitespace()
+        .any(|t| t.trim_matches(['[', ']']) == "Custom")
+        && dir.join("charge_control_end_threshold").exists();
+    if custom {
+        offered.push(Charging::Limit80);
+    }
+    let now = types
+        .split_whitespace()
+        .find(|t| t.starts_with('['))
+        .map(|t| t.trim_matches(['[', ']']))
+        .unwrap_or("Standard");
+    let current = match now {
+        "Adaptive" => Charging::Adaptive,
+        "Custom" => Charging::Limit80,
+        _ => Charging::Standard,
+    };
+    Some((offered, current))
+}
+
+/// Sets the charging mode. For "Stop at 80%" the limits are written first (75 to start,
+/// 80 to stop; the end before the start, so start < end holds at every step), then the mode.
+pub fn set_charging(c: Charging) -> Result<(), String> {
+    let dir = battery_dir().ok_or("no battery")?;
+    let write = |f: &str, v: &str| std::fs::write(dir.join(f), v).map_err(|e| format!("{f}: {e}"));
+    match c {
+        Charging::Standard => write("charge_types", "Standard"),
+        Charging::Adaptive => write("charge_types", "Adaptive"),
+        Charging::Limit80 => {
+            write("charge_control_end_threshold", "80")?;
+            write("charge_control_start_threshold", "75")?;
+            write("charge_types", "Custom")
+        }
+    }
+}
+
 async fn read(c: &Connection) -> State {
     let present: bool = dbus::get(c, UPOWER, DISPLAY, DEVICE, "IsPresent")
         .await
