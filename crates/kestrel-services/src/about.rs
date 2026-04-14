@@ -201,6 +201,52 @@ pub async fn rename(name: String) -> Result<(), String> {
     Ok(())
 }
 
+/// The user: login name, full name, whether an administrator (in wheel).
+pub fn account() -> (String, String, bool) {
+    let uid = unsafe { libc::getuid() };
+    let line = std::fs::read_to_string("/etc/passwd")
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.split(':').nth(2) == Some(&uid.to_string()))
+        .map(str::to_string)
+        .unwrap_or_default();
+    let f: Vec<&str> = line.split(':').collect();
+    let login = f.first().copied().unwrap_or("").to_string();
+    let full = f
+        .get(4)
+        .and_then(|g| g.split(',').next())
+        .unwrap_or("")
+        .to_string();
+    let admin = std::fs::read_to_string("/etc/group")
+        .unwrap_or_default()
+        .lines()
+        .any(|l| {
+            let g: Vec<&str> = l.split(':').collect();
+            g.first() == Some(&"wheel")
+                && g.get(3).is_some_and(|m| m.split(',').any(|u| u == login))
+        });
+    (login, full, admin)
+}
+
+/// Sets the user's full name (chfn through polkit's pkexec).
+pub async fn set_full_name(name: String) -> Result<(), String> {
+    let name: String = name
+        .chars()
+        .filter(|c| !matches!(c, ':' | ',' | '=' | '\n'))
+        .collect();
+    let (login, _, _) = account();
+    let ok = tokio::process::Command::new("pkexec")
+        .args(["chfn", "-f", name.trim(), &login])
+        .status()
+        .await
+        .is_ok_and(|s| s.success());
+    if ok {
+        Ok(())
+    } else {
+        Err("Could not change the name".into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
