@@ -32,6 +32,57 @@ async fn count(cmd: &str, args: &[&str]) -> usize {
         .unwrap_or(0)
 }
 
+/// One pending update: name, version now, version offered, from the AUR.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Package {
+    pub name: String,
+    pub from: String,
+    pub to: String,
+    pub aur: bool,
+}
+
+async fn lines(cmd: &str, args: &[&str]) -> Vec<String> {
+    tokio::process::Command::new(cmd)
+        .args(args)
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// "name 1.0-1 -> 1.1-1" as a package.
+fn parse(line: &str, aur: bool) -> Option<Package> {
+    let mut w = line.split_whitespace();
+    let name = w.next()?.to_string();
+    let from = w.next()?.to_string();
+    let _arrow = w.next()?;
+    let to = w.next()?.to_string();
+    Some(Package {
+        name,
+        from,
+        to,
+        aur,
+    })
+}
+
+/// Every pending update, by name (repo and AUR).
+pub async fn list() -> Vec<Package> {
+    let (repo, aur) = tokio::join!(lines("checkupdates", &[]), lines("yay", &["-Qua"]));
+    let mut v: Vec<Package> = repo
+        .iter()
+        .filter_map(|l| parse(l, false))
+        .chain(aur.iter().filter_map(|l| parse(l, true)))
+        .collect();
+    v.sort_by(|a, b| a.name.cmp(&b.name));
+    v
+}
+
 /// Resolves when pacman's local database changes (packages installed, upgraded or removed).
 async fn pacman_changed() {
     let Ok(ino) = inotify::Inotify::init() else {
