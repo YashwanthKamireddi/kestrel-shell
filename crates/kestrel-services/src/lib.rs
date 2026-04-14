@@ -8,6 +8,7 @@ pub mod about;
 pub mod airpods;
 pub mod apps;
 pub mod audio;
+pub mod autostart;
 pub mod bluetooth;
 pub mod browser_host;
 pub mod clipboard;

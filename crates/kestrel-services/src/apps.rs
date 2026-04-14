@@ -82,6 +82,19 @@ fn parse(path: &Path, id: String) -> Option<App> {
     })
 }
 
+/// The desktop file of an app id (the user's copy first).
+pub fn desktop_file(id: &str) -> Option<PathBuf> {
+    dirs().into_iter().find_map(|d| {
+        let direct = d.join(id);
+        if direct.exists() {
+            return Some(direct);
+        }
+        // Ids of files in subfolders join the path with '-'.
+        let nested = d.join(id.replacen('-', "/", 1));
+        nested.exists().then_some(nested)
+    })
+}
+
 /// All visible applications; earlier directories (the user's) win over system ones.
 pub fn load() -> Vec<App> {
     let mut seen = HashMap::new();
