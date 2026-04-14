@@ -139,3 +139,5 @@ zap bolt
 info info
 plus add
 plane flight
+usb usb
+eject eject

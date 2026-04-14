@@ -126,6 +126,8 @@ icons! {
     Info => "info", '\u{e88e}',
     Plus => "plus", '\u{e145}',
     Plane => "plane", '\u{e539}',
+    Usb => "usb", '\u{e1e0}',
+    Eject => "eject", '\u{e8fb}',
     Shield => "shield", '\u{e9e0}',
     Shuffle => "shuffle", '\u{e043}',
     SkipBack => "skip-back", '\u{e045}',
