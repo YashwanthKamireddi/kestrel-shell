@@ -164,6 +164,43 @@ pub fn read_all() -> About {
     }
 }
 
+/// Renames the computer (systemd-hostnamed: the static and the pretty name). polkit may ask.
+pub async fn rename(name: String) -> Result<(), String> {
+    let name = name.trim().to_string();
+    // A host name: letters, digits and hyphens, not at the ends.
+    let host: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    if host.is_empty() || host.len() > 63 {
+        return Err("Use letters and numbers".into());
+    }
+    let c = zbus::Connection::system()
+        .await
+        .map_err(|e| e.to_string())?;
+    let p = crate::dbus::proxy(
+        &c,
+        "org.freedesktop.hostname1",
+        "/org/freedesktop/hostname1",
+        "org.freedesktop.hostname1",
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    p.call::<_, _, ()>("SetStaticHostname", &(host.as_str(), true))
+        .await
+        .map_err(|e| {
+            log::warn!("rename {host}: {e}");
+            "Could not rename the computer".to_string()
+        })?;
+    let _ = p
+        .call::<_, _, ()>("SetPrettyHostname", &(name.as_str(), true))
+        .await;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
