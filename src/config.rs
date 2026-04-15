@@ -26,6 +26,8 @@ pub struct Config {
     pub weather_longitude: Option<f64>,
     /// Night light's warmth in kelvin (lower is warmer).
     pub night_light_temperature: u32,
+    /// Night light on by itself from sunset to sunrise (the weather's sun times).
+    pub night_light_schedule: bool,
     /// What the bar shows, where, and in which style.
     pub bar: BarConfig,
     /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
@@ -195,6 +197,7 @@ impl Default for Config {
             weather_latitude: None,
             weather_longitude: None,
             night_light_temperature: 4500,
+            night_light_schedule: false,
             bar: BarConfig::default(),
             modules: std::collections::BTreeMap::new(),
             clock: ClockConfig::default(),
