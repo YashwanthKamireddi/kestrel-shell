@@ -129,6 +129,7 @@ icons! {
     Usb => "usb", '\u{e1e0}',
     Eject => "eject", '\u{e8fb}',
     User => "user", '\u{f20b}',
+    Accessibility => "accessibility", '\u{e92c}',
     Shield => "shield", '\u{e9e0}',
     Shuffle => "shuffle", '\u{e043}',
     SkipBack => "skip-back", '\u{e045}',
