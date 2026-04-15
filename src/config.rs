@@ -28,6 +28,9 @@ pub struct Config {
     pub night_light_temperature: u32,
     /// Night light on by itself from sunset to sunrise (the weather's sun times).
     pub night_light_schedule: bool,
+    /// Do not disturb by itself between these times ("22:00" to "07:00"); off when unset.
+    pub quiet_from: Option<String>,
+    pub quiet_to: Option<String>,
     /// What the bar shows, where, and in which style.
     pub bar: BarConfig,
     /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
@@ -198,6 +201,8 @@ impl Default for Config {
             weather_longitude: None,
             night_light_temperature: 4500,
             night_light_schedule: false,
+            quiet_from: None,
+            quiet_to: None,
             bar: BarConfig::default(),
             modules: std::collections::BTreeMap::new(),
             clock: ClockConfig::default(),
