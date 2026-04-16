@@ -143,3 +143,4 @@ usb usb
 eject eject
 user account_circle
 accessibility accessibility_new
+crop screenshot_region

@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod calendar;
+pub mod capture;
 pub mod clipboard;
 pub mod control;
 pub mod emoji;
@@ -44,6 +45,8 @@ pub enum PanelKind {
     Files,
     /// The password prompt for administrator rights (kestrel's polkit agent).
     Auth,
+    /// Screenshots and recordings: region, window or screen, now or later.
+    Capture,
 }
 
 impl PanelKind {
@@ -56,6 +59,7 @@ impl PanelKind {
             // Notifications live in the control centre.
             "notifications" => Self::Control,
             "power" => Self::Power,
+            "capture" | "screenshot" => Self::Capture,
             "launcher" => Self::Launcher,
             "wallpaper" => Self::Wallpaper,
             "keys" | "cheatsheet" => Self::Keys,
@@ -97,6 +101,7 @@ impl PanelKind {
             Self::Media => media::WIDTH,
             Self::Calendar => 312.0,
             Self::Power => 232.0,
+            Self::Capture => capture::WIDTH,
             Self::Tray => 260.0,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
@@ -119,6 +124,7 @@ impl PanelKind {
 pub struct State {
     pub calendar: calendar::State,
     pub power: power::State,
+    pub capture: capture::State,
     pub control: control::State,
     pub media: media::State,
     pub tray: tray::State,
@@ -137,6 +143,7 @@ pub struct State {
 pub enum Message {
     Calendar(calendar::Message),
     Power(power::Message),
+    Capture(capture::Message),
     Control(control::Message),
     Media(media::Message),
     Notifications(notifications::Message),
@@ -209,7 +216,8 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         | PanelKind::Weather
         | PanelKind::Pods
         | PanelKind::Files
-        | PanelKind::Auth => {}
+        | PanelKind::Auth
+        | PanelKind::Capture => {}
     }
     Task::none()
 }
@@ -221,6 +229,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Task::none()
         }
         Message::Power(m) => power::update(app, m),
+        Message::Capture(m) => capture::update(app, m),
         Message::Control(m) => control::update(app, m),
         Message::Media(m) => media::update(app, m),
         Message::Notifications(m) => notifications::update(app, m),
@@ -241,6 +250,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Overview) => overview::key(app, k),
             Some(PanelKind::Control) => control::key(app, k),
             Some(PanelKind::Power) => power::key(app, k),
+            Some(PanelKind::Capture) => capture::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             _ => Task::none(),
@@ -356,6 +366,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
     match kind {
         PanelKind::Calendar => calendar::view(app, s),
         PanelKind::Power => power::view(app, s),
+        PanelKind::Capture => capture::view(app, s),
         PanelKind::Control => control::view(app, s),
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
