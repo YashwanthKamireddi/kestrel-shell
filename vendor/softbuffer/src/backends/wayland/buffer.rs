@@ -145,6 +145,10 @@ impl WaylandBuffer {
             );
             self.width = width;
             self.height = height;
+            // kestrel patch: a new buffer holds no earlier frame. Keeping the age made the
+            // renderer redraw only what changed, over garbage: flashes and tearing in any
+            // surface that changes size (a window being tiled or resized).
+            self.age = 0;
         }
     }
 

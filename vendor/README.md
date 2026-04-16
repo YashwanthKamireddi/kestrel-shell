@@ -36,7 +36,9 @@ pixel). Clipboard key moves: ~12 ms -> ~3.8 ms raster per frame. iced_tiny_skia 
 redrawn rectangles under `KESTREL_TRACE`.
 
 `softbuffer/` is MalpenZibo's softbuffer `wayland-argb` branch (MIT/Apache-2.0) with one kestrel
-patch: a third buffer, so drawing never waits for Hyprland to release the previous frame's.
+patch: a third buffer, so drawing never waits for Hyprland to release the previous frame's;
+and a resized buffer's age is reset (it held garbage while the renderer, trusting the age, redrew
+only the changed parts: flashes and tearing in resized/tiled windows, 2026-11-14).
 
 Measured 2026-11-13 in the rig (overview selection, control centre open/close): overlay frame
 time 8.4 ms -> 5.1 ms on average. Canvas drawings are also cached now (`ui::Memo`): an uncached
