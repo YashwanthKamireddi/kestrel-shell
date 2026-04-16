@@ -38,19 +38,23 @@ pub(crate) struct IcedSurface {
 #[derive(Default)]
 pub(crate) struct PendingCreations {
     surfaces: Vec<(SurfaceId, LayerShellSettings)>,
+    windows: Vec<(SurfaceId, crate::settings::WindowSettings)>,
     commands: Vec<LayerShellCommand>,
 }
 
 impl PendingCreations {
     pub(crate) fn clear(&mut self) {
         self.surfaces.clear();
+        self.windows.clear();
         self.commands.clear();
     }
 
     /// Hold `cmd` if it targets a surface still waiting to be created;
     /// otherwise hand it back.
     fn defer(&mut self, id: SurfaceId, cmd: LayerShellCommand) -> Option<LayerShellCommand> {
-        if self.surfaces.iter().any(|(pending, _)| *pending == id) {
+        if self.surfaces.iter().any(|(pending, _)| *pending == id)
+            || self.windows.iter().any(|(pending, _)| *pending == id)
+        {
             self.commands.push(cmd);
             None
         } else {
@@ -60,6 +64,7 @@ impl PendingCreations {
 }
 
 /// Apply a synchronous layer shell command (surface create/destroy, property changes).
+#[allow(clippy::too_many_lines)]
 pub(crate) fn apply_layer_shell_command(
     cmd: LayerShellCommand,
     state: &mut WaylandState,
@@ -78,6 +83,9 @@ pub(crate) fn apply_layer_shell_command(
         LayerShellCommand::NewSurface(id, settings) => {
             pending_creations.surfaces.push((id, settings));
         }
+        LayerShellCommand::NewWindow(id, settings) => {
+            pending_creations.windows.push((id, settings));
+        }
         LayerShellCommand::DestroySurface(id) => {
             state.closed_surfaces.push(id);
         }
@@ -85,16 +93,20 @@ pub(crate) fn apply_layer_shell_command(
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
             {
-                data.layer_surface.set_anchor(anchor.to_sctk());
-                data.layer_surface.wl_surface().commit();
+                if let Some(l) = data.role.layer() {
+                    l.set_anchor(anchor.to_sctk());
+                }
+                data.role.wl_surface().commit();
             }
         }
         LayerShellCommand::SetLayer(id, layer) => {
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
             {
-                data.layer_surface.set_layer(layer.to_sctk());
-                let wl_surf = data.layer_surface.wl_surface();
+                if let Some(l) = data.role.layer() {
+                    l.set_layer(layer.to_sctk());
+                }
+                let wl_surf = data.role.wl_surface();
                 // When hiding (Background), set empty input region so it
                 // doesn't intercept clicks meant for surfaces above it.
                 if layer == crate::settings::Layer::Background {
@@ -113,8 +125,10 @@ pub(crate) fn apply_layer_shell_command(
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
             {
-                data.layer_surface.set_exclusive_zone(zone);
-                data.layer_surface.wl_surface().commit();
+                if let Some(l) = data.role.layer() {
+                    l.set_exclusive_zone(zone);
+                }
+                data.role.wl_surface().commit();
             }
         }
         LayerShellCommand::SetKeyboardInteractivity(id, ki) => {
@@ -122,8 +136,10 @@ pub(crate) fn apply_layer_shell_command(
                 && let Some(data) = state.surfaces.get(wl)
             {
                 crate::ktrace!("keyboard {id:?}");
-                data.layer_surface.set_keyboard_interactivity(ki.to_sctk());
-                data.layer_surface.wl_surface().commit();
+                if let Some(l) = data.role.layer() {
+                    l.set_keyboard_interactivity(ki.to_sctk());
+                }
+                data.role.wl_surface().commit();
             }
         }
         LayerShellCommand::SetSize(id, (w, h)) => {
@@ -131,16 +147,20 @@ pub(crate) fn apply_layer_shell_command(
                 && let Some(data) = state.surfaces.get_mut(wl)
             {
                 crate::ktrace!("set_size {id:?} {w}x{h}");
-                data.layer_surface.set_size(w, h);
-                data.layer_surface.wl_surface().commit();
+                if let Some(l) = data.role.layer() {
+                    l.set_size(w, h);
+                }
+                data.role.wl_surface().commit();
             }
         }
         LayerShellCommand::SetMargin(id, (top, right, bottom, left)) => {
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
             {
-                data.layer_surface.set_margin(top, right, bottom, left);
-                data.layer_surface.wl_surface().commit();
+                if let Some(l) = data.role.layer() {
+                    l.set_margin(top, right, bottom, left);
+                }
+                data.role.wl_surface().commit();
             }
         }
         LayerShellCommand::SetInputRegion(id, rects) => {
@@ -148,7 +168,7 @@ pub(crate) fn apply_layer_shell_command(
                 && let Some(data) = state.surfaces.get(wl)
             {
                 crate::ktrace!("input_region {id:?} {:?}", rects.as_ref().map(Vec::len));
-                let wl_surf = data.layer_surface.wl_surface();
+                let wl_surf = data.role.wl_surface();
                 match rects {
                     None => {
                         wl_surf.set_input_region(None);
@@ -254,6 +274,23 @@ pub(crate) fn flush_pending_creations(
         let (layer, scale) =
             create_layer_surface(&wl.compositor, &wl.layer_shell, qh, &settings, wl);
         wl.register_surface(id, layer, scale);
+    }
+    while let Some((id, settings)) = pending.windows.pop() {
+        let Some(xdg) = wl.xdg_shell.as_ref() else {
+            log::warn!("no xdg-shell: window {id:?} not created");
+            continue;
+        };
+        let surface = wl.compositor.create_surface(qh);
+        let window = xdg.create_window(
+            surface,
+            smithay_client_toolkit::shell::xdg::window::WindowDecorations::RequestServer,
+            qh,
+        );
+        window.set_title(settings.title.clone());
+        window.set_app_id(settings.app_id.clone());
+        window.set_min_size(Some(settings.min_size));
+        window.commit();
+        wl.register_role(id, crate::state::Role::Window(window), 1, settings.size);
     }
     // Every held command's surface exists now, so none is deferred again.
     for cmd in std::mem::take(&mut pending.commands) {

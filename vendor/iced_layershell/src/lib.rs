@@ -25,11 +25,12 @@ pub use error::Error;
 pub use output_subscription::output_events;
 pub use settings::{
     Anchor, KeyboardInteractivity, Layer, LayerShellSettings, OutputEvent, OutputId, OutputInfo,
-    SurfaceId,
+    SurfaceId, WindowSettings,
 };
 pub use task_impl::{
-    InputRegionRect, destroy_layer_surface, new_layer_surface, set_anchor, set_exclusive_zone,
-    set_input_region, set_keyboard_interactivity, set_layer, set_margin, set_size,
+    InputRegionRect, destroy_layer_surface, new_layer_surface, new_window, set_anchor,
+    set_exclusive_zone, set_input_region, set_keyboard_interactivity, set_layer, set_margin,
+    set_size,
 };
 
 // === Full iced public API re-export ===

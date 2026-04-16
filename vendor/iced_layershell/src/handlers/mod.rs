@@ -19,3 +19,4 @@ pub mod output;
 pub mod pointer;
 pub mod seat;
 pub mod touch;
+mod window;

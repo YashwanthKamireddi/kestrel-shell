@@ -22,6 +22,8 @@ pub(crate) struct BlurRect {
 #[derive(Debug, Clone)]
 pub enum LayerShellCommand {
     NewSurface(SurfaceId, LayerShellSettings),
+    /// kestrel patch: an ordinary window (xdg-toplevel).
+    NewWindow(SurfaceId, crate::settings::WindowSettings),
     DestroySurface(SurfaceId),
     SetAnchor(SurfaceId, Anchor),
     SetLayer(SurfaceId, Layer),
@@ -38,7 +40,7 @@ impl LayerShellCommand {
     /// destruction, which don't need the surface to exist yet.
     pub(crate) fn property_target(&self) -> Option<SurfaceId> {
         match self {
-            Self::NewSurface(..) | Self::DestroySurface(_) => None,
+            Self::NewSurface(..) | Self::NewWindow(..) | Self::DestroySurface(_) => None,
             Self::SetAnchor(id, _)
             | Self::SetLayer(id, _)
             | Self::SetExclusiveZone(id, _)
@@ -190,6 +192,18 @@ pub fn new_layer_surface<M>(settings: LayerShellSettings) -> (SurfaceId, Task<M>
     (
         id,
         Task::LayerShell(LayerShellCommand::NewSurface(id, settings)),
+    )
+}
+
+/// kestrel patch: open an ordinary window. Returns its ID and a task; it is closed like a
+/// surface (`destroy_layer_surface`), and when the user closes it the app gets a
+/// `window::Event::CloseRequested` for it (the window is gone by then).
+#[must_use]
+pub fn new_window<M>(settings: crate::settings::WindowSettings) -> (SurfaceId, Task<M>) {
+    let id = SurfaceId::unique();
+    (
+        id,
+        Task::LayerShell(LayerShellCommand::NewWindow(id, settings)),
     )
 }
 

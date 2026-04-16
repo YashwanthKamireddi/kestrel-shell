@@ -315,3 +315,14 @@ mod tests {
         assert!(s.output.is_none());
     }
 }
+
+/// kestrel patch: an ordinary window's settings.
+#[derive(Debug, Clone)]
+pub struct WindowSettings {
+    pub title: String,
+    /// The app id compositors match rules on ("kestrel-settings").
+    pub app_id: String,
+    /// Size before the compositor chooses one (a floating window keeps it).
+    pub size: (u32, u32),
+    pub min_size: (u32, u32),
+}

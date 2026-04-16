@@ -19,7 +19,6 @@ use smithay_client_toolkit::data_device_manager::DataDeviceManagerState;
 use smithay_client_toolkit::output::OutputState;
 use smithay_client_toolkit::registry::RegistryState;
 use smithay_client_toolkit::seat::SeatState;
-use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::LayerShell;
 use wayland_client::Connection;
 use wayland_client::globals::registry_queue_init;
@@ -229,6 +228,8 @@ where
         &conn,
     );
     wl_state.cursor_shape_manager = cursor_shape_manager;
+    // kestrel patch: ordinary windows where the compositor has xdg-shell (every desktop one).
+    wl_state.xdg_shell = smithay_client_toolkit::shell::xdg::XdgShell::bind(&globals, &qh).ok();
     wl_state.bg_effect_manager = bg_effect_manager;
 
     // Create initial layer surface (SurfaceId::MAIN)
@@ -538,6 +539,16 @@ where
                 }
                 other => other,
             };
+            // kestrel patch: a surface already gone (a window the user closed) still has its
+            // last events heard by subscriptions (CloseRequested).
+            if !iced_surfaces.contains_key(&sid) {
+                runtime.broadcast(iced_futures::subscription::Event::Interaction {
+                    window: sid.into(),
+                    event,
+                    status: iced_core::event::Status::Ignored,
+                });
+                continue;
+            }
             surface_events.entry(sid).or_default().push(event);
         }
 
@@ -817,7 +828,7 @@ where
                     data.needs_rerender = true;
                 } else {
                     let bg = iced_core::Color::TRANSPARENT;
-                    let wl_surf = data.layer_surface.wl_surface();
+                    let wl_surf = data.role.wl_surface();
                     wl_surf.frame(&qh, wl_surf.clone());
                     data.frame_pending = true;
 
@@ -868,7 +879,7 @@ where
                                 if matches!(err, iced_graphics::compositor::SurfaceError::Lost) {
                                     match WaylandWindow::new(
                                         wl_state.display_ptr,
-                                        data.layer_surface.wl_surface(),
+                                        data.role.wl_surface(),
                                     ) {
                                         Some(window) => {
                                             iced_s.surface = compositor.create_surface(

@@ -29,10 +29,34 @@ use wayland_protocols::ext::background_effect::v1::client::{
 
 use crate::settings::{OutputEvent, OutputId, OutputInfo, SurfaceId};
 
+/// What a surface is to the compositor: a layer surface (bar, overlay) or, kestrel patch, an
+/// ordinary window (xdg-toplevel) that can be moved, tiled and closed like any app.
+pub(crate) enum Role {
+    Layer(LayerSurface),
+    Window(smithay_client_toolkit::shell::xdg::window::Window),
+}
+
+impl Role {
+    pub fn wl_surface(&self) -> &WlSurface {
+        match self {
+            Role::Layer(l) => l.wl_surface(),
+            Role::Window(w) => w.wl_surface(),
+        }
+    }
+    pub fn layer(&self) -> Option<&LayerSurface> {
+        match self {
+            Role::Layer(l) => Some(l),
+            Role::Window(_) => None,
+        }
+    }
+}
+
 /// Per-surface Wayland data.
 pub(crate) struct SurfaceData {
     pub id: SurfaceId,
-    pub layer_surface: LayerSurface,
+    pub role: Role,
+    /// A window's size before the compositor picks one (layer surfaces: unused).
+    pub default_size: (u32, u32),
     pub size: (u32, u32),
     pub scale_factor: i32,
     pub configured: bool,
@@ -61,6 +85,8 @@ pub(crate) struct WaylandState {
     pub registry: RegistryState,
     pub compositor: CompositorState,
     pub layer_shell: LayerShell,
+    /// xdg-shell, for ordinary windows (kestrel patch); None if the compositor has none.
+    pub xdg_shell: Option<smithay_client_toolkit::shell::xdg::XdgShell>,
     pub seat: SeatState,
     pub output: OutputState,
 
@@ -131,6 +157,7 @@ impl WaylandState {
             registry,
             compositor,
             layer_shell,
+            xdg_shell: None,
             seat,
             output,
             surfaces: HashMap::new(),
@@ -172,12 +199,24 @@ impl WaylandState {
         layer_surface: LayerSurface,
         scale_factor: i32,
     ) {
-        let wl_surface = layer_surface.wl_surface().clone();
+        self.register_role(id, Role::Layer(layer_surface), scale_factor, (0, 0));
+    }
+
+    /// Register a surface of any role (kestrel patch: windows too).
+    pub fn register_role(
+        &mut self,
+        id: SurfaceId,
+        role: Role,
+        scale_factor: i32,
+        default_size: (u32, u32),
+    ) {
+        let wl_surface = role.wl_surface().clone();
         self.surfaces.insert(
             wl_surface.clone(),
             SurfaceData {
                 id,
-                layer_surface,
+                role,
+                default_size,
                 size: (0, 0),
                 scale_factor,
                 configured: false,

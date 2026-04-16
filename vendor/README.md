@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with five
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with six
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -13,6 +13,10 @@ place every redraw passes), so input events and redraw retries no longer re-rast
 wallpaper; a compositor request (configure, scale, resize) always draws.
 4. `KESTREL_TRACE=1` prints every surface size request, configure, present and deferred frame
 with wall-clock times, for correlating flicker in a screen recording with what was committed.
+6. Ordinary windows (xdg-toplevel) beside layer surfaces: `new_window(WindowSettings)` opens
+one (title, app id, size), the compositor sizes it like any app, and closing it (Super+Q) removes
+it and sends `window::Event::CloseRequested` to subscriptions, even though the surface is gone.
+Used for Settings (2026-11-14). Surfaces carry a `Role` (Layer or Window).
 5. A surface whose `RedrawRequested` produced messages is not presented on that pass; the retry
 that follows (same loop, no frame of delay) draws it with them applied. Before, a panel opened at
 its remembered height for a frame and then jumped to the one it reported (`redo` in the trace).
