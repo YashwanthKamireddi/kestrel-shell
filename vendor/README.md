@@ -16,7 +16,8 @@ with wall-clock times, for correlating flicker in a screen recording with what w
 6. Ordinary windows (xdg-toplevel) beside layer surfaces: `new_window(WindowSettings)` opens
 one (title, app id, size), the compositor sizes it like any app, and closing it (Super+Q) removes
 it and sends `window::Event::CloseRequested` to subscriptions, even though the surface is gone.
-Used for Settings (2026-11-14). Surfaces carry a `Role` (Layer or Window).
+Used for Settings (2026-11-14). Surfaces carry a `Role` (Layer or Window). A surface whose
+size changes is laid out again even without a message (it kept its old layout: cut off, stale).
 5. A surface whose `RedrawRequested` produced messages is not presented on that pass; the retry
 that follows (same loop, no frame of delay) draws it with them applied. Before, a panel opened at
 its remembered height for a frame and then jumped to the one it reported (`redo` in the trace).

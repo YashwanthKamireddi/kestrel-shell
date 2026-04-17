@@ -469,6 +469,10 @@ where
         // resolving at each of those points would let them disagree.
         refresh_surface_scales(&mut surface_scales, scale_factor_fn, &user_state, &wl_state);
 
+        // kestrel patch: a surface whose size changed is laid out again (below), even with no
+        // message to process; it kept its old layout before (a resized window drew its old
+        // layout, cut off or stale).
+        let mut resized = false;
         for data in wl_state.surfaces.values() {
             if let Some(iced) = iced_surfaces.get_mut(&data.id)
                 && let Some(new_vp) = surface_viewport(data, &surface_scales)
@@ -489,6 +493,7 @@ where
                 iced.viewport = new_vp;
                 iced.needs_redraw = true;
                 iced.forced = true;
+                resized = true;
             }
         }
 
@@ -614,7 +619,7 @@ where
         }
 
         pending_creations.clear();
-        if !all_messages.is_empty() {
+        if !all_messages.is_empty() || resized {
             // Drop all UIs before mutating state (same as iced_winit)
             let caches: HashMap<SurfaceId, user_interface::Cache> =
                 ManuallyDrop::into_inner(user_interfaces)
