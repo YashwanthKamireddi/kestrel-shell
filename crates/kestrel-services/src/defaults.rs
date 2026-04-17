@@ -99,3 +99,61 @@ pub fn set(kind: &Kind, app: &str) -> Result<(), String> {
         Err(format!("Could not set the default for {}", kind.name))
     }
 }
+
+/// The command line that opens `arg` (a path or link; empty: just start the app) with the
+/// default app for `mime`, following its desktop file: field codes filled in, and a terminal
+/// app (Yazi, ranger) run in kitty. None when no default is set.
+pub fn command_for(mime: &str, arg: &str) -> Option<String> {
+    let id = current(mime)?;
+    let path = crate::apps::desktop_file(&id)?;
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut on = false;
+    let (mut exec, mut terminal) = (None, false);
+    for line in text.lines() {
+        let l = line.trim();
+        if l.starts_with('[') {
+            on = l == "[Desktop Entry]";
+            continue;
+        }
+        if !on {
+            continue;
+        }
+        if let Some(v) = l.strip_prefix("Exec=") {
+            exec.get_or_insert_with(|| v.to_string());
+        } else if l == "Terminal=true" {
+            terminal = true;
+        }
+    }
+    let quoted = if arg.is_empty() {
+        String::new()
+    } else {
+        format!("'{}'", arg.replace('\'', "'\\''"))
+    };
+    let mut cmd = String::new();
+    let exec = exec?;
+    let mut chars = exec.chars().peekable();
+    let mut used = false;
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            cmd.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('f' | 'F' | 'u' | 'U') => {
+                cmd += &quoted;
+                used = true;
+            }
+            Some('%') => cmd.push('%'),
+            _ => {}
+        }
+    }
+    if !used && !quoted.is_empty() {
+        cmd = format!("{cmd} {quoted}");
+    }
+    let cmd = cmd.split_whitespace().collect::<Vec<_>>().join(" ");
+    Some(if terminal {
+        format!("kitty -e {cmd}")
+    } else {
+        cmd
+    })
+}
