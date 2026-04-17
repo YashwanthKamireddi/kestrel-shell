@@ -5,6 +5,7 @@
 //! when it leaves) or the one Tab and the arrows reached; Enter or a click goes there. Nothing fades or glides.
 
 use super::Message as PanelMessage;
+use super::PanelKind;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{apps, hyprland, icons};
 use crate::theme::{self, Scheme, text};
@@ -27,6 +28,9 @@ const CAPTION_GAP: f32 = 8.0;
 pub struct State {
     /// Address of the selected window.
     selected: Option<String>,
+    /// Waiting to open (until its fresh pictures are in): its number, screen and place.
+    pending: Option<(u64, iced::OutputId, iced::Rectangle)>,
+    token: u64,
     /// Live pictures of the windows, by address, ready at their tile's size (kept between
     /// opens so the overview shows them at once; refreshed on each open, off the UI thread).
     previews: std::collections::HashMap<String, Ready>,
@@ -47,6 +51,8 @@ pub enum Message {
     Unhover(String),
     /// New pictures of windows that changed, from the live stream while open.
     Live(Vec<crate::services::previews::Frame>),
+    /// The pictures taken before opening (`prepare`): shown, then the overview opens.
+    Fresh(u64, Vec<crate::services::previews::Frame>),
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -59,9 +65,8 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
     // before you did anything read as a heavy border: design call).
     st.selected = None;
     Task::batch([
-        // Fresh pictures of every window, off the UI thread.
-        refresh(app),
-        // Positions change without an event (resizing); read them fresh.
+        // The pictures were taken just before it opened (`prepare`); the live stream keeps
+        // them moving. Positions change without an event (resizing): read them fresh.
         Task::perform(hyprland::snapshot(), |s| match s {
             Some(s) => AppMessage::Hypr(s),
             None => AppMessage::Batch(Vec::new()),
@@ -73,8 +78,24 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
 /// thread. Taken when the overview opens and in the background whenever the set of windows
 /// changes (so the first open has pictures, not icons); while it is open, `live_jobs` keeps
 /// each picture moving with its window.
-pub fn refresh(app: &App) -> Task<AppMessage> {
-    snapshot(live_jobs(app))
+/// Opening: every window's picture is taken first (all at once, about a frame), then the
+/// overview shows them, current, never an old picture changing in front of you. If the
+/// compositor is slow, it opens anyway after `WAIT` with what it has.
+pub fn prepare(app: &mut App, output: iced::OutputId, at: iced::Rectangle) -> Task<AppMessage> {
+    const WAIT: std::time::Duration = std::time::Duration::from_millis(90);
+    let st = &mut app.panels.overview;
+    st.token += 1;
+    let token = st.token;
+    st.pending = Some((token, output, at));
+    let jobs = live_jobs(app);
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || crate::services::previews::snapshot(&jobs, WAIT))
+                .await
+                .unwrap_or_default()
+        },
+        move |frames| msg(Message::Fresh(token, frames)),
+    )
 }
 
 /// Pictures for windows that have none at their tile's size yet (a window opened or was
@@ -99,9 +120,11 @@ fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Task<AppMessage> {
     }
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || crate::services::previews::snapshot(&jobs))
-                .await
-                .unwrap_or_default()
+            tokio::task::spawn_blocking(move || {
+                crate::services::previews::snapshot(&jobs, std::time::Duration::from_millis(250))
+            })
+            .await
+            .unwrap_or_default()
         },
         |v| msg(Message::Live(v)),
     )
@@ -208,6 +231,15 @@ fn focus(address: &str) -> Task<AppMessage> {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
+        Message::Fresh(token, frames) => {
+            let _ = update(app, Message::Live(frames));
+            if let Some((t, output, at)) = app.panels.overview.pending
+                && t == token
+            {
+                app.panels.overview.pending = None;
+                return app.open_panel(PanelKind::Overview, output, at);
+            }
+        }
         Message::Live(frames) => {
             let st = &mut app.panels.overview;
             for f in frames {
