@@ -264,6 +264,18 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
+    // Recording a shortcut's keys in Settings: the next combination pressed.
+    if settings::recording(&app.panels.settings) {
+        subs.push(iced::event::listen_with(|e, _status, _id| match e {
+            iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                ..
+            }) => settings::combo(&key, modifiers)
+                .map(|k| Message::Settings(settings::Message::Recorded(k))),
+            _ => None,
+        }));
+    }
     // The display settings' "keep?" countdown moves while it runs.
     if settings::display_countdown(&app.panels.settings).is_some() {
         subs.push(
