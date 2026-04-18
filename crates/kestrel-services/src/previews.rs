@@ -123,6 +123,11 @@ struct Slot {
     failed: bool,
     /// When the next picture may be asked for.
     next: std::time::Instant,
+    /// A fingerprint of the last picture sent (sampled pixels), to skip unchanged ones.
+    last: Option<u64>,
+    /// When the picture in flight was asked for (the next is due a frame after that, so the
+    /// compositor's own delay overlaps the wait instead of adding to it).
+    asked: std::time::Instant,
     /// Rounded-corner coverage for the job's size (0..=255 per pixel).
     mask: Vec<u8>,
 }
@@ -369,6 +374,26 @@ fn compose(src: &[u8], key: (wl_shm::Format, u32, u32, u32), job: &Job, mask: &[
     out
 }
 
+/// A fingerprint of a window's pixels: a 64 x 48 grid of samples, hashed (cheap: about three
+/// thousand reads of a buffer the compositor just wrote). Text scrolling, a cursor, video all
+/// change it; a still window keeps it.
+fn signature(src: &[u8], (_, w, h, stride): (wl_shm::Format, u32, u32, u32)) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (w, h).hash(&mut hasher);
+    for gy in 0..48u32 {
+        let y = (u64::from(gy) * u64::from(h.max(1)) / 48) as usize;
+        let row = y * stride as usize;
+        for gx in 0..64u32 {
+            let x = (u64::from(gx) * u64::from(w.max(1)) / 64) as usize;
+            if let Some(px) = src.get(row + x * 4..row + x * 4 + 4) {
+                px.hash(&mut hasher);
+            }
+        }
+    }
+    hasher.finish()
+}
+
 /// Fastest a window's picture is renewed.
 const FRAME: std::time::Duration = std::time::Duration::from_millis(33);
 
@@ -398,6 +423,8 @@ fn follow(jobs: Vec<Job>, tx: &futures::channel::mpsc::UnboundedSender<Vec<Frame
                 ready: false,
                 failed: false,
                 next: Instant::now(),
+                asked: Instant::now(),
+                last: None,
             })
         })
         .collect();
@@ -412,6 +439,7 @@ fn follow(jobs: Vec<Job>, tx: &futures::channel::mpsc::UnboundedSender<Vec<Frame
                 slot.offer = None;
                 slot.ready = false;
                 slot.failed = false;
+                slot.asked = now;
                 slot.frame = Some(manager.capture_toplevel(0, slot.handle, &qh, k));
             }
         }
@@ -448,16 +476,22 @@ fn follow(jobs: Vec<Job>, tx: &futures::channel::mpsc::UnboundedSender<Vec<Frame
                 if let (Some(b), Some(key)) = (&slot.buffer, slot.offer) {
                     // Safety: the mapping lives as long as `b`; the compositor finished writing.
                     let src = unsafe { std::slice::from_raw_parts(b.ptr as *const u8, b.size) };
-                    let rgba = compose(src, key, &slot.job, &slot.mask);
-                    batch.retain(|f| f.address != slot.job.address);
-                    batch.push(Frame {
-                        address: slot.job.address.clone(),
-                        width: slot.job.width.max(1),
-                        height: slot.job.height.max(1),
-                        rgba,
-                    });
+                    // Unchanged since the last picture (most windows, most of the time): nothing
+                    // is scaled, sent or redrawn.
+                    let sig = signature(src, key);
+                    if slot.last != Some(sig) {
+                        slot.last = Some(sig);
+                        let rgba = compose(src, key, &slot.job, &slot.mask);
+                        batch.retain(|f| f.address != slot.job.address);
+                        batch.push(Frame {
+                            address: slot.job.address.clone(),
+                            width: slot.job.width.max(1),
+                            height: slot.job.height.max(1),
+                            rgba,
+                        });
+                    }
                 }
-                slot.next = now + FRAME;
+                slot.next = slot.asked + FRAME;
             } else if slot.failed {
                 // Gone or not capturable right now: try again a little later.
                 slot.next = now + std::time::Duration::from_millis(500);

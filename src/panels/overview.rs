@@ -188,7 +188,9 @@ fn workspace_ids(app: &App) -> Vec<i32> {
     ids
 }
 
-/// Windows of a workspace in reading order: tiled top-left first, floating ones last.
+/// Windows of a workspace as they are seen: tiled top-left first, floating ones last; a
+/// fullscreen or maximized window covers the rest, so it is the only one (drawing the ones
+/// behind it over it cut it off).
 fn windows_on(app: &App, id: i32) -> Vec<&hyprland::Window> {
     let mut v: Vec<&hyprland::Window> = app
         .hypr
@@ -196,6 +198,13 @@ fn windows_on(app: &App, id: i32) -> Vec<&hyprland::Window> {
         .iter()
         .filter(|w| w.workspace == id)
         .collect();
+    if let Some(top) = v
+        .iter()
+        .filter(|w| w.fullscreen > 0)
+        .min_by_key(|w| (std::cmp::Reverse(w.fullscreen), w.focus))
+    {
+        return vec![*top];
+    }
     v.sort_by(|a, b| {
         (a.floating, a.y as i32 / 40, a.x as i32).cmp(&(b.floating, b.y as i32 / 40, b.x as i32))
     });
@@ -320,21 +329,43 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         .clone()
         .or_else(|| focused(app))
         .and_then(|a| list.iter().position(|(_, w)| w.address == a));
-    // The first key marks the window you are in; the next ones move from there.
+    // Every key moves, starting from the window you are in (the first press used to only mark
+    // it: a press that did nothing).
     let Some(cur) = cur else {
         app.panels.overview.selected = list.first().map(|(_, w)| w.address.clone());
         return Task::none();
     };
-    if app.panels.overview.selected.is_none() && !matches!(k, Key::Home | Key::End) {
-        app.panels.overview.selected = Some(list[cur].1.address.clone());
-        return Task::none();
-    }
     let n = list.len();
     let next = match k {
         Key::Right | Key::Tab => (cur + 1) % n,
         Key::Left | Key::BackTab => (cur + n - 1) % n,
         Key::Down | Key::Up => {
-            // The first window of the nearest card in that direction.
+            // First a window above or below in the same workspace (the nearest one that way),
+            // then the first window of the nearest card in that direction.
+            let (card_now, w) = list[cur];
+            let down = k == Key::Down;
+            let mid = w.x + w.w / 2.0;
+            let same = list
+                .iter()
+                .enumerate()
+                .filter(|(_, (c, o))| {
+                    *c == card_now
+                        && if down {
+                            o.y >= w.y + w.h - 1.0
+                        } else {
+                            o.y + o.h <= w.y + 1.0
+                        }
+                })
+                .min_by(|(_, (_, a)), (_, (_, b))| {
+                    let d =
+                        |o: &&hyprland::Window| (o.y - w.y).abs() + (o.x + o.w / 2.0 - mid).abs();
+                    d(a).total_cmp(&d(b))
+                })
+                .map(|(i, _)| i);
+            if let Some(i) = same {
+                app.panels.overview.selected = Some(list[i].1.address.clone());
+                return Task::none();
+            }
             let card = list[cur].0 as i64;
             let step = if k == Key::Down {
                 COLUMNS as i64
