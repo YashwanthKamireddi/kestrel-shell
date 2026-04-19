@@ -328,12 +328,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 }
                 grid = grid.push(r);
             }
-            scrollable(grid)
-                .height(Length::Fixed(3.0 * (THUMB_H + 6.0) + 2.0 * 10.0 + 4.0))
-                .direction(scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new().width(0).scroller_width(0),
-                ))
-                .into()
+            crate::ui::smooth(
+                scrollable(grid)
+                    .height(Length::Fixed(3.0 * (THUMB_H + 6.0) + 2.0 * 10.0 + 4.0))
+                    .direction(scrollable::Direction::Vertical(
+                        scrollable::Scrollbar::new().width(0).scroller_width(0),
+                    )),
+            )
+            .into()
         }
     };
     container(column![header, body].spacing(12))

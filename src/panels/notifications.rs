@@ -368,7 +368,7 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new().width(0).scroller_width(0),
         ));
-    column![header, container(list).max_height(380)]
+    column![header, container(crate::ui::smooth(list)).max_height(380)]
         .spacing(8)
         .into()
 }

@@ -82,11 +82,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     container(
         column![
             header,
-            scrollable(body).height(Length::Fixed(520.0)).direction(
+            crate::ui::smooth(scrollable(body).height(Length::Fixed(520.0)).direction(
                 scrollable::Direction::Vertical(
                     scrollable::Scrollbar::new().width(0).scroller_width(0),
                 )
-            ),
+            )),
         ]
         .spacing(12),
     )

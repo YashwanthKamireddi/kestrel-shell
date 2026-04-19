@@ -74,7 +74,9 @@ fn main() {
         "scroll" => {
             mv(num(1), num(2));
             let lines: f64 = a[3].parse().unwrap();
-            p.axis(t(), Axis::VerticalScroll, lines * 15.0);
+            // As a mouse wheel: its notches (discrete steps), not touchpad pixels.
+            p.axis_source(wayland_client::protocol::wl_pointer::AxisSource::Wheel);
+            p.axis_discrete(t(), Axis::VerticalScroll, lines * 15.0, lines as i32);
             p.frame();
         }
         _ => eprintln!("rig-pointer move X Y | click X Y [right] | drag X1 Y1 X2 Y2 | scroll X Y LINES"),

@@ -107,6 +107,7 @@ impl PointerHandler for WaylandState {
                             y: -vertical.absolute as f32,
                         }
                     };
+                    crate::ktrace!("axis {delta:?} to {surface_id:?}");
                     self.pending_events.push((
                         surface_id,
                         iced_core::Event::Mouse(iced_core::mouse::Event::WheelScrolled { delta }),
