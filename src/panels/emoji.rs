@@ -52,15 +52,43 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
     Task::Iced(iced::widget::focus(INPUT_ID.clone()))
 }
 
+/// The emoji (from the list) the installed emoji font can draw. Newer ones than the font
+/// (Twemoji lags Unicode) drew as empty cells; they are left out. Read once.
+fn drawable() -> &'static [(&'static str, &'static str)] {
+    static LIST: std::sync::LazyLock<Vec<(&'static str, &'static str)>> =
+        std::sync::LazyLock::new(|| {
+            let all = EMOJI.lines().filter_map(|l| l.split_once(' '));
+            let file = std::process::Command::new("fc-match")
+                .args(["-f", "%{file}", "Twemoji"])
+                .output()
+                .ok()
+                .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                .filter(|f| f.to_lowercase().contains("twemoji"));
+            let Some(data) = file.and_then(|f| std::fs::read(f).ok()) else {
+                return all.collect();
+            };
+            let Ok(face) = ttf_parser::Face::parse(&data, 0) else {
+                return all.collect();
+            };
+            // Every codepoint but joiners, variation selectors and tags must have a glyph.
+            all.filter(|(e, _)| {
+                e.chars()
+                    .filter(|c| !matches!(*c as u32, 0x200D | 0xFE0E | 0xFE0F | 0xE0020..=0xE007F))
+                    .all(|c| face.glyph_index(c).is_some())
+            })
+            .collect()
+        });
+    &LIST
+}
+
 /// (emoji, name) pairs to show: recent ones first when nothing is typed.
 fn shown(st: &State) -> Vec<(&str, &str)> {
-    let all = EMOJI.lines().filter_map(|l| l.split_once(' '));
+    let all = drawable().iter().copied();
     let q = st.query.trim().to_lowercase();
     if q.is_empty() {
         let name_of = |e: &str| {
-            EMOJI
-                .lines()
-                .filter_map(|l| l.split_once(' '))
+            drawable()
+                .iter()
                 .find(|(x, _)| *x == e)
                 .map_or("", |(_, n)| n)
         };
