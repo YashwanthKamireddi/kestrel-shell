@@ -20,14 +20,34 @@ pub const WIDTH: f32 = 4.0 * (THUMB_W + 6.0) + 3.0 * 10.0 + 28.0;
 pub struct State {
     /// (original, thumbnail handle), kept between opens so the picker shows them at once.
     items: Option<Vec<(PathBuf, image::Handle)>>,
-    /// The tile the arrow keys are on.
+    /// The one tile marked: under the pointer, or where the arrow keys moved (one ring, never
+    /// two).
     sel: Option<usize>,
+    /// The folder as last read: each file with its modification time. A re-read that finds the
+    /// same files changes nothing (it used to redecode and replace every picture on each open).
+    stamps: Vec<(PathBuf, u64)>,
+    /// How far the grid is scrolled (to bring a key-marked row into view only when needed).
+    offset: f32,
 }
+
+static GRID_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("wallpaper-grid"));
+
+/// The grid's visible height (three rows).
+const VIEW_H: f32 = 3.0 * (THUMB_H + 6.0) + 2.0 * 10.0 + 4.0;
+/// One row's step.
+const ROW_STEP: f32 = THUMB_H + 6.0 + 10.0;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    /// The folder's pictures with their thumbnails, made and rounded off the drawing thread.
-    Loaded(Vec<(PathBuf, image::Handle)>),
+    /// The folder as it is now (files and times), to compare with what is shown.
+    Listed(Vec<(PathBuf, u64)>),
+    /// Thumbnails of the files that were new or changed, made and rounded off the drawing
+    /// thread, with the folder's full order.
+    Loaded(Vec<(PathBuf, u64)>, Vec<(PathBuf, image::Handle)>),
+    /// The pointer came onto a tile.
+    Hover(usize),
+    Scrolled(f32),
     /// A random one other than the current.
     Shuffle,
     Set(PathBuf),
@@ -90,9 +110,18 @@ fn thumbnail(src: &Path) -> Option<PathBuf> {
     Some(out)
 }
 
-async fn load(dir: PathBuf) -> Vec<(PathBuf, image::Handle)> {
+fn stamp(p: &Path) -> u64 {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs())
+}
+
+/// The folder's pictures and their modification times, sorted (cheap: no image is read).
+async fn list(dir: PathBuf) -> Vec<(PathBuf, u64)> {
     tokio::task::spawn_blocking(move || {
-        let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        let mut files: Vec<(PathBuf, u64)> = std::fs::read_dir(&dir)
             .map(|rd| {
                 rd.flatten()
                     .map(|e| e.path())
@@ -104,16 +133,28 @@ async fn load(dir: PathBuf) -> Vec<(PathBuf, image::Handle)> {
                             )
                         })
                     })
+                    .map(|p| {
+                        let t = stamp(&p);
+                        (p, t)
+                    })
                     .collect()
             })
             .unwrap_or_default();
         files.sort();
+        files
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// Thumbnails for `files`, decoded and rounded off the drawing thread (done on it, the picker
+/// stuttered as it opened).
+async fn thumbs(files: Vec<PathBuf>) -> Vec<(PathBuf, image::Handle)> {
+    tokio::task::spawn_blocking(move || {
         let out = files
             .into_iter()
             .filter_map(|f| {
                 let t = thumbnail(&f)?;
-                // Decoded and rounded here, not when the list arrives: done on the drawing
-                // thread it made the picker stutter as it opened.
                 let img = ::image::ImageReader::open(&t)
                     .ok()?
                     .with_guessed_format()
@@ -137,6 +178,29 @@ async fn load(dir: PathBuf) -> Vec<(PathBuf, image::Handle)> {
     .unwrap_or_default()
 }
 
+/// Brings the marked tile's row into view (keys move past the three rows shown).
+fn reveal(app: &App) -> Task<AppMessage> {
+    let Some(i) = app.panels.wallpaper.sel else {
+        return Task::none();
+    };
+    let row = (i / COLS) as f32;
+    let top = row * ROW_STEP;
+    // Only as far as needed: the row just inside the top or bottom edge.
+    let y = (top - (VIEW_H - (THUMB_H + 6.0))).max(0.0);
+    let off = app.panels.wallpaper.offset;
+    let to = if top < off {
+        top
+    } else if top + THUMB_H + 6.0 > off + VIEW_H {
+        y
+    } else {
+        return Task::none();
+    };
+    Task::Iced(iced::widget::scroll_to(
+        GRID_ID.clone(),
+        iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: to },
+    ))
+}
+
 pub fn open(app: &mut App) -> Task<AppMessage> {
     // The kept thumbnails show at once; the folder is read again behind them.
     let current = app.config.wallpaper.as_deref().map(config::expand);
@@ -146,7 +210,15 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
             .position(|(p, _)| Some(p.as_path()) == current.as_deref())
     });
     let dir = folder(app);
-    Task::perform(load(dir), |v| msg(Message::Loaded(v)))
+    Task::batch([
+        Task::perform(list(dir), |v| msg(Message::Listed(v))),
+        // Opens on the row of the current wallpaper (from the top: the grid's own scroll may
+        // not be what was last heard).
+        {
+            app.panels.wallpaper.offset = f32::MAX;
+            reveal(app)
+        },
+    ])
 }
 
 /// Arrows move over the tiles, Enter sets the one they are on.
@@ -156,8 +228,18 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
     if n == 0 {
         return Task::none();
     }
+    let current = app.config.wallpaper.as_deref().map(config::expand);
     let st = &mut app.panels.wallpaper;
-    let at = st.sel.unwrap_or(0) as i64;
+    // Keys start from the current wallpaper when nothing is marked.
+    let at = st
+        .sel
+        .or_else(|| {
+            st.items
+                .as_ref()?
+                .iter()
+                .position(|(p, _)| Some(p.as_path()) == current.as_deref())
+        })
+        .unwrap_or(0) as i64;
     let to = match k {
         Key::Left => at - 1,
         Key::Right | Key::Tab => at + 1,
@@ -180,13 +262,49 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         _ => return Task::none(),
     };
     st.sel = Some(to.clamp(0, n as i64 - 1) as usize);
-    Task::none()
+    reveal(app)
 }
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
-        Message::Loaded(v) => {
-            app.panels.wallpaper.items = Some(v);
+        Message::Listed(now) => {
+            let st = &mut app.panels.wallpaper;
+            if st.items.is_some() && now == st.stamps {
+                return Task::none();
+            }
+            // Only new or changed files are decoded; the rest keep their pictures.
+            let need: Vec<PathBuf> = now
+                .iter()
+                .filter(|f| !st.stamps.contains(f))
+                .map(|(p, _)| p.clone())
+                .collect();
+            Task::perform(thumbs(need), move |made| {
+                msg(Message::Loaded(now.clone(), made))
+            })
+        }
+        Message::Loaded(now, made) => {
+            let st = &mut app.panels.wallpaper;
+            let mut have: std::collections::HashMap<PathBuf, image::Handle> = st
+                .items
+                .take()
+                .unwrap_or_default()
+                .into_iter()
+                .chain(made)
+                .collect();
+            st.items = Some(
+                now.iter()
+                    .filter_map(|(p, _)| have.remove(p).map(|h| (p.clone(), h)))
+                    .collect(),
+            );
+            st.stamps = now;
+            Task::none()
+        }
+        Message::Scrolled(y) => {
+            app.panels.wallpaper.offset = y;
+            Task::none()
+        }
+        Message::Hover(i) => {
+            app.panels.wallpaper.sel = Some(i);
             Task::none()
         }
         Message::Shuffle => {
@@ -272,15 +390,16 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 let mut r = row![].spacing(10);
                 for (ti, (path, thumb)) in chunk.iter().enumerate() {
                     let on = current.as_deref() == Some(path.as_path());
-                    let keyed = sel == Some(ci * COLS + ti);
+                    let i = ci * COLS + ti;
+                    let marked = sel == Some(i);
                     let picture = iced::widget::image(thumb.clone())
                         .width(THUMB_W)
                         .height(THUMB_H)
                         .opacity(s.opacity);
-                    // The current one: a white ring (the padding) and a check in its corner.
-                    let tile: Element<'_, AppMessage> = if on {
-                        iced::widget::stack![
-                            picture,
+                    let mut tile = iced::widget::stack![picture];
+                    // The current one: a check in its corner.
+                    if on {
+                        tile = tile.push(
                             container(
                                 container(ui::icon(Icon::Check, 13.0, s.base))
                                     .center(20)
@@ -288,41 +407,40 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                                         background: Some(s.ink.into()),
                                         border: iced::Border::default().rounded(10),
                                         ..container::Style::default()
-                                    })
+                                    }),
                             )
                             .width(THUMB_W)
                             .height(THUMB_H)
                             .padding(7)
                             .align_x(Alignment::End)
                             .align_y(Alignment::Start),
-                        ]
-                        .into()
-                    } else {
-                        picture.into()
-                    };
+                        );
+                    }
+                    // One ring: the tile under the pointer or the keys (the current one has
+                    // its check). Drawn over the picture, at once.
+                    if marked || on {
+                        let ring = if marked { 0.9 } else { 0.5 };
+                        tile = tile.push(
+                            container(iced::widget::Space::new())
+                                .width(THUMB_W)
+                                .height(THUMB_H)
+                                .style(move |_| container::Style {
+                                    border: iced::Border {
+                                        color: s.ink.scale_alpha(ring * s.opacity),
+                                        width: 2.0,
+                                        radius: (size::ROW_RADIUS - 3.0).into(),
+                                    },
+                                    ..container::Style::default()
+                                }),
+                        );
+                    }
                     r = r.push(
                         control(tile)
                             .padding(3)
                             .radius(size::ROW_RADIUS)
-                            .colors(
-                                if on {
-                                    s.ink
-                                } else if keyed {
-                                    s.ink.scale_alpha(0.4 * s.opacity)
-                                } else {
-                                    Color::TRANSPARENT
-                                },
-                                if on {
-                                    s.ink
-                                } else {
-                                    s.ink.scale_alpha(0.22 * s.opacity)
-                                },
-                                if on {
-                                    s.ink
-                                } else {
-                                    s.ink.scale_alpha(0.3 * s.opacity)
-                                },
-                            )
+                            .colors(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT)
+                            .no_press_scale()
+                            .on_enter(msg(Message::Hover(i)))
                             .on_press(msg(Message::Set(path.clone()))),
                     );
                 }
@@ -330,7 +448,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             }
             crate::ui::smooth(
                 scrollable(grid)
-                    .height(Length::Fixed(3.0 * (THUMB_H + 6.0) + 2.0 * 10.0 + 4.0))
+                    .id(GRID_ID.clone())
+                    .on_scroll(|v| msg(Message::Scrolled(v.absolute_offset().y)))
+                    .height(Length::Fixed(VIEW_H))
                     .direction(scrollable::Direction::Vertical(
                         scrollable::Scrollbar::new().width(0).scroller_width(0),
                     )),
