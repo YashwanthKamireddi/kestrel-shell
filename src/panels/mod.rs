@@ -253,6 +253,19 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Capture) => capture::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
+            // The calendar: months back and forth, Home for today.
+            Some(PanelKind::Calendar | PanelKind::Island) => {
+                let m = match k {
+                    Key::Left | Key::PageUp | Key::Up => Some(calendar::Message::Shift(-1)),
+                    Key::Right | Key::PageDown | Key::Down => Some(calendar::Message::Shift(1)),
+                    Key::Home => Some(calendar::Message::Today),
+                    _ => None,
+                };
+                if let Some(m) = m {
+                    app.panels.calendar.update(m);
+                }
+                Task::none()
+            }
             _ => Task::none(),
         },
         Message::TrayActivate(item) => {
