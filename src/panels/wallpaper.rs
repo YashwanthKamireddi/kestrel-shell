@@ -201,6 +201,12 @@ fn reveal(app: &App) -> Task<AppMessage> {
     ))
 }
 
+/// Read the folder and make its thumbnails in the background when the shell starts, so the
+/// first open shows them at once (it was empty for a second while 96 pictures decoded).
+pub fn preload(app: &App) -> Task<AppMessage> {
+    Task::perform(list(folder(app)), |v| msg(Message::Listed(v)))
+}
+
 pub fn open(app: &mut App) -> Task<AppMessage> {
     // The kept thumbnails show at once; the folder is read again behind them.
     let current = app.config.wallpaper.as_deref().map(config::expand);

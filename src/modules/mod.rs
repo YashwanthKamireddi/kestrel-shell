@@ -365,6 +365,8 @@ fn tray<'a>(
     if hidden > 0 {
         let out = app.tray_expanded;
         items.push(
+            // A full bubble like the icons beside it, in the same white and size (a thin,
+            // dimmed half-width arrow read as something broken).
             ui::control(
                 iced::widget::container(icon(
                     if out {
@@ -372,12 +374,11 @@ fn tray<'a>(
                     } else {
                         Icon::ChevronLeft
                     },
-                    14.0,
-                    s.ink_dim,
+                    size::ICON,
+                    s.ink,
                 ))
                 .center(size::CONTROL),
             )
-            .width(22)
             .radius(size::CONTROL / 2.0)
             .bar(s, false)
             .on_press(Message::TrayExpand)
@@ -482,11 +483,12 @@ fn updates<'a>(
     // Pending updates: click to run them in a terminal.
     if app.updates.total() > 0 {
         let u = app.updates;
+        // A bubble with a package, white like the other status icons, its count beside it.
         items.push(
             ui::control(
                 row![
-                    icon(Icon::ArrowDownToLine, 14.0, s.warn),
-                    label(u.total().to_string(), text::SMALL, s.warn),
+                    icon(Icon::Cube, size::ICON, s.ink),
+                    label(u.total().to_string(), text::SMALL, s.ink),
                 ]
                 .spacing(5)
                 .align_y(Alignment::Center),

@@ -44,6 +44,9 @@ fn chip<'a>(s: Scheme, k: &str) -> Element<'a, AppMessage> {
         .into()
 }
 
+/// The list's most height before it scrolls (a 1080 p screen less the bar and margins).
+const MAX_LIST_H: f32 = 900.0;
+
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
     // Not read yet, or no bindings found: the title and a quiet icon, not 520 px of nothing.
@@ -63,7 +66,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             let keys = row(b.keys.iter().map(|k| chip(s, k))).spacing(3);
             g = g.push(
                 row![
-                    label(crate::ui::ellipsize(&b.what, 28), text::SMALL, s.ink_dim)
+                    label(crate::ui::ellipsize(&b.what, 44), text::SMALL, s.ink_dim)
                         .width(Length::Fill),
                     keys,
                 ]
@@ -82,11 +85,16 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     container(
         column![
             header,
-            crate::ui::smooth(scrollable(body).height(Length::Fixed(520.0)).direction(
-                scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new().width(0).scroller_width(0),
-                )
-            )),
+            // As tall as all the shortcuts (a fixed box hid the rest below with nothing to say
+            // so); it scrolls only when they don't fit on the screen.
+            container(crate::ui::smooth(
+                scrollable(body)
+                    .height(Length::Shrink)
+                    .direction(scrollable::Direction::Vertical(
+                        scrollable::Scrollbar::new().width(0).scroller_width(0),
+                    ))
+            ))
+            .max_height(MAX_LIST_H),
         ]
         .spacing(12),
     )

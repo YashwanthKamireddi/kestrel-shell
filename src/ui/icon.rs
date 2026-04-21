@@ -128,6 +128,7 @@ icons! {
     Plane => "plane", '\u{e539}',
     Usb => "usb", '\u{e1e0}',
     Crop => "crop", '\u{f7d2}',
+    Cube => "cube", '\u{f720}',
     Eject => "eject", '\u{e8fb}',
     User => "user", '\u{f20b}',
     Accessibility => "accessibility", '\u{e92c}',
