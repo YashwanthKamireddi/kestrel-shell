@@ -111,7 +111,7 @@ pub const MODULES: &[Info] = &[
     Info { id: "clock", home: Home::Center, setting: None, options: &[] },
     Info { id: "weather", home: Home::Center, setting: Some("Weather"), options: &[UNITS] },
     Info { id: "airpods", home: Home::Center, setting: Some("AirPods battery circle"), options: &[] },
-    Info { id: "tray", home: Home::Right, setting: Some("Tray icons"), options: &[] },
+    Info { id: "tray", home: Home::Right, setting: Some("Tray icons in the bar"), options: &[] },
     Info { id: "system", home: Home::Right, setting: Some("CPU and memory"), options: &[] },
     Info { id: "updates", home: Home::Right, setting: Some("Pending updates"), options: &[] },
     Info { id: "privacy", home: Home::Right, setting: Some("Microphone and screen in use"), options: &[] },
