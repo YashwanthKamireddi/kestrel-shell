@@ -142,9 +142,19 @@ fn run(out: &futures::channel::mpsc::UnboundedSender<Bands>) -> Option<()> {
 }
 
 /// The four bands, about 30 readings a second, while the stream is polled.
+/// The newest bands, for the frame clock to read (no message per reading: each one ran the
+/// shell's whole update, a third of the visualiser's cost).
+static LATEST: std::sync::Mutex<Bands> = std::sync::Mutex::new([0.0; 4]);
+
+/// The newest reading.
+pub fn latest() -> Bands {
+    LATEST.lock().map(|b| *b).unwrap_or_default()
+}
+
+/// Listens while polled, keeping `latest()` current; yields nothing.
 pub fn stream() -> impl Stream<Item = Bands> {
-    crate::stream::channel(4, async |mut out| {
-        use futures::{SinkExt, StreamExt};
+    crate::stream::channel(4, async |_out| {
+        use futures::StreamExt;
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let spawned = std::thread::Builder::new()
             .name("kestrel-level".into())
@@ -154,9 +164,10 @@ pub fn stream() -> impl Stream<Item = Bands> {
         if spawned.is_err() {
             return;
         }
+        // Dropping rx (the stream no longer polled) makes the thread's next send fail: it stops.
         while let Some(v) = rx.next().await {
-            if out.send(v).await.is_err() {
-                return; // Dropping rx makes the thread's next send fail, and it stops.
+            if let Ok(mut b) = LATEST.lock() {
+                *b = v;
             }
         }
     })
