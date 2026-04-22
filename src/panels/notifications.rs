@@ -194,15 +194,64 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     }
 }
 
+/// The picture's size on the card's right (a screenshot is wider, as screens are).
+fn picture_size(n: &Notification) -> (f32, f32) {
+    if n.app == "kestrel" {
+        (72.0, 44.0)
+    } else {
+        (44.0, 44.0)
+    }
+}
+
 fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
+    let (w, h) = picture_size(n);
     match n.image.as_ref()? {
         // Decoded first: an app's unreadable file must never reach the renderer.
         Image::Path(p) => {
-            let h = ui::rounded_file(std::path::Path::new(p), 40.0, 40.0, 8.0)?;
-            Some(image(h).width(40.0).height(40.0).into())
+            let handle = ui::rounded_file(std::path::Path::new(p), w, h, 8.0)?;
+            Some(image(handle).width(w).height(h).into())
         }
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), 40.0, 40.0, 8.0)),
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), w, h, 8.0)),
     }
+}
+
+/// `text` cut to at most `lines` lines of `width` at `size` (wrapping by word), with an
+/// ellipsis when cut.
+fn lines_of(text: &str, size: f32, width: f32, lines: usize) -> String {
+    let per = (width / (size * 0.55)).floor().max(8.0) as usize;
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut cut = false;
+    for (i, w) in words.iter().enumerate() {
+        let next = if cur.is_empty() {
+            w.len()
+        } else {
+            cur.len() + 1 + w.len()
+        };
+        if next > per && !cur.is_empty() {
+            out.push(std::mem::take(&mut cur));
+            if out.len() == lines {
+                cut = i < words.len();
+                break;
+            }
+        }
+        if !cur.is_empty() {
+            cur.push(' ');
+        }
+        cur.push_str(w);
+    }
+    if !cur.is_empty() && out.len() < lines {
+        out.push(cur);
+    }
+    let mut s = out.join(" ");
+    if cut || s.chars().count() > per * lines {
+        s = ui::ellipsize(&s, per * lines);
+        if !s.ends_with('…') {
+            s.push('…');
+        }
+    }
+    s
 }
 
 /// One notification. In the list it is a card of its own; as a banner (`boxed` false) the
@@ -211,27 +260,28 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
     // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
     // one quiet line, the title, then the message wrapped over up to four lines.
     // kestrel's own entries (a screenshot, a recording) need no app line: the title says it.
+    // One layout for every notification (screenshots included): the app's icon; beside it
+    // the app and when on one quiet line with the close button, the title (up to two lines),
+    // the message (up to three); a picture, if any, on the right at a fixed size; actions under.
+    // Every piece lives in a text column of a known width, so nothing runs under the picture.
     let own = n.app == "kestrel";
+    let pic = picture(n);
+    // The card's inner width: the control centre's list or a banner, both ~368 px wide.
+    const INNER: f32 = 368.0 - 24.0;
+    let text_w = INNER - 32.0 - 12.0 - pic.as_ref().map_or(0.0, |_| picture_size(n).0 + 12.0);
     let top = row![
-        // kestrel's own: the title on this line (no app name, no empty line).
-        if own {
-            label_w(
-                ui::ellipsize(&n.summary, 40),
-                text::BODY,
-                s.ink,
-                theme::SEMIBOLD,
-            )
-        } else {
-            label_w(
-                ui::ellipsize(&n.app, 28),
+        label_w(
+            ui::fit(
+                if own { "kestrel" } else { &n.app },
                 text::CAPTION,
-                s.ink_dim,
-                theme::MEDIUM,
-            )
-        },
+                text_w - 70.0
+            ),
+            text::CAPTION,
+            s.ink_dim,
+            theme::MEDIUM,
+        ),
         Space::new().width(Length::Fill),
         label(ago(n.time), text::CAPTION, s.ink_faint),
-        // A real button: a soft round fill, big enough to hit (it was a bare 13 px cross).
         control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
             .radius(10.0)
             .colors(
@@ -243,39 +293,45 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
     ]
     .spacing(6)
     .align_y(Alignment::Center);
-
-    let mut words = column![].spacing(2).width(Length::Fill);
-    if !own {
-        words = words.push(label_w(
-            ui::ellipsize(&n.summary, 60),
+    let wrapped = |t: String, size: f32, color: Color, bold: bool| {
+        iced::widget::text(t)
+            .size(size)
+            .color(color)
+            .font(if bold {
+                iced::Font {
+                    weight: theme::SEMIBOLD,
+                    ..theme::FONT
+                }
+            } else {
+                theme::FONT
+            })
+            .line_height(iced::widget::text::LineHeight::Relative(1.3))
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+            .width(Length::Fill)
+    };
+    let mut words = column![].spacing(2).width(text_w);
+    if !n.summary.trim().is_empty() {
+        words = words.push(wrapped(
+            lines_of(n.summary.trim(), text::BODY, text_w, 2),
             text::BODY,
             s.ink,
-            theme::SEMIBOLD,
+            true,
         ));
     }
-    if !n.body.is_empty() {
-        words = words.push(
-            // Up to four lines of it, wrapped: enough to read without opening the app.
-            iced::widget::text(ui::ellipsize(
-                &n.body.lines().take(4).collect::<Vec<_>>().join("\n"),
-                320,
-            ))
-            .size(text::SMALL)
-            .line_height(iced::widget::text::LineHeight::Relative(1.35))
-            .color(s.ink_dim)
-            .font(theme::FONT)
-            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
-        );
+    let body_text = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
+    if !body_text.is_empty() {
+        words = words.push(wrapped(
+            lines_of(&body_text, text::SMALL, text_w, 3),
+            text::SMALL,
+            s.ink_dim,
+            false,
+        ));
     }
-    // The picture beside the words, under the close button (not past it).
-    let mut main = row![words].spacing(10).align_y(Alignment::Start);
-    // (kestrel's own pictures lead the card instead.)
-    if !own && let Some(pic) = picture(n) {
-        main = main.push(pic);
+    let mut main = row![words].spacing(12).align_y(Alignment::Start);
+    if let Some(p) = pic {
+        main = main.push(p);
     }
-    // Clear room under the top line, so the close button and the picture never touch.
-    let mut texts = column![top, main].spacing(6).width(Length::Fill);
-    // Actions: small pills under the words, as wide as their names.
+    let mut texts = column![top, main].spacing(4).width(Length::Fill);
     let actions: Vec<_> = n
         .actions
         .iter()
@@ -287,7 +343,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             container(
                 row(actions.into_iter().map(|(k, l)| {
                     control(label_w(
-                        ui::ellipsize(l, 24),
+                        ui::ellipsize(l, 20),
                         text::SMALL,
                         s.ink,
                         theme::MEDIUM,
@@ -299,23 +355,14 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
                 .spacing(6),
             )
             .padding(iced::Padding {
-                top: 8.0,
+                top: 6.0,
                 ..iced::Padding::ZERO
             }),
         );
     }
-    // A screenshot's card leads with the picture itself (not a camera icon beside a small
-    // copy); everything else with its app's icon.
-    let lead: Element<'a, AppMessage> = match (own, n.image.as_ref()) {
-        (true, Some(Image::Path(p))) => {
-            match ui::rounded_file(std::path::Path::new(p), 88.0, 56.0, 8.0) {
-                Some(h) => image(h).width(88.0).height(56.0).into(),
-                None => app_icon(s, n),
-            }
-        }
-        _ => app_icon(s, n),
-    };
-    let body = row![lead, texts].spacing(12).align_y(Alignment::Start);
+    let body = row![app_icon(s, n), texts]
+        .spacing(12)
+        .align_y(Alignment::Start);
     let col = column![body];
     // What a click on the card does: the app's default action, or for kestrel's own entries
     // (a recording, a picture) opening it.
