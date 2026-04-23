@@ -648,19 +648,26 @@ pub fn temperature_tint(c: f32) -> Color {
 
 /// An image file shown at `w` × `h` with rounded corners (see `rounded_cover`), decoded once
 /// per file and size.
+type RoundedKey = (std::path::PathBuf, u32, u32, u32);
+static ROUNDED: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<RoundedKey, Option<iced::widget::image::Handle>>>,
+> = std::sync::LazyLock::new(Default::default);
+
+/// Forgets the pictures made from `path` (the file changed under the same name).
+pub fn forget_picture(path: &std::path::Path) {
+    if let Ok(mut c) = ROUNDED.lock() {
+        c.retain(|(p, ..), _| p != path);
+    }
+}
+
 pub fn rounded_file(
     path: &std::path::Path,
     w: f32,
     h: f32,
     radius: f32,
 ) -> Option<iced::widget::image::Handle> {
-    use std::collections::HashMap;
-    use std::sync::{LazyLock, Mutex};
-    type Key = (std::path::PathBuf, u32, u32, u32);
-    static CACHE: LazyLock<Mutex<HashMap<Key, Option<iced::widget::image::Handle>>>> =
-        LazyLock::new(Default::default);
     let key = (path.to_path_buf(), w as u32, h as u32, radius as u32);
-    if let Some(hit) = CACHE.lock().ok()?.get(&key) {
+    if let Some(hit) = ROUNDED.lock().ok()?.get(&key) {
         return hit.clone();
     }
     let made = ::image::ImageReader::open(path)
@@ -672,7 +679,7 @@ pub fn rounded_file(
             let r = rounded_cover(&img.into_rgba8(), w, h, radius);
             iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
         });
-    let mut cache = CACHE.lock().ok()?;
+    let mut cache = ROUNDED.lock().ok()?;
     // Capped by size: ~24 MB of pictures at most, then it starts over.
     let bytes: u64 = cache
         .iter()

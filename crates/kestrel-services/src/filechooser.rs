@@ -52,6 +52,34 @@ static NEXT: AtomicU64 = AtomicU64::new(1);
 static WAITING: LazyLock<Mutex<HashMap<u64, oneshot::Sender<Answer>>>> =
     LazyLock::new(Default::default);
 
+/// A request from the shell itself (a picture for the account): the same dialog apps get,
+/// answered here instead of over the portal.
+pub fn local(
+    title: &str,
+    filter: Option<Filter>,
+    folder: Option<PathBuf>,
+) -> (Request, oneshot::Receiver<Answer>) {
+    let id = NEXT.fetch_add(1, Ordering::Relaxed);
+    let (tx, rx) = oneshot::channel();
+    if let Ok(mut w) = WAITING.lock() {
+        w.insert(id, tx);
+    }
+    (
+        Request {
+            id,
+            save: false,
+            title: title.to_string(),
+            multiple: false,
+            directory: false,
+            filters: filter.into_iter().collect(),
+            name: String::new(),
+            folder,
+            accept: String::new(),
+        },
+        rx,
+    )
+}
+
 /// Answers request `id` (the app waiting on it gets the files, or a cancel).
 pub fn answer(id: u64, a: Answer) {
     if let Some(tx) = WAITING.lock().ok().and_then(|mut w| w.remove(&id)) {
