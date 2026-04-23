@@ -194,10 +194,25 @@ pub fn present(
         surface.layer_stack.push_front(renderer.layers().to_vec());
         surface.background_color = background_color;
 
-        let damage = damage::group(
-            damage,
-            Rectangle::with_size(viewport.logical_size()),
-        );
+        // kestrel patch: each damaged area grown by a pixel on every side (kept on the surface).
+        // A shape at a fractional position anti-aliases one pixel past its bounds; repainting
+        // only the bounds left that fringe behind when the shape went (thin lines above and
+        // below a pressed or hovered chip).
+        let screen = Rectangle::with_size(viewport.logical_size());
+        let px = 1.0 / viewport.scale_factor();
+        let damage: Vec<Rectangle> = damage
+            .into_iter()
+            .filter_map(|r| {
+                Rectangle {
+                    x: r.x - px,
+                    y: r.y - px,
+                    width: r.width + 2.0 * px,
+                    height: r.height + 2.0 * px,
+                }
+                .intersection(&screen)
+            })
+            .collect();
+        let damage = damage::group(damage, screen);
         // kestrel patch: what is redrawn, for KESTREL_TRACE (rectangles and their area).
         if std::env::var_os("KESTREL_TRACE").is_some() {
             let area: f32 = damage.iter().map(|r| r.width * r.height).sum();
