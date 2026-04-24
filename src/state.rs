@@ -39,6 +39,8 @@ pub struct Toggles {
     pub night_light: bool,
     /// Airplane mode: what was on before it (Wi-Fi, Bluetooth), put back when it ends.
     pub airplane: Option<(bool, bool)>,
+    /// Do not disturb ends by itself at this time (seconds since 1970); None: until turned off.
+    pub dnd_until: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
