@@ -98,3 +98,136 @@ pub fn stream() -> impl Stream<Item = State> {
         }
     })
 }
+
+/// What the system monitor shows: each core's load, memory and swap, the busiest processes.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Detail {
+    /// Percent per core.
+    pub cores: Vec<u8>,
+    /// Bytes: memory used and total, swap used and total.
+    pub mem: (u64, u64),
+    pub swap: (u64, u64),
+    /// The busiest processes: pid, name, CPU percent of one core, memory bytes.
+    pub top: Vec<(u32, String, f32, u64)>,
+}
+
+/// Per-core (total, idle) jiffies.
+fn core_times() -> Vec<(u64, u64)> {
+    std::fs::read_to_string("/proc/stat")
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.starts_with("cpu") && l.as_bytes().get(3).is_some_and(u8::is_ascii_digit))
+        .map(|l| {
+            let v: Vec<u64> = l
+                .split_whitespace()
+                .skip(1)
+                .filter_map(|x| x.parse().ok())
+                .collect();
+            (
+                v.iter().sum(),
+                v.get(3).unwrap_or(&0) + v.get(4).unwrap_or(&0),
+            )
+        })
+        .collect()
+}
+
+/// Each process: pid -> (name, CPU jiffies so far, resident bytes). Only the user's own.
+fn processes() -> std::collections::HashMap<u32, (String, u64, u64)> {
+    let uid = unsafe { libc::getuid() };
+    let page = 4096u64;
+    let mut out = std::collections::HashMap::new();
+    let Ok(rd) = std::fs::read_dir("/proc") else {
+        return out;
+    };
+    for e in rd.flatten() {
+        let Some(pid) = e.file_name().to_str().and_then(|n| n.parse::<u32>().ok()) else {
+            continue;
+        };
+        use std::os::unix::fs::MetadataExt;
+        if e.metadata().map(|m| m.uid()).ok() != Some(uid) {
+            continue;
+        }
+        let Ok(stat) = std::fs::read_to_string(e.path().join("stat")) else {
+            continue;
+        };
+        // The name is in parentheses and may hold spaces: split after the last ')'.
+        let (Some(a), Some(b)) = (stat.find('('), stat.rfind(')')) else {
+            continue;
+        };
+        let name = stat[a + 1..b].to_string();
+        let f: Vec<&str> = stat[b + 2..].split_whitespace().collect();
+        // Fields after the name: state(0) ... utime(11) stime(12) ... rss(21).
+        let ticks = f.get(11).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0)
+            + f.get(12).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let rss = f.get(21).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) * page;
+        out.insert(pid, (name, ticks, rss));
+    }
+    out
+}
+
+fn meminfo() -> ((u64, u64), (u64, u64)) {
+    let s = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    let get = |k: &str| -> u64 {
+        s.lines()
+            .find(|l| l.starts_with(k))
+            .and_then(|l| l.split_whitespace().nth(1))
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0)
+            * 1024
+    };
+    let (mt, ma) = (get("MemTotal:"), get("MemAvailable:"));
+    let (st, sf) = (get("SwapTotal:"), get("SwapFree:"));
+    ((mt.saturating_sub(ma), mt), (st.saturating_sub(sf), st))
+}
+
+/// The monitor's readings every 1.5 s while polled (the system monitor is open).
+pub fn detail() -> impl Stream<Item = Detail> {
+    crate::stream::channel(1, async |mut out| {
+        const STEP: Duration = Duration::from_millis(1500);
+        let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as f32;
+        let mut cores = core_times();
+        let mut procs = processes();
+        loop {
+            tokio::time::sleep(STEP).await;
+            let (c2, p2) = tokio::task::spawn_blocking(|| (core_times(), processes()))
+                .await
+                .unwrap_or_default();
+            let load: Vec<u8> = cores
+                .iter()
+                .zip(&c2)
+                .map(|((t0, i0), (t1, i1))| {
+                    let dt = t1.saturating_sub(*t0).max(1) as f32;
+                    ((1.0 - i1.saturating_sub(*i0) as f32 / dt) * 100.0)
+                        .round()
+                        .clamp(0.0, 100.0) as u8
+                })
+                .collect();
+            let secs = STEP.as_secs_f32();
+            let mut top: Vec<(u32, String, f32, u64)> = p2
+                .iter()
+                .map(|(pid, (name, ticks, rss))| {
+                    let before = procs.get(pid).map_or(*ticks, |p| p.1);
+                    let cpu = ticks.saturating_sub(before) as f32 / hz / secs * 100.0;
+                    (*pid, name.clone(), cpu, *rss)
+                })
+                .collect();
+            top.sort_by(|a, b| b.2.total_cmp(&a.2).then(b.3.cmp(&a.3)));
+            top.truncate(10);
+            let (mem, swap) = meminfo();
+            cores = c2;
+            procs = p2;
+            if out
+                .send(Detail {
+                    cores: load,
+                    mem,
+                    swap,
+                    top,
+                })
+                .await
+                .is_err()
+            {
+                return;
+            }
+        }
+    })
+}

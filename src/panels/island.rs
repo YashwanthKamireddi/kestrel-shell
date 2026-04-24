@@ -197,5 +197,13 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             app.gauges[2].value,
         ));
     }
-    card(s, r.align_y(Alignment::Start))
+    // A click anywhere on the gauges opens the system monitor (cores, memory, processes).
+    card(
+        s,
+        ui::control(r.align_y(Alignment::Start))
+            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .radius(theme::size::CARD_RADIUS)
+            .no_press_scale()
+            .on_press(AppMessage::Ipc("toggle system".into())),
+    )
 }

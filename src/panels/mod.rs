@@ -11,6 +11,7 @@ pub mod island;
 pub mod keys;
 pub mod launcher;
 pub mod media;
+pub mod monitor;
 pub mod notifications;
 pub mod overview;
 pub mod pods;
@@ -47,6 +48,8 @@ pub enum PanelKind {
     Auth,
     /// Screenshots and recordings: region, window or screen, now or later.
     Capture,
+    /// System monitor: cores, memory, busiest processes.
+    Monitor,
 }
 
 impl PanelKind {
@@ -60,6 +63,7 @@ impl PanelKind {
             "notifications" => Self::Control,
             "power" => Self::Power,
             "capture" | "screenshot" => Self::Capture,
+            "system" | "monitor" => Self::Monitor,
             "launcher" => Self::Launcher,
             "wallpaper" => Self::Wallpaper,
             "keys" | "cheatsheet" => Self::Keys,
@@ -102,6 +106,7 @@ impl PanelKind {
             Self::Calendar => 312.0,
             Self::Power => 232.0,
             Self::Capture => capture::WIDTH,
+            Self::Monitor => monitor::WIDTH,
             Self::Tray => 260.0,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
@@ -125,6 +130,7 @@ pub struct State {
     pub calendar: calendar::State,
     pub power: power::State,
     pub capture: capture::State,
+    pub monitor: monitor::State,
     pub control: control::State,
     pub media: media::State,
     pub tray: tray::State,
@@ -144,6 +150,7 @@ pub enum Message {
     Calendar(calendar::Message),
     Power(power::Message),
     Capture(capture::Message),
+    Monitor(monitor::Message),
     Control(control::Message),
     Media(media::Message),
     Notifications(notifications::Message),
@@ -217,7 +224,8 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         | PanelKind::Pods
         | PanelKind::Files
         | PanelKind::Auth
-        | PanelKind::Capture => {}
+        | PanelKind::Capture
+        | PanelKind::Monitor => {}
     }
     Task::none()
 }
@@ -230,6 +238,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         }
         Message::Power(m) => power::update(app, m),
         Message::Capture(m) => capture::update(app, m),
+        Message::Monitor(m) => monitor::update(app, m),
         Message::Control(m) => control::update(app, m),
         Message::Media(m) => media::update(app, m),
         Message::Notifications(m) => notifications::update(app, m),
@@ -277,6 +286,13 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
 pub fn subscription(app: &App) -> Subscription<Message> {
     let open = app.panel.as_ref().filter(|p| p.open).map(|p| p.kind);
     let mut subs = Vec::new();
+    // The system monitor's readings while it is open.
+    if open == Some(PanelKind::Monitor) {
+        subs.push(
+            iced::Subscription::run(crate::services::system::detail)
+                .map(|d| Message::Monitor(monitor::Message::Detail(d))),
+        );
+    }
     // Recording a shortcut's keys in Settings: the next combination pressed.
     if settings::recording(&app.panels.settings) {
         subs.push(iced::event::listen_with(|e, _status, _id| match e {
@@ -392,6 +408,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Calendar => calendar::view(app, s),
         PanelKind::Power => power::view(app, s),
         PanelKind::Capture => capture::view(app, s),
+        PanelKind::Monitor => monitor::view(app, s),
         PanelKind::Control => control::view(app, s),
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
