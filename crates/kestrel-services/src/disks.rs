@@ -158,3 +158,37 @@ pub async fn eject(path: String, drive: String) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// What fills a folder: its biggest folders and files (one level down), largest first, with
+/// the folder's total. Measured with `du` (on this filesystem only); slow on a cold cache, so
+/// run it in the background.
+pub async fn usage(dir: std::path::PathBuf) -> (u64, Vec<(std::path::PathBuf, u64)>) {
+    let out = tokio::process::Command::new("du")
+        .args(["-b", "-x", "--max-depth=1"])
+        .arg(&dir)
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await;
+    let Ok(out) = out else {
+        return (0, Vec::new());
+    };
+    let mut total = 0;
+    let mut items: Vec<(std::path::PathBuf, u64)> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let (n, p) = l.split_once('\t')?;
+            Some((std::path::PathBuf::from(p), n.parse().ok()?))
+        })
+        .filter(|(p, n)| {
+            if *p == dir {
+                total = *n;
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+    items.sort_by_key(|x| std::cmp::Reverse(x.1));
+    items.truncate(10);
+    (total, items)
+}
