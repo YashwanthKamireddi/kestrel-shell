@@ -91,14 +91,26 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .spacing(2)
     .align_y(Alignment::Center);
 
-    let weekdays = row(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(|d| {
+    // The week starts on Monday, or on Sunday (Settings > Date & time).
+    let sunday = app.config.clock.week_starts_sunday;
+    let names = if sunday {
+        ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+    } else {
+        ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+    };
+    let weekdays = row(names.map(|d| {
         container(label(d, text::CAPTION, s.ink_faint))
             .center_x(Length::Fill)
             .into()
     }));
 
-    // Six weeks starting on the Monday on or before the 1st.
-    let start = first - Duration::days(i64::from(first.weekday().num_days_from_monday()));
+    // Six weeks starting on the first weekday on or before the 1st.
+    let back = if sunday {
+        first.weekday().num_days_from_sunday()
+    } else {
+        first.weekday().num_days_from_monday()
+    };
+    let start = first - Duration::days(i64::from(back));
     let mut weeks = column![].spacing(2);
     for w in 0..6 {
         let mut week = row![];

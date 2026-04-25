@@ -84,6 +84,8 @@ pub struct ClockConfig {
     pub format: ClockFormat,
     /// The date beside the time in the bar.
     pub date: bool,
+    /// The calendar's weeks start on Sunday (else Monday).
+    pub week_starts_sunday: bool,
 }
 
 impl Default for ClockConfig {
@@ -91,6 +93,7 @@ impl Default for ClockConfig {
         Self {
             format: ClockFormat::H24,
             date: true,
+            week_starts_sunday: false,
         }
     }
 }
