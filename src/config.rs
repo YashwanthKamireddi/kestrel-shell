@@ -37,6 +37,9 @@ pub struct Config {
     pub bar: BarConfig,
     /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
     pub clock: ClockConfig,
+    /// Volume keys: `[sound] step = 2` (percent per press), `max = 150` (percent the keys may
+    /// reach; above 100 boosts quiet sound, as the user's keys always allowed).
+    pub sound: SoundConfig,
     /// Temperatures in "celsius" or "fahrenheit".
     pub weather_units: Units,
     /// Per-module extras: `[modules.clock] middle = "kitty -e khal interactive"`.
@@ -51,6 +54,19 @@ pub struct Config {
 pub struct NotificationRules {
     pub muted: Vec<String>,
     pub quiet: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct SoundConfig {
+    pub step: u32,
+    pub max: u32,
+}
+
+impl Default for SoundConfig {
+    fn default() -> Self {
+        Self { step: 2, max: 150 }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -202,6 +218,7 @@ impl Default for Config {
             bar: BarConfig::default(),
             modules: std::collections::BTreeMap::new(),
             clock: ClockConfig::default(),
+            sound: SoundConfig::default(),
             weather_units: Units::Celsius,
             notifications: NotificationRules::default(),
         }
