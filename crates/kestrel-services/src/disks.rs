@@ -163,8 +163,10 @@ pub async fn eject(path: String, drive: String) -> Result<(), String> {
 /// the folder's total. Measured with `du` (on this filesystem only); slow on a cold cache, so
 /// run it in the background.
 pub async fn usage(dir: std::path::PathBuf) -> (u64, Vec<(std::path::PathBuf, u64)>) {
-    let out = tokio::process::Command::new("du")
-        .args(["-b", "-x", "--max-depth=1"])
+    // Idle I/O class: the walk reads every file's metadata in home, and must not slow what the
+    // user is doing.
+    let out = tokio::process::Command::new("ionice")
+        .args(["-c3", "du", "-b", "-x", "--max-depth=1"])
         .arg(&dir)
         .stderr(std::process::Stdio::null())
         .output()

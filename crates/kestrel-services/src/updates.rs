@@ -32,6 +32,25 @@ async fn count(cmd: &str, args: &[&str]) -> usize {
         .unwrap_or(0)
 }
 
+/// Pending repo updates; None when checkupdates failed (it exits 0 with updates, 2 with none).
+async fn repo_count() -> Option<usize> {
+    let o = tokio::process::Command::new("checkupdates")
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    match o.status.code() {
+        Some(0) => Some(
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .count(),
+        ),
+        Some(2) => Some(0),
+        _ => None,
+    }
+}
+
 /// One pending update: name, version now, version offered, from the AUR.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Package {
@@ -103,13 +122,23 @@ async fn pacman_changed() {
 pub fn stream() -> impl Stream<Item = State> {
     crate::stream::channel(1, async |mut out| {
         tokio::time::sleep(Duration::from_secs(60)).await;
+        let mut last: Option<State> = None;
         loop {
+            // Offline (or the mirror unreachable) checkupdates fails: the count is unknown, not
+            // zero, so the last one stays and it is tried again in ten minutes.
+            let Some(repo) = repo_count().await else {
+                tokio::time::sleep(Duration::from_secs(600)).await;
+                continue;
+            };
             let s = State {
-                repo: count("checkupdates", &[]).await,
+                repo,
                 aur: count("yay", &["-Qua"]).await,
             };
-            if out.send(s).await.is_err() {
-                return;
+            if last != Some(s) {
+                last = Some(s);
+                if out.send(s).await.is_err() {
+                    return;
+                }
             }
             // Wait for the two-hour mark or a pacman transaction, whichever comes first.
             let timer = tokio::time::sleep(Duration::from_secs(2 * 3600));

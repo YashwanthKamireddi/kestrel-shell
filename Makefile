@@ -13,7 +13,7 @@ build:
 
 # Package, install and restart the running shell. Refuses to install if the checks fail.
 install: check
-	cd packaging/arch && $(SCOPE) makepkg -f --noconfirm >/dev/null && sudo pacman -U --noconfirm kestrel-*.pkg.tar.zst >/dev/null && rm -rf kestrel-*.pkg.tar.zst pkg src
+	cd packaging/arch && $(SCOPE) makepkg -f --noconfirm >/dev/null && sudo pacman -U --noconfirm kestrel-shell-*.pkg.tar.zst >/dev/null && rm -rf kestrel-shell-*.pkg.tar.zst pkg src
 	systemctl --user restart kestrel
 
 # Dev mode: the shell runs from this tree and restarts on every save that builds. A failing
