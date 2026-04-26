@@ -32,6 +32,7 @@ pub mod notifications;
 pub mod polkit;
 pub mod power;
 pub mod previews;
+pub mod sounds;
 pub mod stream;
 pub mod system;
 pub mod timedate;

@@ -49,11 +49,32 @@ pub struct Config {
     pub notifications: NotificationRules,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct NotificationRules {
     pub muted: Vec<String>,
     pub quiet: Vec<String>,
+    /// A sound for each notification that shows a banner (`sound = false`: none).
+    pub sound: bool,
+    /// Apps that show banners without a sound.
+    pub silent: Vec<String>,
+    /// Seconds a banner stays when the app does not say (`banner = 5`).
+    pub banner: u64,
+    /// Urgent notifications (a call, a low battery) show even in Do not disturb.
+    pub urgent_in_dnd: bool,
+}
+
+impl Default for NotificationRules {
+    fn default() -> Self {
+        Self {
+            muted: Vec::new(),
+            quiet: Vec::new(),
+            sound: true,
+            silent: Vec::new(),
+            banner: 5,
+            urgent_in_dnd: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]

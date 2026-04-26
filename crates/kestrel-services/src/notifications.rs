@@ -60,11 +60,16 @@ pub struct Notification {
     /// Milliseconds; -1 = server default, 0 = never.
     pub timeout: i32,
     pub time: SystemTime,
+    /// The sound it asks for (spec hints `sound-file`, `sound-name`, `suppress-sound`).
+    pub sound: crate::sounds::Sound,
+    /// It updates one already shown (`replaces_id`): a progress or a changed message, which
+    /// does not sound again.
+    pub replaced: bool,
 }
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    Added(Notification),
+    Added(Box<Notification>),
     Closed(u32),
 }
 
@@ -80,6 +85,30 @@ static SERVER: OnceLock<(Connection, Arc<Mutex<u32>>)> = OnceLock::new();
 struct Server {
     next: Arc<Mutex<u32>>,
     tx: mpsc::UnboundedSender<Event>,
+}
+
+fn sound_from_hints(hints: &HashMap<String, OwnedValue>) -> crate::sounds::Sound {
+    use crate::sounds::Sound;
+    let text = |k: &str| {
+        hints
+            .get(k)
+            .and_then(|v| String::try_from(v.clone()).ok())
+            .filter(|s| !s.is_empty())
+    };
+    if hints
+        .get("suppress-sound")
+        .and_then(|v| bool::try_from(v.clone()).ok())
+        .unwrap_or(false)
+    {
+        Sound::Silent
+    } else if let Some(f) = text("sound-file") {
+        let f = f.strip_prefix("file://").unwrap_or(&f).to_string();
+        Sound::File(f.into())
+    } else if let Some(n) = text("sound-name") {
+        Sound::Named(n)
+    } else {
+        Sound::Default
+    }
 }
 
 fn image_from_hints(hints: &HashMap<String, OwnedValue>) -> Option<Image> {
@@ -153,6 +182,7 @@ impl Server {
             .get("desktop-entry")
             .and_then(|v| String::try_from(v.clone()).ok())
             .unwrap_or_default();
+        let sound = sound_from_hints(&hints);
         let n = Notification {
             id,
             app: if app_name.is_empty() {
@@ -176,8 +206,10 @@ impl Server {
             urgency,
             timeout: expire_timeout,
             time: SystemTime::now(),
+            sound,
+            replaced: replaces_id > 0,
         };
-        let _ = self.tx.send(Event::Added(n));
+        let _ = self.tx.send(Event::Added(Box::new(n)));
         id
     }
 
@@ -197,6 +229,7 @@ impl Server {
             "actions",
             "icon-static",
             "persistence",
+            "sound",
         ]
     }
 
