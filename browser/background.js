@@ -23,18 +23,22 @@ function publish() {
 }
 
 function connect() {
+  let mine;
   try {
-    port = chrome.runtime.connectNative("dev.kestrel.media");
+    mine = chrome.runtime.connectNative("dev.kestrel.media");
   } catch {
     port = null;
     return;
   }
+  port = mine;
   port.onMessage.addListener((m) => {
     const p = best();
     if (p && m.cmd) chrome.tabs.sendMessage(p.tab, m).catch(() => {});
   });
+  // Only this port's end clears it: an older port closing late must not drop the current one
+  // (the next report then opened a second helper beside the first).
   port.onDisconnect.addListener(() => {
-    port = null;
+    if (port === mine) port = null;
   });
   const p = best();
   if (p) port.postMessage({ tab: p.tab, ...p.s });

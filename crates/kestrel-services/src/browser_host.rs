@@ -350,8 +350,26 @@ pub fn run() {
         let Ok(root) = conn.object_server().interface::<_, Root>(PATH).await else {
             return;
         };
+        // A newer host for the same browser (the extension reconnected) takes the bus name
+        // over; this one is then stale and ends, instead of living on beside it.
+        let mut lost = match zbus::fdo::DBusProxy::new(&conn).await {
+            Ok(p) => p.receive_name_lost().await.ok(),
+            Err(_) => None,
+        };
         let mut pages = frames();
-        while let Some(page) = pages.next().await {
+        loop {
+            let page = tokio::select! {
+                p = pages.next() => match p {
+                    Some(p) => p,
+                    None => return,
+                },
+                Some(_) = async {
+                    match lost.as_mut() {
+                        Some(l) => l.next().await,
+                        None => std::future::pending().await,
+                    }
+                } => return,
+            };
             let art_url = page.art.clone();
             let need_art = state
                 .lock()
