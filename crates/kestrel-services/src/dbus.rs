@@ -53,6 +53,23 @@ where
         .map_err(zbus::Error::from)
 }
 
+/// Every property of `iface` at `path` in one call (instead of one round trip per property).
+pub async fn get_all(
+    c: &Connection,
+    dest: &str,
+    path: &str,
+    iface: &str,
+) -> zbus::Result<std::collections::HashMap<String, OwnedValue>> {
+    let props = zbus::fdo::PropertiesProxy::builder(c)
+        .destination(dest.to_string())?
+        .path(path.to_string())?
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+    let iface = zbus::names::InterfaceName::try_from(iface.to_string())?;
+    Ok(props.get_all(iface).await?)
+}
+
 /// Fires (debounced) whenever `sender` emits any signal.
 pub async fn changes(
     c: &Connection,
