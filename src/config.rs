@@ -82,11 +82,30 @@ impl Default for NotificationRules {
 pub struct SoundConfig {
     pub step: u32,
     pub max: u32,
+    /// Alert sounds' volume, percent of the output's (`alerts = 70`).
+    pub alerts: u32,
+    /// A click on each volume key press, at the new volume.
+    pub feedback: bool,
+    /// A shutter sound when a screenshot is taken.
+    pub screenshot: bool,
 }
 
 impl Default for SoundConfig {
     fn default() -> Self {
-        Self { step: 2, max: 150 }
+        Self {
+            step: 2,
+            max: 150,
+            alerts: 70,
+            feedback: false,
+            screenshot: true,
+        }
+    }
+}
+
+impl SoundConfig {
+    /// Alert volume as pw-play takes it (0 to 1).
+    pub fn alert_volume(&self) -> f32 {
+        self.alerts.min(100) as f32 / 100.0
     }
 }
 
