@@ -37,7 +37,7 @@ pub struct State {
     pub adapter: String,
     /// Paired devices.
     pub devices: Vec<Device>,
-    /// Devices found nearby that are not paired (only those with a name), strongest first.
+    /// Devices found nearby that are not paired (only those with a name), by name.
     pub nearby: Vec<Device>,
     /// The adapter is searching for devices.
     pub discovering: bool,
@@ -131,12 +131,10 @@ async fn read(c: &Connection) -> zbus::Result<State> {
             s.discovering = prop(a, "Discovering").unwrap_or(false);
         }
     }
-    s.nearby.sort_by(|a, b| {
-        b.rssi
-            .unwrap_or(-127)
-            .cmp(&a.rssi.unwrap_or(-127))
-            .then(a.name.cmp(&b.name))
-    });
+    // By name: signal strength changes every second while searching, and rows must not jump
+    // under the pointer.
+    s.nearby
+        .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     s.devices
         .sort_by(|a, b| b.connected.cmp(&a.connected).then(a.name.cmp(&b.name)));
     Ok(s)
