@@ -56,6 +56,8 @@ impl Display {
 
 #[derive(Deserialize)]
 struct Raw {
+    #[serde(default)]
+    id: i64,
     name: String,
     #[serde(default)]
     model: String,
@@ -98,6 +100,17 @@ pub async fn read() -> Vec<Display> {
         return Vec::new();
     };
     let raw: Vec<Raw> = serde_json::from_str(&text).unwrap_or_default();
+    // Hyprland names the mirrored screen by its id; kept by connector (ids change).
+    let names: Vec<(i64, String)> = raw.iter().map(|r| (r.id, r.name.clone())).collect();
+    let mirror_name = |of: &str| -> Option<String> {
+        if of.is_empty() || of == "none" {
+            return None;
+        }
+        match of.parse::<i64>() {
+            Ok(id) => names.iter().find(|(i, _)| *i == id).map(|(_, n)| n.clone()),
+            Err(_) => Some(of.to_string()),
+        }
+    };
     raw.into_iter()
         .map(|r| {
             let mut modes: Vec<(u32, u32, f32)> =
@@ -127,7 +140,7 @@ pub async fn read() -> Vec<Display> {
                 scale: r.scale,
                 transform: r.transform,
                 modes,
-                mirror: (!r.mirror_of.is_empty() && r.mirror_of != "none").then_some(r.mirror_of),
+                mirror: mirror_name(&r.mirror_of),
             }
         })
         .collect()
@@ -152,13 +165,25 @@ pub fn line(d: &Display) -> String {
     s
 }
 
+/// The line applied live: a screen leaving a mirror needs `mirror = ""` said (a rule without
+/// it keeps the running mirror; checked 2026-11-14). The saved file has no need: at start an
+/// absent mirror is none.
+fn live_line(d: &Display) -> String {
+    let l = line(d);
+    if d.enabled && d.mirror.is_none() {
+        format!("{}, mirror = \"\" }})", l.trim_end_matches(" })"))
+    } else {
+        l
+    }
+}
+
 /// Applies every screen's line at once (live, not saved). Screens being turned on go first, so
 /// there is never a moment with none.
 pub async fn apply(all: &[Display]) {
     let mut order: Vec<&Display> = all.iter().collect();
     order.sort_by_key(|d| !d.enabled);
     for d in order {
-        crate::hyprland::eval(line(d)).await;
+        crate::hyprland::eval(live_line(d)).await;
     }
 }
 
@@ -222,6 +247,11 @@ mod tests {
             ..hdmi()
         };
         assert!(line(&m).ends_with(", mirror = \"HDMI-A-1\" })"));
+    }
+
+    #[test]
+    fn leaves_a_mirror_live() {
+        assert!(live_line(&hdmi()).ends_with("scale = 1.00, mirror = \"\" })"));
     }
 
     #[test]
