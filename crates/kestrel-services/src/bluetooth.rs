@@ -41,6 +41,11 @@ pub struct State {
     pub nearby: Vec<Device>,
     /// The adapter is searching for devices.
     pub discovering: bool,
+    /// The name other devices see, and the adapter's address.
+    pub name: String,
+    pub address: String,
+    /// Other devices can find this computer now.
+    pub discoverable: bool,
 }
 
 impl State {
@@ -60,6 +65,12 @@ pub enum Command {
     Pair(String),
     /// Remove a paired device (asked for in the shell first).
     Forget(String),
+    /// The name other devices see this computer by.
+    Rename(String),
+    /// A paired device's name here (its alias).
+    RenameDevice(String, String),
+    /// Other devices can find this computer (or not).
+    Visible(bool),
 }
 
 type Objects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
@@ -81,6 +92,11 @@ async fn read(c: &Connection) -> zbus::Result<State> {
             s.available = true;
             s.powered = prop(a, "Powered").unwrap_or(false);
             s.adapter = path.to_string();
+            s.name = prop::<String>(a, "Alias")
+                .or_else(|| prop(a, "Name"))
+                .unwrap_or_default();
+            s.address = prop(a, "Address").unwrap_or_default();
+            s.discoverable = prop(a, "Discoverable").unwrap_or(false);
         }
         if let Some(d) = ifaces.get("org.bluez.Device1") {
             let paired = prop::<bool>(d, "Paired").unwrap_or(false);
@@ -209,6 +225,29 @@ async fn run_command(cmd: Command) -> zbus::Result<()> {
             dbus::set(&c, BLUEZ, &p, "org.bluez.Device1", "Trusted", true).await?;
             let _: () = dev.call("Connect", &()).await?;
         }
+        Command::Rename(name) => {
+            let s = read(&c).await?;
+            if !s.adapter.is_empty() {
+                dbus::set(&c, BLUEZ, &s.adapter, "org.bluez.Adapter1", "Alias", name).await?;
+            }
+        }
+        Command::RenameDevice(p, name) => {
+            dbus::set(&c, BLUEZ, &p, "org.bluez.Device1", "Alias", name).await?;
+        }
+        Command::Visible(on) => {
+            let s = read(&c).await?;
+            if !s.adapter.is_empty() && s.discoverable != on {
+                dbus::set(
+                    &c,
+                    BLUEZ,
+                    &s.adapter,
+                    "org.bluez.Adapter1",
+                    "Discoverable",
+                    on,
+                )
+                .await?;
+            }
+        }
         Command::Forget(p) => {
             let s = read(&c).await?;
             let path = OwnedObjectPath::try_from(p.as_str())
@@ -261,6 +300,26 @@ pub fn search() -> impl Stream<Item = ()> {
         }
         let _stop = Stop;
         let _ = command(Command::Search(true)).await;
+        futures::future::pending::<()>().await;
+    })
+}
+
+/// Visible to other devices for as long as the stream is polled (Settings' Bluetooth page is
+/// open), then hidden again however the page closed.
+pub fn visible() -> impl Stream<Item = ()> {
+    crate::stream::channel(1, async |_out| {
+        struct Hide;
+        impl Drop for Hide {
+            fn drop(&mut self) {
+                if let Ok(h) = tokio::runtime::Handle::try_current() {
+                    h.spawn(async {
+                        let _ = command(Command::Visible(false)).await;
+                    });
+                }
+            }
+        }
+        let _hide = Hide;
+        let _ = command(Command::Visible(true)).await;
         futures::future::pending::<()>().await;
     })
 }

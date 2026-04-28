@@ -35,6 +35,10 @@ pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods
 pub fn bt_agent() -> Subscription<crate::services::bluetooth::Ask> {
     Subscription::run(crate::services::bluetooth::agent)
 }
+pub fn bt_visible() -> Subscription<()> {
+    Subscription::run(crate::services::bluetooth::visible)
+}
+
 pub fn bt_search() -> Subscription<()> {
     Subscription::run(crate::services::bluetooth::search)
 }

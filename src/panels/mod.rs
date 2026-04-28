@@ -314,12 +314,22 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     // Searching for Bluetooth devices while the Bluetooth page is open (stopped when it
     // closes, however it closes).
-    if open == Some(PanelKind::Control)
-        && app.panels.control.page == control::Page::Bluetooth
-        && app.bt.powered
+    let settings_bt =
+        app.settings_window.is_some() && app.panels.settings.page == settings::Page::Bluetooth;
+    if app.bt.powered
+        && (settings_bt
+            || open == Some(PanelKind::Control)
+                && app.panels.control.page == control::Page::Bluetooth)
     {
         subs.push(
             crate::subs::bt_search()
+                .map(|()| Message::Control(control::Message::Page(control::Page::Bluetooth))),
+        );
+    }
+    // Settings' Bluetooth page open: this computer can be found by other devices.
+    if app.bt.powered && settings_bt {
+        subs.push(
+            crate::subs::bt_visible()
                 .map(|()| Message::Control(control::Message::Page(control::Page::Bluetooth))),
         );
     }
