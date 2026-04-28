@@ -133,8 +133,7 @@ async fn read(c: &Connection) -> zbus::Result<State> {
     }
     // By name: signal strength changes every second while searching, and rows must not jump
     // under the pointer.
-    s.nearby
-        .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    s.nearby.sort_by_key(|d| d.name.to_lowercase());
     s.devices
         .sort_by(|a, b| b.connected.cmp(&a.connected).then(a.name.cmp(&b.name)));
     Ok(s)
