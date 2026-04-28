@@ -6,7 +6,7 @@
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
-use crate::services::{bluetooth, polkit};
+use crate::services::{bluetooth, network, polkit};
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
@@ -22,6 +22,8 @@ pub struct State {
     checking: bool,
     /// A Bluetooth pairing question (when there is no password request).
     pub bt: Option<bluetooth::Ask>,
+    /// A Wi-Fi password NetworkManager needs (when nothing else is asked).
+    pub wifi: Option<network::Ask>,
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +43,22 @@ pub fn ask_bt(app: &mut App, a: bluetooth::Ask) -> Task<AppMessage> {
         Task::Iced(iced::widget::focus(INPUT_ID.clone()))
     } else {
         Task::none()
+    }
+}
+
+/// A Wi-Fi password question arrived: shown with the field focused.
+pub fn ask_wifi(app: &mut App, a: network::Ask) -> Task<AppMessage> {
+    let st = &mut app.panels.auth;
+    st.password.clear();
+    st.wifi = Some(a);
+    Task::Iced(iced::widget::focus(INPUT_ID.clone()))
+}
+
+/// The Wi-Fi question's id, if one is shown.
+pub fn wifi_id(st: &State) -> Option<u64> {
+    match st.wifi.as_ref()? {
+        network::Ask::Password { id, .. } => Some(*id),
+        network::Ask::Done(_) => None,
     }
 }
 
@@ -72,6 +90,27 @@ pub fn ask(app: &mut App, r: polkit::Request) -> Task<AppMessage> {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     let st = &mut app.panels.auth;
+    if st.request.is_none()
+        && st.bt.is_none()
+        && let Some(id) = wifi_id(st)
+    {
+        match m {
+            Message::Password(p) => st.password = p,
+            // WPA passwords are 8 to 63 characters: shorter is never sent.
+            Message::Submit if st.password.chars().count() >= 8 => {
+                network::answer(id, Some(std::mem::take(&mut st.password)));
+                st.wifi = None;
+                return Task::done(AppMessage::Close);
+            }
+            Message::Submit => {}
+            Message::Cancel => {
+                network::answer(id, None);
+                st.wifi = None;
+                return Task::done(AppMessage::Close);
+            }
+        }
+        return Task::none();
+    }
     if st.request.is_none()
         && let Some(a) = st.bt.clone()
     {
@@ -127,15 +166,23 @@ pub fn closed(app: &mut App) {
         bluetooth::answer(id, false);
     }
     app.panels.auth.bt = None;
+    // A Wi-Fi password closed without one: cancelled.
+    if let Some(id) = wifi_id(&app.panels.auth) {
+        network::answer(id, None);
+    }
+    app.panels.auth.wifi = None;
     app.panels.auth.password.clear();
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let st = &app.panels.auth;
     let Some(r) = &st.request else {
-        return match &st.bt {
-            Some(a) => bt_view(st, a, s),
-            None => iced::widget::Space::new().into(),
+        return match (&st.bt, &st.wifi) {
+            (Some(a), _) => bt_view(st, a, s),
+            (None, Some(network::Ask::Password { ssid, wrong, .. })) => {
+                wifi_view(st, ssid, *wrong, s)
+            }
+            _ => iced::widget::Space::new().into(),
         };
     };
     let head = row![
@@ -306,6 +353,65 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
                 .on_press_maybe((!pin || !st.password.is_empty()).then(|| msg(Message::Submit))),
         );
     }
+    container(body.push(buttons))
+        .padding(20)
+        .width(Length::Fill)
+        .into()
+}
+
+/// A Wi-Fi network's password: the network, the field, and a quiet line when the saved one no
+/// longer works.
+fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Element<'a, AppMessage> {
+    let head = row![
+        container(icon(Icon::Wifi, 20.0, s.ink))
+            .center(40)
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                border: iced::Border::default().rounded(20),
+                ..container::Style::default()
+            }),
+        column![
+            label_w(ssid, text::TITLE, s.ink, theme::SEMIBOLD),
+            label("Wi-Fi password", text::SMALL, s.ink_dim),
+        ]
+        .spacing(2),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center);
+    let field = container(
+        text_input("Password", &st.password)
+            .id(INPUT_ID.clone())
+            .secure(true)
+            .on_input(|p| msg(Message::Password(p)))
+            .on_submit(msg(Message::Submit))
+            .padding([10, 14])
+            .size(text::BODY)
+            .font(theme::FONT)
+            .style(move |_, _| text_input::Style {
+                background: Color::TRANSPARENT.into(),
+                border: iced::Border::default(),
+                icon: s.ink_dim,
+                placeholder: s.ink_faint,
+                value: s.ink,
+                selection: s.accent_soft,
+            }),
+    )
+    .style(move |_| ui::field_style(s));
+    let mut body = column![head, field].spacing(14);
+    if wrong {
+        body = body.push(label("The saved password did not work", text::SMALL, s.bad));
+    }
+    let buttons = row![
+        iced::widget::Space::new().width(Length::Fill),
+        control(label_w("Cancel", text::SMALL, s.ink, theme::MEDIUM))
+            .pill(s, crate::ui::control::Pill::Plain)
+            .on_press(msg(Message::Cancel)),
+        control(label_w("Join", text::SMALL, s.on_accent, theme::SEMIBOLD))
+            .pill(s, crate::ui::control::Pill::Primary)
+            .on_press_maybe((st.password.chars().count() >= 8).then(|| msg(Message::Submit))),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
     container(body.push(buttons))
         .padding(20)
         .width(Length::Fill)

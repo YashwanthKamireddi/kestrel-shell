@@ -24,6 +24,34 @@ pub struct Display {
     pub transform: u8,
     /// Modes it offers: (width, height, Hz), best first.
     pub modes: Vec<(u32, u32, f32)>,
+    /// Shows the same picture as this screen (its connector) instead of its own space.
+    pub mirror: Option<String>,
+}
+
+impl Display {
+    /// Its sizes, each once, best first.
+    pub fn sizes(&self) -> Vec<(u32, u32)> {
+        let mut v: Vec<(u32, u32)> = Vec::new();
+        for (w, h, _) in &self.modes {
+            if !v.contains(&(*w, *h)) {
+                v.push((*w, *h));
+            }
+        }
+        v
+    }
+
+    /// The refresh rates it offers at a size, highest first.
+    pub fn rates(&self, w: u32, h: u32) -> Vec<f32> {
+        let mut v: Vec<f32> = self
+            .modes
+            .iter()
+            .filter(|m| m.0 == w && m.1 == h)
+            .map(|m| m.2)
+            .collect();
+        v.sort_by(|a, b| b.total_cmp(a));
+        v.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+        v
+    }
 }
 
 #[derive(Deserialize)]
@@ -49,6 +77,8 @@ struct Raw {
     disabled: bool,
     #[serde(default, rename = "availableModes")]
     available_modes: Vec<String>,
+    #[serde(default, rename = "mirrorOf")]
+    mirror_of: String,
 }
 
 fn one() -> f32 {
@@ -97,6 +127,7 @@ pub async fn read() -> Vec<Display> {
                 scale: r.scale,
                 transform: r.transform,
                 modes,
+                mirror: (!r.mirror_of.is_empty() && r.mirror_of != "none").then_some(r.mirror_of),
             }
         })
         .collect()
@@ -113,6 +144,9 @@ pub fn line(d: &Display) -> String {
     );
     if d.transform != 0 {
         s += &format!(", transform = {}", d.transform);
+    }
+    if let Some(m) = &d.mirror {
+        s += &format!(", mirror = \"{m}\"");
     }
     s += " })";
     s
@@ -159,6 +193,7 @@ mod tests {
             scale: 1.0,
             transform: 0,
             modes: vec![],
+            mirror: None,
         }
     }
 
@@ -177,6 +212,32 @@ mod tests {
             line(&off),
             "hl.monitor({ output = \"eDP-1\", disabled = true })"
         );
+    }
+
+    #[test]
+    fn writes_a_mirror() {
+        let m = Display {
+            name: "eDP-1".into(),
+            mirror: Some("HDMI-A-1".into()),
+            ..hdmi()
+        };
+        assert!(line(&m).ends_with(", mirror = \"HDMI-A-1\" })"));
+    }
+
+    #[test]
+    fn sizes_and_rates() {
+        let d = Display {
+            modes: vec![
+                (1920, 1080, 60.0),
+                (1920, 1080, 48.0),
+                (1280, 1024, 75.03),
+                (1280, 1024, 60.02),
+                (1920, 1080, 59.94),
+            ],
+            ..hdmi()
+        };
+        assert_eq!(d.sizes(), vec![(1920, 1080), (1280, 1024)]);
+        assert_eq!(d.rates(1920, 1080), vec![60.0, 48.0]);
     }
 
     #[test]
