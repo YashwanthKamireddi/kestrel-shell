@@ -106,16 +106,26 @@ pub enum Charging {
     Standard,
     /// The firmware learns the routine and keeps the battery lower when on the charger.
     Adaptive,
+    /// Charges as fast as it can (Dell ExpressCharge): handy, wears the battery more.
+    Fast,
+    /// For a laptop that stays on the charger (Dell "Primarily AC use").
+    Trickle,
     /// Stops at 80% (charges again below 75%): the battery wears much slower.
     Limit80,
+    /// Custom limits set elsewhere (the firmware setup): stops at this percent. Shown as it
+    /// is, never passed off as 80%.
+    Custom(u8),
 }
 
 impl Charging {
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Standard => "Standard",
-            Self::Adaptive => "Adaptive",
-            Self::Limit80 => "Stop at 80%",
+            Self::Standard => "Standard".into(),
+            Self::Adaptive => "Adaptive".into(),
+            Self::Fast => "Fast".into(),
+            Self::Trickle => "Mostly plugged in".into(),
+            Self::Limit80 => "Stop at 80%".into(),
+            Self::Custom(n) => format!("Stop at {n}%"),
         }
     }
 }
@@ -140,17 +150,22 @@ pub fn charging() -> Option<(Vec<Charging>, Charging)> {
     if !writable {
         return None;
     }
+    let has = |m: &str| {
+        types
+            .split_whitespace()
+            .any(|t| t.trim_matches(['[', ']']) == m)
+    };
     let mut offered = vec![Charging::Standard];
-    if types
-        .split_whitespace()
-        .any(|t| t.trim_matches(['[', ']']) == "Adaptive")
-    {
+    if has("Adaptive") {
         offered.push(Charging::Adaptive);
     }
-    let custom = types
-        .split_whitespace()
-        .any(|t| t.trim_matches(['[', ']']) == "Custom")
-        && dir.join("charge_control_end_threshold").exists();
+    if has("Fast") {
+        offered.push(Charging::Fast);
+    }
+    if has("Trickle") {
+        offered.push(Charging::Trickle);
+    }
+    let custom = has("Custom") && dir.join("charge_control_end_threshold").exists();
     if custom {
         offered.push(Charging::Limit80);
     }
@@ -161,9 +176,25 @@ pub fn charging() -> Option<(Vec<Charging>, Charging)> {
         .unwrap_or("Standard");
     let current = match now {
         "Adaptive" => Charging::Adaptive,
-        "Custom" => Charging::Limit80,
+        "Fast" => Charging::Fast,
+        "Trickle" => Charging::Trickle,
+        "Custom" => {
+            let end = std::fs::read_to_string(dir.join("charge_control_end_threshold"))
+                .ok()
+                .and_then(|t| t.trim().parse::<u8>().ok())
+                .unwrap_or(80);
+            if end == 80 {
+                Charging::Limit80
+            } else {
+                Charging::Custom(end)
+            }
+        }
         _ => Charging::Standard,
     };
+    // Limits set elsewhere stay shown (and chosen) beside the others.
+    if let Charging::Custom(_) = current {
+        offered.push(current);
+    }
     Some((offered, current))
 }
 
@@ -175,6 +206,10 @@ pub fn set_charging(c: Charging) -> Result<(), String> {
     match c {
         Charging::Standard => write("charge_types", "Standard"),
         Charging::Adaptive => write("charge_types", "Adaptive"),
+        Charging::Fast => write("charge_types", "Fast"),
+        Charging::Trickle => write("charge_types", "Trickle"),
+        // Choosing the limits already in place: only the mode.
+        Charging::Custom(_) => write("charge_types", "Custom"),
         Charging::Limit80 => {
             write("charge_control_end_threshold", "80")?;
             write("charge_control_start_threshold", "75")?;
@@ -314,5 +349,132 @@ pub async fn set_brightness(v: f32) {
     .await;
     if let Err(e) = r {
         log::warn!("brightness: {e}");
+    }
+}
+
+// --- Lid and power button ----------------------------------------------------------------------
+//
+// What closing the lid and pressing the power button do, as logind decides it. Read from logind
+// itself (so the user's own drop-ins show as they are); a change goes into
+// /etc/systemd/logind.conf.d/50-kestrel-power.conf (after the user's 20-lid-clamshell.conf, so it
+// wins) through pkexec, then logind is reloaded (never restarted: a restart ends sessions).
+
+/// What an event does: one of logind's actions kestrel offers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Action {
+    #[default]
+    Suspend,
+    Lock,
+    PowerOff,
+    Nothing,
+}
+
+impl Action {
+    fn from_logind(s: &str) -> Self {
+        match s {
+            "lock" => Self::Lock,
+            "poweroff" => Self::PowerOff,
+            "ignore" => Self::Nothing,
+            _ => Self::Suspend,
+        }
+    }
+    fn logind(self) -> &'static str {
+        match self {
+            Self::Suspend => "suspend",
+            Self::Lock => "lock",
+            Self::PowerOff => "poweroff",
+            Self::Nothing => "ignore",
+        }
+    }
+}
+
+/// The lid on battery, on AC, with an external display; and the power button.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Lid {
+    pub battery: Action,
+    pub charging: Action,
+    pub docked: Action,
+    pub power_key: Action,
+}
+
+/// The actions as logind has them now.
+pub async fn lid() -> Option<Lid> {
+    let c = zbus::Connection::system().await.ok()?;
+    let get = |k: &'static str| {
+        let c = c.clone();
+        async move {
+            crate::dbus::get::<String>(
+                &c,
+                "org.freedesktop.login1",
+                "/org/freedesktop/login1",
+                "org.freedesktop.login1.Manager",
+                k,
+            )
+            .await
+            .map(|s| Action::from_logind(&s))
+            .ok()
+        }
+    };
+    Some(Lid {
+        battery: get("HandleLidSwitch").await?,
+        charging: get("HandleLidSwitchExternalPower").await?,
+        docked: get("HandleLidSwitchDocked").await?,
+        power_key: get("HandlePowerKey").await?,
+    })
+}
+
+/// The drop-in kestrel writes for `l`.
+pub fn lid_conf(l: &Lid) -> String {
+    format!(
+        "# Written by kestrel (Settings > Power). Loaded after 20-lid-clamshell.conf, so it wins.\n\
+         [Login]\n\
+         HandleLidSwitch={}\n\
+         HandleLidSwitchExternalPower={}\n\
+         HandleLidSwitchDocked={}\n\
+         HandlePowerKey={}\n",
+        l.battery.logind(),
+        l.charging.logind(),
+        l.docked.logind(),
+        l.power_key.logind()
+    )
+}
+
+/// Saves `l` (asks for the administrator password once) and reloads logind.
+pub async fn set_lid(l: Lid) -> Result<(), String> {
+    // Every value is one of logind's fixed words: nothing typed reaches the shell.
+    let script = format!(
+        "mkdir -p /etc/systemd/logind.conf.d && printf '%s' '{}' > /etc/systemd/logind.conf.d/50-kestrel-power.conf && systemctl reload systemd-logind",
+        lid_conf(&l)
+    );
+    let ok = tokio::process::Command::new("pkexec")
+        .args(["/bin/sh", "-c", &script])
+        .status()
+        .await
+        .is_ok_and(|s| s.success());
+    if ok {
+        Ok(())
+    } else {
+        Err("The lid and power button settings were not changed".into())
+    }
+}
+
+#[cfg(test)]
+mod lid_tests {
+    use super::*;
+
+    #[test]
+    fn writes_the_drop_in() {
+        let l = Lid {
+            battery: Action::Suspend,
+            charging: Action::Nothing,
+            docked: Action::Nothing,
+            power_key: Action::PowerOff,
+        };
+        let c = lid_conf(&l);
+        assert!(c.contains("HandleLidSwitch=suspend\n"));
+        assert!(c.contains("HandleLidSwitchExternalPower=ignore\n"));
+        assert!(c.contains("HandlePowerKey=poweroff\n"));
+        // Nothing in it may break the single-quoted shell string.
+        assert!(!c.contains('\''));
     }
 }
