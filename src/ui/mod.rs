@@ -310,12 +310,18 @@ pub fn switch<'a, M: Clone + 'static>(s: Scheme, on: bool, on_press: M) -> Eleme
         .padding(3)
         .align_x(if on { Alignment::End } else { Alignment::Start })
         .align_y(Alignment::Center);
+    // Off, the track is a tint of the ink, not a surface colour: a surface colour matched the
+    // card under it (Black and Frosted both) and the switch read as a lone dot.
+    let (off, off_hover) = (
+        s.ink.scale_alpha(0.16 * s.opacity),
+        s.ink.scale_alpha(0.24 * s.opacity),
+    );
     control(track)
         .radius(10.0)
         .colors(
-            if on { s.accent } else { s.raised_hi },
-            if on { s.accent } else { s.raised_press },
-            if on { s.accent } else { s.raised_press },
+            if on { s.accent } else { off },
+            if on { s.accent } else { off_hover },
+            if on { s.accent } else { off_hover },
         )
         .on_press(on_press)
         .into()
