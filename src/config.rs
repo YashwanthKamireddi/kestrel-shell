@@ -18,6 +18,8 @@ pub struct Config {
     /// What the bar's pills and the panels are made of: "black" (solid) or "frosted" (a heavy
     /// blur of the wallpaper behind them, darkened so text stays easy to read).
     pub material: Material,
+    /// A fixed accent colour ("#4c8df6"); none: the wallpaper's.
+    pub accent: Option<String>,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
     /// Exact place for the weather (a neighbourhood the city search can't find); the city
@@ -250,6 +252,7 @@ impl Default for Config {
             workspaces: 5,
             theme_apps: true,
             material: Material::Black,
+            accent: None,
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,
