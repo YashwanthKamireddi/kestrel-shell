@@ -62,6 +62,9 @@ pub struct State {
     /// Seconds until empty (discharging) or full (charging); 0 when unknown.
     pub time_left: i64,
     pub profile: Option<Profile>,
+    /// UPower's warning level for the battery: 1 none, 3 low, 4 critical, 5 action (it is
+    /// about to act); from its own thresholds.
+    pub warning: u32,
 }
 
 /// How worn the battery is: what it holds now as a share of when new, and charge cycles.
@@ -249,6 +252,9 @@ async fn read(c: &Connection) -> State {
     let on_battery: bool = dbus::get(c, UPOWER, "/org/freedesktop/UPower", UPOWER, "OnBattery")
         .await
         .unwrap_or(false);
+    let warning: u32 = dbus::get(c, UPOWER, DISPLAY, DEVICE, "WarningLevel")
+        .await
+        .unwrap_or(1);
     State {
         has_battery: present,
         on_battery,
@@ -257,6 +263,99 @@ async fn read(c: &Connection) -> State {
         full: state == 4,
         time_left,
         profile,
+        warning,
+    }
+}
+
+// --- Low battery -----------------------------------------------------------------------------
+//
+// UPower decides when the battery is low and critical and what happens when it is nearly empty
+// (/etc/UPower/UPower.conf). kestrel warns at its levels; a choice made in Settings goes into
+// /etc/UPower/UPower.conf.d/50-kestrel.conf (pkexec), then UPower is restarted (harmless: it
+// only reads batteries).
+
+/// The low-battery policy: warn at this percent, and what happens when nearly empty.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LowBattery {
+    pub warn_at: u32,
+    pub action_at: u32,
+    /// UPower's word for the end action as it will be taken ("PowerOff", "Hibernate",
+    /// "HybridSleep", "Suspend"/"Sleep").
+    pub action: String,
+}
+
+fn upower_conf_value(key: &str) -> Option<String> {
+    // The main file, then drop-ins in name order: the last one wins, as UPower reads them.
+    let mut files = vec![std::path::PathBuf::from("/etc/UPower/UPower.conf")];
+    if let Ok(rd) = std::fs::read_dir("/etc/UPower/UPower.conf.d") {
+        let mut more: Vec<_> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "conf"))
+            .collect();
+        more.sort();
+        files.extend(more);
+    }
+    let mut value = None;
+    for f in files {
+        if let Ok(t) = std::fs::read_to_string(f) {
+            for l in t.lines() {
+                if let Some(v) = l.trim().strip_prefix(&format!("{key}=")) {
+                    value = Some(v.trim().to_string());
+                }
+            }
+        }
+    }
+    value
+}
+
+/// The policy as UPower has it now.
+pub async fn low_battery() -> Option<LowBattery> {
+    let c = Connection::system().await.ok()?;
+    let action: String = dbus::proxy(&c, UPOWER, "/org/freedesktop/UPower", UPOWER)
+        .await
+        .ok()?
+        .call("GetCriticalAction", &())
+        .await
+        .ok()?;
+    let num = |k: &str, d: u32| {
+        upower_conf_value(k)
+            .and_then(|v| v.parse::<f32>().ok())
+            .map_or(d, |f| f.round() as u32)
+    };
+    Some(LowBattery {
+        warn_at: num("PercentageLow", 20),
+        action_at: num("PercentageAction", 2),
+        action,
+    })
+}
+
+/// Saves the warning level and the end action ("PowerOff" or "Suspend"), asking once.
+pub async fn set_low_battery(warn_at: u32, action: &str) -> Result<(), String> {
+    let action = if action == "Suspend" {
+        "Suspend"
+    } else {
+        "PowerOff"
+    };
+    let warn_at = warn_at.clamp(10, 50);
+    // Critical stays UPower's 5%, below the warning (UPower requires low > critical > action).
+    let critical = 5.min(warn_at - 1);
+    let conf = format!(
+        "# Written by kestrel (Settings > Power).\n[UPower]\nPercentageLow={warn_at}.0\nPercentageCritical={critical}.0\nCriticalPowerAction={action}\nAllowRiskyCriticalPowerAction={}\n",
+        action == "Suspend"
+    );
+    let script = format!(
+        "mkdir -p /etc/UPower/UPower.conf.d && printf '{conf}' > /etc/UPower/UPower.conf.d/50-kestrel.conf && systemctl restart upower"
+    );
+    let ok = tokio::process::Command::new("pkexec")
+        .args(["/bin/sh", "-c", &script])
+        .status()
+        .await
+        .is_ok_and(|s| s.success());
+    if ok {
+        Ok(())
+    } else {
+        Err("The low battery settings were not changed".into())
     }
 }
 
