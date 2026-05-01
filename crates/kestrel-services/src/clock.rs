@@ -18,3 +18,16 @@ pub fn stream() -> impl Stream<Item = ()> {
         }
     })
 }
+
+/// A tick at each whole second (the clock showing seconds), for as long as it is polled.
+pub fn seconds() -> impl Stream<Item = ()> {
+    crate::stream::channel(1, async |mut out| {
+        loop {
+            let ms_left = 1000 - u64::from(Local::now().timestamp_subsec_millis());
+            tokio::time::sleep(Duration::from_millis(ms_left.max(1) + 2)).await;
+            if out.send(()).await.is_err() {
+                return;
+            }
+        }
+    })
+}

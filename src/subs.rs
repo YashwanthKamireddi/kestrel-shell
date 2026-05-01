@@ -13,6 +13,9 @@ pub fn hyprland() -> Subscription<hyprland::State> {
 pub fn clock() -> Subscription<()> {
     Subscription::run(clock::stream)
 }
+pub fn seconds() -> Subscription<()> {
+    Subscription::run(clock::seconds)
+}
 pub fn audio() -> Subscription<audio::State> {
     Subscription::run(audio::stream)
 }

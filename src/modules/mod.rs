@@ -88,6 +88,12 @@ const CLOCK_DATE: Opt = Opt {
     label: "Date",
     kind: OptKind::Switch(true),
 };
+const CLOCK_SECONDS: Opt = Opt {
+    table: &["clock"],
+    key: "seconds",
+    label: "Seconds",
+    kind: OptKind::Switch(false),
+};
 const VISUALISER: Opt = Opt {
     table: &["bar"],
     key: "visualiser",
@@ -107,7 +113,7 @@ pub const MODULES: &[Info] = &[
     Info { id: "workspaces", home: Home::Left, setting: None, options: &[] },
     Info { id: "app", home: Home::Left, setting: Some("Focused app name"), options: &[] },
     Info { id: "media", home: Home::Center, setting: Some("Music as its own bubble"), options: &[] },
-    Info { id: "island", home: Home::Center, setting: None, options: &[CLOCK_FORMAT, CLOCK_DATE, VISUALISER] },
+    Info { id: "island", home: Home::Center, setting: None, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS, VISUALISER] },
     Info { id: "clock", home: Home::Center, setting: None, options: &[] },
     Info { id: "weather", home: Home::Center, setting: Some("Weather"), options: &[UNITS] },
     Info { id: "airpods", home: Home::Center, setting: Some("AirPods battery circle"), options: &[] },
