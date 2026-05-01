@@ -2,6 +2,9 @@
 hl.config({
     animations = { enabled = false },
     misc = { disable_hyprland_logo = true, disable_splash_rendering = true },
+    -- This compositor runs on the user's session bus with the user's HOME: syncing its cursor to gsettings
+    -- wrote the rig's cursor theme into the user's real settings (2026-11-14). Never.
+    cursor = { sync_gsettings_theme = false },
     general = { gaps_in = 4, gaps_out = 8, border_size = 0 },
     -- Blur as on the user's desktop (conf/look.lua), so windows look as they do there.
     decoration = {

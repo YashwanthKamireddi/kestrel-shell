@@ -20,6 +20,8 @@ pub struct Config {
     pub material: Material,
     /// A fixed accent colour ("#4c8df6"); none: the wallpaper's.
     pub accent: Option<String>,
+    /// Apps' fonts, icon theme and cursor theme (`[look]`), as chosen in Settings.
+    pub look: LookConfig,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
     /// Exact place for the weather (a neighbourhood the city search can't find); the city
@@ -76,6 +78,38 @@ impl Default for NotificationRules {
             banner: 5,
             urgent_in_dnd: true,
         }
+    }
+}
+
+/// `[look]`: unset fields leave what is there alone.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct LookConfig {
+    pub font: Option<String>,
+    pub font_size: Option<u32>,
+    pub mono: Option<String>,
+    pub mono_size: Option<u32>,
+    pub icons: Option<String>,
+    pub cursor: Option<String>,
+}
+
+impl LookConfig {
+    /// The app font and size (the shell's own font, 11, unless chosen).
+    pub fn font(&self) -> (String, u32) {
+        (
+            self.font
+                .clone()
+                .unwrap_or_else(|| crate::look::DEFAULT_FONT.into()),
+            self.font_size.unwrap_or(11),
+        )
+    }
+    pub fn mono(&self) -> (String, u32) {
+        (
+            self.mono
+                .clone()
+                .unwrap_or_else(|| crate::look::DEFAULT_MONO.into()),
+            self.mono_size.unwrap_or(11),
+        )
     }
 }
 
@@ -253,6 +287,7 @@ impl Default for Config {
             theme_apps: true,
             material: Material::Black,
             accent: None,
+            look: LookConfig::default(),
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,

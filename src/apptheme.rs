@@ -201,7 +201,7 @@ fn kitty(s: &Scheme) -> String {
 }
 
 /// Updates the colour sections of kdeglobals in place, keeping every other line.
-fn kdeglobals(s: &Scheme, text: &str) -> String {
+fn kdeglobals(s: &Scheme, text: &str, look: &crate::config::LookConfig) -> String {
     let link = Oklch::new(0.78, 0.10, 240.0).to_color();
     let visited = Oklch::new(0.78, 0.10, 310.0).to_color();
     let set = |bg: Color, alt: Color, fg: Color| {
@@ -274,18 +274,34 @@ fn kdeglobals(s: &Scheme, text: &str) -> String {
             seen.insert(k.to_string());
             continue;
         }
-        // Qt apps use the shell's typeface (Medium).
+        // Qt apps use the app font (the shell's typeface, Medium, unless another is chosen in
+        // Settings) and the monospace one.
         if let Some((k, v)) = t.split_once('=')
             && matches!(
                 k,
                 "font" | "menuFont" | "smallestReadableFont" | "toolBarFont" | "activeFont"
             )
-            && !v.starts_with(&format!("{},", crate::theme::FONT_NAME))
         {
-            let size = v.split(',').nth(1).unwrap_or("10");
+            let (font, size) = look.font();
+            let small = if k == "smallestReadableFont" {
+                size.saturating_sub(2).max(7)
+            } else {
+                size
+            };
+            let _ = v;
             out.push(format!(
-                "{k}={},{size},-1,5,500,0,0,0,0,0,0,0,0,0,0,1,Medium",
-                crate::theme::FONT_NAME
+                "{k}={font},{small},-1,5,500,0,0,0,0,0,0,0,0,0,0,1,Medium"
+            ));
+            continue;
+        }
+        // The monospace font only once one is chosen in Settings (left as it is otherwise).
+        if let Some((k, _)) = t.split_once('=')
+            && k == "fixed"
+            && (look.mono.is_some() || look.mono_size.is_some())
+        {
+            let (mono, size) = look.mono();
+            out.push(format!(
+                "fixed={mono},{size},-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
             ));
             continue;
         }
@@ -448,8 +464,11 @@ fn qt6ct_conf(dir: &Path, old: &str) -> String {
             }
         })
         .collect();
+    // The fonts chosen in Settings > Appearance (the shell's own and JetBrains Mono unless).
+    let look = crate::config::load().look;
+    let ((font, size), (mono, mono_size)) = (look.font(), look.mono());
     format!(
-        "[Appearance]\ncolor_scheme_path={}\ncustom_palette=true\nicon_theme={icons}\nstandard_dialogs=xdgdesktopportal\nstyle={style}\n\n[Fonts]\nfixed=\"JetBrainsMono Nerd Font,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\"\ngeneral=\"Rubik,11,-1,5,500,0,0,0,0,0,0,0,0,0,0,1\"\n\n{rest}",
+        "[Appearance]\ncolor_scheme_path={}\ncustom_palette=true\nicon_theme={icons}\nstandard_dialogs=xdgdesktopportal\nstyle={style}\n\n[Fonts]\nfixed=\"{mono},{mono_size},-1,5,400,0,0,0,0,0,0,0,0,0,0,1\"\ngeneral=\"{font},{size},-1,5,500,0,0,0,0,0,0,0,0,0,0,1\"\n\n{rest}",
         dir.join("colors/kestrel.conf").display()
     )
 }
@@ -495,7 +514,7 @@ pub fn apply(s: Scheme, wallpaper: Option<String>) {
 
     let kde = cfg.join("kdeglobals");
     if let Ok(old) = std::fs::read_to_string(&kde) {
-        write(&kde, &kdeglobals(&s, &old));
+        write(&kde, &kdeglobals(&s, &old, &crate::config::load().look));
     }
 
     // Qt apps (Dolphin, Easy Effects, …) take their palette from qt6ct (QT_QPA_PLATFORMTHEME):
@@ -692,7 +711,7 @@ mod tests {
     fn kdeglobals_keeps_other_lines_and_adds_missing_keys() {
         let s = Scheme::default();
         let old = "[Colors:View]\nBackgroundNormal=#000000\nCustom=1\n\n[General]\nfixed=X\n";
-        let new = kdeglobals(&s, old);
+        let new = kdeglobals(&s, old, &crate::config::LookConfig::default());
         assert!(new.contains("Custom=1"));
         assert!(new.contains("fixed=X"));
         assert!(new.contains(&format!("BackgroundNormal={}", hex(s.base))));

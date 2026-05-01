@@ -6,6 +6,7 @@ mod config;
 mod guard;
 mod hypr_settings;
 mod ipc;
+mod look;
 mod lua;
 mod modules;
 mod motion;
