@@ -1,7 +1,7 @@
 # Local package for kestrel, built from this repository. Named kestrel-shell: the AUR has an
 # unrelated "kestrel" (a file encryption tool), which an AUR helper would offer as an upgrade.
 pkgname=kestrel-shell
-pkgver=0.1.0.r314.gf23987c
+pkgver=0.1.0.r315.g8cf959b
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
@@ -43,6 +43,8 @@ package() {
     # kestrel's file picker, as the desktop portal's FileChooser backend.
     install -Dm644 "$_repo/packaging/portal/kestrel.portal" \
         "$pkgdir/usr/share/xdg-desktop-portal/portals/kestrel.portal"
+    # Colour filters (Settings > Accessibility): Hyprland screen shaders.
+    install -Dm644 -t "$pkgdir/usr/share/kestrel/shaders" "$_repo"/assets/shaders/*.frag
     # The "kestrel media" browser extension (load it unpacked from here) and its native host.
     install -Dm644 -t "$pkgdir/usr/share/kestrel/browser" "$_repo"/browser/*
     install -Dm644 "$_repo/packaging/browser/dev.kestrel.media.json" \
