@@ -153,3 +153,51 @@ pub fn stream() -> impl Stream<Item = State> {
         }
     })
 }
+
+/// A firmware update fwupd offers (from the LVFS): the device, its version now and the new
+/// one, and fwupd's id for it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Firmware {
+    pub device: String,
+    pub from: String,
+    pub to: String,
+    pub id: String,
+    /// Plugged in needed, and a restart after.
+    pub needs_ac: bool,
+    pub needs_reboot: bool,
+}
+
+/// Firmware updates from fwupd's metadata as it has it (no download; fwupd refreshes it on
+/// its own timer). Empty without fwupd.
+pub async fn firmware() -> Vec<Firmware> {
+    let Ok(out) = tokio::process::Command::new("fwupdmgr")
+        .args(["get-updates", "--json", "--no-unreported-check"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+    else {
+        return Vec::new();
+    };
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
+    let mut list = Vec::new();
+    for d in v["Devices"].as_array().into_iter().flatten() {
+        let Some(r) = d["Releases"].as_array().and_then(|r| r.first()) else {
+            continue;
+        };
+        let flags: Vec<&str> = d["Flags"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|f| f.as_str())
+            .collect();
+        list.push(Firmware {
+            device: d["Name"].as_str().unwrap_or("Device").to_string(),
+            from: d["Version"].as_str().unwrap_or("").to_string(),
+            to: r["Version"].as_str().unwrap_or("").to_string(),
+            id: d["DeviceId"].as_str().unwrap_or("").to_string(),
+            needs_ac: flags.contains(&"require-ac"),
+            needs_reboot: flags.contains(&"needs-reboot"),
+        });
+    }
+    list
+}
