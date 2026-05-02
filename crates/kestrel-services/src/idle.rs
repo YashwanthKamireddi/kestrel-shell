@@ -142,17 +142,125 @@ pub async fn set(step: Step, secs: u64) -> Result<(), String> {
     let new = with(&text, step, secs).ok_or("that idle step is not set up in hypridle.conf")?;
     std::fs::write(&p, new).map_err(|e| e.to_string())?;
     // hypridle reads its config once: started again by Hyprland (as at login).
-    let _ = tokio::process::Command::new("pkill")
-        .args(["-x", "hypridle"])
-        .status()
-        .await;
+    restart_hypridle().await;
+    Ok(())
+}
+
+/// hypridle reads its config once: this session's is stopped and started again by Hyprland
+/// (as at login). Only the hypridle of this Hyprland session (another session's, a nested
+/// test compositor's, are left alone: `pkill -x hypridle` stopped every one).
+async fn restart_hypridle() {
+    let ours = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").unwrap_or_default();
+    if let Ok(rd) = std::fs::read_dir("/proc") {
+        for e in rd.flatten() {
+            let Ok(pid) = e.file_name().to_string_lossy().parse::<i32>() else {
+                continue;
+            };
+            let comm = std::fs::read_to_string(e.path().join("comm")).unwrap_or_default();
+            if comm.trim() != "hypridle" {
+                continue;
+            }
+            let env = std::fs::read(e.path().join("environ")).unwrap_or_default();
+            let same = env
+                .split(|b| *b == 0)
+                .any(|kv| kv == format!("HYPRLAND_INSTANCE_SIGNATURE={ours}").as_bytes());
+            if same {
+                let _ = tokio::process::Command::new("kill")
+                    .arg(pid.to_string())
+                    .status()
+                    .await;
+            }
+        }
+    }
     crate::hyprland::dispatch("hl.dsp.exec_cmd(\"hypridle\")".into()).await;
+}
+
+/// Whether the session locks before the laptop sleeps (hypridle's `before_sleep_cmd`).
+pub fn lock_on_sleep() -> Option<bool> {
+    let text = std::fs::read_to_string(path()?).ok()?;
+    Some(locks_on_sleep(&text))
+}
+
+fn locks_on_sleep(text: &str) -> bool {
+    text.lines()
+        .any(|l| l.trim_start().starts_with("before_sleep_cmd") && l.contains("lock-session"))
+}
+
+const LOCK_LINE: &str = "    before_sleep_cmd = loginctl lock-session";
+const OFF_MARK: &str = "# kestrel: lock on sleep off: ";
+
+/// The config with locking before sleep on or off. Off comments the line out and sets
+/// inhibit_sleep to 0 (3 holds sleep until a lock that would never come); on puts both back
+/// as they were.
+fn with_lock_on_sleep(text: &str, on: bool) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut have_lock = false;
+    for l in text.lines() {
+        let t = l.trim_start();
+        if on {
+            if let Some(orig) = t.strip_prefix(OFF_MARK) {
+                out.push(format!("    {orig}"));
+                if orig.starts_with("before_sleep_cmd") {
+                    have_lock = true;
+                }
+                continue;
+            }
+            if t.starts_with("inhibit_sleep = 0") && l.contains("kestrel") {
+                continue;
+            }
+            if t.starts_with("before_sleep_cmd") {
+                have_lock = true;
+            }
+            out.push(l.to_string());
+        } else if (t.starts_with("before_sleep_cmd") && l.contains("lock-session"))
+            || t.starts_with("inhibit_sleep")
+        {
+            out.push(format!("    {OFF_MARK}{t}"));
+            if t.starts_with("inhibit_sleep") {
+                out.push("    inhibit_sleep = 0 # kestrel: nothing to wait for".into());
+            }
+        } else {
+            out.push(l.to_string());
+        }
+    }
+    // On, and the config never had the line: added inside `general`.
+    if on
+        && !have_lock
+        && let Some(i) = out
+            .iter()
+            .position(|l| l.trim_start().starts_with("general"))
+    {
+        out.insert(i + 1, LOCK_LINE.into());
+    }
+    out.join("\n") + "\n"
+}
+
+/// Locks before sleeping, or not; hypridle started again to read it.
+pub async fn set_lock_on_sleep(on: bool) -> Result<(), String> {
+    let p = path().ok_or("no home folder")?;
+    let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+    if locks_on_sleep(&text) == on {
+        return Ok(());
+    }
+    std::fs::write(&p, with_lock_on_sleep(&text, on)).map_err(|e| e.to_string())?;
+    restart_hypridle().await;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lock_on_sleep_off_and_back() {
+        let conf = "general {\n    lock_cmd = pidof hyprlock || hyprlock\n    before_sleep_cmd = loginctl lock-session\n    # 3: hold sleep until locked\n    inhibit_sleep = 3\n}\n";
+        assert!(locks_on_sleep(conf));
+        let off = with_lock_on_sleep(conf, false);
+        assert!(!locks_on_sleep(&off));
+        assert!(off.contains("inhibit_sleep = 0"));
+        let back = with_lock_on_sleep(&off, true);
+        assert_eq!(back, conf);
+    }
 
     const CONF: &str = "# Idle: lock at 30 min, screen off at 45, suspend at 90. hyprlock is the lock screen.\n\ngeneral {\n    lock_cmd = pidof hyprlock || hyprlock\n}\n\nlistener {\n    timeout = 1800\n    on-timeout = loginctl lock-session\n}\n\nlistener {\n    timeout = 2700\n    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'\n    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'\n}\n\nlistener {\n    timeout = 5400\n    on-timeout = systemctl suspend\n}\n";
 
