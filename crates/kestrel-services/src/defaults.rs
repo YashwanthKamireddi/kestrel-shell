@@ -102,7 +102,7 @@ pub fn set(kind: &Kind, app: &str) -> Result<(), String> {
 
 /// The command line that opens `arg` (a path or link; empty: just start the app) with the
 /// default app for `mime`, following its desktop file: field codes filled in, and a terminal
-/// app (Yazi, ranger) run in kitty. None when no default is set.
+/// app (Yazi, ranger) run in the default terminal. None when no default is set.
 pub fn command_for(mime: &str, arg: &str) -> Option<String> {
     let id = current(mime)?;
     let path = crate::apps::desktop_file(&id)?;
@@ -152,8 +152,106 @@ pub fn command_for(mime: &str, arg: &str) -> Option<String> {
     }
     let cmd = cmd.split_whitespace().collect::<Vec<_>>().join(" ");
     Some(if terminal {
-        format!("kitty -e {cmd}")
+        in_terminal(&cmd, None)
     } else {
         cmd
     })
+}
+
+// --- Terminal and editor -------------------------------------------------------------------
+//
+// The default terminal is the freedesktop way: ~/.config/xdg-terminals.list (desktop file
+// ids, first first), which GLib reads for Terminal=true apps and xdg-terminal-exec too.
+// kestrel opens its own terminal commands (updates, password) in it as well.
+
+fn terminals_list() -> std::path::PathBuf {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".config")))
+        .unwrap_or_default();
+    base.join("xdg-terminals.list")
+}
+
+/// Installed terminal apps (desktop entries in the TerminalEmulator category, shown ones):
+/// (desktop file id, name).
+pub fn terminals(apps: &[App]) -> Vec<(String, String)> {
+    apps.iter()
+        .filter(|a| {
+            crate::apps::desktop_file(&a.id)
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .is_some_and(|t| {
+                    t.lines()
+                        .any(|l| l.starts_with("Categories=") && l.contains("TerminalEmulator"))
+                        && !t.lines().any(|l| l.trim() == "NoDisplay=true")
+                })
+        })
+        .map(|a| (a.id.clone(), a.name.clone()))
+        .collect()
+}
+
+/// The terminal in use: the first installed one in xdg-terminals.list, else kitty.
+pub fn terminal() -> String {
+    std::fs::read_to_string(terminals_list())
+        .unwrap_or_default()
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .find(|id| crate::apps::desktop_file(id).is_some())
+        .map_or_else(|| "kitty.desktop".into(), str::to_string)
+}
+
+/// Makes `id` the first terminal in xdg-terminals.list, keeping the rest of the list.
+pub fn set_terminal(id: &str) -> Result<(), String> {
+    let path = terminals_list();
+    let old = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut lines: Vec<String> = old
+        .lines()
+        .filter(|l| l.trim() != id)
+        .map(str::to_string)
+        .collect();
+    // After any leading comments, so a comment header stays on top.
+    let at = lines
+        .iter()
+        .take_while(|l| l.trim_start().starts_with('#'))
+        .count();
+    lines.insert(at, id.to_string());
+    std::fs::write(&path, lines.join("\n") + "\n").map_err(|e| e.to_string())
+}
+
+/// `cmd` run in the default terminal (with a window title where the terminal takes one).
+pub fn in_terminal(cmd: &str, title: Option<&str>) -> String {
+    let id = terminal();
+    let bin = id
+        .trim_end_matches(".desktop")
+        .rsplit('.')
+        .next()
+        .unwrap_or("kitty")
+        .to_lowercase();
+    let t = |flag: &str| {
+        title.map_or_else(String::new, |t| {
+            format!("{flag} '{}' ", t.replace('\'', ""))
+        })
+    };
+    match bin.as_str() {
+        "kitty" => format!("kitty {}-e {cmd}", t("--title")),
+        "alacritty" => format!("alacritty {}-e {cmd}", t("--title")),
+        "foot" => format!("foot {}{cmd}", t("--title")),
+        "wezterm" => format!("wezterm start -- {cmd}"),
+        "ghostty" => format!("ghostty {}-e {cmd}", t("--title")),
+        "konsole" => format!("konsole -e {cmd}"),
+        "ptyxis" | "console" => format!("ptyxis -- {cmd}"),
+        "terminal" | "gnome-terminal" => format!("gnome-terminal -- {cmd}"),
+        other => format!("{other} -e {cmd}"),
+    }
+}
+
+/// Text editors that run in a terminal (what $EDITOR names), those installed.
+pub fn editors() -> Vec<&'static str> {
+    ["nvim", "vim", "hx", "helix", "micro", "nano", "emacs"]
+        .into_iter()
+        .filter(|e| {
+            std::env::var_os("PATH")
+                .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(e).is_file()))
+        })
+        .collect()
 }

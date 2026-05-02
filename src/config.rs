@@ -20,6 +20,8 @@ pub struct Config {
     pub material: Material,
     /// A fixed accent colour ("#4c8df6"); none: the wallpaper's.
     pub accent: Option<String>,
+    /// $EDITOR and $VISUAL for the session ("nvim"), set in settings.lua.
+    pub editor: Option<String>,
     /// Apps' fonts, icon theme and cursor theme (`[look]`), as chosen in Settings.
     pub look: LookConfig,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
@@ -290,6 +292,7 @@ impl Default for Config {
             theme_apps: true,
             material: Material::Black,
             accent: None,
+            editor: None,
             look: LookConfig::default(),
             weather_city: None,
             weather_latitude: None,
