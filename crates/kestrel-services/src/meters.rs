@@ -56,6 +56,16 @@ fn peak_stream(ctx: &mut Context, device: &str, monitor_of: Option<u32>) -> Opti
     Some(s)
 }
 
+/// A peak as a meter shows it: decibels, -60 dB (silence) to 0 dB (full) over 0 to 1, as
+/// sound meters read. Linear, speech into a laptop microphone (a few hundredths) was a sliver
+/// and the microphone looked dead.
+fn shown(peak: f32) -> f32 {
+    if peak <= 0.001 {
+        return 0.0;
+    }
+    ((20.0 * peak.log10() + 60.0) / 60.0).clamp(0.0, 1.0)
+}
+
 /// The newest reading waiting on a stream, if any.
 fn latest(s: &mut PaStream) -> Option<f32> {
     if s.get_state() != StreamState::Ready {
@@ -118,14 +128,14 @@ fn run(
             return None;
         }
         if let Some(v) = output.as_mut().and_then(latest) {
-            m.output = v;
+            m.output = shown(v);
         }
         if let Some(v) = input.as_mut().and_then(latest) {
-            m.input = v;
+            m.input = shown(v);
         }
         for (k, (_, s)) in per_app.iter_mut().enumerate() {
             if let Some(v) = s.as_mut().and_then(latest) {
-                m.apps[k].1 = v;
+                m.apps[k].1 = shown(v);
             }
         }
         if sent.as_ref() != Some(&m) {
@@ -164,4 +174,15 @@ pub fn stream(apps: Vec<(u32, String)>) -> impl Stream<Item = Meters> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn decibel_scale() {
+        assert_eq!(super::shown(0.0), 0.0);
+        assert!((super::shown(1.0) - 1.0).abs() < 1e-6);
+        // -20 dB (0.1, speech) reads two thirds of the way, not a tenth.
+        assert!((super::shown(0.1) - 2.0 / 3.0).abs() < 1e-3);
+    }
 }
