@@ -1,7 +1,7 @@
 # Local package for kestrel, built from this repository. Named kestrel-shell: the AUR has an
 # unrelated "kestrel" (a file encryption tool), which an AUR helper would offer as an upgrade.
 pkgname=kestrel-shell
-pkgver=0.1.0.r326.g1bb1e21
+pkgver=0.1.0.r328.g8bcd041
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')

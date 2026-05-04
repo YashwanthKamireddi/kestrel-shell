@@ -228,7 +228,7 @@ pub struct BarConfig {
     pub center: Vec<String>,
     pub right: Vec<String>,
     /// Pill style: modules that share one pill when they sit next to each other, e.g.
-    /// `groups = [["privacy", "status", "power"]]`. Everything else stands alone.
+    /// `groups = [["network", "bluetooth", "volume", "battery"]]`. Everything else stands alone.
     pub groups: Vec<Vec<String>>,
     /// The music visualiser in the time pill.
     pub visualiser: bool,
@@ -243,8 +243,26 @@ impl Default for BarConfig {
             style: BarStyle::Full,
             left: v(&["workspaces", "app"]),
             center: v(&["island", "airpods"]),
-            right: v(&["privacy", "updates", "status", "notifications", "power"]),
-            groups: vec![v(&["tray", "privacy", "status", "notifications", "power"])],
+            right: v(&[
+                "privacy",
+                "updates",
+                "network",
+                "bluetooth",
+                "volume",
+                "battery",
+                "notifications",
+                "power",
+            ]),
+            groups: vec![v(&[
+                "tray",
+                "privacy",
+                "network",
+                "bluetooth",
+                "volume",
+                "battery",
+                "notifications",
+                "power",
+            ])],
             visualiser: true,
             battery_percent: true,
         }
@@ -255,6 +273,35 @@ impl BarConfig {
     /// Which group `id` belongs to, if any.
     pub fn group_of(&self, id: &str) -> Option<usize> {
         self.groups.iter().position(|g| g.iter().any(|m| m == id))
+    }
+
+    /// An older layout in today's terms: the combined `status` button becomes the separate
+    /// network, bluetooth, volume and battery buttons, with the notifications bell that lived
+    /// inside it (a separate `notifications` entry, which drew nothing then, goes with it).
+    pub fn normalize(&mut self) {
+        let has_status = self.contains("status");
+        let expand = |list: &mut Vec<String>| {
+            // A separate bell only goes where the status button it lived in was (in that
+            // section or that group); anywhere else it stays.
+            let here = list.iter().any(|m| m == "status");
+            let has_status = has_status && here;
+            let mut out = Vec::new();
+            for id in list.drain(..) {
+                if id == "status" {
+                    out.extend(crate::modules::STATUS.iter().map(|m| (*m).to_string()));
+                    out.push("notifications".into());
+                } else if !(has_status && id == "notifications") {
+                    out.push(id);
+                }
+            }
+            *list = out;
+        };
+        expand(&mut self.left);
+        expand(&mut self.center);
+        expand(&mut self.right);
+        for g in &mut self.groups {
+            expand(g);
+        }
     }
 
     pub fn contains(&self, id: &str) -> bool {
@@ -343,16 +390,22 @@ pub fn read() -> Result<Config, String> {
     let Ok(s) = std::fs::read_to_string(&p) else {
         return Ok(Config::default());
     };
-    toml::from_str(&s).map_err(|e| {
-        let line = e
-            .span()
-            .map(|r| s[..r.start.min(s.len())].lines().count().max(1));
-        let what = e.message().trim().to_string();
-        match line {
-            Some(l) => format!("config.toml, line {l}: {what}"),
-            None => format!("config.toml: {what}"),
-        }
-    })
+    let parsed: Result<Config, toml::de::Error> = toml::from_str(&s);
+    parsed
+        .map(|mut c| {
+            c.bar.normalize();
+            c
+        })
+        .map_err(|e| {
+            let line = e
+                .span()
+                .map(|r| s[..r.start.min(s.len())].lines().count().max(1));
+            let what = e.message().trim().to_string();
+            match line {
+                Some(l) => format!("config.toml, line {l}: {what}"),
+                None => format!("config.toml: {what}"),
+            }
+        })
 }
 
 /// The `[plugins]` part of config.toml, as text (to notice when it changes).
@@ -413,4 +466,47 @@ pub fn expand(p: &str) -> PathBuf {
         return PathBuf::from(home).join(rest);
     }
     PathBuf::from(p)
+}
+
+#[cfg(test)]
+mod bar_tests {
+    use super::*;
+
+    #[test]
+    fn status_becomes_separate_buttons() {
+        let mut b = BarConfig {
+            right: ["updates", "privacy", "status", "power", "notifications"]
+                .map(String::from)
+                .to_vec(),
+            groups: vec![["privacy", "status", "power"].map(String::from).to_vec()],
+            ..BarConfig::default()
+        };
+        b.normalize();
+        assert_eq!(
+            b.right,
+            [
+                "updates",
+                "privacy",
+                "network",
+                "bluetooth",
+                "volume",
+                "battery",
+                "notifications",
+                "power"
+            ]
+        );
+        assert!(b.groups[0].contains(&"volume".to_string()));
+        // A group that never held `status` keeps its bell.
+        let mut g = BarConfig {
+            right: ["status", "notifications"].map(String::from).to_vec(),
+            groups: vec![["battery", "notifications"].map(String::from).to_vec()],
+            ..BarConfig::default()
+        };
+        g.normalize();
+        assert_eq!(g.groups[0], ["battery", "notifications"]);
+        // Already in today's terms: unchanged.
+        let before = b.clone();
+        b.normalize();
+        assert_eq!(b, before);
+    }
 }

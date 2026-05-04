@@ -7,7 +7,7 @@
 //! file reloads it with a fresh state.
 //!
 //! ```lua
-//! kestrel.bar { style = "pills", right = { "disk", "tray", "status", "power" } }
+//! kestrel.bar { style = "pills", right = { "disk", "tray", "network", "volume", "battery", "power" } }
 //!
 //! kestrel.widget("disk", {
 //!   interval = 60,                       -- seconds between updates (default 10)

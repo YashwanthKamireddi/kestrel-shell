@@ -19,6 +19,16 @@ pub fn hosts_osd(app: &App) -> bool {
 /// The island: the time pill. It always shows the time and date; music (unless it has its
 /// own bubble), the visualiser while music plays, and the weather (unless it has its own
 /// circle) join it, and pop-ups take it over for a moment.
+/// The module's view (the island's items).
+pub fn view<'a>(
+    app: &'a App,
+    o: &'a Output,
+    s: Scheme,
+    open: Option<PanelKind>,
+) -> Vec<Element<'a, Message>> {
+    items(app, o, s, open)
+}
+
 pub fn items<'a>(
     app: &'a App,
     o: &'a Output,
