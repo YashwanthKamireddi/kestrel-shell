@@ -505,7 +505,9 @@ fn card<'a>(
             .no_press_scale()
             .on_enter(msg(Message::Hover(w.address.clone())))
             .on_exit(msg(Message::Unhover(w.address.clone())))
-            .on_press(focus_msg(&w.address));
+            .on_press(focus_msg(&w.address))
+            // Right click: how this app's windows open (its rule in Settings > Windows).
+            .on_right_press(AppMessage::RuleFor(w.class.clone()));
         layers = layers.push(pin(tile).x(x).y(y));
     }
     // Under the card: its number (in the bar's white capsule when it is the one you are on)
