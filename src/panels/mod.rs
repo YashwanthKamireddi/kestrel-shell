@@ -262,6 +262,8 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Capture) => capture::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
+            Some(PanelKind::Media) => media::key(app, k),
+            Some(PanelKind::Keys) => keys::key(app, k),
             // The calendar: months back and forth, Home for today.
             Some(PanelKind::Calendar | PanelKind::Island) => {
                 let m = match k {

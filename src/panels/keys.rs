@@ -21,6 +21,33 @@ pub enum Message {
     Loaded(Vec<(String, Vec<Bind>)>),
 }
 
+static LIST_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("keys-list"));
+
+/// The arrows and Page Up / Down scroll the sheet; Home and End go to its ends.
+pub fn key(_app: &mut App, k: super::Key) -> Task<AppMessage> {
+    use super::Key;
+    use iced::widget::scrollable::{AbsoluteOffset, RelativeOffset};
+    let by = |y: f32| {
+        Task::Iced(iced::widget::scroll_by(
+            LIST_ID.clone(),
+            AbsoluteOffset { x: 0.0, y },
+        ))
+    };
+    match k {
+        Key::Down => by(60.0),
+        Key::Up => by(-60.0),
+        Key::PageDown | Key::Space => by(320.0),
+        Key::PageUp => by(-320.0),
+        Key::Home => Task::Iced(iced::widget::snap_to(
+            LIST_ID.clone(),
+            RelativeOffset { x: 0.0, y: 0.0 },
+        )),
+        Key::End => Task::Iced(iced::widget::snap_to_end(LIST_ID.clone())),
+        _ => Task::none(),
+    }
+}
+
 pub fn open(_app: &mut App) -> Task<AppMessage> {
     Task::perform(hyprland::binds(), |g| {
         AppMessage::Panel(PanelMessage::Keys(Message::Loaded(g)))
@@ -89,6 +116,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             // so); it scrolls only when they don't fit on the screen.
             container(crate::ui::smooth(
                 scrollable(body)
+                    .id(LIST_ID.clone())
                     .height(Length::Shrink)
                     .direction(scrollable::Direction::Vertical(
                         scrollable::Scrollbar::new().width(0).scroller_width(0),

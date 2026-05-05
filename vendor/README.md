@@ -44,3 +44,5 @@ only the changed parts: flashes and tearing in resized/tiled windows, 2026-11-14
 Measured 2026-11-13 in the rig (overview selection, control centre open/close): overlay frame
 time 8.4 ms -> 5.1 ms on average. Canvas drawings are also cached now (`ui::Memo`): an uncached
 canvas was repainted over all its bounds every frame.
+7. `scroll_by` and `snap_to_end` re-exported beside `scroll_to` / `snap_to` (keyboard
+   scrolling in panels: the shortcuts sheet).

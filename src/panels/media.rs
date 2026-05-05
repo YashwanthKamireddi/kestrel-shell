@@ -573,3 +573,18 @@ mod logo_tests {
         assert!(!super::is_browser_logo(&photo));
     }
 }
+
+/// Space plays or pauses the player in front; the arrows go to the previous or next track.
+pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+    use super::Key;
+    let Some(bus) = app.media.main().map(|p| p.bus.clone()) else {
+        return Task::none();
+    };
+    let m = match k {
+        Key::Space | Key::Enter => Message::PlayPause(bus),
+        Key::Left => Message::Previous(bus),
+        Key::Right => Message::Next(bus),
+        _ => return Task::none(),
+    };
+    update(app, m)
+}
