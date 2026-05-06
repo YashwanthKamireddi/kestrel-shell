@@ -86,7 +86,11 @@ pointer) shift; WAYLAND_DISPLAY=$(display) "$HERE/../../target/rig-pointer/relea
 type) shift; WAYLAND_DISPLAY=$(display) wtype "$@" ;;
 bus) # run a command on kestrel's private session bus (e.g. notify-send)
     shift
-    pid=$(for p in $(pgrep -x kestrel); do tr '\0' '\n' </proc/$p/environ | grep -q "^HOME=$WORK/home$" && echo $p; done | head -1)
+    # Every kestrel's HOME checked (`|| true`: under set -e a last non-matching one ended the
+    # script silently, whenever the desktop's kestrel happened to be listed after the rig's).
+    pid=$(for p in $(pgrep -x kestrel || true); do
+        if tr '\0' '\n' </proc/$p/environ 2>/dev/null | grep -q "^HOME=$WORK/home$"; then echo "$p"; fi
+    done | head -1)
     addr=$(tr '\0' '\n' </proc/$pid/environ | grep ^DBUS_SESSION_BUS_ADDRESS= | cut -d= -f2-)
     DBUS_SESSION_BUS_ADDRESS="$addr" "$@" ;;
 msg) shift; KESTREL_SOCKET="$WORK/kestrel.sock" "$BIN" "$@" ;;

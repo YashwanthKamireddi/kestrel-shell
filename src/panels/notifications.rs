@@ -203,7 +203,58 @@ fn picture_size(n: &Notification) -> (f32, f32) {
     }
 }
 
+/// A screenshot (or recording) of kestrel's own: shown under the title across the text's
+/// width at its own shape (height kept between 70 and 150 px), on a faint backing so a dark
+/// picture still shows its edges. A 72 px chip beside the title read as a clipped sliver.
+fn preview<'a>(s: Scheme, n: &Notification, width: f32) -> Option<Element<'a, AppMessage>> {
+    if n.app != "kestrel" {
+        return None;
+    }
+    let Some(Image::Path(p)) = n.image.as_ref() else {
+        return None;
+    };
+    let path = std::path::Path::new(p);
+    let (iw, ih) = image_size(path)?;
+    let h = (width * ih as f32 / iw.max(1) as f32)
+        .clamp(70.0, 150.0)
+        .round();
+    let handle = ui::rounded_file(path, width, h, 10.0)?;
+    Some(
+        container(image(handle).width(width).height(h))
+            .padding(1)
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(0.10 * s.opacity).into()),
+                border: iced::Border::default().rounded(11),
+                ..container::Style::default()
+            })
+            .into(),
+    )
+}
+
+/// A picture file's size, read from its header once per file.
+fn image_size(path: &std::path::Path) -> Option<(u32, u32)> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static SIZES: Mutex<Option<HashMap<std::path::PathBuf, (u32, u32)>>> = Mutex::new(None);
+    let mut guard = SIZES.lock().ok()?;
+    let map = guard.get_or_insert_with(HashMap::new);
+    if let Some(sz) = map.get(path) {
+        return Some(*sz);
+    }
+    let sz = ::image::image_dimensions(path).ok()?;
+    // A handful of screenshots at most are listed; the table stays small.
+    if map.len() > 64 {
+        map.clear();
+    }
+    map.insert(path.to_path_buf(), sz);
+    Some(sz)
+}
+
 fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
+    // kestrel's own pictures are a preview under the title (`preview`), not a chip.
+    if n.app == "kestrel" && matches!(n.image, Some(Image::Path(_))) {
+        return None;
+    }
     let (w, h) = picture_size(n);
     match n.image.as_ref()? {
         // Decoded first: an app's unreadable file must never reach the renderer.
@@ -332,6 +383,12 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         main = main.push(p);
     }
     let mut texts = column![top, main].spacing(4).width(Length::Fill);
+    if let Some(p) = preview(s, n, INNER - 32.0 - 12.0 - 2.0) {
+        texts = texts.push(container(p).padding(iced::Padding {
+            top: 4.0,
+            ..iced::Padding::ZERO
+        }));
+    }
     let actions: Vec<_> = n
         .actions
         .iter()
