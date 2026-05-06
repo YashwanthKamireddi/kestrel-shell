@@ -358,9 +358,11 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
                 ..container::Style::default()
             })
     };
+    // The track a tint of the ink (a surface colour vanished on the card); the fill stops at
+    // its end, while the number says the real level (a boosted volume reads 120).
     let track = stack![
-        bar(track_w, s.raised_hi),
-        bar((track_w * osd.value).max(6.0), s.accent),
+        bar(track_w, s.ink.scale_alpha(0.16 * s.opacity)),
+        bar((track_w * osd.value.clamp(0.0, 1.0)).max(6.0), s.accent),
     ];
     row![
         ui::icon(osd.icon, 18.0, s.ink),
