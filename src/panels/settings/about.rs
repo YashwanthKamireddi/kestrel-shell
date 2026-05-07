@@ -1,0 +1,113 @@
+//! Settings › about: its page.
+
+use super::*;
+
+/// The About page as text, one line each (the computer's name left out).
+pub(super) fn system_report(a: &crate::services::about::About) -> String {
+    let mut lines = vec![
+        format!("Device: {}", a.device),
+        format!("System: {}", a.os),
+        format!("Kernel: {}", a.kernel),
+        format!("Processor: {}", a.processor),
+        format!("Memory: {}", a.memory),
+    ];
+    for g in &a.graphics {
+        lines.push(format!("Graphics: {g}"));
+    }
+    lines.push(format!("Disk: {}", a.disk));
+    lines.push(format!("Compositor: {}", a.compositor));
+    lines.push(format!("Shell: kestrel {}", env!("CARGO_PKG_VERSION")));
+    lines.join("\n")
+}
+
+pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
+    let Some(a) = &app.panels.settings.about else {
+        return Vec::new();
+    };
+    let mut hardware = vec![
+        value_row(s, "Processor", a.processor.clone()),
+        value_row(s, "Memory", a.memory.clone()),
+    ];
+    for g in &a.graphics {
+        hardware.push(value_row(s, "Graphics", g.clone()));
+    }
+    hardware.push(value_row(s, "Disk", a.disk.clone()));
+    [
+        group(
+            s,
+            None,
+            vec![
+                value_row(s, "Device", a.device.clone()),
+                row_of(
+                    s,
+                    "Name",
+                    None,
+                    match &app.panels.settings.rename {
+                        Some(t) => container(
+                            text_input("Name", t)
+                                .id(iced::widget::Id::new("rename"))
+                                .on_input(|t| msg(Message::Rename(Some(t))))
+                                .on_submit(msg(Message::RenameSubmit))
+                                .padding([6, 10])
+                                .size(text::BODY)
+                                .font(theme::FONT)
+                                .width(220)
+                                .style(move |_, _| text_input::Style {
+                                    background: Color::TRANSPARENT.into(),
+                                    border: iced::Border::default(),
+                                    icon: s.ink_dim,
+                                    placeholder: s.ink_faint,
+                                    value: s.ink,
+                                    selection: s.accent_soft,
+                                }),
+                        )
+                        .style(move |_| ui::field_style(s))
+                        .into(),
+                        None => control(label(a.hostname.clone(), text::SMALL, s.ink))
+                            .pill(s, crate::ui::control::Pill::Plain)
+                            .on_press(msg(Message::Rename(Some(a.hostname.clone()))))
+                            .into(),
+                    },
+                ),
+            ],
+        ),
+        group(s, Some("Hardware"), hardware),
+        group(
+            s,
+            Some("Software"),
+            vec![
+                value_row(s, "System", a.os.clone()),
+                value_row(s, "Kernel", a.kernel.clone()),
+                value_row(s, "Compositor", a.compositor.clone()),
+                value_row(s, "Shell", format!("kestrel {}", env!("CARGO_PKG_VERSION"))),
+                value_row(s, "Up for", a.uptime.clone()),
+            ],
+        ),
+        // Everything above as plain text, for a bug report or a forum post (no computer name).
+        group(
+            s,
+            None,
+            vec![row_of(
+                s,
+                "System report",
+                None,
+                control(label("Copy", text::SMALL, s.ink))
+                    .pill(s, crate::ui::control::Pill::Plain)
+                    .on_press(snd(crate::panels::control::Message::CopyIp(system_report(
+                        a,
+                    ))))
+                    .into(),
+            )],
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .chain(
+        app.panels
+            .settings
+            .error
+            .clone()
+            .map(|e| label(e, text::SMALL, s.bad).into()),
+    )
+    .collect()
+}
