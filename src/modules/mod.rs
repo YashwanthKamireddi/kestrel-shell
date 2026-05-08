@@ -23,7 +23,7 @@ pub mod volume;
 pub mod weather;
 pub mod workspaces;
 
-pub use tray::{tray_icon, tray_icon_at};
+pub use tray::tray_icon_at;
 
 use crate::app::{App, Message, Output};
 use crate::config::BarConfig;
