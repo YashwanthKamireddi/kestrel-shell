@@ -97,7 +97,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Smooth<'_, M> {
             }
             Event::Window(iced::window::Event::RedrawRequested(now)) => {
                 let st = tree.state.downcast_mut::<State>();
-                if st.left.0.abs() > 0.5 || st.left.1.abs() > 0.5 {
+                // A redraw of a frame already stepped (same instant) moves nothing.
+                let stepped = st.last == Some(*now);
+                if !stepped && (st.left.0.abs() > 0.5 || st.left.1.abs() > 0.5) {
                     let dt = st
                         .last
                         .map_or(1.0 / 60.0, |t| {

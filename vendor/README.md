@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with six
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with seven
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -23,6 +23,10 @@ that follows (same loop, no frame of delay) draws it with them applied. Before, 
 its remembered height for a frame and then jumped to the one it reported (`redo` in the trace).
 Measured: CPU during panel animations went from ~43 % to ~15 % of a core, because the
 full-screen wallpaper was being re-rasterised on every animation frame.
+7. Every pass of one frame's redraw loop gets the same `RedrawRequested` instant. A retry
+(patch 5) carried a fresh one, so time-driven widgets (smooth scrolling) stepped again on it,
+published again and forced another retry: each scrolling frame was built three times and logged
+"More than 3 consecutive RedrawRequested cycles" (2026-11-15).
 
 `iced_tiny_skia/` is iced_tiny_skia 0.14.1 (MIT) with one kestrel patch (search "kestrel
 patch"): `adjust_clip_mask` touches only the pixels that change. The original wiped and refilled

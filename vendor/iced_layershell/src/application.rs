@@ -707,6 +707,10 @@ where
         // Draw and present surfaces that need redraw.
         // Retries up to 3 times if RedrawRequested produces new messages.
         let mut redraw_count = 0u32;
+        // kestrel patch: one instant for every pass of this frame. A retry redraws the same
+        // frame; a fresh instant made time-driven widgets (smooth scrolling) step again,
+        // publish again and retry again, building each frame three times.
+        let frame_at = std::time::Instant::now();
         loop {
             surface_ids.clear();
             surface_ids.extend(iced_surfaces.keys().copied());
@@ -768,7 +772,7 @@ where
 
                 // RedrawRequested makes widgets commit visual state
                 let redraw_event = [iced_core::Event::Window(
-                    iced_core::window::Event::RedrawRequested(std::time::Instant::now()),
+                    iced_core::window::Event::RedrawRequested(frame_at),
                 )];
                 // kestrel patch: subscriptions see frames too, so `iced::window::frames()`
                 // ticks in step with the compositor's frame callbacks.
