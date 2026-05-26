@@ -325,16 +325,6 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                         shell.capture_event();
                     }
                 }
-                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                    if state.pressed {
-                        state.pressed = false;
-                        state.scale.to(1.0, Spring::CLOSE);
-                        shell.capture_event();
-                        // Redrawn now: without this the pressed look stayed on screen until
-                        // something else redrew, seconds later.
-                        shell.request_redraw();
-                    }
-                }
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if over => {
                     if let Some(m) = &self.on_right_press {
                         shell.publish(m.clone());
@@ -355,6 +345,27 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 }
                 _ => {}
             }
+        }
+
+        // The pressed look ends with the button, wherever the release lands. Seen by every
+        // control, captured or not, and never captured here: each pressed control used to take
+        // the release for itself, so one left pressed (its release landed after the view
+        // changed) kept the next one from ever seeing its own, and every click left another
+        // item lit. A press anywhere else also ends it (the button must have come up).
+        let up = matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+        ) || (matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+        ) && !over)
+            || matches!(event, Event::Mouse(mouse::Event::CursorLeft));
+        if up && state.pressed {
+            state.pressed = false;
+            state.scale.to(1.0, Spring::CLOSE);
+            // Redrawn now: without this the pressed look stayed on screen until something
+            // else redrew, seconds later.
+            shell.request_redraw();
         }
 
         if state.hovered != over {
@@ -411,7 +422,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         let bounds = layout.bounds();
         let (rest, hover) = fade_pair(self.rest, self.hover);
         let mut bg = mix(rest, hover, ease(state.hover_t));
-        if state.pressed {
+        if state.pressed && state.hovered {
             bg = self.press;
         }
         let s = state.scale.value;
@@ -445,7 +456,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                     &clip,
                 );
             });
-            let veil = if state.pressed {
+            let veil = if state.pressed && state.hovered {
                 0.0
             } else {
                 self.veil.a * (1.0 - ease(state.hover_t))

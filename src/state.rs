@@ -62,6 +62,8 @@ pub struct Emoji {
 pub struct Files {
     /// Where the file picker was last used.
     pub last_folder: Option<String>,
+    /// How each folder was last sorted (folder → "name", "modified-desc", …).
+    pub sort: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
