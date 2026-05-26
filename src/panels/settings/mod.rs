@@ -122,7 +122,46 @@ const SYSTEM: [Page; 20] = [
 ];
 
 impl Page {
-    fn name(self) -> &'static str {
+    /// Every page, as the sidebar lists them.
+    pub fn all() -> impl Iterator<Item = Page> {
+        SHELL.into_iter().chain(SYSTEM)
+    }
+
+    /// Everyday words for what the page holds, for the launcher ("wifi" finds Network).
+    pub fn words(self) -> &'static str {
+        match self {
+            Page::Bar => "panel taskbar modules clock tray status",
+            Page::Appearance => {
+                "theme wallpaper background accent colour color font dark icons cursor pointer"
+            }
+            Page::Time => "weather city temperature forecast",
+            Page::Plugins => "extensions lua widgets",
+            Page::Network => {
+                "wifi wi-fi wireless internet ethernet cable vpn hotspot ip dns airplane"
+            }
+            Page::Bluetooth => "airpods headphones earbuds pair devices",
+            Page::Account => "user name password avatar login",
+            Page::Sound => "audio volume speakers headphones microphone mic output input alerts",
+            Page::Displays => "monitor screen resolution refresh rate scale mirror night light",
+            Page::Windows => "gaps blur rounding border shadows rules tiling focus",
+            Page::Notifications => "do not disturb dnd alerts banners quiet",
+            Page::Privacy => "lock screen recent files clipboard history",
+            Page::Startup => "autostart login apps launch at start",
+            Page::Updates => "upgrade packages firmware bios",
+            Page::Storage => "disk space drive",
+            Page::Power => "battery lid sleep suspend charging power button",
+            Page::Access => "accessibility zoom magnifier colour filters greyscale mono",
+            Page::Keyboard => "layout language typing input method repeat",
+            Page::Shortcuts => "keybinds hotkeys keys bindings",
+            Page::Mouse => "touchpad trackpad pointer scroll speed",
+            Page::Defaults => "default apps browser terminal editor open with",
+            Page::DateTime => "clock time zone timezone date region formats",
+            Page::Developer => "debug log restart commands",
+            Page::About => "system info version hardware computer",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
         match self {
             Page::Bar => "Bar",
             Page::Appearance => "Appearance",
@@ -150,7 +189,7 @@ impl Page {
             Page::About => "About",
         }
     }
-    fn icon(self) -> Icon {
+    pub fn icon(self) -> Icon {
         match self {
             Page::Bar => Icon::LayoutGrid,
             Page::Appearance => Icon::Image,
