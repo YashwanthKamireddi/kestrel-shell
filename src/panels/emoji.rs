@@ -1,11 +1,13 @@
 //! Emoji picker (Super+.): a grid, recently used first. Type to filter by name; arrows move in
 //! the grid; Enter (or a click) copies the emoji and types it into the window you came from.
+//! Along the bottom, the categories (as on macOS and Windows): a click jumps to one, and the
+//! one in view is marked as you scroll.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
-use iced::widget::{Space, column, container, mouse_area, row, text_input};
+use iced::widget::{column, container, mouse_area, row, text_input};
 use iced::{Alignment, Color, Element, Length, Task};
 
 const COLUMNS: usize = 10;
@@ -15,6 +17,36 @@ pub const WIDTH: f32 = COLUMNS as f32 * (CELL + 4.0) + 24.0;
 const RECENT_MAX: usize = 30;
 
 const EMOJI: &str = include_str!("../../assets/emoji.txt");
+
+/// The Unicode groups, in the list's order: (the group's first emoji, its tab, its name).
+const GROUPS: [(&str, &str, &str); 9] = [
+    ("😀", "😀", "Smileys"),
+    ("👋", "👋", "People"),
+    ("🐵", "🐶", "Animals and nature"),
+    ("🍇", "🍔", "Food and drink"),
+    ("🌍", "✈️", "Travel and places"),
+    ("🎃", "⚽", "Activities"),
+    ("👓", "💡", "Objects"),
+    ("🏧", "🔣", "Symbols"),
+    ("🏁", "🏁", "Flags"),
+];
+
+/// Which group `e` is in (by its place in the list).
+fn group_of(e: &str) -> usize {
+    static AT: std::sync::LazyLock<(std::collections::HashMap<&'static str, usize>, [usize; 9])> =
+        std::sync::LazyLock::new(|| {
+            let line: std::collections::HashMap<&'static str, usize> = EMOJI
+                .lines()
+                .enumerate()
+                .filter_map(|(i, l)| l.split_once(' ').map(|(e, _)| (e, i)))
+                .collect();
+            let starts = GROUPS.map(|(first, _, _)| line.get(first).copied().unwrap_or(0));
+            (line, starts)
+        });
+    let (line, starts) = &*AT;
+    let at = line.get(e).copied().unwrap_or(0);
+    starts.iter().rposition(|&s| s <= at).unwrap_or(0)
+}
 
 #[derive(Default)]
 pub struct State {
@@ -34,6 +66,8 @@ pub enum Message {
     Query(String),
     Pick(usize),
     Scroll(f32),
+    /// Go to a category (None: recently used).
+    Jump(Option<usize>),
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -105,6 +139,15 @@ fn shown(st: &State) -> Vec<(&str, &str)> {
     }
 }
 
+/// How many of the shown emoji are the recently used ones at the top.
+fn recent_count(st: &State) -> usize {
+    if st.query.trim().is_empty() {
+        st.recent.len()
+    } else {
+        0
+    }
+}
+
 fn settle(st: &mut State, n: usize) {
     st.selected = st.selected.min(n.saturating_sub(1));
     let row = st.selected / COLUMNS;
@@ -135,6 +178,27 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.selected = st.selected.clamp(first, first + ROWS * COLUMNS - 1);
         }
         Message::Hover(i) => st.selected = i,
+        Message::Jump(g) => {
+            let list = shown(st);
+            let recents = recent_count(st);
+            let at = match g {
+                None => Some(0),
+                Some(g) => list
+                    .iter()
+                    .enumerate()
+                    .skip(recents)
+                    .find(|(_, (e, _))| group_of(e) == g)
+                    .map(|(i, _)| i),
+            };
+            if let Some(i) = at {
+                let rows = list.len().div_ceil(COLUMNS);
+                st.top = (i / COLUMNS).min(rows.saturating_sub(ROWS));
+                st.selected = i;
+                st.scroll = 0.0;
+            }
+            // The keyboard back on the search (a click on a tab left it on nothing).
+            return Task::Iced(iced::widget::focus(INPUT_ID.clone()));
+        }
         Message::Pick(i) => {
             let Some((e, _)) = shown(st).get(i).copied() else {
                 return Task::none();
@@ -250,8 +314,19 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         grid = grid.push(line);
     }
     let body: Element<'_, AppMessage> = if list.is_empty() {
-        // Nothing found: the grid's space stays, empty (no "No matches" label).
-        iced::widget::Space::new().height(grid_h).into()
+        // Nothing found: said where the grid would be.
+        container(label(
+            format!("No emoji for “{}”", st.query.trim()),
+            text::BODY,
+            s.ink_dim,
+        ))
+        .center_x(Length::Fill)
+        .padding(iced::Padding {
+            top: 48.0,
+            ..iced::Padding::ZERO
+        })
+        .height(grid_h)
+        .into()
     } else {
         mouse_area(container(grid).height(grid_h))
             .on_scroll(|d| {
@@ -266,21 +341,47 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .get(st.selected)
         .map(|(_, n)| n.to_string())
         .unwrap_or_default();
-    let section = if st.query.trim().is_empty() && !st.recent.is_empty() {
-        if st.selected < st.recent.len() {
-            "Recent"
-        } else {
-            "All"
-        }
-    } else {
-        ""
-    };
-    let footer = row![
-        label_w(name, text::SMALL, s.ink, theme::MEDIUM),
-        Space::new().width(Length::Fill),
-        label(section, text::CAPTION, s.ink_faint),
+    let mut footer = row![
+        label_w(
+            ui::fit(&name, text::SMALL, 190.0),
+            text::SMALL,
+            s.ink,
+            theme::MEDIUM
+        )
+        .width(Length::Fill)
     ]
+    .spacing(2)
     .align_y(Alignment::Center);
+    // The categories, while browsing (a search shows only matches). The one in view is marked.
+    if st.query.trim().is_empty() && !list.is_empty() {
+        let recents = recent_count(st);
+        // The selection's (categories do not start on a new row, so the first emoji in view
+        // can still be the one before's).
+        let here = if st.selected < recents {
+            None
+        } else {
+            list.get(st.selected).map(|(e, _)| group_of(e))
+        };
+        let tab = |glyph: &'static str, on: bool, m: Option<usize>| {
+            control(
+                container(label(glyph, 16.0, s.ink).font(iced::Font::with_name("Twemoji")))
+                    .center(30),
+            )
+            .radius(9.0)
+            .colors(
+                if on { s.selected() } else { Color::TRANSPARENT },
+                if on { s.selected() } else { s.hover() },
+                s.raised_press,
+            )
+            .on_press(msg(Message::Jump(m)))
+        };
+        if recents > 0 {
+            footer = footer.push(tab("🕘", here.is_none(), None));
+        }
+        for (g, (_, glyph, _)) in GROUPS.iter().enumerate() {
+            footer = footer.push(tab(glyph, here == Some(g), Some(g)));
+        }
+    }
     container(column![field, body, container(footer).padding([0, 6])].spacing(10))
         .padding(12)
         .into()
