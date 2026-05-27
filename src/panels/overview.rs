@@ -3,6 +3,9 @@
 //! pictures; the panel is only as wide as its cards (no search, no title line: design call).
 //! Nothing is marked until you choose: a thin ring shows the window under the pointer (gone
 //! when it leaves) or the one Tab and the arrows reached; Enter or a click goes there. Nothing fades or glides.
+//! As in GNOME, macOS and Windows: a window dragged onto another card moves there (while
+//! dragging, a card for a new workspace is added and a copy of the window follows the pointer);
+//! a middle click, Delete or the × on the marked window closes it.
 
 use super::Message as PanelMessage;
 use super::PanelKind;
@@ -34,6 +37,15 @@ pub struct State {
     /// Live pictures of the windows, by address, ready at their tile's size (kept between
     /// opens so the overview shows them at once; refreshed on each open, off the UI thread).
     previews: std::collections::HashMap<String, Ready>,
+    /// A window pressed on (a click or the start of a drag), until the button comes up.
+    pub press: Option<String>,
+    /// Moved far enough from where it was pressed: it is being dragged.
+    dragging: bool,
+    /// The pointer, in the panel, and where it was when the press began.
+    at: Option<iced::Point>,
+    from: Option<iced::Point>,
+    /// The card under the pointer.
+    over: Option<i32>,
 }
 
 /// A window's picture, rounded at a tile's size.
@@ -53,6 +65,17 @@ pub enum Message {
     Live(Vec<crate::services::previews::Frame>),
     /// The pictures taken before opening (`prepare`): shown, then the overview opens.
     Fresh(u64, Vec<crate::services::previews::Frame>),
+    /// The button went down on a window.
+    Press(String),
+    /// The pointer moved over the panel.
+    Moved(iced::Point),
+    /// The button came up, anywhere.
+    Released,
+    /// The pointer is over this card (None: left it).
+    Over(i32),
+    Out(i32),
+    /// Close this window.
+    CloseWindow(String),
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -64,6 +87,9 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
     // Nothing marked until the pointer or a key chooses (a ring on the current window
     // before you did anything read as a heavy border: design call).
     st.selected = None;
+    st.press = None;
+    st.dragging = false;
+    st.over = None;
     Task::batch([
         // The pictures were taken just before it opened (`prepare`); the live stream keeps
         // them moving. Positions change without an event (resizing): read them fresh.
@@ -185,7 +211,16 @@ fn workspace_ids(app: &App) -> Vec<i32> {
         .collect();
     ids.sort_unstable();
     ids.dedup();
+    // Dragging a window: one more, empty, to move it to a workspace of its own.
+    if app.panels.overview.dragging {
+        ids.push(new_workspace(&ids));
+    }
     ids
+}
+
+/// The workspace a window dropped on the empty card goes to: the one after the last in use.
+fn new_workspace(ids: &[i32]) -> i32 {
+    ids.iter().copied().max().unwrap_or(0) + 1
 }
 
 /// Windows of a workspace as they are seen: tiled top-left first, floating ones last; a
@@ -272,6 +307,61 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .previews
                 .retain(|a, _| open.contains(a.as_str()));
         }
+        Message::Press(a) => {
+            let st = &mut app.panels.overview;
+            st.press = Some(a);
+            st.dragging = false;
+            st.from = st.at;
+        }
+        Message::Moved(p) => {
+            let st = &mut app.panels.overview;
+            st.at = Some(p);
+            if st.press.is_some()
+                && !st.dragging
+                && st
+                    .from
+                    .is_some_and(|f| (f.x - p.x).abs() + (f.y - p.y).abs() > 8.0)
+            {
+                st.dragging = true;
+            }
+        }
+        Message::Released => {
+            let st = &mut app.panels.overview;
+            let Some(a) = st.press.take() else {
+                return Task::none();
+            };
+            let dragged = std::mem::take(&mut st.dragging);
+            if !dragged {
+                // A click: go there.
+                return focus(&a);
+            }
+            let from = app
+                .hypr
+                .windows
+                .iter()
+                .find(|w| w.address == a)
+                .map(|w| w.workspace);
+            if let Some(to) = app.panels.overview.over
+                && Some(to) != from
+            {
+                // Moved, and the overview stays (the window shows on its new card).
+                return Task::done(AppMessage::Dispatch(
+                    crate::services::compositor::Action::MoveWindow(a, to),
+                ));
+            }
+        }
+        Message::Over(id) => app.panels.overview.over = Some(id),
+        Message::Out(id) => {
+            let st = &mut app.panels.overview;
+            if st.over == Some(id) {
+                st.over = None;
+            }
+        }
+        Message::CloseWindow(a) => {
+            return Task::done(AppMessage::Dispatch(
+                crate::services::compositor::Action::CloseWindow(a),
+            ));
+        }
         Message::Hover(a) => app.panels.overview.selected = Some(a),
         Message::Unhover(a) => {
             let st = &mut app.panels.overview;
@@ -317,6 +407,12 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
     use super::Key;
     if k == Key::Enter {
         return update(app, Message::Submit);
+    }
+    if k == Key::Delete {
+        return match app.panels.overview.selected.clone() {
+            Some(a) => update(app, Message::CloseWindow(a)),
+            None => Task::none(),
+        };
     }
     let list = order(app);
     if list.is_empty() {
@@ -415,7 +511,47 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         grid = grid.push(r);
     }
-    container(grid).padding(PAD).into()
+    let st = &app.panels.overview;
+    // Dragging: a copy of the window follows the pointer.
+    let ghost: Option<Element<'_, AppMessage>> = st
+        .dragging
+        .then(|| {
+            let a = st.press.as_deref()?;
+            let w = app.hypr.windows.iter().find(|w| w.address == a)?;
+            let at = st.at?;
+            let (gw, gh) = {
+                let (cw, _) = card_size();
+                let (ww, wh) = (w.w.max(1.0), w.h.max(1.0));
+                let gw = cw * 0.6;
+                (gw, (gw * wh / ww).min(cw * 0.6))
+            };
+            let body: Element<'_, AppMessage> = match st.previews.get(a) {
+                Some(r) => iced::widget::image(r.handle.clone())
+                    .width(gw)
+                    .height(gh)
+                    .content_fit(iced::ContentFit::Fill)
+                    .opacity(0.9 * s.opacity)
+                    .into(),
+                None => container(app_icon(&w.class, 24.0, s))
+                    .center_x(gw)
+                    .center_y(gh)
+                    .style(move |_| container::Style {
+                        background: Some(s.ink.scale_alpha(0.12 * s.opacity).into()),
+                        border: iced::Border::default().rounded(7),
+                        ..container::Style::default()
+                    })
+                    .into(),
+            };
+            Some(pin(body).x(at.x - gw / 2.0).y(at.y - gh / 2.0).into())
+        })
+        .flatten();
+    let mut root = stack![container(grid).padding(PAD)];
+    if let Some(g) = ghost {
+        root = root.push(g);
+    }
+    iced::widget::mouse_area(root)
+        .on_move(|p| msg(Message::Moved(p)))
+        .into()
 }
 
 fn card<'a>(
@@ -453,7 +589,14 @@ fn card<'a>(
     for w in &windows {
         let (x, y, bw, bh) = tile_rect(w, width, height);
         let sel = selected == Some(w.address.as_str());
-        let alpha = 1.0;
+        // The window being dragged stays faint in its place.
+        let alpha = if app.panels.overview.dragging
+            && app.panels.overview.press.as_deref() == Some(w.address.as_str())
+        {
+            0.35
+        } else {
+            1.0
+        };
         // The window's last picture, even if its tile changed size since (scaled to fit until
         // the fresh one arrives): an icon flashed for a second before.
         let ready = app.panels.overview.previews.get(&w.address);
@@ -498,6 +641,17 @@ fn card<'a>(
                     }),
             );
         }
+        // The marked window's close button, in its corner (not while dragging).
+        if sel && !app.panels.overview.dragging {
+            tile = tile.push(
+                pin(control(container(icon(Icon::X, 12.0, s.ink)).center(22))
+                    .radius(11.0)
+                    .colors(s.base.scale_alpha(0.85), s.bad, s.bad.scale_alpha(0.8))
+                    .on_press(msg(Message::CloseWindow(w.address.clone()))))
+                .x((bw - 26.0).max(0.0))
+                .y(4.0),
+            );
+        }
         let tile = control(tile)
             .width(bw)
             .height(bh)
@@ -505,9 +659,13 @@ fn card<'a>(
             .no_press_scale()
             .on_enter(msg(Message::Hover(w.address.clone())))
             .on_exit(msg(Message::Unhover(w.address.clone())))
-            .on_press(focus_msg(&w.address))
             // Right click: how this app's windows open (its rule in Settings > Windows).
             .on_right_press(AppMessage::RuleFor(w.class.clone()));
+        // Left: a click goes there, a drag moves it (decided when the button comes up);
+        // middle: closes it.
+        let tile = iced::widget::mouse_area(tile)
+            .on_press(msg(Message::Press(w.address.clone())))
+            .on_middle_press(msg(Message::CloseWindow(w.address.clone())));
         layers = layers.push(pin(tile).x(x).y(y));
     }
     // Under the card: its number (in the bar's white capsule when it is the one you are on)
@@ -545,17 +703,38 @@ fn card<'a>(
     .spacing(8)
     .align_y(Alignment::Center)
     .padding([0, 2]);
-    column![layers, container(caption).height(CAPTION).center_y(CAPTION)]
-        .spacing(CAPTION_GAP)
-        .width(width)
-        .into()
-}
-
-fn focus_msg(address: &str) -> AppMessage {
-    AppMessage::Batch(vec![
-        AppMessage::Dispatch(crate::services::compositor::Action::FocusWindow(
-            String::from(address),
-        )),
-        AppMessage::Close,
-    ])
+    let st = &app.panels.overview;
+    // Dragging: the empty card's +, and a ring on the card it would land on.
+    if st.dragging && windows.is_empty() && !current {
+        layers = layers.push(
+            container(icon(Icon::Plus, 22.0, s.ink_dim))
+                .center_x(width)
+                .center_y(height),
+        );
+    }
+    let from = st
+        .press
+        .as_deref()
+        .and_then(|a| app.hypr.windows.iter().find(|w| w.address == a))
+        .map(|w| w.workspace);
+    if st.dragging && st.over == Some(id) && from != Some(id) {
+        layers = layers.push(container(Space::new()).width(width).height(height).style(
+            move |_| container::Style {
+                border: iced::Border {
+                    color: s.accent,
+                    width: 2.0,
+                    radius: 12.0.into(),
+                },
+                ..container::Style::default()
+            },
+        ));
+    }
+    iced::widget::mouse_area(
+        column![layers, container(caption).height(CAPTION).center_y(CAPTION)]
+            .spacing(CAPTION_GAP)
+            .width(width),
+    )
+    .on_enter(msg(Message::Over(id)))
+    .on_exit(msg(Message::Out(id)))
+    .into()
 }

@@ -1,4 +1,4 @@
-//! rig-pointer move X Y | click X Y [right] | scroll X Y LINES
+//! rig-pointer move X Y | click X Y [right|middle] | drag X1 Y1 X2 Y2 | hold X1 Y1 X2 Y2 MS | scroll X Y LINES
 //! Drives a virtual pointer on the compositor in WAYLAND_DISPLAY (the test rig).
 
 use wayland_client::protocol::{wl_registry, wl_seat};
@@ -42,7 +42,7 @@ fn main() {
         "move" => mv(num(1), num(2)),
         "click" => {
             mv(num(1), num(2));
-            let btn = if a.get(3).is_some_and(|s| s == "right") { 0x111 } else { 0x110 };
+            let btn = match a.get(3).map(String::as_str) { Some("right") => 0x111, Some("middle") => 0x112, _ => 0x110 };
             conn.flush().ok();
             std::thread::sleep(std::time::Duration::from_millis(60));
             p.button(t(), btn, ButtonState::Pressed);
@@ -52,8 +52,9 @@ fn main() {
             p.button(t(), btn, ButtonState::Released);
             p.frame();
         }
-        "drag" => {
-            // Press at X1 Y1, move to X2 Y2 in steps, release.
+        "drag" | "hold" => {
+            // Press at X1 Y1, move to X2 Y2 in steps, release ("hold": wait MS first, still
+            // pressed, for a screenshot in the middle of a drag).
             let (x1, y1, x2, y2) = (num(1) as f64, num(2) as f64, num(3) as f64, num(4) as f64);
             mv(x1 as u32, y1 as u32);
             conn.flush().ok();
@@ -67,7 +68,11 @@ fn main() {
                 mv((x1 + (x2 - x1) * k) as u32, (y1 + (y2 - y1) * k) as u32);
             }
             conn.flush().ok();
-            std::thread::sleep(std::time::Duration::from_millis(60));
+            std::thread::sleep(std::time::Duration::from_millis(if a[0] == "hold" {
+                u64::from(num(5))
+            } else {
+                60
+            }));
             p.button(t(), 0x110, ButtonState::Released);
             p.frame();
         }
@@ -79,7 +84,7 @@ fn main() {
             p.axis_discrete(t(), Axis::VerticalScroll, lines * 15.0, lines as i32);
             p.frame();
         }
-        _ => eprintln!("rig-pointer move X Y | click X Y [right] | drag X1 Y1 X2 Y2 | scroll X Y LINES"),
+        _ => eprintln!("rig-pointer move X Y | click X Y [right|middle] | drag X1 Y1 X2 Y2 | hold X1 Y1 X2 Y2 MS | scroll X Y LINES"),
     }
     q.roundtrip(&mut S).ok();
     std::thread::sleep(std::time::Duration::from_millis(50));

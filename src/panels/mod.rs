@@ -337,6 +337,16 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     // The overview's pictures move with their windows while it is open (a playing video
     // plays): the compositor hands over a new picture each time a window changes.
+    // A window pressed on in the overview: the release ends the click or the drag wherever it
+    // happens (outside a card too).
+    if open == Some(PanelKind::Overview) && app.panels.overview.press.is_some() {
+        subs.push(iced::event::listen_raw(|e, _, _| match e {
+            iced::event::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )) => Some(Message::Overview(overview::Message::Released)),
+            _ => None,
+        }));
+    }
     if open == Some(PanelKind::Overview) {
         subs.push(
             Subscription::run_with(overview::live_jobs(app), |j| {

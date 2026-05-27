@@ -11,6 +11,10 @@ pub enum Action {
     CycleWorkspace(i32),
     /// A window by its compositor address.
     FocusWindow(String),
+    /// Asks a window to close (as its close button would).
+    CloseWindow(String),
+    /// Moves a window to a workspace, staying where you are.
+    MoveWindow(String, i32),
     /// A command line, run by the user's shell.
     Exec(String),
     /// A key with modifiers ("CTRL SHIFT", "V") sent straight to the focused window by the
@@ -59,6 +63,16 @@ fn hyprland_lua(a: &Action) -> String {
         Action::FocusWindow(addr) => {
             format!("hl.dsp.focus({{ window = \"address:{}\" }})", quote(addr))
         }
+        Action::CloseWindow(addr) => {
+            format!(
+                "hl.dsp.window.close({{ window = \"address:{}\" }})",
+                quote(addr)
+            )
+        }
+        Action::MoveWindow(addr, ws) => format!(
+            "hl.dsp.window.move({{ workspace = {ws}, window = \"address:{}\", follow = false }})",
+            quote(addr)
+        ),
         Action::Exec(cmd) => format!("hl.dsp.exec_cmd(\"{}\")", quote(cmd)),
         Action::Shortcut(mods, key) => format!(
             "hl.dsp.send_shortcut({{ mods = \"{}\", key = \"{}\" }})",
