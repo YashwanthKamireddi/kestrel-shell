@@ -1,6 +1,7 @@
 //! Wallpaper picker: large thumbnails of the wallpaper folder, the current one ringed in white
 //! with a check; a click sets the wallpaper (and with it the colours) and saves the choice. The
-//! folder's name opens it in the file manager.
+//! folder's name chooses another folder (kestrel's file picker, folders only; saved as
+//! `wallpaper_dir`); a folder with no pictures says so.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
@@ -51,7 +52,10 @@ pub enum Message {
     /// A random one other than the current.
     Shuffle,
     Set(PathBuf),
-    OpenFolder,
+    /// Choose another folder (the file picker).
+    ChooseFolder,
+    /// The folder chosen.
+    Folder(PathBuf),
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -334,13 +338,29 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 None => Task::none(),
             }
         }
-        Message::OpenFolder => {
-            let _ = std::process::Command::new("xdg-open")
-                .arg(folder(app))
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn();
-            Task::done(AppMessage::Close)
+        Message::ChooseFolder => {
+            app.panels.files.then = Some(|p| msg(Message::Folder(p)));
+            let req = crate::services::filechooser::Request {
+                id: crate::services::filechooser::OWN,
+                title: "Wallpaper folder".into(),
+                directory: true,
+                folder: Some(folder(app)),
+                accept: "Choose".into(),
+                ..Default::default()
+            };
+            Task::done(AppMessage::Close).chain(Task::done(AppMessage::FileRequest(req)))
+        }
+        Message::Folder(p) => {
+            let h = std::env::var("HOME").unwrap_or_default();
+            let shown = match p.strip_prefix(&h) {
+                Ok(rest) => format!("~/{}", rest.display()),
+                Err(_) => p.display().to_string(),
+            };
+            config::set(&[], "wallpaper_dir", toml_edit::value(shown.clone()));
+            app.config.wallpaper_dir = Some(shown);
+            app.panels.wallpaper.items = None;
+            // Back to the pictures, now from there.
+            Task::done(AppMessage::Ipc("toggle wallpaper".into()))
         }
         Message::Set(p) => {
             if let Some(v) = &app.panels.wallpaper.items {
@@ -370,25 +390,58 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .align_y(Alignment::Center)
         )
         .pill(s, crate::ui::control::Pill::Plain)
-        .on_press(msg(Message::OpenFolder)),
-        control(
-            row![
-                ui::icon(Icon::Shuffle, 14.0, s.ink_dim),
-                ui::label("Shuffle", text::SMALL, s.ink)
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center)
-        )
-        .pill(s, crate::ui::control::Pill::Plain)
-        .on_press(msg(Message::Shuffle)),
+        .on_press(msg(Message::ChooseFolder)),
     ]
     .spacing(8)
     .align_y(Alignment::Center)
     .height(size::CONTROL + 4.0);
+    // Shuffle only with something to shuffle to.
+    let header = if app
+        .panels
+        .wallpaper
+        .items
+        .as_ref()
+        .is_some_and(|v| v.len() > 1)
+    {
+        header.push(
+            control(
+                row![
+                    ui::icon(Icon::Shuffle, 14.0, s.ink_dim),
+                    ui::label("Shuffle", text::SMALL, s.ink)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .pill(s, crate::ui::control::Pill::Plain)
+            .on_press(msg(Message::Shuffle)),
+        )
+    } else {
+        header
+    };
     let current = app.config.wallpaper.as_deref().map(config::expand);
     let body: Element<'_, AppMessage> = match &app.panels.wallpaper.items {
         None => empty(s, Icon::Image),
-        Some(v) if v.is_empty() => empty(s, Icon::Image),
+        // A folder with no pictures (or none at all) says which, not just an icon.
+        Some(v) if v.is_empty() => {
+            let f = folder(app);
+            let h = std::env::var("HOME").unwrap_or_default();
+            let shown = match f.strip_prefix(&h) {
+                Ok(rest) => format!("~/{}", rest.display()),
+                Err(_) => f.display().to_string(),
+            };
+            container(ui::label(
+                if f.is_dir() {
+                    format!("No pictures in {shown}")
+                } else {
+                    format!("No folder {shown}")
+                },
+                text::BODY,
+                s.ink_dim,
+            ))
+            .center_x(Length::Fill)
+            .padding([40, 0])
+            .into()
+        }
         Some(v) => {
             let mut grid = column![].spacing(10);
             let sel = app.panels.wallpaper.sel;

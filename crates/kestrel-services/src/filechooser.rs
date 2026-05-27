@@ -48,6 +48,10 @@ pub enum Answer {
     Chosen(Vec<PathBuf>),
 }
 
+/// The id of a request kestrel makes for itself (choosing the wallpaper folder): answered
+/// inside the shell, never sent to an app. Apps' requests count from 1.
+pub const OWN: u64 = 0;
+
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static WAITING: LazyLock<Mutex<HashMap<u64, oneshot::Sender<Answer>>>> =
     LazyLock::new(Default::default);
