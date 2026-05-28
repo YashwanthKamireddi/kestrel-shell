@@ -12,12 +12,16 @@ use iced::{Alignment, Color, Element, Length};
 pub struct State {
     /// Months away from the current one.
     offset: i32,
+    /// Scrolling not yet worth a month (a touchpad sends small steps).
+    scroll: f32,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
     Shift(i32),
     Today,
+    /// The wheel or touchpad over the month, in lines (up: positive).
+    Scroll(f32),
 }
 
 impl State {
@@ -25,6 +29,19 @@ impl State {
         match m {
             Message::Shift(d) => self.offset += d,
             Message::Today => self.offset = 0,
+            // As in GNOME's calendar: down is the next month. A wheel notch is a month; small
+            // touchpad steps add up to one.
+            Message::Scroll(lines) => {
+                self.scroll += lines;
+                while self.scroll >= 1.0 {
+                    self.scroll -= 1.0;
+                    self.offset -= 1;
+                }
+                while self.scroll <= -1.0 {
+                    self.scroll += 1.0;
+                    self.offset += 1;
+                }
+            }
         }
     }
 }
@@ -121,6 +138,12 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         weeks = weeks.push(week);
     }
 
+    let weeks = iced::widget::mouse_area(weeks).on_scroll(|d| {
+        msg(Message::Scroll(match d {
+            iced::mouse::ScrollDelta::Lines { y, .. } => y.signum(),
+            iced::mouse::ScrollDelta::Pixels { y, .. } => y / 60.0,
+        }))
+    });
     column![
         nav,
         Space::new().height(8),

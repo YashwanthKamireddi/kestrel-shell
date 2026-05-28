@@ -1,4 +1,4 @@
-//! rig-pointer move X Y | click X Y [right|middle] | drag X1 Y1 X2 Y2 | hold X1 Y1 X2 Y2 MS | scroll X Y LINES
+//! rig-pointer move X Y | click X Y [right|middle] | drag X1 Y1 X2 Y2 | hold X1 Y1 X2 Y2 MS | sweep X1 Y1 X2 Y2 N MS | scroll X Y LINES
 //! Drives a virtual pointer on the compositor in WAYLAND_DISPLAY (the test rig).
 
 use wayland_client::protocol::{wl_registry, wl_seat};
@@ -76,6 +76,17 @@ fn main() {
             p.button(t(), 0x110, ButtonState::Released);
             p.frame();
         }
+        "sweep" => {
+            // Move from X1 Y1 to X2 Y2 in N steps, MS apart (a real mouse's stream of motion).
+            let (x1, y1, x2, y2) = (num(1) as f64, num(2) as f64, num(3) as f64, num(4) as f64);
+            let (n, ms) = (num(5).max(1), u64::from(num(6)));
+            for i in 0..=n {
+                let k = f64::from(i) / f64::from(n);
+                mv((x1 + (x2 - x1) * k) as u32, (y1 + (y2 - y1) * k) as u32);
+                conn.flush().ok();
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
+        }
         "scroll" => {
             mv(num(1), num(2));
             let lines: f64 = a[3].parse().unwrap();
@@ -84,7 +95,7 @@ fn main() {
             p.axis_discrete(t(), Axis::VerticalScroll, lines * 15.0, lines as i32);
             p.frame();
         }
-        _ => eprintln!("rig-pointer move X Y | click X Y [right|middle] | drag X1 Y1 X2 Y2 | hold X1 Y1 X2 Y2 MS | scroll X Y LINES"),
+        _ => eprintln!("rig-pointer move X Y | click X Y [right|middle] | drag X1 Y1 X2 Y2 | hold X1 Y1 X2 Y2 MS | sweep X1 Y1 X2 Y2 N MS | scroll X Y LINES"),
     }
     q.roundtrip(&mut S).ok();
     std::thread::sleep(std::time::Duration::from_millis(50));
