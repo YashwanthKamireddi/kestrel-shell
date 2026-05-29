@@ -1,6 +1,7 @@
 //! The control centre's sound page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -19,7 +20,7 @@ pub(super) fn meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> {
         .width(Length::FillPortion((((1.0 - v) * 1000.0) as u16).max(1)))
         .height(3);
     container(row![fill, rest])
-        .padding([0, 14])
+        .padding([tok::NONE, tok::L])
         .width(Length::Fill)
         .height(3)
         .into()
@@ -80,7 +81,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
         Space::new().into(),
     );
     let heading = |t: &'static str| {
-        container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD)).padding([4, 6])
+        container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD)).padding([tok::XS, tok::S])
     };
     let check = |on: bool| -> Element<'_, AppMessage> {
         if on {
@@ -89,14 +90,14 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             Space::new().into()
         }
     };
-    let mut col = column![].spacing(10);
+    let mut col = column![].spacing(tok::L);
     if header {
         col = col.push(head);
     }
     let st = &app.panels.control;
 
     // Output: its level and the sound moving, the devices, its card's modes, the balance.
-    let mut out = column![heading("Output")].spacing(6);
+    let mut out = column![heading("Output")].spacing(tok::S);
     let sink = app.audio.sink();
     if let Some(d) = sink {
         out = out.push(level_row(
@@ -116,7 +117,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
         .filter(|d| d.plugged || d.name == app.audio.default_sink)
         .collect();
     let names = short_names(sinks.iter().map(|d| device_name(&d.description)));
-    let mut list = column![].spacing(2);
+    let mut list = column![].spacing(tok::XXS);
     for (d, name) in sinks.into_iter().zip(names) {
         let active = d.name == app.audio.default_sink;
         let i = if d.bluetooth || d.headphones {
@@ -144,7 +145,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
         .and_then(|c| app.audio.cards.iter().find(|k| k.index == c))
         .filter(|k| k.profiles.len() > 1)
     {
-        let mut modes = column![heading("Mode")].spacing(2);
+        let mut modes = column![heading("Mode")].spacing(tok::XXS);
         for (name, description) in &card.profiles {
             let active = *name == card.active;
             modes = modes.push(list_row(
@@ -171,7 +172,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
         let even = (d.balance.abs() < 0.03).then_some(());
         let bar = slider(
             row![
-                container(label("Left", text::CAPTION, s.ink_dim)).padding([0, 12]),
+                container(label("Left", text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::L]),
                 Space::new().width(Length::Fill),
                 label(
                     if even.is_some() {
@@ -183,7 +184,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                     s.ink_dim
                 ),
                 Space::new().width(Length::Fill),
-                container(label("Right", text::CAPTION, s.ink_dim)).padding([0, 12]),
+                container(label("Right", text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::L]),
             ]
             .align_y(Alignment::Center),
             v,
@@ -194,13 +195,13 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             ),
             |v| msg(Message::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
         );
-        out = out.push(column![heading("Balance"), bar].spacing(6));
+        out = out.push(column![heading("Balance"), bar].spacing(tok::S));
     }
     col = col.push(out);
 
     // Input: the microphone's level and the sound it hears, then the microphones.
     if let Some(d) = app.audio.source() {
-        let mut input = column![heading("Input")].spacing(6).push(level_row(
+        let mut input = column![heading("Input")].spacing(tok::S).push(level_row(
             s,
             if d.muted { Icon::MicOff } else { Icon::Mic },
             if d.muted { 0.0 } else { d.volume.min(1.0) },
@@ -221,7 +222,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                     .iter()
                     .map(|d| mic_name(device_name(&d.description))),
             );
-            let mut mics = column![].spacing(2);
+            let mut mics = column![].spacing(tok::XXS);
             for (d, name) in sources.into_iter().zip(names) {
                 let active = d.name == app.audio.default_source;
                 mics = mics.push(list_row(
@@ -241,7 +242,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
 
     // Apps playing sound.
     if !app.audio.apps.is_empty() {
-        let mut apps = column![heading("Apps")].spacing(10);
+        let mut apps = column![heading("Apps")].spacing(tok::L);
         for a in &app.audio.apps {
             let level = app
                 .meters
@@ -256,7 +257,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
     }
     // Apps recording (a microphone).
     if !app.audio.recorders.is_empty() {
-        let mut rec = column![heading("Recording")].spacing(10);
+        let mut rec = column![heading("Recording")].spacing(tok::L);
         for a in &app.audio.recorders {
             rec = rec.push(app_row(app, s, a, 0.0, st.sound_open.as_deref(), true));
         }
@@ -293,7 +294,7 @@ pub(super) fn app_row<'a>(
         .into(),
     };
     let mute = ui::control(container(lead).center(32))
-        .radius(16.0)
+        .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(msg(if recording {
             Message::RecMute(ids.clone())
@@ -355,7 +356,7 @@ pub(super) fn app_row<'a>(
                         s.ink_dim
                     ),
                 ]
-                .spacing(4)
+                .spacing(tok::XS)
                 .align_y(Alignment::Center),
             )
             .pill(s, crate::ui::control::Pill::Quiet)
@@ -390,13 +391,13 @@ pub(super) fn app_row<'a>(
             })
         },
     );
-    let mut body = column![title, bar].spacing(4).width(Length::Fill);
+    let mut body = column![title, bar].spacing(tok::XS).width(Length::Fill);
     if !recording {
         body = body.push(meter(s, if a.muted { 0.0 } else { level }));
     }
     // Its devices to choose from, right under it, while open.
     if expanded {
-        let mut list = column![].spacing(2);
+        let mut list = column![].spacing(tok::XXS);
         for (d, name) in usable.iter().zip(&names) {
             let active = d.name == on;
             list = list.push(list_row(
@@ -424,7 +425,10 @@ pub(super) fn app_row<'a>(
         }
         body = body.push(list);
     }
-    row![mute, body].spacing(8).align_y(Alignment::Start).into()
+    row![mute, body]
+        .spacing(tok::M)
+        .align_y(Alignment::Start)
+        .into()
 }
 
 /// Drops the words every name starts with, when there are several names that share them.

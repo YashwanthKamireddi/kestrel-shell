@@ -4,6 +4,7 @@ use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::icons;
 use crate::services::notifications::{self, Image, Notification, Reason};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row, scrollable};
@@ -334,11 +335,11 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         Space::new().width(Length::Fill),
         label(ago(n.time), text::CAPTION, s.ink_faint),
         control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
-            .radius(10.0)
+            .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Tonal)
             .on_press(msg(Message::Dismiss(n.id))),
     ]
-    .spacing(6)
+    .spacing(tok::S)
     .align_y(Alignment::Center);
     let wrapped = |t: String, size: f32, color: Color, bold: bool| {
         iced::widget::text(t)
@@ -356,7 +357,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
             .width(Length::Fill)
     };
-    let mut words = column![].spacing(2).width(text_w);
+    let mut words = column![].spacing(tok::XXS).width(text_w);
     if !n.summary.trim().is_empty() {
         words = words.push(wrapped(
             lines_of(n.summary.trim(), text::BODY, text_w, 2),
@@ -374,11 +375,11 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             false,
         ));
     }
-    let mut main = row![words].spacing(12).align_y(Alignment::Start);
+    let mut main = row![words].spacing(tok::L).align_y(Alignment::Start);
     if let Some(p) = pic {
         main = main.push(p);
     }
-    let mut texts = column![top, main].spacing(4).width(Length::Fill);
+    let mut texts = column![top, main].spacing(tok::XS).width(Length::Fill);
     if let Some(p) = preview(s, n, INNER - 32.0 - 12.0 - 2.0) {
         texts = texts.push(container(p).padding(iced::Padding {
             top: 4.0,
@@ -405,7 +406,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
                     .on_press(msg(Message::Action(n.id, k.clone())))
                     .into()
                 }))
-                .spacing(6),
+                .spacing(tok::S),
             )
             .padding(iced::Padding {
                 top: 6.0,
@@ -414,7 +415,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         );
     }
     let body = row![app_icon(s, n), texts]
-        .spacing(12)
+        .spacing(tok::L)
         .align_y(Alignment::Start);
     let col = column![body];
     // What a click on the card does: the app's default action, or for kestrel's own entries
@@ -431,7 +432,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         Color::TRANSPARENT
     };
     control(col)
-        .padding(12)
+        .padding(tok::L)
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
         .colors(
@@ -461,14 +462,14 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .on_press(msg(Message::ClearAll)),
     ]
     .align_y(Alignment::Center)
-    .padding([0, 4]);
-    let list = column(app.notifications.iter().rev().map(|n| card(s, n, true))).spacing(8);
+    .padding([tok::NONE, tok::XS]);
+    let list = column(app.notifications.iter().rev().map(|n| card(s, n, true))).spacing(tok::M);
     let list = scrollable(list)
         .height(Length::Shrink)
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new().width(0).scroller_width(0),
         ));
     column![header, container(crate::ui::smooth(list)).max_height(380)]
-        .spacing(8)
+        .spacing(tok::M)
         .into()
 }

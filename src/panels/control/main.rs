@@ -1,6 +1,7 @@
 //! The control centre's main page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -39,7 +40,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ),
             label(detail, text::SMALL, s.ink_dim),
         ]
-        .spacing(8)
+        .spacing(tok::M)
         .align_y(Alignment::Center)
         .into()
     } else {
@@ -76,7 +77,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             false
         ),
     ]
-    .spacing(2)
+    .spacing(tok::XXS)
     .padding(iced::Padding {
         right: 3.0,
         ..iced::Padding::ZERO
@@ -102,16 +103,16 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             )
         })
         .collect();
-    let mut grid = column![].spacing(8);
+    let mut grid = column![].spacing(tok::M);
     let mut it = tiles.into_iter();
     while let Some(first) = it.next() {
         let second = it
             .next()
             .unwrap_or_else(|| Space::new().width(Length::Fill).into());
-        grid = grid.push(row![first, second].spacing(8));
+        grid = grid.push(row![first, second].spacing(tok::M));
     }
 
-    let mut levels = column![].spacing(8);
+    let mut levels = column![].spacing(tok::M);
     let sink = app.audio.sink();
     if let Some(d) = sink {
         levels = levels.push(level_row(
@@ -173,12 +174,12 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
     }
 
-    let mut page = column![header, grid, card(s, levels)].spacing(12);
+    let mut page = column![header, grid, card(s, levels)].spacing(tok::L);
     // Apps running in the background (the system tray), here with the rest of the system: a
     // click opens the app, a right click its menu.
     if !app.tray.items.is_empty() {
         let out = app.panel.as_ref().map(|p| p.output);
-        let mut icons = row![].spacing(2).align_y(Alignment::Center);
+        let mut icons = row![].spacing(tok::XXS).align_y(Alignment::Center);
         for item in &app.tray.items {
             let menu = item.clone();
             let mut c = ui::control(
@@ -203,9 +204,9 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     s.ink,
                     theme::SEMIBOLD
                 ))
-                .padding([0, 4]),
+                .padding([tok::NONE, tok::XS]),
                 container(icons)
-                    .padding([4, 4])
+                    .padding([tok::XS, tok::XS])
                     .width(Length::Fill)
                     .height(h)
                     .align_y(Alignment::Center)
@@ -215,7 +216,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         ..iced::widget::container::Style::default()
                     }),
             ]
-            .spacing(8),
+            .spacing(tok::M),
         );
     }
     page.push(crate::panels::notifications::section(app, s))
@@ -239,7 +240,7 @@ pub(super) fn level_row<'a>(
     );
     let inner = row![
         ui::control(container(icon(i, size::ICON, s.on_accent)).center(32))
-            .radius(16.0)
+            .radius(tok::FULL)
             .colors(
                 iced::Color::TRANSPARENT,
                 s.on_accent.scale_alpha(0.12),
@@ -258,7 +259,7 @@ pub(super) fn level_row<'a>(
         (s.ink.scale_alpha(0.07 * s.opacity), s.accent),
         move |v| msg(on_change(v)),
     );
-    let mut r = row![bar].spacing(4).align_y(Alignment::Center);
+    let mut r = row![bar].spacing(tok::XS).align_y(Alignment::Center);
     if let Some(d) = details {
         r = r.push(icon_button(s, Icon::ChevronRight, d, false));
     }

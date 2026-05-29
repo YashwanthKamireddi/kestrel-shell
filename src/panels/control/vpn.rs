@@ -1,13 +1,14 @@
 //! The control centre's vpn page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
 /// A section title inside a page.
 pub(super) fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
     container(label_w(title, text::SMALL, s.ink_dim, theme::SEMIBOLD))
-        .padding([6, 6])
+        .padding([tok::S, tok::S])
         .into()
 }
 
@@ -21,7 +22,7 @@ pub(super) fn fact<'a>(
         label(name.into(), text::SMALL, s.ink_dim).width(Length::Fill),
         label(value.into(), text::SMALL, s.ink),
     ]
-    .padding([4, 6])
+    .padding([tok::XS, tok::S])
     .into()
 }
 
@@ -36,7 +37,7 @@ pub(super) fn setting<'a>(
         label(name, text::BODY, s.ink).width(Length::Fill),
         switch(s, on, m)
     ]
-    .padding([6, 6])
+    .padding([tok::S, tok::S])
     .align_y(Alignment::Center)
     .into()
 }
@@ -68,10 +69,10 @@ pub(super) fn summary<'a>(
             label_w(title, text::BODY, s.ink, theme::SEMIBOLD),
             label(sub, text::CAPTION, s.ink_dim),
         ]
-        .spacing(2),
+        .spacing(tok::XXS),
     ]
-    .spacing(12)
-    .padding([4, 4])
+    .spacing(tok::L)
+    .padding([tok::XS, tok::XS])
     .align_y(Alignment::Center)
     .into()
 }
@@ -100,7 +101,7 @@ pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 "Your connection is direct".into()
             )
         ]
-        .spacing(10)
+        .spacing(tok::L)
         .into();
     };
     let connected = w.status.starts_with("Connected");
@@ -116,10 +117,10 @@ pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         header,
         summary(s, Icon::Cloud, connected, w.status.clone(), sub)
     ]
-    .spacing(6);
+    .spacing(tok::S);
     // Modes: what WARP carries.
     col = col.push(heading(s, "Mode"));
-    let mut modes = column![].spacing(2);
+    let mut modes = column![].spacing(tok::XXS);
     for (m, name, note) in [
         (
             "warp+doh",
@@ -155,7 +156,7 @@ pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ));
     }
     col = col.push(modes);
-    let mut facts = column![].spacing(0);
+    let mut facts = column![].spacing(tok::NONE);
     if !w.account.is_empty() {
         facts = facts.push(fact(s, "Account", w.account.clone()));
     }
@@ -192,7 +193,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 "Not on your tailnet".into()
             )
         ]
-        .spacing(10)
+        .spacing(tok::L)
         .into();
     };
     let ts = |args: &[&str]| {
@@ -201,7 +202,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ))
     };
     let running = net.state == "Running";
-    let mut col = column![header].spacing(6);
+    let mut col = column![header].spacing(tok::S);
     if net.state == "NeedsLogin" {
         col = col.push(summary(
             s,
@@ -237,18 +238,19 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     };
     col = col.push(summary(s, Icon::Network, running, net.name.clone(), sub));
     if let Some(e) = &st.ts_error {
-        col = col.push(container(label(e.clone(), text::CAPTION, s.warn)).padding([2, 6]));
+        col = col
+            .push(container(label(e.clone(), text::CAPTION, s.warn)).padding([tok::XXS, tok::S]));
     }
     // This device.
-    let mut me = column![].spacing(0);
+    let mut me = column![].spacing(tok::NONE);
     if !net.ip.is_empty() {
         me = me.push(
             ui::control(row![
                 label("IPv4", text::SMALL, s.ink_dim).width(Length::Fill),
                 label(net.ip.clone(), text::SMALL, s.ink),
             ])
-            .padding([4, 6])
-            .radius(8.0)
+            .padding([tok::XS, tok::S])
+            .radius(tok::R_CONTROL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::CopyIp(net.ip.clone()))),
         );
@@ -301,7 +303,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             none,
             Some(ts(&["set", "--exit-node="])),
         )]
-        .spacing(2);
+        .spacing(tok::XXS);
         for p in exits {
             list = list.push(list_row(
                 s,
@@ -327,7 +329,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
     // Devices.
     col = col.push(heading(s, "Devices"));
-    let mut list = column![].spacing(2);
+    let mut list = column![].spacing(tok::XXS);
     for p in net.peers.iter().take(8) {
         let i = match p.os.as_str() {
             "iOS" | "android" => Icon::Smartphone,
@@ -368,7 +370,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .pill(s, crate::ui::control::Pill::Quiet)
                 .on_press(ts(&["logout"])),
         ]
-        .padding([4, 0]),
+        .padding([tok::XS, tok::NONE]),
     );
     ui::smooth(
         iced::widget::scrollable(col)

@@ -1,6 +1,7 @@
 //! The control centre's bluetooth page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -27,10 +28,10 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         switch(s, b.powered, msg(Message::Bluetooth(!b.powered))),
     );
     let st = &app.panels.control;
-    let mut list = column![].spacing(2);
+    let mut list = column![].spacing(tok::XXS);
     if !b.powered {
         list = list.push(empty(s, Icon::BluetoothOff));
-        return column![header, list].spacing(8).into();
+        return column![header, list].spacing(tok::M).into();
     }
     // Your devices: a click connects or disconnects; the trailing button forgets (asking
     // once: "Forget?" in red, a second press removes it).
@@ -58,15 +59,15 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let armed = st.forget.as_deref() == Some(d.path.as_str());
         let forget: Element<'_, AppMessage> = if armed {
             crate::ui::control(label_w("Forget?", text::SMALL, s.base, theme::MEDIUM))
-                .padding([4, 10])
-                .radius(12.0)
+                .padding([tok::XS, tok::L])
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::Forget(d.path.clone())))
                 .into()
         } else {
             crate::ui::control(icon(Icon::X, 16.0, s.ink_dim))
-                .padding(6)
-                .radius(14.0)
+                .padding(tok::S)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::Forget(d.path.clone())))
                 .into()
@@ -147,5 +148,5 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             (st.pairing.is_none()).then(|| msg(Message::Pair(d.path.clone()))),
         ));
     }
-    column![header, list].spacing(8).into()
+    column![header, list].spacing(tok::M).into()
 }

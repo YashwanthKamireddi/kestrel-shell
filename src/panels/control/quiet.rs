@@ -1,6 +1,7 @@
 //! The control centre's quiet page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -27,7 +28,7 @@ pub(super) fn quiet_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         switch(s, app.dnd, msg(Message::Dnd)),
     );
     let until = crate::state::get(|st| st.toggles.dnd_until);
-    let mut list = column![].spacing(2);
+    let mut list = column![].spacing(tok::XXS);
     for (name, minutes) in [
         ("For 1 hour", 60u64),
         ("For 3 hours", 180),
@@ -63,8 +64,8 @@ pub(super) fn quiet_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 text::SMALL,
                 s.ink_dim,
             ))
-            .padding([6, 12]),
+            .padding([tok::S, tok::L]),
         );
     }
-    column![header, list].spacing(8).into()
+    column![header, list].spacing(tok::M).into()
 }

@@ -1,6 +1,7 @@
 //! The control centre's power page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -12,7 +13,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         Space::new().into(),
     );
     let current = app.power.profile;
-    let mut list = column![].spacing(2);
+    let mut list = column![].spacing(tok::XXS);
     for (p, i, note) in [
         (
             power::Profile::PowerSaver,
@@ -41,5 +42,5 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Some(msg(Message::SetProfile(p))),
         ));
     }
-    column![header, list].spacing(8).into()
+    column![header, list].spacing(tok::M).into()
 }

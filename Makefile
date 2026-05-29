@@ -5,6 +5,7 @@ SCOPE =
 
 check:
 	cargo fmt --all -- --check
+	tools/lint/tokens.sh
 	$(SCOPE) cargo clippy --release --workspace --all-targets -- -D warnings
 	$(SCOPE) cargo test --release --workspace
 

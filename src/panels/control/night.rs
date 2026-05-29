@@ -1,6 +1,7 @@
 //! The control centre's night page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -63,9 +64,11 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     };
     column![
         header,
-        column![bar, ends].spacing(6).padding([4, 4]),
+        column![bar, ends]
+            .spacing(tok::S)
+            .padding([tok::XS, tok::XS]),
         schedule
     ]
-    .spacing(12)
+    .spacing(tok::L)
     .into()
 }

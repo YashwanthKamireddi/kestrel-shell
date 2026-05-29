@@ -4,6 +4,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{audio, bluetooth, network, power, toggles};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::slider::slider;
 use crate::ui::{
@@ -822,7 +823,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         Page::Network => network_page(app, s),
         Page::Hidden => hidden_page(app, s),
     };
-    container(body).padding(12).into()
+    container(body).padding(tok::L).into()
 }
 
 /// Keys on the main page: arrows move between tiles (two per row), Space flips the tile,

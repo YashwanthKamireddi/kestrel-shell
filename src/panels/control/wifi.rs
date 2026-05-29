@@ -1,6 +1,7 @@
 //! The control centre's wifi page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -12,7 +13,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         msg(Message::Page(Page::Main)),
         switch(s, n.wifi_enabled, msg(Message::Wifi(!n.wifi_enabled))),
     );
-    let mut list = column![].spacing(2);
+    let mut list = column![].spacing(tok::XXS);
     if !n.wifi_enabled {
         list = list.push(empty(s, Icon::WifiOff));
     } else if n.networks.is_empty() {
@@ -77,7 +78,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                             .secure(true)
                             .on_input(|t| msg(Message::Password(t)))
                             .on_submit(msg(Message::SubmitPassword))
-                            .padding([8, 12])
+                            .padding([tok::M, tok::L])
                             .size(text::BODY)
                             .font(theme::FONT)
                             .style(move |_, _| text_input::Style {
@@ -92,7 +93,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     // The same quiet capsule as every other field (no accent outline on focus).
                     .style(move |_| ui::field_style(s)),
                 )
-                .padding([4, 0]),
+                .padding([tok::XS, tok::NONE]),
             );
         }
     }
@@ -127,7 +128,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Some(msg(Message::Page(Page::Hidden))),
         ));
     }
-    column![header, list].spacing(8).into()
+    column![header, list].spacing(tok::M).into()
 }
 
 /// A small heading over a part of a list.
@@ -146,7 +147,7 @@ pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, AppMessage> {
 pub(super) fn info_button<'a>(s: Scheme, m: AppMessage) -> Element<'a, AppMessage> {
     crate::ui::control(icon(Icon::Info, 18.0, s.ink_dim))
         .padding(5)
-        .radius(14.0)
+        .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(m)
         .into()
@@ -161,7 +162,7 @@ pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element
         ]
         .align_y(Alignment::Center),
     )
-    .padding([0, 12])
+    .padding([tok::NONE, tok::L])
     .height(32)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
@@ -183,7 +184,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         msg(Message::Page(Page::Wifi)),
         Space::new().into(),
     );
-    let mut body = column![].spacing(2);
+    let mut body = column![].spacing(tok::XXS);
     let active = n.ssid.as_deref() == Some(ssid.as_str());
     if active && let Some(d) = &n.details {
         if let Some(ip) = &d.ipv4 {
@@ -226,10 +227,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 ]
                 .align_y(Alignment::Center),
             )
-            .padding([10, 12]),
+            .padding([tok::L, tok::L]),
         );
     }
-    let mut buttons = row![Space::new().width(Length::Fill)].spacing(8);
+    let mut buttons = row![Space::new().width(Length::Fill)].spacing(tok::M);
     if active {
         buttons = buttons.push(
             crate::ui::control(label_w("Disconnect", text::SMALL, s.ink, theme::MEDIUM))
@@ -240,8 +241,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     if saved.is_some() {
         buttons = buttons.push(if st.forget_net {
             crate::ui::control(label_w("Forget?", text::SMALL, s.base, theme::MEDIUM))
-                .padding([6, 14])
-                .radius(14.0)
+                .padding([tok::S, tok::L])
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::ForgetNetwork))
         } else {
@@ -250,8 +251,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .on_press(msg(Message::ForgetNetwork))
         });
     }
-    column![header, body, container(buttons).padding([8, 4])]
-        .spacing(8)
+    column![header, body, container(buttons).padding([tok::M, tok::XS])]
+        .spacing(tok::M)
         .into()
 }
 
@@ -275,7 +276,7 @@ pub(super) fn hidden_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .secure(secure)
                 .on_input(move |t| msg(on(t)))
                 .on_submit(msg(Message::JoinHidden))
-                .padding([8, 12])
+                .padding([tok::M, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
                 .style(move |_, _| text_input::Style {
@@ -308,8 +309,8 @@ pub(super) fn hidden_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             true,
             Message::HiddenPassword
         ),
-        container(row![Space::new().width(Length::Fill), join]).padding([8, 4]),
+        container(row![Space::new().width(Length::Fill), join]).padding([tok::M, tok::XS]),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .into()
 }

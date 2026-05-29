@@ -270,6 +270,11 @@ pub mod tok {
     pub const R_ROW: f32 = 10.0;
     pub const R_CONTROL: f32 = 8.0;
 
+    /// Fully round, whatever the height (controls cap a radius at half their height).
+    pub const FULL: f32 = 999.0;
+    /// No space.
+    pub const NONE: f32 = 0.0;
+
     /// Fully round for something `h` tall.
     pub const fn pill(h: f32) -> f32 {
         h / 2.0
