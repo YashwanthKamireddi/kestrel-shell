@@ -362,14 +362,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ))
             .padding([4, 10])
             .radius(12.0)
-            .colors(
+            .kind(
+                s,
                 if on {
-                    s.accent
+                    crate::ui::control::Kind::Primary
                 } else {
-                    s.ink.scale_alpha(0.06 * s.opacity)
+                    crate::ui::control::Kind::Tonal
                 },
-                if on { s.accent } else { s.selected() },
-                s.raised_press,
             )
             .on_press(msg(Message::Select(q.bus.clone())))
             .into()
@@ -451,7 +450,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let side = |i: Icon, m: Option<AppMessage>| {
         control(container(icon(i, 17.0, if m.is_some() { s.ink } else { s.ink_faint })).center(36))
             .radius(18.0)
-            .colors(Color::TRANSPARENT, s.ink.scale_alpha(0.08), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press_maybe(m)
     };
     let play = control(
@@ -463,7 +462,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .center(48),
     )
     .radius(24.0)
-    .colors(s.accent, s.accent, s.accent)
+    .kind(s, crate::ui::control::Kind::Primary)
     .on_press(msg(Message::PlayPause(bus.clone())));
     let transport = row![
         side(

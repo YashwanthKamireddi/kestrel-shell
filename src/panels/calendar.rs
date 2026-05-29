@@ -6,7 +6,7 @@ use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, control, icon_button, label, label_w};
 use chrono::{Datelike, Duration, NaiveDate};
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Color, Element, Length};
+use iced::{Alignment, Element, Length};
 
 #[derive(Default)]
 pub struct State {
@@ -96,7 +96,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ))
     .padding([4, 8])
     .radius(size::CONTROL_RADIUS)
-    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+    .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::Today));
 
     let nav = row![

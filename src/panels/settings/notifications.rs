@@ -55,7 +55,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                 )
                 .padding([4, 10])
                 .radius(14.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::QuietOpen((!open).then_some(which))))
                 .into(),
             ));
@@ -86,10 +86,13 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                             .padding([5, 0])
                             .width(Length::Fill)
                             .radius(12.0)
-                            .colors(
-                                if on { s.accent } else { Color::TRANSPARENT },
-                                if on { s.accent } else { s.hover() },
-                                s.raised_press,
+                            .kind(
+                                s,
+                                if on {
+                                    crate::ui::control::Kind::Primary
+                                } else {
+                                    crate::ui::control::Kind::Ghost
+                                },
                             )
                             .no_press_scale()
                             .on_press(msg(Message::Quiet(Some(pick)))),
@@ -211,7 +214,7 @@ pub(super) fn sound_toggle<'a>(
     ))
     .padding(7)
     .radius(15.0)
-    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+    .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::NotifySilent(name.to_string(), !on)))
     .into()
 }

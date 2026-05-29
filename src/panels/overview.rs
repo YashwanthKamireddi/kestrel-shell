@@ -572,11 +572,13 @@ fn card<'a>(
             .width(width)
             .height(height)
             .radius(12.0)
-            .colors(
-                s.ink
-                    .scale_alpha(if current { 0.08 } else { 0.05 } * s.opacity),
-                s.ink.scale_alpha(0.1 * s.opacity),
-                s.ink.scale_alpha(0.12 * s.opacity),
+            .kind(
+                s,
+                if current {
+                    crate::ui::control::Kind::Chosen
+                } else {
+                    crate::ui::control::Kind::Tonal
+                }
             )
             .no_press_scale()
             .on_press(AppMessage::Batch(vec![

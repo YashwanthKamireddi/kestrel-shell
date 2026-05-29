@@ -201,7 +201,7 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     card(
         s,
         ui::control(r.align_y(Alignment::Start))
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .radius(theme::size::CARD_RADIUS)
             .no_press_scale()
             .on_press(AppMessage::Ipc("toggle system".into())),

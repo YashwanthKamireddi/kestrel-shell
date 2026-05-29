@@ -67,7 +67,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 control(icon(Icon::Eject, 16.0, s.ink))
                     .padding(6)
                     .radius(14.0)
-                    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                    .kind(s, crate::ui::control::Kind::Ghost)
                     .on_press(msg(Message::VolumeEject(v.path.clone(), v.drive.clone()))),
             );
         }
@@ -164,7 +164,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         )
                         .padding([10, 16])
                         .width(Length::Fill)
-                        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                        .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()
                         .on_press(msg(Message::VolumeOpen(
                             String::new(),

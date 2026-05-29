@@ -335,11 +335,7 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         label(ago(n.time), text::CAPTION, s.ink_faint),
         control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
             .radius(10.0)
-            .colors(
-                s.ink.scale_alpha(0.06 * s.opacity),
-                s.ink.scale_alpha(0.14 * s.opacity),
-                s.ink.scale_alpha(0.2 * s.opacity),
-            )
+            .kind(s, crate::ui::control::Kind::Tonal)
             .on_press(msg(Message::Dismiss(n.id))),
     ]
     .spacing(6)

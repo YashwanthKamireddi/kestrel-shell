@@ -2196,10 +2196,13 @@ fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'
             ))
             .padding([6, 14])
             .radius(14.0)
-            .colors(
-                if *on { s.accent } else { Color::TRANSPARENT },
-                if *on { s.accent } else { s.hover() },
-                s.raised_press,
+            .kind(
+                s,
+                if *on {
+                    crate::ui::control::Kind::Primary
+                } else {
+                    crate::ui::control::Kind::Ghost
+                },
             )
             .on_press(m.clone()),
         );
@@ -2328,14 +2331,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .height(36)
             .width(Length::Fill)
             .radius(size::ROW_RADIUS)
-            .colors(
+            .kind(
+                s,
                 if on {
-                    s.ink.scale_alpha(0.09 * s.opacity)
+                    crate::ui::control::Kind::Chosen
                 } else {
-                    Color::TRANSPARENT
+                    crate::ui::control::Kind::Ghost
                 },
-                s.ink.scale_alpha(0.09 * s.opacity),
-                s.ink.scale_alpha(0.09 * s.opacity),
             )
             .no_press_scale()
             .on_press(msg(Message::Page(p))),
@@ -2429,7 +2431,7 @@ fn stepper<'a>(s: Scheme, n: i64) -> Element<'a, AppMessage> {
     let arrow = |i: Icon, m: Message| {
         control(container(icon(i, 16.0, s.ink)).center(28))
             .radius(14.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(m))
     };
     row![
@@ -2518,7 +2520,7 @@ fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, A
         control(label(value.clone(), text::BODY, s.ink_dim))
             .padding([4, 10])
             .radius(14.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
             .on_press(snd(super::control::Message::CopyIp(value)))
             .into(),
@@ -2580,7 +2582,7 @@ fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Ap
         .height(34)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(msg(m))
         .into()

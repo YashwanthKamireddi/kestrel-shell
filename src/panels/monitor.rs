@@ -8,7 +8,7 @@ use crate::services::system::Detail;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 
 pub const WIDTH: f32 = 440.0;
 
@@ -175,14 +175,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             control(label_w("End?", text::CAPTION, s.base, theme::SEMIBOLD))
                 .padding([3, 8])
                 .radius(11.0)
-                .colors(s.bad, s.bad, s.bad)
+                .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::End(*pid)))
                 .into()
         } else {
             control(icon(Icon::X, 14.0, s.ink_dim))
                 .padding(4)
                 .radius(11.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::End(*pid)))
                 .into()
         };

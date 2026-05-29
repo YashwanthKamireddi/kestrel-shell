@@ -249,7 +249,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ])
             .padding([4, 6])
             .radius(8.0)
-            .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::CopyIp(net.ip.clone()))),
         );
     }

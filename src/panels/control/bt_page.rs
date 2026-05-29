@@ -60,14 +60,14 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             crate::ui::control(label_w("Forget?", text::SMALL, s.base, theme::MEDIUM))
                 .padding([4, 10])
                 .radius(12.0)
-                .colors(s.bad, s.bad, s.bad)
+                .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::Forget(d.path.clone())))
                 .into()
         } else {
             crate::ui::control(icon(Icon::X, 16.0, s.ink_dim))
                 .padding(6)
                 .radius(14.0)
-                .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::Forget(d.path.clone())))
                 .into()
         };

@@ -294,18 +294,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     .center(CELL),
                 )
                 .radius(10.0)
-                .colors(
+                .kind(
+                    s,
                     if selected {
-                        s.accent_soft
+                        crate::ui::control::Kind::Chosen
                     } else {
-                        Color::TRANSPARENT
+                        crate::ui::control::Kind::Ghost
                     },
-                    if selected {
-                        s.selected()
-                    } else {
-                        Color::TRANSPARENT
-                    },
-                    s.raised_press,
                 )
                 .on_enter(msg(Message::Hover(i)))
                 .on_press(msg(Message::Pick(i))),
@@ -368,10 +363,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     .center(30),
             )
             .radius(9.0)
-            .colors(
-                if on { s.selected() } else { Color::TRANSPARENT },
-                if on { s.selected() } else { s.hover() },
-                s.raised_press,
+            .kind(
+                s,
+                if on {
+                    crate::ui::control::Kind::Chosen
+                } else {
+                    crate::ui::control::Kind::Ghost
+                },
             )
             .on_press(msg(Message::Jump(m)))
         };

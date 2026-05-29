@@ -294,11 +294,7 @@ pub(super) fn app_row<'a>(
     };
     let mute = ui::control(container(lead).center(32))
         .radius(16.0)
-        .colors(
-            iced::Color::TRANSPARENT,
-            s.ink.scale_alpha(0.08 * s.opacity),
-            s.ink.scale_alpha(0.14 * s.opacity),
-        )
+        .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(msg(if recording {
             Message::RecMute(ids.clone())
         } else {

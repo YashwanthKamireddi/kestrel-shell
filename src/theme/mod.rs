@@ -250,6 +250,49 @@ pub fn font(weight: font::Weight) -> Font {
     Font { weight, ..FONT }
 }
 
+/// The design kit's tokens (docs/DESIGN.md). Panels use these names, never numbers.
+#[allow(dead_code)] // the whole scale, in use as panels move onto it
+pub mod tok {
+    // Spacing: the 4 px grid (with 2 and 6 for tight optical fixes).
+    pub const XXS: f32 = 2.0;
+    pub const XS: f32 = 4.0;
+    pub const S: f32 = 6.0;
+    pub const M: f32 = 8.0;
+    pub const L: f32 = 12.0;
+    pub const XL: f32 = 16.0;
+    pub const XXL: f32 = 20.0;
+    pub const XXXL: f32 = 24.0;
+
+    // Radii, concentric: a panel (24) padded 12 holds cards of 12; rows 10; small controls 8.
+    // A pill is half its height (`pill`).
+    pub const R_PANEL: f32 = 24.0;
+    pub const R_CARD: f32 = 12.0;
+    pub const R_ROW: f32 = 10.0;
+    pub const R_CONTROL: f32 = 8.0;
+
+    /// Fully round for something `h` tall.
+    pub const fn pill(h: f32) -> f32 {
+        h / 2.0
+    }
+
+    // Control heights.
+    pub const H_SMALL: f32 = 28.0;
+    pub const H_CONTROL: f32 = 32.0;
+    pub const H_ROW: f32 = 40.0;
+
+    // The state layer: ink laid over a container.
+    pub const HOVER: f32 = 0.08;
+    pub const PRESS: f32 = 0.14;
+    pub const SELECTED: f32 = 0.14;
+    pub const DISABLED: f32 = 0.38;
+    /// A tonal container at rest (a quiet filled button, a chip).
+    pub const TONAL: f32 = 0.06;
+
+    // Motion, in seconds.
+    pub const HOVER_IN: f32 = 0.07;
+    pub const HOVER_OUT: f32 = 0.12;
+}
+
 pub const MEDIUM: font::Weight = font::Weight::Medium;
 pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 

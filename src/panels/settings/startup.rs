@@ -41,7 +41,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 control(icon(Icon::X, 15.0, s.ink_dim))
                     .padding(5)
                     .radius(13.0)
-                    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                    .kind(s, crate::ui::control::Kind::Ghost)
                     .on_press(msg(Message::StartupRemove(e.id.clone())))
                     .into()
             } else {
@@ -82,7 +82,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .height(42)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(msg(Message::StartupAddOpen(!st.startup_add)))
         .into(),
@@ -110,7 +110,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     .height(36)
                     .width(Length::Fill)
                     .radius(size::ROW_RADIUS)
-                    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                    .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(msg(Message::StartupAdd(a.id.clone()))),
             );

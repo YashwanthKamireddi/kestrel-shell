@@ -87,7 +87,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 .padding([0, 16])
                 .height(if state.is_empty() { 46 } else { 54 })
                 .width(Length::Fill)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale();
             if !net.active {
                 c = c.on_press(msg(Message::JoinNet(net.clone())));

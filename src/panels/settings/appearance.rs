@@ -100,7 +100,7 @@ pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
         )
         .padding([4, 10])
         .radius(14.0)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(msg(Message::LookOpen((!open).then_some(i))));
         rows.push(row_of(s, names[usize::from(i)], None, chooser.into()));
         // Font sizes beside their fonts.
@@ -169,7 +169,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
             control(inner)
                 .padding(2)
                 .radius(11.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(m),
         )
         .padding(1)

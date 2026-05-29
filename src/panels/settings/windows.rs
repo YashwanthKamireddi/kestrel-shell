@@ -72,7 +72,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
             .padding([0, 16])
             .height(56)
             .width(Length::Fill)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
             .on_press(msg(Message::RuleOpen((!open).then(|| r.class.clone()))))
             .into(),
@@ -181,7 +181,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                         .padding([0, 16])
                         .height(44)
                         .width(Length::Fill)
-                        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                        .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()
                         .on_press(msg(Message::RuleOpen(Some(c))))
                         .into(),

@@ -181,7 +181,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 )
                 .padding([4, 10])
                 .radius(14.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::ModeOpen((!open).then_some(i))))
                 .into(),
             ));
@@ -216,7 +216,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         .padding([0, 28])
                         .height(34)
                         .width(Length::Fill)
-                        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                        .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()
                         .on_press(msg(Message::Display(i, DisplayChange::Mode(w, h, hz))))
                         .into(),

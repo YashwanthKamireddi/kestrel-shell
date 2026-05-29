@@ -104,3 +104,40 @@ A button whose panel is open shows `accent_soft` behind an `accent` icon.
 | Launcher | 560 | search field; app results with icons; `=` calculator, `>` command, `:` clipboard |
 | Toasts | 380 | the notification card, under the bell, auto-dismissed |
 | OSD | 240 | icon, level bar, value; under the clock |
+
+## Enforcement and interaction states (2026-11-15)
+
+The contract above was right; the code drifted from it. Measured on 2026-11-15: 94 literal radii
+in 15 values (2…20, against the contract's 24 / 12 / 10 / 8 / pill), 214 literal paddings, 283
+literal gaps and 87 hand-picked `.colors(rest, hover, press)` triples with ~15 different ink
+alphas. So nothing looked quite like anything else. How the popular shells prevent this is in
+docs/research/SHELLS.md (Noctalia and DMS forbid raw values by rule).
+
+**Tokens in code.** `theme::tok` holds this document's scales as named constants: spacing
+(`XXS 2 · XS 4 · S 6 · M 8 · L 12 · XL 16 · XXL 20 · XXXL 24`), radii (`PANEL 24 · CARD 12 ·
+ROW 10 · CONTROL 8`, pill = half the height), control heights, state alphas, motion. Panels use
+these names, never numbers.
+
+**One state layer** (Material 3's model, as Caelestia and ii use it): every interactive element is
+drawn by `ui::control`, and its hover / pressed / selected looks come from the same ink alphas
+laid over its container:
+
+| State | Ink over the container | Timing |
+|---|---|---|
+| Hover | 0.08 | eases in 70 ms, out 120 ms (ease-out); fast enough to read as instant, never a pop |
+| Pressed | 0.14 | at once |
+| Selected / open | 0.14 | at once |
+| Disabled | content at 0.38 | no hover |
+
+The motion table above said hover fades in over 110 ms; it later snapped on instantly (the user's "no
+lag" rule), which made clear-at-rest buttons (Clear all, ×) flash a pill out of nothing as the
+pointer crossed them: the "cheap and glitchy" hover in the user's recording of 2026-11-15. 70 ms keeps
+it instant to the eye without the pop.
+
+**Components.** Buttons come in four variants only (Primary: accent fill · Tonal: faint ink fill ·
+Ghost: clear at rest · Danger), plus the icon button, chip, row, card, section heading, field,
+switch, slider and segmented control. A screen built from anything else adds it here first.
+
+**The check.** `tools/lint/tokens.sh` counts literal radii, paddings, gaps and colour triples
+outside `src/ui` and `src/theme`; `make check` fails if a count rises above the recorded baseline,
+which only goes down as panels move onto the kit.

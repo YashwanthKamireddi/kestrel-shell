@@ -147,7 +147,7 @@ pub(super) fn info_button<'a>(s: Scheme, m: AppMessage) -> Element<'a, AppMessag
     crate::ui::control(icon(Icon::Info, 18.0, s.ink_dim))
         .padding(5)
         .radius(14.0)
-        .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(m)
         .into()
 }
@@ -165,7 +165,7 @@ pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element
     .height(32)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
-    .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press)
+    .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
     .on_press(msg(Message::CopyIp(value)))
     .into()
@@ -242,7 +242,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             crate::ui::control(label_w("Forget?", text::SMALL, s.base, theme::MEDIUM))
                 .padding([6, 14])
                 .radius(14.0)
-                .colors(s.bad, s.bad, s.bad)
+                .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::ForgetNetwork))
         } else {
             crate::ui::control(label_w("Forget", text::SMALL, s.ink, theme::MEDIUM))

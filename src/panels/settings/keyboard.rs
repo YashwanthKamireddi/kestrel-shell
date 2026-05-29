@@ -63,7 +63,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             control(icon(Icon::X, 15.0, s.ink_dim))
                 .padding(5)
                 .radius(13.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::LayoutRemove(code.clone())))
                 .into()
         } else {
@@ -96,7 +96,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         .height(42)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(msg(Message::LayoutsOpen(!st.layouts_open)))
         .into(),

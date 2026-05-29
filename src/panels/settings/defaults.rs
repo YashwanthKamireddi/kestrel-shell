@@ -43,7 +43,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             )
             .padding([4, 10])
             .radius(14.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::DefaultOpen((!open).then_some(k))))
             .into(),
         ));
@@ -67,7 +67,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     .padding([0, 28])
                     .height(36)
                     .width(Length::Fill)
-                    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                    .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(msg(Message::DefaultSet(k, a.id.clone())))
                     .into(),

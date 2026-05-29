@@ -27,7 +27,7 @@ pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<AppMessage>) -> Element<'a,
     let mut c = control(icon(i, 14.0, if on { s.ink } else { s.ink_faint }))
         .padding(6)
         .radius(13.0)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press);
+        .kind(s, crate::ui::control::Kind::Ghost);
     if let Some(m) = m {
         c = c.on_press(m);
     }
@@ -143,7 +143,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 )
                 .padding([4, 8])
                 .radius(12.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(msg(Message::BarOpen((!open).then(|| id.clone()))))
                 .into()
@@ -199,7 +199,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 .padding([0, 16])
                 .height(44)
                 .width(Length::Fill)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(msg(Message::BarAdd(m.id.to_string())))
                 .into(),

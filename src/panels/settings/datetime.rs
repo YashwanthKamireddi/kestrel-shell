@@ -94,7 +94,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .height(34)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(msg(Message::Zone(z.clone()))),
             );
@@ -133,7 +133,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             )
             .padding([4, 10])
             .radius(14.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::RegionOpen(!st.region_open)))
             .into(),
         )];

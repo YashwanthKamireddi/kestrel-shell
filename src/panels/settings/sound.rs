@@ -29,7 +29,7 @@ pub(super) fn level<'a>(
         ))
         .padding(5)
         .radius(13.0)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(on_mute),
         container(bar).width(220),
         container(label(
@@ -100,7 +100,7 @@ pub(super) fn chooser<'a>(
     )
     .padding([4, 10])
     .radius(14.0)
-    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+    .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::SoundPick((!open).then(|| key.to_string()))))
     .into()
 }
@@ -127,7 +127,7 @@ pub(super) fn choice_row<'a>(
         .padding([0, 28])
         .height(36)
         .width(Length::Fill)
-        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+        .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(AppMessage::Batch(vec![m, msg(Message::SoundPick(None))]))
         .into(),

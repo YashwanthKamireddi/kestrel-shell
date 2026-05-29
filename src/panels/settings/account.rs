@@ -55,7 +55,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 },
             )
             .radius(28.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::PickPicture)),
             column![
                 label_w(shown, text::TITLE, s.ink, theme::SEMIBOLD),

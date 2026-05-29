@@ -62,7 +62,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             Some(k) => control(key_chips(s, k))
                 .padding([4, 8])
                 .radius(14.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::Record(true)))
                 .into(),
             None => control(label("Record keys", text::SMALL, s.ink))
@@ -150,7 +150,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         control(icon(Icon::X, 15.0, s.ink_dim))
                             .padding(5)
                             .radius(13.0)
-                            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                            .kind(s, crate::ui::control::Kind::Ghost)
                             .on_press(msg(Message::RemoveShortcut(c.keys.clone()))),
                     ]
                     .spacing(10)
@@ -183,7 +183,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                     control(key_chips(s, &keys))
                         .padding([2, 6])
                         .radius(12.0)
-                        .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                        .kind(s, crate::ui::control::Kind::Ghost)
                         .on_press(msg(Message::Rebind(keys.clone())))
                         .into()
                 };

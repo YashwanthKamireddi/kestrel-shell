@@ -9,7 +9,7 @@ use crate::services::{icons, tray};
 use crate::theme::{Scheme, size, text};
 use crate::ui::{self, Icon, control, divider, icon, label};
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 use std::collections::BTreeSet;
 
 pub struct State {
@@ -188,7 +188,7 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
     .height(34)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
-    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+    .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
     .on_press(msg(Message::Back))
     .into()
@@ -253,7 +253,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .height(CELL)
                 .center_x()
                 .radius(16.0)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(primary)
                 .on_right_press(msg(Message::Show(item.clone()))),
@@ -390,7 +390,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .height(34)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
-                .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press_maybe(on),
         );

@@ -185,7 +185,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 container(crate::modules::tray_icon_at(s, item, 20.0)).center(size::CONTROL + 4.0),
             )
             .radius((size::CONTROL + 4.0) / 2.0)
-            .colors(iced::Color::TRANSPARENT, s.hover(), s.raised_press);
+            .kind(s, crate::ui::control::Kind::Ghost);
             if let Some(o) = out {
                 c = c.on_right_press(AppMessage::TrayMenu(Some(menu), o, None));
             }

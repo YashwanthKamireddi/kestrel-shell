@@ -12,7 +12,10 @@ use iced::{Border, Color, Element, Length, Padding, Rectangle, Size, Transformat
 use std::time::Instant;
 
 /// How long a hover highlight takes to leave.
-const HOVER_SECS: f32 = 0.07;
+/// The state layer eases in and out (docs/DESIGN.md): quick enough to read as instant, slow
+/// enough that a clear-at-rest button grows its shape instead of flashing it.
+const HOVER_IN_SECS: f32 = crate::theme::tok::HOVER_IN;
+const HOVER_OUT_SECS: f32 = crate::theme::tok::HOVER_OUT;
 const PRESSED_SCALE: f32 = 0.96;
 
 /// What kind of small pill button (`Control::pill`).
@@ -21,6 +24,22 @@ pub enum Pill {
     Plain,
     Quiet,
     Primary,
+}
+
+/// The state-layer styles every control is drawn in (docs/DESIGN.md): the container at rest,
+/// with the same ink laid over it on hover and press everywhere.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// Clear at rest (text and icon buttons, rows, chips that are off).
+    Ghost,
+    /// A faint ink fill at rest (secondary buttons, cards that click).
+    Tonal,
+    /// Chosen: the selected row, the chip that is on, the open place.
+    Chosen,
+    /// The accent fill (the main action, a choice that is on).
+    Primary,
+    /// The danger fill (a destructive action asked to confirm).
+    Danger,
 }
 
 pub struct Control<'a, M> {
@@ -155,24 +174,34 @@ impl<'a, M> Control<'a, M> {
     pub fn pill(mut self, s: crate::theme::Scheme, kind: Pill) -> Self {
         self.padding = Padding::from([5, 12]);
         self.radius = 13.0;
-        let (rest, hover, press) = match kind {
-            Pill::Plain => (0.08, 0.14, 0.2),
-            Pill::Quiet => (0.0, 0.08, 0.14),
-            Pill::Primary => {
-                self.rest = s.accent;
-                self.hover = s.accent;
-                self.press = s.accent;
-                return self;
-            }
+        self.kind(
+            s,
+            match kind {
+                Pill::Plain => Kind::Tonal,
+                Pill::Quiet => Kind::Ghost,
+                Pill::Primary => Kind::Primary,
+            },
+        )
+    }
+    /// Draws it in one of the kit's styles (rest, hover and press from the one state layer).
+    pub fn kind(mut self, s: crate::theme::Scheme, k: Kind) -> Self {
+        use crate::theme::tok::{HOVER, PRESS, SELECTED, TONAL};
+        let ink = |x: f32| s.ink.scale_alpha(x * s.opacity);
+        let over = |base: Color, x: f32| mix(base, s.on_accent, x);
+        let (rest, hover, press) = match k {
+            Kind::Ghost => (Color::TRANSPARENT, ink(HOVER), ink(PRESS)),
+            Kind::Tonal => (ink(TONAL), ink(TONAL + HOVER), ink(TONAL + PRESS)),
+            Kind::Chosen => (
+                ink(SELECTED),
+                ink(SELECTED + HOVER / 2.0),
+                ink(SELECTED + PRESS / 2.0),
+            ),
+            Kind::Primary => (s.accent, over(s.accent, HOVER), over(s.accent, PRESS)),
+            Kind::Danger => (s.bad, over(s.bad, HOVER), over(s.bad, PRESS)),
         };
-        let a = |x: f32| s.ink.scale_alpha(x * s.opacity);
-        self.rest = if rest > 0.0 {
-            a(rest)
-        } else {
-            Color::TRANSPARENT
-        };
-        self.hover = a(hover);
-        self.press = a(press);
+        self.rest = rest;
+        self.hover = hover;
+        self.press = press;
         self
     }
     pub fn border(mut self, c: Color) -> Self {
@@ -370,9 +399,8 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
 
         if state.hovered != over {
             state.hovered = over;
-            // On and off at once, with no fade: a fade-out waits on later frames, and when
-            // the bar had none to draw the highlight stayed after the pointer had gone.
-            state.hover_t = if over { 1.0 } else { 0.0 };
+            // The redraw below starts the ease (every surface a control can be on redraws while
+            // it shows anything: `redraw_key` is None for the bar and a busy overlay).
             if over && let Some(m) = &self.on_enter {
                 shell.publish(m.clone());
             }
@@ -391,12 +419,13 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             });
             state.last = Some(*now);
             let want = if state.hovered { 1.0 } else { 0.0 };
-            // The highlight is there the moment the pointer arrives (no fade-in: it read as
-            // lag) and leaves with a very short fade. Game mode: no fade at all.
-            state.hover_t = if state.hover_t < want || crate::motion::still() {
+            // In over 70 ms, out over 120 ms (eased in `draw`). Game mode: no fade at all.
+            state.hover_t = if crate::motion::still() {
                 want
+            } else if state.hover_t < want {
+                (state.hover_t + dt / HOVER_IN_SECS).min(want)
             } else {
-                (state.hover_t - dt / HOVER_SECS).max(want)
+                (state.hover_t - dt / HOVER_OUT_SECS).max(want)
             };
             state.scale.step(dt);
             if state.animating() {

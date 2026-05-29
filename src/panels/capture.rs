@@ -11,7 +11,7 @@ use crate::app::{App, Message as AppMessage};
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 
 pub const WIDTH: f32 = 360.0;
 
@@ -163,14 +163,13 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
     .padding([12, 0])
     .width(Length::Fill)
     .radius(size::CARD_RADIUS)
-    .colors(
+    .kind(
+        s,
         if on {
-            s.accent
+            crate::ui::control::Kind::Primary
         } else {
-            s.ink.scale_alpha(0.06 * s.opacity)
+            crate::ui::control::Kind::Tonal
         },
-        if on { s.accent } else { s.hover() },
-        s.raised_press,
     )
     .no_press_scale()
     .on_press(msg(m))
@@ -190,10 +189,13 @@ fn chip<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMes
     .padding([6, 0])
     .width(Length::Fill)
     .radius(14.0)
-    .colors(
-        if on { s.accent } else { Color::TRANSPARENT },
-        if on { s.accent } else { s.hover() },
-        s.raised_press,
+    .kind(
+        s,
+        if on {
+            crate::ui::control::Kind::Primary
+        } else {
+            crate::ui::control::Kind::Ghost
+        },
     )
     .no_press_scale()
     .on_press(msg(m))

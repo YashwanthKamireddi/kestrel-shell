@@ -136,7 +136,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             )
             .padding([4, 10])
             .radius(14.0)
-            .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+            .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::IdleOpen((!open).then_some(*step))))
             .into(),
         ));
@@ -164,7 +164,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     .padding([0, 28])
                     .height(34)
                     .width(Length::Fill)
-                    .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
+                    .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(msg(Message::Idle(*step, t)))
                     .into(),
