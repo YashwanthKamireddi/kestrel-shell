@@ -1,6 +1,7 @@
 //! Settings › notifications: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -54,7 +55,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                     .align_y(Alignment::Center),
                 )
                 .padding([4, 10])
-                .radius(14.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::QuietOpen((!open).then_some(which))))
                 .into(),
@@ -85,7 +86,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                             )
                             .padding([5, 0])
                             .width(Length::Fill)
-                            .radius(12.0)
+                            .radius(tok::FULL)
                             .kind(
                                 s,
                                 if on {
@@ -213,7 +214,7 @@ pub(super) fn sound_toggle<'a>(
         if on { s.ink } else { s.ink_dim },
     ))
     .padding(7)
-    .radius(15.0)
+    .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::NotifySilent(name.to_string(), !on)))
     .into()

@@ -189,7 +189,7 @@ fn chip<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMes
     )
     .padding([tok::S, tok::NONE])
     .width(Length::Fill)
-    .radius(14.0)
+    .radius(tok::FULL)
     .kind(
         s,
         if on {
@@ -215,7 +215,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .padding(tok::XXS)
     .style(move |_| container::Style {
         background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
-        border: iced::Border::default().rounded(16),
+        border: iced::Border::default().rounded(tok::FULL),
         ..container::Style::default()
     });
     let what = row![

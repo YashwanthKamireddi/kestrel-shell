@@ -2197,7 +2197,7 @@ fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'
                 if *on { s.on_accent } else { s.ink },
             ))
             .padding([tok::S, tok::L])
-            .radius(14.0)
+            .radius(tok::FULL)
             .kind(
                 s,
                 if *on {
@@ -2213,7 +2213,7 @@ fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'
         .padding(tok::XXS)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
-            border: iced::Border::default().rounded(16),
+            border: iced::Border::default().rounded(tok::FULL),
             ..container::Style::default()
         })
         .into()
@@ -2433,7 +2433,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 fn stepper<'a>(s: Scheme, n: i64) -> Element<'a, AppMessage> {
     let arrow = |i: Icon, m: Message| {
         control(container(icon(i, 16.0, s.ink)).center(28))
-            .radius(14.0)
+            .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(m))
     };
@@ -2522,7 +2522,7 @@ fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, A
         None,
         control(label(value.clone(), text::BODY, s.ink_dim))
             .padding([tok::XS, tok::L])
-            .radius(14.0)
+            .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
             .on_press(snd(super::control::Message::CopyIp(value)))

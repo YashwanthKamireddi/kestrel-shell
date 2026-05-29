@@ -362,7 +362,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 if on { s.on_accent } else { s.ink_dim },
             ))
             .padding([tok::XS, tok::L])
-            .radius(12.0)
+            .radius(tok::FULL)
             .kind(
                 s,
                 if on {
@@ -390,7 +390,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .padding([tok::XXS, tok::M])
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(0.08).into()),
-                    border: iced::Border::default().rounded(8),
+                    border: iced::Border::default().rounded(tok::R_CONTROL),
                     ..container::Style::default()
                 }),
         );
@@ -450,7 +450,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
     let side = |i: Icon, m: Option<AppMessage>| {
         control(container(icon(i, 17.0, if m.is_some() { s.ink } else { s.ink_faint })).center(36))
-            .radius(18.0)
+            .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press_maybe(m)
     };
@@ -462,7 +462,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ))
         .center(48),
     )
-    .radius(24.0)
+    .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Primary)
     .on_press(msg(Message::PlayPause(bus.clone())));
     let transport = row![

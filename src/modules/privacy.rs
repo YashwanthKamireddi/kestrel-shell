@@ -36,7 +36,7 @@ pub fn view<'a>(
             .height(8)
             .style(move |_| iced::widget::container::Style {
                 background: Some(red.into()),
-                border: iced::Border::default().rounded(4),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..iced::widget::container::Style::default()
             });
         // Digits keep their place as they count (a fixed width per length).
@@ -76,7 +76,7 @@ fn indicator<'a>(s: Scheme, i: Icon) -> Element<'a, Message> {
         .center(22)
         .style(move |_| iced::widget::container::Style {
             background: Some(s.accent.into()),
-            border: iced::Border::default().rounded(11),
+            border: iced::Border::default().rounded(tok::FULL),
             ..iced::widget::container::Style::default()
         })
         .into()

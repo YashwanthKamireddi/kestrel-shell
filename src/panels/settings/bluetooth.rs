@@ -24,7 +24,7 @@ pub(super) fn renamable<'a>(
         ),
         _ => control(label(now.clone(), text::BODY, s.ink_dim))
             .padding([tok::XS, tok::L])
-            .radius(14.0)
+            .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
             .on_press(msg(Message::BtRename(target, now)))
@@ -98,7 +98,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             _ => column![
                 control(label(d.name.clone(), text::BODY, s.ink))
                     .padding([tok::XXS, tok::S])
-                    .radius(10.0)
+                    .radius(tok::R_ROW)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(msg(Message::BtRename(Some(d.path.clone()), d.name.clone()))),

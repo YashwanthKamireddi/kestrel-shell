@@ -572,7 +572,7 @@ fn card<'a>(
         control(Space::new().width(width).height(height))
             .width(width)
             .height(height)
-            .radius(12.0)
+            .radius(tok::FULL)
             .kind(
                 s,
                 if current {
@@ -648,7 +648,7 @@ fn card<'a>(
         if sel && !app.panels.overview.dragging {
             tile = tile.push(
                 pin(control(container(icon(Icon::X, 12.0, s.ink)).center(22))
-                    .radius(11.0)
+                    .radius(tok::FULL)
                     .colors(s.base.scale_alpha(0.85), s.bad, s.bad.scale_alpha(0.8))
                     .on_press(msg(Message::CloseWindow(w.address.clone()))))
                 .x((bw - 26.0).max(0.0))
@@ -688,7 +688,7 @@ fn card<'a>(
         .padding([1, 8])
         .style(move |_| container::Style {
             background: Some(s.fade(s.accent).into()),
-            border: iced::Border::default().rounded(9),
+            border: iced::Border::default().rounded(tok::R_CONTROL),
             ..container::Style::default()
         })
         .into()

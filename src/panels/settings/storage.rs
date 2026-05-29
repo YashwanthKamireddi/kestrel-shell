@@ -41,7 +41,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 .height(4)
                 .style(move |_| container::Style {
                     background: Some((if share > 0.9 { s.bad } else { s.accent }).into()),
-                    border: iced::Border::default().rounded(2),
+                    border: iced::Border::default().rounded(tok::FULL),
                     ..container::Style::default()
                 }),
             container(iced::widget::Space::new())
@@ -51,7 +51,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 .height(4)
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
-                    border: iced::Border::default().rounded(2),
+                    border: iced::Border::default().rounded(tok::FULL),
                     ..container::Style::default()
                 }),
         ];
@@ -67,7 +67,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             actions = actions.push(
                 control(icon(Icon::Eject, 16.0, s.ink))
                     .padding(tok::S)
-                    .radius(14.0)
+                    .radius(tok::FULL)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .on_press(msg(Message::VolumeEject(v.path.clone(), v.drive.clone()))),
             );

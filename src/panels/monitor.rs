@@ -175,14 +175,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         } else if armed {
             control(label_w("End?", text::CAPTION, s.base, theme::SEMIBOLD))
                 .padding([3, 8])
-                .radius(11.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::End(*pid)))
                 .into()
         } else {
             control(icon(Icon::X, 14.0, s.ink_dim))
                 .padding(tok::XS)
-                .radius(11.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::End(*pid)))
                 .into()

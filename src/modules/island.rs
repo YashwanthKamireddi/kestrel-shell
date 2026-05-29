@@ -63,7 +63,7 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
             .height(h)
             .style(move |_| iced::widget::container::Style {
                 background: Some(tint.into()),
-                border: iced::Border::default().rounded(2),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..iced::widget::container::Style::default()
             })
             .into()

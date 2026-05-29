@@ -100,7 +100,7 @@ pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
             .align_y(Alignment::Center),
         )
         .padding([tok::XS, tok::L])
-        .radius(14.0)
+        .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(msg(Message::LookOpen((!open).then_some(i))));
         rows.push(row_of(s, names[usize::from(i)], None, chooser.into()));
@@ -169,7 +169,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
         container(
             control(inner)
                 .padding(tok::XXS)
-                .radius(11.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(m),
         )
@@ -189,7 +189,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
             .center(18)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(0.14 * s.opacity).into()),
-                border: iced::Border::default().rounded(9),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             })
             .into(),
@@ -207,7 +207,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
                 .height(18)
                 .style(move |_| container::Style {
                     background: Some(col.into()),
-                    border: iced::Border::default().rounded(9),
+                    border: iced::Border::default().rounded(tok::FULL),
                     ..container::Style::default()
                 })
                 .into(),

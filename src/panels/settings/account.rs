@@ -55,7 +55,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         .into(),
                 },
             )
-            .radius(28.0)
+            .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::PickPicture)),
             column![

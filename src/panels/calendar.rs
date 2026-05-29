@@ -183,7 +183,7 @@ fn day<'a>(
     let n = label_w(date.day().to_string(), text::BODY, color, weight);
     let disc = container(n).center(30).style(move |_| container::Style {
         background: is_today.then(|| s.accent.into()),
-        border: iced::Border::default().rounded(15),
+        border: iced::Border::default().rounded(tok::FULL),
         ..container::Style::default()
     });
     container(disc)

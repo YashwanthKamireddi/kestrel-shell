@@ -294,7 +294,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     )
                     .center(CELL),
                 )
-                .radius(10.0)
+                .radius(tok::R_ROW)
                 .kind(
                     s,
                     if selected {
@@ -363,7 +363,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 container(label(glyph, 16.0, s.ink).font(iced::Font::with_name("Twemoji")))
                     .center(30),
             )
-            .radius(9.0)
+            .radius(tok::R_CONTROL)
             .kind(
                 s,
                 if on {

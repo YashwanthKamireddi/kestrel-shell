@@ -29,7 +29,7 @@ pub(super) fn level<'a>(
             if muted { s.bad } else { s.ink_dim }
         ))
         .padding(5)
-        .radius(13.0)
+        .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(on_mute),
         container(bar).width(220),
@@ -55,7 +55,7 @@ pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> 
             .height(4)
             .style(move |_| container::Style {
                 background: Some(s.accent.into()),
-                border: iced::Border::default().rounded(2),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
         container(iced::widget::Space::new())
@@ -63,7 +63,7 @@ pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> 
             .height(4)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
-                border: iced::Border::default().rounded(2),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
     ])
@@ -100,7 +100,7 @@ pub(super) fn chooser<'a>(
         .align_y(Alignment::Center),
     )
     .padding([tok::XS, tok::L])
-    .radius(14.0)
+    .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::SoundPick((!open).then(|| key.to_string()))))
     .into()

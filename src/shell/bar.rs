@@ -355,7 +355,7 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
             .height(6)
             .style(move |_| container::Style {
                 background: Some(c.into()),
-                border: iced::Border::default().rounded(3),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             })
     };

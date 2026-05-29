@@ -181,7 +181,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     .align_y(Alignment::Center),
                 )
                 .padding([tok::XS, tok::L])
-                .radius(14.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::ModeOpen((!open).then_some(i))))
                 .into(),

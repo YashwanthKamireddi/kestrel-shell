@@ -27,7 +27,7 @@ pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<AppMessage>) -> Element<'a,
     let on = m.is_some();
     let mut c = control(icon(i, 14.0, if on { s.ink } else { s.ink_faint }))
         .padding(tok::S)
-        .radius(13.0)
+        .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost);
     if let Some(m) = m {
         c = c.on_press(m);
@@ -143,7 +143,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     .align_y(Alignment::Center),
                 )
                 .padding([tok::XS, tok::M])
-                .radius(12.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(msg(Message::BarOpen((!open).then(|| id.clone()))))

@@ -102,7 +102,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
             )
         };
         control(container(icon(i, 16.0, fg)).center(32))
-            .radius(16.0)
+            .radius(tok::FULL)
             .colors(bg, if primary { bg } else { s.hover() }, s.raised_press)
             .on_press_maybe(m)
     };

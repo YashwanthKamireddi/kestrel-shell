@@ -62,7 +62,7 @@ pub(super) fn summary<'a>(
                     }
                     .into()
                 ),
-                border: iced::Border::default().rounded(22),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
         column![

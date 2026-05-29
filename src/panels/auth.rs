@@ -191,7 +191,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .center(40)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
-                border: iced::Border::default().rounded(20),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
         column![
@@ -287,7 +287,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
             .center(40)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
-                border: iced::Border::default().rounded(20),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
         label_w(title, text::TITLE, s.ink, theme::SEMIBOLD),
@@ -368,7 +368,7 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
             .center(40)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
-                border: iced::Border::default().rounded(20),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
         column![

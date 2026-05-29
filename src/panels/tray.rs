@@ -224,7 +224,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     iced::widget::pin(container(Space::new()).width(6).height(6).style(
                         move |_| container::Style {
                             background: Some(s.accent.into()),
-                            border: iced::Border::default().rounded(3),
+                            border: iced::Border::default().rounded(tok::FULL),
                             ..container::Style::default()
                         },
                     ))
@@ -253,7 +253,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .width(CELL)
                 .height(CELL)
                 .center_x()
-                .radius(16.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(primary)

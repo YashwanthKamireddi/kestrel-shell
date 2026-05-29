@@ -62,7 +62,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         match &st.new_keys {
             Some(k) => control(key_chips(s, k))
                 .padding([tok::XS, tok::M])
-                .radius(14.0)
+                .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::Record(true)))
                 .into(),
@@ -150,7 +150,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         key_chips(s, &c.keys),
                         control(icon(Icon::X, 15.0, s.ink_dim))
                             .padding(5)
-                            .radius(13.0)
+                            .radius(tok::FULL)
                             .kind(s, crate::ui::control::Kind::Ghost)
                             .on_press(msg(Message::RemoveShortcut(c.keys.clone()))),
                     ]
@@ -183,7 +183,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                 } else {
                     control(key_chips(s, &keys))
                         .padding([tok::XXS, tok::S])
-                        .radius(12.0)
+                        .radius(tok::FULL)
                         .kind(s, crate::ui::control::Kind::Ghost)
                         .on_press(msg(Message::Rebind(keys.clone())))
                         .into()

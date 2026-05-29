@@ -41,7 +41,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             let remove: Element<'_, AppMessage> = if e.user_only {
                 control(icon(Icon::X, 15.0, s.ink_dim))
                     .padding(5)
-                    .radius(13.0)
+                    .radius(tok::FULL)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .on_press(msg(Message::StartupRemove(e.id.clone())))
                     .into()

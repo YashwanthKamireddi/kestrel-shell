@@ -465,7 +465,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                                     .center(20)
                                     .style(move |_| container::Style {
                                         background: Some(s.ink.into()),
-                                        border: iced::Border::default().rounded(10),
+                                        border: iced::Border::default().rounded(tok::FULL),
                                         ..container::Style::default()
                                     }),
                             )

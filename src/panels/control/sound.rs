@@ -13,7 +13,7 @@ pub(super) fn meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> {
         .height(3)
         .style(move |_| container::Style {
             background: Some(s.accent.scale_alpha(0.85 * s.opacity).into()),
-            border: iced::Border::default().rounded(1.5),
+            border: iced::Border::default().rounded(tok::FULL),
             ..container::Style::default()
         });
     let rest = Space::new()
