@@ -3,6 +3,7 @@
 
 use crate::app::{App, Message as AppMessage};
 use crate::services::web::Weather;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
@@ -15,14 +16,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
         return crate::ui::empty(s, Icon::Cloud);
     };
-    let mut col = column![now(app, w, s), details(app, w, s)].spacing(14);
+    let mut col = column![now(app, w, s), details(app, w, s)].spacing(tok::L);
     if w.hours.len() > 1 {
         col = col.push(hours(app, w, s));
     }
     if w.days.len() > 1 {
         col = col.push(days(app, w, s));
     }
-    container(col).padding(12).into()
+    container(col).padding(tok::L).into()
 }
 
 /// Now: place, temperature, condition and today's range, on the sky.
@@ -43,18 +44,18 @@ fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
             soft
         ),
     ]
-    .spacing(0)
+    .spacing(tok::NONE)
     .width(Length::Fill);
     let right = column![
         icon(ui::weather_icon(w), 52.0, s.fade(ui::weather_tint(w))),
         label_w(w.describe(), text::BODY, white, theme::MEDIUM),
     ]
-    .spacing(6)
+    .spacing(tok::S)
     .align_x(Alignment::End);
     let (top, bottom) = ui::weather_sky(w);
     let (top, bottom) = (s.fade(top), s.fade(bottom));
     container(row![left, right].align_y(Alignment::Center))
-        .padding([16, 20])
+        .padding([tok::XL, tok::XXL])
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: Some(
@@ -107,7 +108,7 @@ fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
         ),
         cell(sun_icon, rgb(0xFF, 0xB0, 0x6B), sun_time, sun_name),
     ]
-    .padding([2, 4])
+    .padding([tok::XXS, tok::XS])
     .into()
 }
 
@@ -125,7 +126,7 @@ fn sun_next(w: &Weather) -> (Icon, String, &'static str) {
 
 fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
     container(label_w(title, text::SMALL, s.ink_dim, theme::SEMIBOLD))
-        .padding([0, 6])
+        .padding([tok::NONE, tok::S])
         .into()
 }
 
@@ -156,14 +157,17 @@ fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                 ),
                 label_w(app.temp(t), text::SMALL, s.ink, theme::MEDIUM),
             ]
-            .spacing(6)
+            .spacing(tok::S)
             .align_x(Alignment::Center)
             .width(Length::Fill)
             .into()
         });
-    column![heading(s, "Next hours"), row(cells).padding([0, 2])]
-        .spacing(8)
-        .into()
+    column![
+        heading(s, "Next hours"),
+        row(cells).padding([tok::NONE, tok::XXS])
+    ]
+    .spacing(tok::M)
+    .into()
 }
 
 /// The coming days: name, condition, and the range as a bar on the week's scale.
@@ -173,7 +177,7 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let span = (hi - lo).max(1.0);
     // Day, icon, low, range, high in tight columns (the icon floated in a wide gap before).
     const TRACK: f32 = 190.0;
-    let mut list = column![heading(s, "This week")].spacing(2);
+    let mut list = column![heading(s, "This week")].spacing(tok::XXS);
     for (i, (date, code, max, min)) in w.days.iter().enumerate() {
         let name = if i == 0 {
             "Today".to_string()
@@ -226,10 +230,10 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                     track,
                     label_w(app.temp(*max), text::BODY, s.ink, theme::MEDIUM).width(34),
                 ]
-                .spacing(10)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
             )
-            .padding([6, 6]),
+            .padding([tok::S, tok::S]),
         );
     }
     list.into()

@@ -1,6 +1,7 @@
 //! Settings › about: its page.
 
 use super::*;
+use crate::theme::tok;
 
 /// The About page as text, one line each (the computer's name left out).
 pub(super) fn system_report(a: &crate::services::about::About) -> String {
@@ -48,7 +49,7 @@ pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                                 .id(iced::widget::Id::new("rename"))
                                 .on_input(|t| msg(Message::Rename(Some(t))))
                                 .on_submit(msg(Message::RenameSubmit))
-                                .padding([6, 10])
+                                .padding([tok::S, tok::L])
                                 .size(text::BODY)
                                 .font(theme::FONT)
                                 .width(220)

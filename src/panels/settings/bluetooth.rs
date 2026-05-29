@@ -1,6 +1,7 @@
 //! Settings › bluetooth: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -22,7 +23,7 @@ pub(super) fn renamable<'a>(
             false,
         ),
         _ => control(label(now.clone(), text::BODY, s.ink_dim))
-            .padding([4, 10])
+            .padding([tok::XS, tok::L])
             .radius(14.0)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
@@ -96,14 +97,14 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             // A click on the name renames it.
             _ => column![
                 control(label(d.name.clone(), text::BODY, s.ink))
-                    .padding([2, 6])
+                    .padding([tok::XXS, tok::S])
                     .radius(10.0)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(msg(Message::BtRename(Some(d.path.clone()), d.name.clone()))),
-                container(label(state, text::CAPTION, s.ink_dim)).padding([0, 6]),
+                container(label(state, text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::S]),
             ]
-            .spacing(0)
+            .spacing(tok::NONE)
             .into(),
         };
         mine.push(Some(
@@ -130,10 +131,10 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                     .pill(s, crate::ui::control::Pill::Plain)
                     .on_press(snd(C::Forget(d.path.clone()))),
                 ]
-                .spacing(10)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
             )
-            .padding([0, 16])
+            .padding([tok::NONE, tok::XL])
             .height(56)
             .align_y(Alignment::Center)
             .into(),
@@ -153,7 +154,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             .as_ref()
             .filter(|(p, _)| *p == d.path)
             .map(|(_, w)| w.clone());
-        let mut words = column![label(d.name.clone(), text::BODY, s.ink)].spacing(2);
+        let mut words = column![label(d.name.clone(), text::BODY, s.ink)].spacing(tok::XXS);
         if pairing {
             words = words.push(label("Pairing…", text::CAPTION, s.ink_dim));
         } else if let Some(e) = err {
@@ -175,10 +176,10 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                     words.width(Length::Fill),
                     pair,
                 ]
-                .spacing(10)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
             )
-            .padding([0, 16])
+            .padding([tok::NONE, tok::XL])
             .height(52)
             .align_y(Alignment::Center)
             .into(),

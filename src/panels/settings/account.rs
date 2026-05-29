@@ -1,6 +1,7 @@
 //! Settings › account: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -20,7 +21,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 .id(iced::widget::Id::new("full-name"))
                 .on_input(|t| msg(Message::FullName(Some(t))))
                 .on_submit(msg(Message::FullNameSubmit))
-                .padding([6, 10])
+                .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
                 .width(220)
@@ -69,12 +70,12 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     s.ink_dim
                 ),
             ]
-            .spacing(2),
+            .spacing(tok::XXS),
         ]
-        .spacing(12)
+        .spacing(tok::L)
         .align_y(Alignment::Center),
     )
-    .padding([4, 4]);
+    .padding([tok::XS, tok::XS]);
     let mut out: Vec<Element<'_, AppMessage>> = vec![head.into()];
     out.extend(group(
         s,

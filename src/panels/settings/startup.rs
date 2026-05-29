@@ -1,6 +1,7 @@
 //! Settings › startup: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -59,10 +60,10 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                             msg(Message::StartupOn(e.id.clone(), !e.enabled))
                         ),
                     ]
-                    .spacing(10)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
                 )
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .height(46)
                 .align_y(Alignment::Center)
                 .into(),
@@ -75,10 +76,10 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 icon(Icon::Plus, 16.0, s.ink_dim),
                 label("Add an app", text::BODY, s.ink_dim)
             ]
-            .spacing(10)
+            .spacing(tok::L)
             .align_y(Alignment::Center),
         )
-        .padding([0, 16])
+        .padding([tok::NONE, tok::XL])
         .height(42)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
@@ -96,7 +97,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             &st.startup_query,
             Message::StartupQuery
         )]
-        .spacing(2);
+        .spacing(tok::XXS);
         for a in st
             .apps
             .iter()
@@ -106,7 +107,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         {
             list = list.push(
                 control(app_chip(s, a))
-                    .padding([0, 12])
+                    .padding([tok::NONE, tok::L])
                     .height(36)
                     .width(Length::Fill)
                     .radius(size::ROW_RADIUS)

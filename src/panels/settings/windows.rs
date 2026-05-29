@@ -1,6 +1,7 @@
 //! Settings › windows: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -54,7 +55,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                         label(name, text::BODY, s.ink),
                         label(r.summary(), text::CAPTION, s.ink_dim)
                     ]
-                    .spacing(2)
+                    .spacing(tok::XXS)
                     .width(Length::Fill),
                     icon(
                         if open {
@@ -66,10 +67,10 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                         s.ink_dim
                     ),
                 ]
-                .spacing(12)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
             )
-            .padding([0, 16])
+            .padding([tok::NONE, tok::XL])
             .height(56)
             .width(Length::Fill)
             .kind(s, crate::ui::control::Kind::Ghost)
@@ -89,10 +90,10 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
         rows.push(Some(
             container(
                 row![ic, label(name, text::BODY, s.ink).width(Length::Fill)]
-                    .spacing(12)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
             )
-            .padding([0, 16])
+            .padding([tok::NONE, tok::XL])
             .height(46)
             .align_y(Alignment::Center)
             .into(),
@@ -116,7 +117,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                         text_input("Search apps", q)
                             .id(iced::widget::Id::new("rule-search"))
                             .on_input(|t| msg(Message::RulePick(Some(t))))
-                            .padding([8, 12])
+                            .padding([tok::M, tok::L])
                             .size(text::BODY)
                             .font(theme::FONT)
                             .style(move |_, _| text_input::Style {
@@ -131,7 +132,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                     .width(Length::Fill)
                     .style(move |_| ui::field_style(s)),
                 )
-                .padding([8, 16])
+                .padding([tok::M, tok::XL])
                 .into(),
             ));
             // Open windows first (their class is exact), then installed apps that match.
@@ -171,14 +172,14 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                 // The class only where it says more than the name (two apps named alike).
                 let same = name.eq_ignore_ascii_case(&c);
                 let mut line = row![ic, label(name, text::BODY, s.ink).width(Length::Fill)]
-                    .spacing(12)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center);
                 if !same {
                     line = line.push(label(c.clone(), text::CAPTION, s.ink_faint));
                 }
                 rows.push(Some(
                     control(line)
-                        .padding([0, 16])
+                        .padding([tok::NONE, tok::XL])
                         .height(44)
                         .width(Length::Fill)
                         .kind(s, crate::ui::control::Kind::Ghost)
@@ -197,7 +198,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                     ]
                     .align_y(Alignment::Center),
                 )
-                .padding([8, 16])
+                .padding([tok::M, tok::XL])
                 .into(),
             ));
         }
@@ -285,7 +286,7 @@ pub(super) fn rule_editor<'a>(
             .collect();
     rows.push(row_of(s, "Opacity", None, segments(s, &opacity)));
     let saved = app.panels.settings.rules.iter().any(|r| r.class == e.class);
-    let mut buttons = row![iced::widget::Space::new().width(Length::Fill)].spacing(8);
+    let mut buttons = row![iced::widget::Space::new().width(Length::Fill)].spacing(tok::M);
     if saved {
         buttons = buttons.push(
             control(label("Remove rule", text::SMALL, s.ink))
@@ -300,7 +301,7 @@ pub(super) fn rule_editor<'a>(
     );
     rows.push(Some(
         container(buttons.align_y(Alignment::Center))
-            .padding([8, 16])
+            .padding([tok::M, tok::XL])
             .into(),
     ));
     rows

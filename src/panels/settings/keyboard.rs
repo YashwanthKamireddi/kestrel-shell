@@ -1,6 +1,7 @@
 //! Settings › keyboard: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -77,7 +78,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 ]
                 .align_y(Alignment::Center),
             )
-            .padding([0, 16])
+            .padding([tok::NONE, tok::XL])
             .height(46)
             .align_y(Alignment::Center)
             .into(),
@@ -89,10 +90,10 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 icon(Icon::Plus, 16.0, s.ink_dim),
                 label("Add a layout", text::BODY, s.ink_dim)
             ]
-            .spacing(10)
+            .spacing(tok::L)
             .align_y(Alignment::Center),
         )
-        .padding([0, 16])
+        .padding([tok::NONE, tok::XL])
         .height(42)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
@@ -113,7 +114,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             &st.layout_query,
             Message::LayoutQuery
         )]
-        .spacing(2);
+        .spacing(tok::XXS);
         for (code, name) in all
             .iter()
             .filter(|(c, n)| {

@@ -2,6 +2,7 @@
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, control, icon_button, label, label_w};
 use chrono::{Datelike, Duration, NaiveDate};
@@ -72,7 +73,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s.ink_dim
         ),
     ]
-    .spacing(2);
+    .spacing(tok::XXS);
 
     column![header, Space::new().height(16), month(app, s)]
         .padding(iced::Padding {
@@ -94,7 +95,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         s.ink,
         theme::MEDIUM,
     ))
-    .padding([4, 8])
+    .padding([tok::XS, tok::M])
     .radius(size::CONTROL_RADIUS)
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::Today));
@@ -105,7 +106,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         icon_button(s, Icon::ChevronLeft, msg(Message::Shift(-1)), false),
         icon_button(s, Icon::ChevronRight, msg(Message::Shift(1)), false),
     ]
-    .spacing(2)
+    .spacing(tok::XXS)
     .align_y(Alignment::Center);
 
     // The week starts on Monday, or on Sunday (Settings > Date & time).
@@ -128,7 +129,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         first.weekday().num_days_from_monday()
     };
     let start = first - Duration::days(i64::from(back));
-    let mut weeks = column![].spacing(2);
+    let mut weeks = column![].spacing(tok::XXS);
     for w in 0..6 {
         let mut week = row![];
         for d in 0..7 {

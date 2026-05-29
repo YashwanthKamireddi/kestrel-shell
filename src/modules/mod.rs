@@ -28,6 +28,7 @@ pub use tray::tray_icon_at;
 use crate::app::{App, Message, Output};
 use crate::config::BarConfig;
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{Scheme, size};
 use crate::ui::{self, Icon, icon};
 use iced::Element;
@@ -227,7 +228,7 @@ pub fn chip<'a>(
     active: bool,
 ) -> ui::control::Control<'a, Message> {
     ui::control(content)
-        .padding([0, 10])
+        .padding([tok::NONE, tok::L])
         .height(size::CONTROL)
         .radius(size::CONTROL / 2.0)
         .bar(s, active)

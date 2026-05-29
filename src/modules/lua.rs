@@ -3,13 +3,14 @@
 
 use crate::app::Message;
 use crate::services::icons;
+use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::{self, Icon, icon, label};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
 pub fn chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, Message> {
-    let mut r = row![].spacing(6).align_y(Alignment::Center);
+    let mut r = row![].spacing(tok::S).align_y(Alignment::Center);
     // A name from kestrel's icon set, else an icon theme name or a path.
     if let Some(name) = c.icon.as_deref() {
         if let Some(i) = Icon::named(name) {

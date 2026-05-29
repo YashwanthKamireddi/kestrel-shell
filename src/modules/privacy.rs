@@ -3,6 +3,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, icon, label_w};
 use iced::widget::{Space, row};
@@ -48,7 +49,7 @@ pub fn view<'a>(
                     iced::widget::container(label_w(time, text::BODY, s.ink, theme::SEMIBOLD))
                         .width(digits)
                 ]
-                .spacing(8)
+                .spacing(tok::M)
                 .align_y(Alignment::Center),
                 true,
             )

@@ -6,6 +6,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::config;
+use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::{self, Icon, control, empty, label_w};
 use iced::widget::{column, container, image, row, scrollable};
@@ -386,13 +387,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 ui::icon(Icon::Folder, 14.0, s.ink_dim),
                 ui::label(name, text::SMALL, s.ink)
             ]
-            .spacing(6)
+            .spacing(tok::S)
             .align_y(Alignment::Center)
         )
         .pill(s, crate::ui::control::Pill::Plain)
         .on_press(msg(Message::ChooseFolder)),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center)
     .height(size::CONTROL + 4.0);
     // Shuffle only with something to shuffle to.
@@ -409,7 +410,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     ui::icon(Icon::Shuffle, 14.0, s.ink_dim),
                     ui::label("Shuffle", text::SMALL, s.ink)
                 ]
-                .spacing(6)
+                .spacing(tok::S)
                 .align_y(Alignment::Center),
             )
             .pill(s, crate::ui::control::Pill::Plain)
@@ -443,10 +444,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .into()
         }
         Some(v) => {
-            let mut grid = column![].spacing(10);
+            let mut grid = column![].spacing(tok::L);
             let sel = app.panels.wallpaper.sel;
             for (ci, chunk) in v.chunks(COLS).enumerate() {
-                let mut r = row![].spacing(10);
+                let mut r = row![].spacing(tok::L);
                 for (ti, (path, thumb)) in chunk.iter().enumerate() {
                     let on = current.as_deref() == Some(path.as_path());
                     let i = ci * COLS + ti;
@@ -517,7 +518,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .into()
         }
     };
-    container(column![header, body].spacing(12))
+    container(column![header, body].spacing(tok::L))
         .padding(iced::Padding {
             top: 10.0,
             right: 14.0,

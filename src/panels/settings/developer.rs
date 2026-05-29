@@ -1,6 +1,7 @@
 //! Settings › developer: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -84,9 +85,9 @@ pub(super) fn developer_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                     .font(theme::FONT)
                     .wrapping(iced::widget::text::Wrapping::Word),
             ]
-            .spacing(4),
+            .spacing(tok::XS),
         )
-        .padding([12, 16])
+        .padding([tok::L, tok::XL])
         .width(Length::Fill)
         .into(),
     ));

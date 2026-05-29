@@ -3,6 +3,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{hyprland, logind};
+use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::{Icon, control, icon, label};
 use iced::widget::{Space, column, row};
@@ -131,10 +132,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 label(text_s, text::BODY, fg),
                 Space::new().width(Length::Fill),
             ]
-            .spacing(12)
+            .spacing(tok::L)
             .align_y(Alignment::Center),
         )
-        .padding([0, 12])
+        .padding([tok::NONE, tok::L])
         .height(40)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
@@ -142,5 +143,5 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .on_press(AppMessage::Panel(PanelMessage::Power(Message::Press(a))))
         .into()
     });
-    column(rows).spacing(2).padding(8).into()
+    column(rows).spacing(tok::XXS).padding(tok::M).into()
 }

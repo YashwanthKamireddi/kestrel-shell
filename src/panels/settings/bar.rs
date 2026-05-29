@@ -1,6 +1,7 @@
 //! Settings › bar: its page.
 
 use super::*;
+use crate::theme::tok;
 
 /// The bar's three sections as configured (old names already read in today's terms).
 pub(super) fn layout(app: &App) -> [Vec<String>; 3] {
@@ -25,7 +26,7 @@ pub(super) fn save_layout(l: &[Vec<String>; 3]) {
 pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<AppMessage>) -> Element<'a, AppMessage> {
     let on = m.is_some();
     let mut c = control(icon(i, 14.0, if on { s.ink } else { s.ink_faint }))
-        .padding(6)
+        .padding(tok::S)
         .radius(13.0)
         .kind(s, crate::ui::control::Kind::Ghost);
     if let Some(m) = m {
@@ -138,10 +139,10 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                             s.ink_dim
                         )
                     ]
-                    .spacing(6)
+                    .spacing(tok::S)
                     .align_y(Alignment::Center),
                 )
-                .padding([4, 8])
+                .padding([tok::XS, tok::M])
                 .radius(12.0)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
@@ -149,7 +150,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 .into()
             } else {
                 container(label(name, text::BODY, s.ink))
-                    .padding([4, 8])
+                    .padding([tok::XS, tok::M])
                     .into()
             };
             let idc = id.clone();
@@ -166,10 +167,10 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         mini(s, Icon::ChevronRight, sv(1, sec < 2)),
                         mini(s, Icon::X, Some(msg(Message::BarRemove(id.clone())))),
                     ]
-                    .spacing(4)
+                    .spacing(tok::XS)
                     .align_y(Alignment::Center),
                 )
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .height(46)
                 .align_y(Alignment::Center)
                 .into(),
@@ -193,10 +194,10 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         label(m.name, text::BODY, s.ink).width(Length::Fill),
                         icon(Icon::Plus, 16.0, s.ink_dim),
                     ]
-                    .spacing(12)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
                 )
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .height(44)
                 .width(Length::Fill)
                 .kind(s, crate::ui::control::Kind::Ghost)

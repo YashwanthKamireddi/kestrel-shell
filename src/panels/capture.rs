@@ -8,6 +8,7 @@
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
@@ -155,12 +156,12 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
                 icon(i, 22.0, if on { s.on_accent } else { s.ink }),
                 label(name, text::SMALL, if on { s.on_accent } else { s.ink }),
             ]
-            .spacing(6)
+            .spacing(tok::S)
             .align_x(Alignment::Center),
         )
         .center_x(Length::Fill),
     )
-    .padding([12, 0])
+    .padding([tok::L, tok::NONE])
     .width(Length::Fill)
     .radius(size::CARD_RADIUS)
     .kind(
@@ -186,7 +187,7 @@ fn chip<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMes
         ))
         .center_x(Length::Fill),
     )
-    .padding([6, 0])
+    .padding([tok::S, tok::NONE])
     .width(Length::Fill)
     .radius(14.0)
     .kind(
@@ -209,9 +210,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             chip(s, "Screenshot".into(), !st.record, Message::Record(false)),
             chip(s, "Record".into(), st.record, Message::Record(true)),
         ]
-        .spacing(2),
+        .spacing(tok::XXS),
     )
-    .padding(2)
+    .padding(tok::XXS)
     .style(move |_| container::Style {
         background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
         border: iced::Border::default().rounded(16),
@@ -240,9 +241,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Message::What(What::Screen)
         ),
     ]
-    .spacing(8);
+    .spacing(tok::M);
     let mut delays = row![icon(Icon::Timer, 16.0, s.ink_dim), Space::new().width(4)]
-        .spacing(2)
+        .spacing(tok::XXS)
         .align_y(Alignment::Center);
     for d in [0u32, 3, 5, 10] {
         delays = delays.push(chip(
@@ -259,7 +260,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // Recording: where its sound comes from.
     let sound = st.record.then(|| {
         let mut r = row![icon(Icon::Volume2, 16.0, s.ink_dim), Space::new().width(4)]
-            .spacing(2)
+            .spacing(tok::XXS)
             .align_y(Alignment::Center);
         for (v, name) in [
             (Sound::None, "No sound"),
@@ -286,12 +287,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .pill(s, crate::ui::control::Pill::Primary)
     .width(Length::Fill)
     .on_press(msg(Message::Go));
-    let mut body = column![kind, what, delays].spacing(14);
+    let mut body = column![kind, what, delays].spacing(tok::L);
     if let Some(r) = sound {
         body = body.push(r);
     }
-    container(body.push(go).spacing(14))
-        .padding(16)
+    container(body.push(go).spacing(tok::L))
+        .padding(tok::XL)
         .width(Length::Fill)
         .into()
 }

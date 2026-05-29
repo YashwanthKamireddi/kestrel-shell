@@ -1,12 +1,13 @@
 //! Settings › weather: its page.
 
 use super::*;
+use crate::theme::tok;
 
 pub(super) fn time_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     let city = text_input("City", &app.panels.settings.city)
         .on_input(|t| msg(Message::City(t)))
         .on_submit(msg(Message::SubmitCity))
-        .padding([6, 10])
+        .padding([tok::S, tok::L])
         .size(text::BODY)
         .font(theme::FONT)
         .width(200)

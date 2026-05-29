@@ -4,6 +4,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::mpris::{self, Player};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, empty, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row};
@@ -331,11 +332,11 @@ pub const EMPTY_WIDTH: f32 = 96.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(p) = current(app) else {
-        return container(empty(s, Icon::Music)).padding(12).into();
+        return container(empty(s, Icon::Music)).padding(tok::L).into();
     };
     let bus = p.bus.clone();
 
-    let mut top = column![].spacing(12);
+    let mut top = column![].spacing(tok::L);
     if app.media.players.len() > 1 {
         // Named by app, unless two come from the same app: then by what they play.
         let same_app = |q: &Player| {
@@ -360,7 +361,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 text::SMALL,
                 if on { s.on_accent } else { s.ink_dim },
             ))
-            .padding([4, 10])
+            .padding([tok::XS, tok::L])
             .radius(12.0)
             .kind(
                 s,
@@ -373,20 +374,20 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .on_press(msg(Message::Select(q.bus.clone())))
             .into()
         }))
-        .spacing(6);
+        .spacing(tok::S);
         top = top.push(chips);
     }
 
     // Right of the artwork: where it plays, what it is, how far along, and the controls.
     const ART: f32 = 136.0;
     let text_w = WIDTH - 2.0 * 16.0 - ART - 16.0;
-    let mut meta = column![].spacing(4);
+    let mut meta = column![].spacing(tok::XS);
     // Where it plays (no visualiser here: the bar's pill already shows one).
     let mut source = row![].align_y(Alignment::Center);
     if !p.identity.is_empty() {
         source = source.push(
             container(label(p.identity.clone(), text::CAPTION, s.ink_dim))
-                .padding([2, 8])
+                .padding([tok::XXS, tok::M])
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(0.08).into()),
                     border: iced::Border::default().rounded(8),
@@ -443,7 +444,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     label(clock(p.length), text::CAPTION, s.ink_faint),
                 ]
             ]
-            .spacing(4),
+            .spacing(tok::XS),
         );
     }
 
@@ -475,13 +476,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             p.can_next.then(|| msg(Message::Next(bus.clone())))
         ),
     ]
-    .spacing(10)
+    .spacing(tok::L)
     .align_y(Alignment::Center);
     meta = meta.push(container(transport).center_x(Length::Fill));
 
     top = top.push(
         row![art(s, p, ART, 16.0), container(meta).width(Length::Fill)]
-            .spacing(16)
+            .spacing(tok::XL)
             .align_y(Alignment::Center),
     );
 
@@ -502,7 +503,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         s.fade(s.base)
     };
     container(top)
-        .padding(16)
+        .padding(tok::XL)
         .style(move |_| container::Style {
             background: tint.map(|deep| {
                 iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2 * 3.0))
@@ -532,7 +533,7 @@ pub fn chip<'a>(s: Scheme, p: &Player, active: bool) -> Element<'a, AppMessage> 
         art(s, p, 18.0, 5.0),
         label(ui::ellipsize(&p.title, 32), text::SMALL, fg),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center)
     .into()
 }

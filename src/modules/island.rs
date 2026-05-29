@@ -5,6 +5,7 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::panels::media;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
@@ -125,7 +126,7 @@ pub fn bar<'a>(
     let active = open == Some(PanelKind::Island);
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
-    let mut content = row![].spacing(10).align_y(Alignment::Center);
+    let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
     // A pop-up (volume, brightness, a device) takes the island while it lasts.
     if hosts_osd(app)
         && let Some(osd) = app
@@ -152,7 +153,7 @@ pub fn bar<'a>(
             s.ink,
             theme::SEMIBOLD
         )]
-        .spacing(8)
+        .spacing(tok::M)
         .align_y(Alignment::Center);
         if !f.detail.is_empty() {
             words = words.push(label(
@@ -161,7 +162,7 @@ pub fn bar<'a>(
                 s.ink_dim,
             ));
         }
-        content = content.push(row![lead, words].spacing(8).align_y(Alignment::Center));
+        content = content.push(row![lead, words].spacing(tok::M).align_y(Alignment::Center));
         // A click acts on it: opens the screenshot or recording, the clipboard, stops a
         // recording.
         return match f.action.clone() {
@@ -183,12 +184,12 @@ pub fn bar<'a>(
                     theme::MEDIUM
                 ),
             ]
-            .spacing(8)
+            .spacing(tok::M)
             .align_y(Alignment::Center),
         );
     }
     content = content.push(if app.config.clock.date {
-        row![time, date].spacing(8).align_y(Alignment::Center)
+        row![time, date].spacing(tok::M).align_y(Alignment::Center)
     } else {
         row![time].align_y(Alignment::Center)
     });
@@ -209,7 +210,7 @@ pub fn bar<'a>(
                     theme::MEDIUM
                 ),
             ]
-            .spacing(4)
+            .spacing(tok::XS)
             .align_y(Alignment::Center),
         );
     }
@@ -228,7 +229,7 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme) -> Element<'a, Message> {
                 theme::SEMIBOLD
             ),
         ]
-        .spacing(8)
+        .spacing(tok::M)
         .align_y(Alignment::Center);
         if let Some(sub) = &osd.sub {
             r = r.push(label(
@@ -273,7 +274,7 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme) -> Element<'a, Message> {
         .width(26)
         .align_x(Alignment::End),
     ]
-    .spacing(10)
+    .spacing(tok::L)
     .align_y(Alignment::Center)
     .into()
 }
@@ -301,7 +302,7 @@ fn finish_with<'a>(
         .on_measure(move |w| Message::IslandMeasured(id, w));
     let h = size::BAR - 6.0;
     ui::control(inner)
-        .padding([0, 14])
+        .padding([tok::NONE, tok::L])
         .height(h)
         .radius(h / 2.0)
         .bar(s, active)
@@ -323,7 +324,7 @@ fn finish_to<'a>(
     // As tall as a pill, so in the pill style it is the pill.
     let h = size::BAR - 6.0;
     ui::control(inner)
-        .padding([0, 14])
+        .padding([tok::NONE, tok::L])
         .height(h)
         .radius(h / 2.0)
         // The same states as every other pill.

@@ -1,6 +1,7 @@
 //! Settings › datetime: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -57,7 +58,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         .cloned()
                         .unwrap_or_else(|| t.timezone.clone()),
                 )))
-                .padding([6, 10])
+                .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
                 .style(move |_, _| text_input::Style {
@@ -70,7 +71,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 }),
         )
         .style(move |_| ui::field_style(s));
-        let mut list = column![search].spacing(2);
+        let mut list = column![search].spacing(tok::XXS);
         for z in t
             .zones
             .iter()
@@ -90,7 +91,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     ]
                     .align_y(Alignment::Center),
                 )
-                .padding([0, 12])
+                .padding([tok::NONE, tok::L])
                 .height(34)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
@@ -128,10 +129,10 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         s.ink_dim
                     )
                 ]
-                .spacing(6)
+                .spacing(tok::S)
                 .align_y(Alignment::Center),
             )
-            .padding([4, 10])
+            .padding([tok::XS, tok::L])
             .radius(14.0)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::RegionOpen(!st.region_open)))
@@ -146,9 +147,9 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     &st.region_query,
                     Message::RegionQuery
                 ))
-                .padding([4, 0])
+                .padding([tok::XS, tok::NONE])
             ]
-            .spacing(2);
+            .spacing(tok::XXS);
             // The language's own formats first (no LC_* values).
             if norm(formats) != norm(lang) && q.is_empty() {
                 list = list.push(pick_row(
@@ -175,7 +176,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     Message::RegionSet(r.clone()),
                 ));
             }
-            rows.push(Some(container(list).padding([4, 12]).into()));
+            rows.push(Some(container(list).padding([tok::XS, tok::L]).into()));
         }
         out.extend(group(s, Some("Region"), rows));
     }

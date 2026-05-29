@@ -7,6 +7,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{bluetooth, network, polkit};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
@@ -202,9 +203,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ),
             label(format!("Password for {}", r.user), text::SMALL, s.ink_dim),
         ]
-        .spacing(2),
+        .spacing(tok::XXS),
     ]
-    .spacing(12)
+    .spacing(tok::L)
     .align_y(Alignment::Center);
     let message = iced::widget::text(r.message.clone())
         .size(text::BODY)
@@ -218,7 +219,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .secure(true)
             .on_input(|p| msg(Message::Password(p)))
             .on_submit(msg(Message::Submit))
-            .padding([10, 14])
+            .padding([tok::L, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
             .style(move |_, _| text_input::Style {
@@ -231,7 +232,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             }),
     )
     .style(move |_| ui::field_style(s));
-    let mut body = column![head, message, field].spacing(14);
+    let mut body = column![head, message, field].spacing(tok::L);
     if r.retry && !st.checking {
         body = body.push(label("That password was not right", text::SMALL, s.bad));
     }
@@ -253,10 +254,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .pill(s, crate::ui::control::Pill::Primary)
         .on_press_maybe((!st.password.is_empty() && !st.checking).then(|| msg(Message::Submit))),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center);
     container(body.push(buttons))
-        .padding(20)
+        .padding(tok::XXL)
         .width(Length::Fill)
         .into()
 }
@@ -291,9 +292,9 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
             }),
         label_w(title, text::TITLE, s.ink, theme::SEMIBOLD),
     ]
-    .spacing(12)
+    .spacing(tok::L)
     .align_y(Alignment::Center);
-    let mut body = column![head].spacing(14);
+    let mut body = column![head].spacing(tok::L);
     if let Some(c) = code {
         // The code as it reads on the device: digits spaced, large.
         body = body.push(
@@ -308,7 +309,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
                 theme::SEMIBOLD,
             ))
             .center_x(Length::Fill)
-            .padding([6, 0]),
+            .padding([tok::S, tok::NONE]),
         );
     }
     if pin {
@@ -318,7 +319,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
                     .id(INPUT_ID.clone())
                     .on_input(|p| msg(Message::Password(p)))
                     .on_submit(msg(Message::Submit))
-                    .padding([10, 14])
+                    .padding([tok::L, tok::L])
                     .size(text::BODY)
                     .font(theme::FONT)
                     .style(move |_, _| text_input::Style {
@@ -344,7 +345,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
         .pill(s, crate::ui::control::Pill::Plain)
         .on_press(msg(Message::Cancel)),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center);
     if let Some(p) = primary {
         buttons = buttons.push(
@@ -354,7 +355,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
         );
     }
     container(body.push(buttons))
-        .padding(20)
+        .padding(tok::XXL)
         .width(Length::Fill)
         .into()
 }
@@ -374,9 +375,9 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
             label_w(ssid, text::TITLE, s.ink, theme::SEMIBOLD),
             label("Wi-Fi password", text::SMALL, s.ink_dim),
         ]
-        .spacing(2),
+        .spacing(tok::XXS),
     ]
-    .spacing(12)
+    .spacing(tok::L)
     .align_y(Alignment::Center);
     let field = container(
         text_input("Password", &st.password)
@@ -384,7 +385,7 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
             .secure(true)
             .on_input(|p| msg(Message::Password(p)))
             .on_submit(msg(Message::Submit))
-            .padding([10, 14])
+            .padding([tok::L, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
             .style(move |_, _| text_input::Style {
@@ -397,7 +398,7 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
             }),
     )
     .style(move |_| ui::field_style(s));
-    let mut body = column![head, field].spacing(14);
+    let mut body = column![head, field].spacing(tok::L);
     if wrong {
         body = body.push(label("The saved password did not work", text::SMALL, s.bad));
     }
@@ -410,10 +411,10 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
             .pill(s, crate::ui::control::Pill::Primary)
             .on_press_maybe((st.password.chars().count() >= 8).then(|| msg(Message::Submit))),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center);
     container(body.push(buttons))
-        .padding(20)
+        .padding(tok::XXL)
         .width(Length::Fill)
         .into()
 }

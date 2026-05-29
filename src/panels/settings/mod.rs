@@ -6,6 +6,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::config::{self, BarStyle};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
@@ -2120,17 +2121,17 @@ fn row_of<'a>(
     }) {
         return None;
     }
-    let mut words = column![label(name, text::BODY, s.ink)].spacing(2);
+    let mut words = column![label(name, text::BODY, s.ink)].spacing(tok::XXS);
     if let Some(n) = note {
         words = words.push(label(n, text::CAPTION, s.ink_dim));
     }
     Some(
         container(
             row![container(words).width(Length::Fill), control_]
-                .spacing(12)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
         )
-        .padding([0, 16])
+        .padding([tok::NONE, tok::XL])
         .height(if note.is_some() { 56 } else { 46 })
         .align_y(Alignment::Center)
         .into(),
@@ -2147,7 +2148,7 @@ fn group<'a>(
     if rows.is_empty() {
         return None;
     }
-    let mut card = column![].spacing(0);
+    let mut card = column![].spacing(tok::NONE);
     let n = rows.len();
     for (i, r) in rows.into_iter().enumerate() {
         card = card.push(r);
@@ -2162,7 +2163,7 @@ fn group<'a>(
                             ..container::Style::default()
                         }),
                 )
-                .padding([0, 16]),
+                .padding([tok::NONE, tok::XL]),
             );
         }
     }
@@ -2175,10 +2176,11 @@ fn group<'a>(
         });
     Some(match title {
         Some(t) => column![
-            container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD)).padding([0, 4]),
+            container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD))
+                .padding([tok::NONE, tok::XS]),
             card
         ]
-        .spacing(8)
+        .spacing(tok::M)
         .into(),
         None => card.into(),
     })
@@ -2186,7 +2188,7 @@ fn group<'a>(
 
 /// Two or more choices, one of them chosen.
 fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'a, AppMessage> {
-    let mut r = row![].spacing(2);
+    let mut r = row![].spacing(tok::XXS);
     for (name, on, m) in options {
         r = r.push(
             control(label(
@@ -2194,7 +2196,7 @@ fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'
                 text::SMALL,
                 if *on { s.on_accent } else { s.ink },
             ))
-            .padding([6, 14])
+            .padding([tok::S, tok::L])
             .radius(14.0)
             .kind(
                 s,
@@ -2208,7 +2210,7 @@ fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'
         );
     }
     container(r)
-        .padding(2)
+        .padding(tok::XXS)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
             border: iced::Border::default().rounded(16),
@@ -2259,7 +2261,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             text_input("Search", &app.panels.settings.query)
                 .id(SEARCH_ID.clone())
                 .on_input(|q| msg(Message::Query(q)))
-                .padding([6, 4])
+                .padding([tok::S, tok::XS])
                 .size(text::BODY)
                 .font(theme::FONT)
                 .style(move |_, _| text_input::Style {
@@ -2271,10 +2273,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     selection: s.accent_soft,
                 })
         ]
-        .spacing(4)
+        .spacing(tok::XS)
         .align_y(Alignment::Center),
     )
-    .padding([0, 10])
+    .padding([tok::NONE, tok::L])
     .height(34)
     .center_y(34)
     .style(move |_| {
@@ -2288,13 +2290,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
     });
     let mut side = column![
-        container(label_w("Settings", text::HEADING, s.ink, theme::SEMIBOLD)).padding([6, 10]),
+        container(label_w("Settings", text::HEADING, s.ink, theme::SEMIBOLD))
+            .padding([tok::S, tok::L]),
         container(search).padding(iced::Padding {
             bottom: 8.0,
             ..iced::Padding::ZERO
         }),
     ]
-    .spacing(2);
+    .spacing(tok::XXS);
     let heading = |t: &'static str| {
         container(label_w(t, text::CAPTION, s.ink_faint, theme::SEMIBOLD)).padding(iced::Padding {
             top: 10.0,
@@ -2324,10 +2327,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         if on { theme::SEMIBOLD } else { theme::MEDIUM }
                     )
                 ]
-                .spacing(10)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
             )
-            .padding([0, 10])
+            .padding([tok::NONE, tok::L])
             .height(36)
             .width(Length::Fill)
             .radius(size::ROW_RADIUS)
@@ -2352,14 +2355,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     )
     .width(SIDEBAR)
     .height(Length::Fill)
-    .padding([14, 10]);
+    .padding([tok::L, tok::L]);
 
     // Searching: every page's matching settings at once.
     let q = app.panels.settings.query.trim().to_lowercase();
     QUERY.with(|cell| *cell.borrow_mut() = q.clone());
     let body = if q.is_empty() {
         column![label_w(page.name(), text::HEADING, s.ink, theme::SEMIBOLD)]
-            .spacing(18)
+            .spacing(tok::XL)
             .extend(match page {
                 Page::Bar => bar_page(app, s),
                 Page::Appearance => appearance_page(app, s),
@@ -2388,7 +2391,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             })
     } else {
         column![label_w("Search", text::HEADING, s.ink, theme::SEMIBOLD)]
-            .spacing(18)
+            .spacing(tok::XL)
             .extend(bar_page(app, s))
             .extend(appearance_page(app, s))
             .extend(time_page(app, s))
@@ -2493,7 +2496,7 @@ fn field<'a>(
         .id(iced::widget::Id::new(id))
         .on_input(on_input)
         .secure(secure)
-        .padding([6, 10])
+        .padding([tok::S, tok::L])
         .size(text::BODY)
         .font(theme::FONT)
         .width(240)
@@ -2518,7 +2521,7 @@ fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, A
         name,
         None,
         control(label(value.clone(), text::BODY, s.ink_dim))
-            .padding([4, 10])
+            .padding([tok::XS, tok::L])
             .radius(14.0)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
@@ -2559,7 +2562,7 @@ fn pick_search<'a>(
         text_input("Search", value)
             .id(iced::widget::Id::new(id))
             .on_input(move |q| msg(on(q)))
-            .padding([6, 10])
+            .padding([tok::S, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
             .style(move |_, _| text_input::Style {
@@ -2578,7 +2581,7 @@ fn pick_search<'a>(
 /// One entry of a pick list.
 fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMessage> {
     control(label(name, text::BODY, if on { s.accent } else { s.ink }))
-        .padding([0, 12])
+        .padding([tok::NONE, tok::L])
         .height(34)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
@@ -2661,7 +2664,7 @@ fn hypr_row<'a>(
                     .width(56)
                     .align_right(56),
             ]
-            .spacing(10)
+            .spacing(tok::L)
             .align_y(Alignment::Center)
             .into()
         }

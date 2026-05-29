@@ -3,6 +3,7 @@
 
 use super::{calendar, media};
 use crate::app::{App, Message as AppMessage};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, card, control, icon, label, label_w};
 use iced::widget::{column, container, row};
@@ -10,7 +11,7 @@ use iced::{Alignment, Color, Element, Length};
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // Weather and music with pills of their own have their own panels: not repeated here.
-    let mut col = column![today(app, s)].spacing(12);
+    let mut col = column![today(app, s)].spacing(tok::L);
     if !app.config.bar.contains("media")
         && let Some(p) = media::current(app)
     {
@@ -18,7 +19,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
     col = col.push(system(app, s));
     col = col.push(card(s, calendar::month(app, s)));
-    container(col).padding(12).into()
+    container(col).padding(tok::L).into()
 }
 
 /// Time, date and the weather, on a sky that matches the weather and the time of day.
@@ -29,7 +30,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .filter(|_| !app.config.bar.contains("weather"))
     else {
         return container(clock(app, s.ink, s.ink_dim))
-            .padding([4, 6])
+            .padding([tok::XS, tok::S])
             .into();
     };
     let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
@@ -46,7 +47,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     theme::SEMIBOLD
                 ),
             ]
-            .spacing(10)
+            .spacing(tok::L)
             .align_y(Alignment::Center),
             label(w.describe(), text::SMALL, soft),
             label(
@@ -55,14 +56,14 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 soft
             ),
         ]
-        .spacing(2)
+        .spacing(tok::XXS)
         .align_x(Alignment::End),
     ]
     .align_y(Alignment::Center);
     let (top, bottom) = ui::weather_sky(w);
     let (top, bottom) = (s.fade(top), s.fade(bottom));
     container(r)
-        .padding([16, 18])
+        .padding([tok::XL, tok::XL])
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: Some(
@@ -82,7 +83,7 @@ fn clock(app: &App, ink: Color, dim: Color) -> Element<'_, AppMessage> {
         label_w(app.time_text(), theme::text::DISPLAY, ink, theme::SEMIBOLD),
         label(app.now.format("%A, %-d %B").to_string(), text::BODY, dim),
     ]
-    .spacing(2)
+    .spacing(tok::XXS)
     .width(Length::Fill)
     .into()
 }
@@ -111,7 +112,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
         s.ink,
         theme::MEDIUM
     )]
-    .spacing(2)
+    .spacing(tok::XXS)
     .width(Length::Fill);
     if !p.artist.is_empty() {
         meta = meta.push(label(
@@ -143,10 +144,10 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
                     false
                 ),
             ]
-            .spacing(2)
+            .spacing(tok::XXS)
             .align_y(Alignment::Center),
         ]
-        .spacing(12)
+        .spacing(tok::L)
         .align_y(Alignment::Center),
     )
 }
@@ -171,7 +172,7 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ],
             label(name, text::SMALL, s.ink_dim),
         ]
-        .spacing(8)
+        .spacing(tok::M)
         .align_x(Alignment::Center)
         .width(Length::Fill)
     };

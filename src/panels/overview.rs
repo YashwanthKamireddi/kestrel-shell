@@ -11,6 +11,7 @@ use super::Message as PanelMessage;
 use super::PanelKind;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{apps, hyprland, icons};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, pin, row, stack};
@@ -702,9 +703,9 @@ fn card<'a>(
             s.ink_dim
         ),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center)
-    .padding([0, 2]);
+    .padding([tok::NONE, tok::XXS]);
     let st = &app.panels.overview;
     // Dragging: the empty card's +, and a ring on the card it would land on.
     if st.dragging && windows.is_empty() && !current {

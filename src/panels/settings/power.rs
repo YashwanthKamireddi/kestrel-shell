@@ -1,6 +1,7 @@
 //! Settings › power: its page.
 
 use super::*;
+use crate::theme::tok;
 
 /// "30 min", "1 hour", "1 h 30 min".
 pub(super) fn idle_time(secs: u64) -> String {
@@ -131,10 +132,10 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     label(idle_time(*secs), text::SMALL, s.ink),
                     icon(Icon::ChevronDown, 14.0, s.ink_dim)
                 ]
-                .spacing(6)
+                .spacing(tok::S)
                 .align_y(Alignment::Center),
             )
-            .padding([4, 10])
+            .padding([tok::XS, tok::L])
             .radius(14.0)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::IdleOpen((!open).then_some(*step))))

@@ -3,6 +3,7 @@
 use crate::app::{App, Message, OSD_WIDTH, Output, TOAST_WIDTH};
 use crate::panels::{self, PanelKind};
 use crate::services::hyprland;
+use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::shape::{BarShape, Drop};
 use crate::ui::{self, label, label_w};
@@ -149,7 +150,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                         .width(Length::Fill)
                         .align_x(Alignment::Start),
                 ]
-                .spacing(6)
+                .spacing(tok::S)
                 .align_y(Alignment::Center)
                 .into()
             }
@@ -281,8 +282,8 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 .find(|n| n.id == t.id)
                 .map(|n| panels::notifications::card(fs, n, false))
         }))
-        .spacing(2)
-        .padding(4);
+        .spacing(tok::XXS)
+        .padding(tok::XS);
         layers.push(
             pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
                 .offset((1.0 - a) * 6.0)
@@ -333,13 +334,13 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
             s.ink,
             crate::theme::MEDIUM
         )]
-        .spacing(2);
+        .spacing(tok::XXS);
         if let Some(sub) = &osd.sub {
             words = words.push(label(sub.clone(), text::SMALL, s.ink_dim));
         }
         return container(
             row![ui::icon(osd.icon, 18.0, s.ink), words]
-                .spacing(12)
+                .spacing(tok::L)
                 .align_y(Alignment::Center),
         )
         .center_x(Length::Fill)
@@ -375,7 +376,7 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
         .width(VALUE_W)
         .align_x(Alignment::End),
     ]
-    .spacing(12)
+    .spacing(tok::L)
     .align_y(Alignment::Center)
     .padding([14.0, PAD])
     .into()
@@ -403,7 +404,7 @@ fn with_actions<'a>(
     if items.is_empty() {
         return items;
     }
-    let mut area = mouse_area(row(items).spacing(4).align_y(Alignment::Center));
+    let mut area = mouse_area(row(items).spacing(tok::XS).align_y(Alignment::Center));
     if let Some(c) = &m.right {
         area = area.on_right_press(action(c));
     }
@@ -442,7 +443,10 @@ fn section<'a>(
             .iter()
             .flat_map(|id| with_actions(id, app, crate::modules::items(id, app, o, s, open)))
             .collect();
-        return row(items).spacing(4).align_y(Alignment::Center).into();
+        return row(items)
+            .spacing(tok::XS)
+            .align_y(Alignment::Center)
+            .into();
     }
     let material = app.config.material;
     // Neighbours of the same group share a pill; every other module is a pill alone.
@@ -466,14 +470,17 @@ fn section<'a>(
     let pills_row = groups.into_iter().map(|items| {
         // A pill with one item (the island) is that item: it fills the pill edge to edge.
         let single = items.len() == 1;
-        let pill = container(row(items).spacing(4).align_y(Alignment::Center))
+        let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
             .padding([0, if single { 0 } else { 4 }])
             .height(size::BAR - 6.0)
             .center_y(size::BAR - 6.0)
             .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
         frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
     });
-    row(pills_row).spacing(6).align_y(Alignment::Center).into()
+    row(pills_row)
+        .spacing(tok::S)
+        .align_y(Alignment::Center)
+        .into()
 }
 
 /// A pill's box in each material. Frosted has no fill of its own: the frost (`ui::frost`) is

@@ -1,6 +1,7 @@
 //! Settings › network: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -68,7 +69,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             let body = row![
                 lead,
                 {
-                    let mut words = column![label(net.ssid.clone(), text::BODY, s.ink)].spacing(2);
+                    let mut words =
+                        column![label(net.ssid.clone(), text::BODY, s.ink)].spacing(tok::XXS);
                     if !state.is_empty() {
                         let ink = if failed.is_some() && busy.is_none() && !net.active {
                             s.bad
@@ -81,10 +83,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 },
                 trailing,
             ]
-            .spacing(12)
+            .spacing(tok::L)
             .align_y(Alignment::Center);
             let mut c = control(body)
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .height(if state.is_empty() { 46 } else { 54 })
                 .width(Length::Fill)
                 .kind(s, crate::ui::control::Kind::Ghost)
@@ -233,10 +235,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                             .pill(s, crate::ui::control::Pill::Plain)
                             .on_press(msg(Message::ForgetNet(k.ssid.clone()))),
                         ]
-                        .spacing(12)
+                        .spacing(tok::L)
                         .align_y(Alignment::Center),
                     )
-                    .padding([0, 16])
+                    .padding([tok::NONE, tok::XL])
                     .height(46)
                     .align_y(Alignment::Center)
                     .into(),
@@ -404,10 +406,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                             .pill(s, crate::ui::control::Pill::Primary)
                             .on_press(msg(Message::IpApply)),
                     ]
-                    .spacing(8)
+                    .spacing(tok::M)
                     .align_y(Alignment::Center),
                 )
-                .padding([8, 16])
+                .padding([tok::M, tok::XL])
                 .into(),
             ));
         }

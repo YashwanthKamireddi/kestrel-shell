@@ -1,6 +1,7 @@
 //! Settings › sound: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -40,7 +41,7 @@ pub(super) fn level<'a>(
         .width(44)
         .align_right(44),
     ]
-    .spacing(8)
+    .spacing(tok::M)
     .align_y(Alignment::Center)
     .into()
 }
@@ -95,10 +96,10 @@ pub(super) fn chooser<'a>(
                 s.ink_dim
             )
         ]
-        .spacing(6)
+        .spacing(tok::S)
         .align_y(Alignment::Center),
     )
-    .padding([4, 10])
+    .padding([tok::XS, tok::L])
     .radius(14.0)
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::SoundPick((!open).then(|| key.to_string()))))
@@ -241,9 +242,9 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             let v = ((d.balance + 1.0) / 2.0).clamp(0.0, 1.0);
             let bar = crate::ui::slider::slider(
                 row![
-                    container(label("L", text::CAPTION, s.ink_dim)).padding([0, 8]),
+                    container(label("L", text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::M]),
                     iced::widget::Space::new().width(Length::Fill),
-                    container(label("R", text::CAPTION, s.ink_dim)).padding([0, 8]),
+                    container(label("R", text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::M]),
                 ]
                 .align_y(Alignment::Center),
                 v,
@@ -273,7 +274,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     .width(44)
                     .align_right(44)
                 ]
-                .spacing(8)
+                .spacing(tok::M)
                 .align_y(Alignment::Center)
                 .into(),
             ));
@@ -434,14 +435,14 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                             label(a.name.clone(), text::BODY, s.ink).width(Length::Fill),
                             chooser(s, now, &key, open),
                         ]
-                        .spacing(10)
+                        .spacing(tok::L)
                         .align_y(Alignment::Center),
                         row![iced::widget::Space::new().width(Length::Fill), lvl]
                             .align_y(Alignment::Center),
                     ]
-                    .spacing(6),
+                    .spacing(tok::S),
                 )
-                .padding([10, 16])
+                .padding([tok::L, tok::XL])
                 .into(),
             ));
             if open {
@@ -495,7 +496,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         .pill(s, crate::ui::control::Pill::Plain)
                         .on_press(msg(Message::AlertPlay)),
                 ]
-                .spacing(8)
+                .spacing(tok::M)
                 .align_y(Alignment::Center)
                 .into(),
             ),

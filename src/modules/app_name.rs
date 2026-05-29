@@ -2,6 +2,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{Scheme, text};
 use crate::ui::label;
 use iced::Element;
@@ -28,6 +29,6 @@ fn name<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
         String::new()
     };
     container(label(name, text::SMALL, s.ink))
-        .padding([0, 6])
+        .padding([tok::NONE, tok::S])
         .into()
 }

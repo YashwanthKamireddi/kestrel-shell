@@ -1,6 +1,7 @@
 //! Settings › shortcuts: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -60,7 +61,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
     } else {
         match &st.new_keys {
             Some(k) => control(key_chips(s, k))
-                .padding([4, 8])
+                .padding([tok::XS, tok::M])
                 .radius(14.0)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::Record(true)))
@@ -77,7 +78,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                 .id(iced::widget::Id::new(id))
                 .on_input(move |t| msg(on(t)))
                 .on_submit(msg(Message::AddShortcut))
-                .padding([6, 10])
+                .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
                 .width(320)
@@ -118,7 +119,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
     if let Some(c) = conflict {
         make.push(Some(
             container(label(format!("Used by {c}"), text::SMALL, s.bad))
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .into(),
         ));
     }
@@ -153,10 +154,10 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                             .kind(s, crate::ui::control::Kind::Ghost)
                             .on_press(msg(Message::RemoveShortcut(c.keys.clone()))),
                     ]
-                    .spacing(10)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
                 )
-                .padding([8, 16])
+                .padding([tok::M, tok::XL])
                 .into(),
             )
         })
@@ -181,7 +182,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         .into()
                 } else {
                     control(key_chips(s, &keys))
-                        .padding([2, 6])
+                        .padding([tok::XXS, tok::S])
                         .radius(12.0)
                         .kind(s, crate::ui::control::Kind::Ghost)
                         .on_press(msg(Message::Rebind(keys.clone())))
@@ -195,7 +196,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         ]
                         .align_y(Alignment::Center),
                     )
-                    .padding([0, 16])
+                    .padding([tok::NONE, tok::XL])
                     .height(40)
                     .align_y(Alignment::Center)
                     .into(),

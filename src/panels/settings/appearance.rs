@@ -1,6 +1,7 @@
 //! Settings › appearance: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -95,10 +96,10 @@ pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                     s.ink_dim
                 )
             ]
-            .spacing(6)
+            .spacing(tok::S)
             .align_y(Alignment::Center),
         )
-        .padding([4, 10])
+        .padding([tok::XS, tok::L])
         .radius(14.0)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(msg(Message::LookOpen((!open).then_some(i))));
@@ -132,9 +133,9 @@ pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                     &st.look_query,
                     Message::LookQuery
                 ))
-                .padding([4, 0])
+                .padding([tok::XS, tok::NONE])
             ]
-            .spacing(2);
+            .spacing(tok::XXS);
             for name in lists[usize::from(i)]
                 .iter()
                 .filter(|n| q.is_empty() || n.to_lowercase().contains(&q))
@@ -147,7 +148,7 @@ pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                     Message::LookSet(i, name.clone()),
                 ));
             }
-            rows.push(Some(container(list).padding([4, 12]).into()));
+            rows.push(Some(container(list).padding([tok::XS, tok::L]).into()));
         }
     }
     rows
@@ -167,7 +168,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
     let ringed = move |on: bool, inner: Element<'a, AppMessage>, m: AppMessage| {
         container(
             control(inner)
-                .padding(2)
+                .padding(tok::XXS)
                 .radius(11.0)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(m),
@@ -194,7 +195,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
             .into(),
         msg(Message::Accent(None)),
     )]
-    .spacing(4)
+    .spacing(tok::XS)
     .align_y(Alignment::Center);
     for hex in ACCENTS {
         let rgb = u32::from_str_radix(&hex[1..], 16).unwrap_or(0);

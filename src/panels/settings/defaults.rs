@@ -1,6 +1,7 @@
 //! Settings › defaults: its page.
 
 use super::*;
+use crate::theme::tok;
 
 /// An app's icon and name, small (default apps).
 pub(super) fn app_chip<'a>(s: Scheme, a: &crate::services::apps::App) -> Element<'a, AppMessage> {
@@ -9,7 +10,7 @@ pub(super) fn app_chip<'a>(s: Scheme, a: &crate::services::apps::App) -> Element
         None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
     };
     row![ic, label(a.name.clone(), text::SMALL, s.ink)]
-        .spacing(8)
+        .spacing(tok::M)
         .align_y(Alignment::Center)
         .into()
 }
@@ -38,10 +39,10 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             None,
             control(
                 row![shown, icon(Icon::ChevronDown, 14.0, s.ink_dim)]
-                    .spacing(6)
+                    .spacing(tok::S)
                     .align_y(Alignment::Center),
             )
-            .padding([4, 10])
+            .padding([tok::XS, tok::L])
             .radius(14.0)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(Message::DefaultOpen((!open).then_some(k))))

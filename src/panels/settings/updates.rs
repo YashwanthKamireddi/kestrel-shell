@@ -1,6 +1,7 @@
 //! Settings › updates: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -35,16 +36,16 @@ pub(super) fn updates_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                                     s.ink_dim
                                 ),
                             ]
-                            .spacing(2)
+                            .spacing(tok::XXS)
                             .width(Length::Fill),
                             control(label("Update…", text::SMALL, s.ink))
                                 .pill(s, crate::ui::control::Pill::Plain)
                                 .on_press(msg(Message::FirmwareUpdate(f.id.clone()))),
                         ]
-                        .spacing(12)
+                        .spacing(tok::L)
                         .align_y(Alignment::Center),
                     )
-                    .padding([0, 16])
+                    .padding([tok::NONE, tok::XL])
                     .height(56)
                     .align_y(Alignment::Center)
                     .into(),
@@ -99,7 +100,7 @@ pub(super) fn package_updates(app: &App, s: Scheme) -> Vec<Element<'_, AppMessag
                     AppMessage::Close,
                 ])),
             ]
-            .spacing(12)
+            .spacing(tok::L)
             .align_y(Alignment::Center)
             .into(),
         )],
@@ -120,10 +121,10 @@ pub(super) fn package_updates(app: &App, s: Scheme) -> Vec<Element<'_, AppMessag
                             iced::widget::Space::new().into()
                         },
                     ]
-                    .spacing(10)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
                 )
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .height(38)
                 .align_y(Alignment::Center)
                 .into(),

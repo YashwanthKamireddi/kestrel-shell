@@ -5,6 +5,7 @@
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, mouse_area, row, text_input};
@@ -255,7 +256,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .id(INPUT_ID.clone())
         .on_input(|q| msg(Message::Query(q)))
         .on_submit(msg(Message::Pick(st.selected)))
-        .padding([10, 12])
+        .padding([tok::L, tok::L])
         .size(text::TITLE)
         .font(theme::FONT)
         .style(move |_, _| text_input::Style {
@@ -268,18 +269,18 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         });
     let field = container(
         row![icon(Icon::Search, 18.0, s.ink_dim), input]
-            .spacing(4)
+            .spacing(tok::XS)
             .align_y(Alignment::Center),
     )
-    .padding([0, 12])
+    .padding([tok::NONE, tok::L])
     .height(44)
     .center_y(44)
     .style(move |_| ui::field_style(s));
 
     let grid_h = ROWS as f32 * (CELL + 4.0);
-    let mut grid = column![].spacing(4);
+    let mut grid = column![].spacing(tok::XS);
     for r in st.top..st.top + ROWS {
-        let mut line = row![].spacing(4);
+        let mut line = row![].spacing(tok::XS);
         for c in 0..COLUMNS {
             let i = r * COLUMNS + c;
             let Some((e, _)) = list.get(i) else {
@@ -345,7 +346,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         )
         .width(Length::Fill)
     ]
-    .spacing(2)
+    .spacing(tok::XXS)
     .align_y(Alignment::Center);
     // The categories, while browsing (a search shows only matches). The one in view is marked.
     if st.query.trim().is_empty() && !list.is_empty() {
@@ -380,7 +381,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             footer = footer.push(tab(glyph, here == Some(g), Some(g)));
         }
     }
-    container(column![field, body, container(footer).padding([0, 6])].spacing(10))
-        .padding(12)
+    container(column![field, body, container(footer).padding([tok::NONE, tok::S])].spacing(tok::L))
+        .padding(tok::L)
         .into()
 }

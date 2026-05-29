@@ -3,6 +3,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{icon, label_w};
 use iced::widget::row;
@@ -27,7 +28,7 @@ pub fn view<'a>(
         ),
         label_w(app.temp(w.temp), text::BODY, s.ink, theme::SEMIBOLD),
     ]
-    .spacing(6)
+    .spacing(tok::S)
     .align_y(Alignment::Center);
     vec![
         super::chip(s, content, active)

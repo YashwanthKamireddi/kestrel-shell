@@ -2,6 +2,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{label, label_w};
 use iced::widget::row;
@@ -32,7 +33,7 @@ fn clock<'a>(
     let date = app.now.format("%a %-d %b").to_string();
     let id = o.id;
     let mut r = row![label_w(time, text::BODY, s.ink, theme::SEMIBOLD)]
-        .spacing(8)
+        .spacing(tok::M)
         .align_y(Alignment::Center);
     if app.config.clock.date {
         r = r.push(label(date, text::SMALL, s.ink));

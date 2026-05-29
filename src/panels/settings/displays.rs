@@ -1,6 +1,7 @@
 //! Settings › displays: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -127,7 +128,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         ),
                         label(format!("Going back in {left} s"), text::SMALL, s.ink_dim),
                     ]
-                    .spacing(2)
+                    .spacing(tok::XXS)
                     .width(Length::Fill),
                     control(label_w("Go back", text::SMALL, s.ink, theme::MEDIUM))
                         .pill(s, crate::ui::control::Pill::Plain)
@@ -136,10 +137,10 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         .pill(s, crate::ui::control::Pill::Primary)
                         .on_press(msg(Message::DisplayKeep)),
                 ]
-                .spacing(8)
+                .spacing(tok::M)
                 .align_y(Alignment::Center),
             )
-            .padding([12, 16])
+            .padding([tok::L, tok::XL])
             .style(move |_| container::Style {
                 background: Some(s.accent.scale_alpha(0.14 * s.opacity).into()),
                 border: iced::Border::default().rounded(size::CARD_RADIUS),
@@ -176,10 +177,10 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         label(format!("{} × {}", d.width, d.height), text::SMALL, s.ink),
                         icon(Icon::ChevronDown, 14.0, s.ink_dim)
                     ]
-                    .spacing(6)
+                    .spacing(tok::S)
                     .align_y(Alignment::Center),
                 )
-                .padding([4, 10])
+                .padding([tok::XS, tok::L])
                 .radius(14.0)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::ModeOpen((!open).then_some(i))))
@@ -356,7 +357,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         .width(56)
                         .align_right(56),
                 ]
-                .spacing(10)
+                .spacing(tok::L)
                 .align_y(Alignment::Center)
                 .into(),
             ),
@@ -375,7 +376,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     ),
                     ui::switch(s, auto, snd(C::Schedule(!auto))),
                 ]
-                .spacing(12)
+                .spacing(tok::L)
                 .align_y(Alignment::Center)
                 .into(),
             ));

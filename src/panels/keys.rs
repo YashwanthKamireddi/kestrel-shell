@@ -4,6 +4,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::hyprland;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, empty, label, label_w};
 use iced::widget::{column, container, row, scrollable};
@@ -78,8 +79,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
     // Not read yet, or no bindings found: the title and a quiet icon, not 520 px of nothing.
     let Some(groups) = app.panels.keys.groups.as_ref().filter(|g| !g.is_empty()) else {
-        return container(column![header, empty(s, Icon::Keyboard)].spacing(10))
-            .padding(14)
+        return container(column![header, empty(s, Icon::Keyboard)].spacing(tok::L))
+            .padding(tok::L)
             .into();
     };
     // Two columns, filled group by group, balancing by row count.
@@ -88,7 +89,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     for (name, binds) in groups {
         let c = usize::from(heights[1] < heights[0]);
         heights[c] += binds.len() + 2;
-        let mut g = column![label_w(name.clone(), text::SMALL, s.accent, theme::MEDIUM)].spacing(6);
+        let mut g =
+            column![label_w(name.clone(), text::SMALL, s.accent, theme::MEDIUM)].spacing(tok::S);
         for b in binds {
             let keys = row(b.keys.iter().map(|k| chip(s, k))).spacing(3);
             g = g.push(
@@ -97,7 +99,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         .width(Length::Fill),
                     keys,
                 ]
-                .spacing(8)
+                .spacing(tok::M)
                 .align_y(Alignment::Center),
             );
         }
@@ -105,10 +107,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
     let [a, b] = cols;
     let body = row![
-        column(a).spacing(16).width(Length::Fill),
-        column(b).spacing(16).width(Length::Fill),
+        column(a).spacing(tok::XL).width(Length::Fill),
+        column(b).spacing(tok::XL).width(Length::Fill),
     ]
-    .spacing(24);
+    .spacing(tok::XXXL);
     container(
         column![
             header,
@@ -124,7 +126,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ))
             .max_height(MAX_LIST_H),
         ]
-        .spacing(12),
+        .spacing(tok::L),
     )
     .padding(iced::Padding {
         top: 12.0,

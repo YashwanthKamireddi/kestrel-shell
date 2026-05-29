@@ -6,6 +6,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{icons, tray};
+use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::{self, Icon, control, divider, icon, label};
 use iced::widget::{Space, column, container, row};
@@ -181,10 +182,10 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
             icon(Icon::ChevronLeft, size::ICON, s.ink_dim),
             label(ui::ellipsize(&text_, 28), text::BODY, s.ink_dim),
         ]
-        .spacing(8)
+        .spacing(tok::M)
         .align_y(Alignment::Center),
     )
-    .padding([0, 10])
+    .padding([tok::NONE, tok::L])
     .height(34)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
@@ -205,9 +206,9 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     if items.is_empty() {
         return Space::new().into();
     }
-    let mut grid = column![].spacing(4);
+    let mut grid = column![].spacing(tok::XS);
     for chunk in items.chunks(COLS) {
-        let mut r = row![].spacing(4);
+        let mut r = row![].spacing(tok::XS);
         for &item in chunk {
             let pinned = st.pins.contains(&pin_key(item));
             let name = if item.title.is_empty() {
@@ -246,7 +247,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                             s.ink_dim
                         ),
                     ]
-                    .spacing(6)
+                    .spacing(tok::S)
                     .align_x(Alignment::Center),
                 )
                 .width(CELL)
@@ -261,7 +262,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         grid = grid.push(r);
     }
-    container(grid).padding(10).into()
+    container(grid).padding(tok::L).into()
 }
 
 /// "Keep in the bar", for the app whose menu is open.
@@ -276,8 +277,8 @@ fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, AppMessage> {
         label("Keep in the bar", text::BODY, s.ink).width(Length::Fill),
         ui::switch(s, pinned, msg(Message::Pin(key))),
     ]
-    .spacing(10)
-    .padding([6, 10])
+    .spacing(tok::L)
+    .padding([tok::S, tok::L])
     .align_y(Alignment::Center)
     .into()
 }
@@ -300,7 +301,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .unwrap_or_default();
     let Some(root) = &st.menu else {
         if st.item.as_ref().is_some_and(|i| i.menu.is_none()) {
-            return container(column![keep_row(st, s)]).padding(8).into();
+            return container(column![keep_row(st, s)]).padding(tok::M).into();
         }
         let note = container(label(
             if st.item.as_ref().is_some_and(|i| i.menu.is_none()) {
@@ -311,10 +312,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             text::SMALL,
             s.ink_dim,
         ))
-        .padding(16);
+        .padding(tok::XL);
         return if st.from_list {
-            container(column![back_row(s, title), note].spacing(2))
-                .padding(8)
+            container(column![back_row(s, title), note].spacing(tok::XXS))
+                .padding(tok::M)
                 .into()
         } else {
             note.into()
@@ -325,7 +326,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .last()
         .and_then(|id| find(root, *id))
         .unwrap_or(root);
-    let mut col = column![].spacing(2);
+    let mut col = column![].spacing(tok::XXS);
     if !st.path.is_empty() || st.from_list {
         let back = if st.path.is_empty() {
             title.clone()
@@ -333,12 +334,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             current.label.clone()
         };
         col = col.push(back_row(s, back));
-        col = col.push(container(divider(s)).padding([4, 6]));
+        col = col.push(container(divider(s)).padding([tok::XS, tok::S]));
     }
     // Every app's own menu starts with whether it stays in the bar.
     if st.path.is_empty() {
         col = col.push(keep_row(st, s));
-        col = col.push(container(divider(s)).padding([4, 6]));
+        col = col.push(container(divider(s)).padding([tok::XS, tok::S]));
     }
     let any_marks = current
         .children
@@ -346,7 +347,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .any(|c| c.toggle.is_some() || c.icon.is_some());
     for c in &current.children {
         if c.separator {
-            col = col.push(container(divider(s)).padding([4, 6]));
+            col = col.push(container(divider(s)).padding([tok::XS, tok::S]));
             continue;
         }
         let fg = if c.enabled { s.ink } else { s.ink_faint };
@@ -369,7 +370,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             (None, None) => Space::new().width(14).into(),
         };
         let has_sub = !c.children.is_empty();
-        let mut r = row![].spacing(10).align_y(Alignment::Center);
+        let mut r = row![].spacing(tok::L).align_y(Alignment::Center);
         if any_marks {
             r = r.push(lead);
         }
@@ -386,7 +387,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         });
         col = col.push(
             control(r)
-                .padding([0, 10])
+                .padding([tok::NONE, tok::L])
                 .height(34)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
@@ -395,5 +396,5 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .on_press_maybe(on),
         );
     }
-    container(col).padding(8).into()
+    container(col).padding(tok::M).into()
 }

@@ -4,6 +4,7 @@
 use crate::app::{App, Message as AppMessage};
 use crate::services::airpods::Charge;
 use crate::services::bluetooth;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row, stack};
@@ -65,11 +66,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .pill(s, crate::ui::control::Pill::Plain)
             .on_press_maybe(disconnect),
     ]
-    .spacing(10)
+    .spacing(tok::L)
     .align_y(Alignment::Center);
 
     let p = app.pods.clone().unwrap_or_default();
-    let mut list = column![].spacing(12);
+    let mut list = column![].spacing(tok::L);
     if let Some(h) = p.headset {
         list = list.push(part(s, Icon::Headphones, "Headphones", Some(h)));
     } else {
@@ -81,8 +82,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             list = list.push(part(s, Icon::EarbudCase, "Case", p.case));
         }
     }
-    container(column![header, list].spacing(16).width(Length::Fill))
-        .padding([16, 18])
+    container(column![header, list].spacing(tok::XL).width(Length::Fill))
+        .padding([tok::XL, tok::XL])
         .into()
 }
 
@@ -120,7 +121,7 @@ fn part<'a>(
                 s.ink,
                 theme::SEMIBOLD
             )]
-            .spacing(2)
+            .spacing(tok::XXS)
             .align_y(Alignment::Center);
             if c.charging {
                 r = r.push(icon(Icon::Zap, 12.0, s.good));
@@ -142,7 +143,7 @@ fn part<'a>(
         track,
         container(number).width(48).align_x(Alignment::End),
     ]
-    .spacing(12)
+    .spacing(tok::L)
     .align_y(Alignment::Center)
     .into()
 }

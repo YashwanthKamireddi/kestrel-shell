@@ -5,6 +5,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::system::Detail;
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
@@ -87,16 +88,16 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(d) = &st.detail else {
         // The first reading is 1.5 s away: the cores from the dashboard's own numbers meanwhile.
         return container(
-            column![title, crate::ui::waiting(s, Icon::Activity, "Reading…")].spacing(12),
+            column![title, crate::ui::waiting(s, Icon::Activity, "Reading…")].spacing(tok::L),
         )
-        .padding(16)
+        .padding(tok::XL)
         .into();
     };
     // Cores: one bar each, in two columns.
-    let mut cores = column![].spacing(6);
+    let mut cores = column![].spacing(tok::S);
     for pair in d.cores.chunks(2).enumerate() {
         let (k, c) = pair;
-        let mut r = row![].spacing(14);
+        let mut r = row![].spacing(tok::L);
         for (j, v) in c.iter().enumerate() {
             r = r.push(
                 row![
@@ -111,7 +112,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         .width(34)
                         .align_right(34),
                 ]
-                .spacing(8)
+                .spacing(tok::M)
                 .align_y(Alignment::Center)
                 .width(Length::Fill),
             );
@@ -130,9 +131,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             ],
             bar(s, used as f32 / total.max(1) as f32, 6.0),
         ]
-        .spacing(6)
+        .spacing(tok::S)
     };
-    let mut mem = column![memory("Memory", d.mem)].spacing(12);
+    let mut mem = column![memory("Memory", d.mem)].spacing(tok::L);
     if d.swap.1 > 0 {
         mem = mem.push(memory("Swap", d.swap));
     }
@@ -148,9 +149,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .align_right(70),
             Space::new().width(30),
         ]
-        .padding([0, 10])
+        .padding([tok::NONE, tok::L])
     ]
-    .spacing(2);
+    .spacing(tok::XXS);
     for (pid, name, cpu, rss) in &d.top {
         let armed = st.armed == Some(*pid);
         // The session itself (the compositor, this shell, sound, the session bus) has no end
@@ -180,7 +181,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .into()
         } else {
             control(icon(Icon::X, 14.0, s.ink_dim))
-                .padding(4)
+                .padding(tok::XS)
                 .radius(11.0)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::End(*pid)))
@@ -202,10 +203,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     .align_right(70),
                     container(end).width(46).align_right(46),
                 ]
-                .spacing(0)
+                .spacing(tok::NONE)
                 .align_y(Alignment::Center),
             )
-            .padding([0, 10])
+            .padding([tok::NONE, tok::L])
             .height(32)
             .align_y(Alignment::Center),
         );
@@ -213,13 +214,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     container(
         column![
             title,
-            crate::ui::card(s, container(cores).padding([4, 2])),
-            crate::ui::card(s, container(mem).padding([4, 2])),
-            crate::ui::card(s, container(procs).padding([4, 2])),
+            crate::ui::card(s, container(cores).padding([tok::XS, tok::XXS])),
+            crate::ui::card(s, container(mem).padding([tok::XS, tok::XXS])),
+            crate::ui::card(s, container(procs).padding([tok::XS, tok::XXS])),
         ]
-        .spacing(12),
+        .spacing(tok::L),
     )
-    .padding(16)
+    .padding(tok::XL)
     .width(Length::Fill)
     .into()
 }

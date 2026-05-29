@@ -1,6 +1,7 @@
 //! Settings › storage: its page.
 
 use super::*;
+use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
@@ -54,7 +55,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     ..container::Style::default()
                 }),
         ];
-        let mut actions = row![].spacing(6).align_y(Alignment::Center);
+        let mut actions = row![].spacing(tok::S).align_y(Alignment::Center);
         if v.removable || v.mount.as_deref().is_some_and(|m| m != "/" && m != "/boot") {
             actions = actions.push(
                 control(label_w("Open", text::SMALL, s.ink, theme::MEDIUM))
@@ -65,7 +66,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         if v.removable {
             actions = actions.push(
                 control(icon(Icon::Eject, 16.0, s.ink))
-                    .padding(6)
+                    .padding(tok::S)
                     .radius(14.0)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .on_press(msg(Message::VolumeEject(v.path.clone(), v.drive.clone()))),
@@ -92,13 +93,13 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         .width(Length::Fill),
                         actions,
                     ]
-                    .spacing(10)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
                     bar,
                 ]
-                .spacing(8),
+                .spacing(tok::M),
             )
-            .padding([12, 16])
+            .padding([tok::L, tok::XL])
             .into(),
         )
     };
@@ -140,7 +141,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                                     label(name, text::BODY, s.ink).width(Length::Fill),
                                     label(bytes_text(*n), text::SMALL, s.ink_dim),
                                 ]
-                                .spacing(10)
+                                .spacing(tok::L)
                                 .align_y(Alignment::Center),
                                 row![
                                     container(iced::widget::Space::new())
@@ -160,9 +161,9 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                                         .height(3),
                                 ],
                             ]
-                            .spacing(6),
+                            .spacing(tok::S),
                         )
-                        .padding([10, 16])
+                        .padding([tok::L, tok::XL])
                         .width(Length::Fill)
                         .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()

@@ -1,6 +1,7 @@
 //! Settings › mouse: its page.
 
 use super::*;
+use crate::theme::tok;
 
 pub(super) fn mouse_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     if app.panels.settings.hypr.is_empty() {
@@ -89,7 +90,7 @@ pub(super) fn device_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMes
                         .width(56)
                         .align_right(56),
                 ]
-                .spacing(10)
+                .spacing(tok::L)
                 .align_y(Alignment::Center)
                 .into(),
             )
