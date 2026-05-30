@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with seven
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with nine
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -50,3 +50,8 @@ time 8.4 ms -> 5.1 ms on average. Canvas drawings are also cached now (`ui::Memo
 canvas was repainted over all its bounds every frame.
 7. `scroll_by` and `snap_to_end` re-exported beside `scroll_to` / `snap_to` (keyboard
    scrolling in panels: the shortcuts sheet).
+8. A layer surface's configure that changes nothing (Hyprland sends a second one of the same size)
+is acknowledged with a bare commit, not a new frame (2026-11-15).
+9. `NOT_READY` as a redraw key: the surface is not presented at all, even for a configure (the
+wallpaper waits for its picture). Together with 8: the wallpaper surface presents once, so the
+compositor holds one 8 MB buffer instead of two; screen buffers 17 → 8.8 MB PSS.

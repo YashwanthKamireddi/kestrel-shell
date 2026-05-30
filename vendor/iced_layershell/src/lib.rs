@@ -19,6 +19,9 @@ mod window_handle;
 mod task_impl;
 
 // === Layer shell API ===
+/// A `redraw_key` meaning "nothing to show yet": the surface is not presented at all.
+pub const NOT_READY: u64 = u64::MAX;
+
 pub use application::application;
 pub use blur::{BlurContainer, blur, blur_container};
 pub use error::Error;

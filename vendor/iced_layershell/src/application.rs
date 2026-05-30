@@ -735,6 +735,12 @@ where
                 if !iced_s.forced && key.is_some() && key == iced_s.redraw_key {
                     continue;
                 }
+                // kestrel patch: `NOT_READY` is nothing to show yet (a wallpaper still being
+                // read): not presented at all, not even for a configure, so its first frame is
+                // its real one and no buffer is spent on an empty frame.
+                if key == Some(crate::NOT_READY) {
+                    continue;
+                }
 
                 let cursor = scaled_cursor(
                     &wl_state,

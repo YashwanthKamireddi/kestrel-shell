@@ -30,12 +30,22 @@ impl LayerShellHandler for WaylandState {
         if let Some(data) = self.surfaces.get_mut(wl_surface) {
             let new_size = configure.new_size;
             crate::ktrace!("configure {:?} {:?}", data.id, new_size);
+            // kestrel patch: a configure that changes nothing (Hyprland sends a second one of the
+            // same size) is acknowledged with a bare commit instead of a new frame. A new frame
+            // there made the compositor hold two buffers of a full-screen surface for good (the
+            // wallpaper kept 2 × 8 MB).
+            let same =
+                data.configured && (new_size.0 == 0 || new_size.1 == 0 || new_size == data.size);
             // (0, 0) means compositor hasn't set a size — keep current or use default
             if new_size.0 > 0 && new_size.1 > 0 {
                 data.size = new_size;
             }
             data.configured = true;
-            self.surfaces_need_redraw.insert(data.id);
+            if same {
+                wl_surface.commit();
+            } else {
+                self.surfaces_need_redraw.insert(data.id);
+            }
         }
     }
 }
