@@ -7,7 +7,7 @@ use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::{Icon, control, icon, label};
 use iced::widget::{Space, column, row};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -114,12 +114,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let rows = Action::ALL.map(|a| {
         let is_armed = armed == Some(a);
         let focused = focus.is_some_and(|i| Action::ALL[i] == a);
-        let (fg, rest, hover) = if is_armed {
-            (s.base, s.bad, s.bad)
+        let fg = if is_armed { s.base } else { s.ink };
+        let kind = if is_armed {
+            crate::ui::control::Kind::Danger
         } else if focused {
-            (s.ink, s.selected(), s.selected())
+            crate::ui::control::Kind::Chosen
         } else {
-            (s.ink, Color::TRANSPARENT, s.hover())
+            crate::ui::control::Kind::Ghost
         };
         let text_s = if is_armed {
             a.confirm().unwrap_or(a.label())
@@ -139,7 +140,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .height(40)
         .width(Length::Fill)
         .radius(size::ROW_RADIUS)
-        .colors(rest, hover, if is_armed { s.bad } else { s.raised_press })
+        .kind(s, kind)
         .on_press(AppMessage::Panel(PanelMessage::Power(Message::Press(a))))
         .into()
     });

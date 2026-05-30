@@ -241,11 +241,7 @@ pub(super) fn level_row<'a>(
     let inner = row![
         ui::control(container(icon(i, size::ICON, s.on_accent)).center(32))
             .radius(tok::FULL)
-            .colors(
-                iced::Color::TRANSPARENT,
-                s.on_accent.scale_alpha(0.12),
-                s.on_accent.scale_alpha(0.2)
-            )
+            .kind(s, crate::ui::control::Kind::OnAccent)
             .on_press(msg(on_icon)),
         Space::new().width(Length::Fill),
         pct,

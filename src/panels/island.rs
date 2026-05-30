@@ -93,17 +93,23 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
     let bus = p.bus.clone();
     let msg = |m: media::Message| AppMessage::Panel(super::Message::Media(m));
     let button = |i: Icon, m: Option<AppMessage>, primary: bool| {
-        let (fg, bg) = if primary {
-            (s.on_accent, s.accent)
+        let fg = if primary {
+            s.on_accent
+        } else if m.is_some() {
+            s.ink
         } else {
-            (
-                if m.is_some() { s.ink } else { s.ink_faint },
-                Color::TRANSPARENT,
-            )
+            s.ink_faint
         };
         control(container(icon(i, 16.0, fg)).center(32))
             .radius(tok::FULL)
-            .colors(bg, if primary { bg } else { s.hover() }, s.raised_press)
+            .kind(
+                s,
+                if primary {
+                    crate::ui::control::Kind::Primary
+                } else {
+                    crate::ui::control::Kind::Ghost
+                },
+            )
             .on_press_maybe(m)
     };
     let mut meta = column![label_w(

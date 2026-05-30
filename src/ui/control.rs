@@ -40,6 +40,14 @@ pub enum Kind {
     Primary,
     /// The danger fill (a destructive action asked to confirm).
     Danger,
+    /// No fill of its own: something else shows the selection (the launcher's highlight that
+    /// moves under the rows, a picture that is its own button). Press still answers.
+    Bare,
+    /// A clear button on an accent fill (the icon at the start of a filled slider).
+    OnAccent,
+    /// The close button over a picture: a scrim to stay legible on anything, red when it would
+    /// close.
+    Dismiss,
 }
 
 pub struct Control<'a, M> {
@@ -198,6 +206,13 @@ impl<'a, M> Control<'a, M> {
             ),
             Kind::Primary => (s.accent, over(s.accent, HOVER), over(s.accent, PRESS)),
             Kind::Danger => (s.bad, over(s.bad, HOVER), over(s.bad, PRESS)),
+            Kind::Bare => (Color::TRANSPARENT, Color::TRANSPARENT, ink(PRESS)),
+            Kind::OnAccent => (
+                Color::TRANSPARENT,
+                s.on_accent.scale_alpha(1.5 * HOVER),
+                s.on_accent.scale_alpha(1.5 * PRESS),
+            ),
+            Kind::Dismiss => (s.base.scale_alpha(0.85), s.bad, over(s.bad, PRESS)),
         };
         self.rest = rest;
         self.hover = hover;

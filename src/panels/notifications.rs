@@ -425,24 +425,19 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
         .iter()
         .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))
         .map(|(k, _)| k.clone());
-    let has_default = default.is_some();
-    let rest = if boxed {
-        s.ink.scale_alpha(0.06 * s.opacity)
-    } else {
-        Color::TRANSPARENT
-    };
     control(col)
         .padding(tok::L)
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
-        .colors(
-            rest,
-            if has_default {
-                s.ink.scale_alpha(0.08 * s.opacity)
+        // A card that opens something lifts on hover (one with no default action does not
+        // react: it has nothing to press).
+        .kind(
+            s,
+            if boxed {
+                crate::ui::control::Kind::Tonal
             } else {
-                rest
+                crate::ui::control::Kind::Ghost
             },
-            rest,
         )
         .no_press_scale()
         .on_press_maybe(default.map(|k| msg(Message::Action(n.id, k))))

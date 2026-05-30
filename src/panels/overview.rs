@@ -649,7 +649,7 @@ fn card<'a>(
             tile = tile.push(
                 pin(control(container(icon(Icon::X, 12.0, s.ink)).center(22))
                     .radius(tok::FULL)
-                    .colors(s.base.scale_alpha(0.85), s.bad, s.bad.scale_alpha(0.8))
+                    .kind(s, crate::ui::control::Kind::Dismiss)
                     .on_press(msg(Message::CloseWindow(w.address.clone()))))
                 .x((bw - 26.0).max(0.0))
                 .y(4.0),

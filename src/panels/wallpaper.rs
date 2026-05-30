@@ -10,7 +10,7 @@ use crate::theme::tok;
 use crate::theme::{Scheme, size, text};
 use crate::ui::{self, Icon, control, empty, label_w};
 use iced::widget::{column, container, image, row, scrollable};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 use std::path::{Path, PathBuf};
 
 const COLS: usize = 4;
@@ -495,7 +495,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         control(tile)
                             .padding(3)
                             .radius(size::ROW_RADIUS)
-                            .colors(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT)
+                            .kind(s, crate::ui::control::Kind::Bare)
                             .no_press_scale()
                             .on_enter(msg(Message::Hover(i)))
                             .on_press(msg(Message::Set(path.clone()))),
