@@ -7,8 +7,8 @@ use iced::widget::column;
 
 /// A section title inside a page.
 pub(super) fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
-    container(label_w(title, text::SMALL, s.ink_dim, theme::SEMIBOLD))
-        .padding([tok::S, tok::S])
+    container(ui::section(s, title, tok::S))
+        .padding([tok::S, tok::NONE])
         .into()
 }
 

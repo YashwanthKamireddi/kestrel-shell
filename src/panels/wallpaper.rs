@@ -430,18 +430,15 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 Ok(rest) => format!("~/{}", rest.display()),
                 Err(_) => f.display().to_string(),
             };
-            container(ui::label(
+            ui::empty_reason(
+                s,
                 if f.is_dir() {
                     format!("No pictures in {shown}")
                 } else {
                     format!("No folder {shown}")
                 },
-                text::BODY,
-                s.ink_dim,
-            ))
-            .center_x(Length::Fill)
-            .padding([40, 0])
-            .into()
+                3.0 * tok::XXXL * 2.0,
+            )
         }
         Some(v) => {
             let mut grid = column![].spacing(tok::L);

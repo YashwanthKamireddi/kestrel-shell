@@ -133,12 +133,12 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
 /// A small heading over a part of a list.
 pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, AppMessage> {
-    container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD))
+    // Room above it, a little below: it belongs to the rows under it.
+    container(ui::section(s, t, tok::L))
         .padding(iced::Padding {
-            top: 10.0,
-            right: 12.0,
-            bottom: 4.0,
-            left: 12.0,
+            top: tok::L,
+            bottom: tok::XS,
+            ..iced::Padding::ZERO
         })
         .into()
 }

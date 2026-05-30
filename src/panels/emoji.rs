@@ -311,18 +311,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
     let body: Element<'_, AppMessage> = if list.is_empty() {
         // Nothing found: said where the grid would be.
-        container(label(
-            format!("No emoji for “{}”", st.query.trim()),
-            text::BODY,
-            s.ink_dim,
-        ))
-        .center_x(Length::Fill)
-        .padding(iced::Padding {
-            top: 48.0,
-            ..iced::Padding::ZERO
-        })
-        .height(grid_h)
-        .into()
+        crate::ui::empty_reason(s, format!("No emoji for “{}”", st.query.trim()), grid_h)
     } else {
         mouse_area(container(grid).height(grid_h))
             .on_scroll(|d| {

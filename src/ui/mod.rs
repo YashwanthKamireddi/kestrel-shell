@@ -387,6 +387,37 @@ pub fn subpage_header<'a, M: Clone + 'static>(
     .into()
 }
 
+/// A group's heading over its rows: SMALL, semibold, dim. `inset` lines it up with the rows'
+/// own content (the one thing that differs between places).
+pub fn section<'a, M: 'a>(
+    s: Scheme,
+    title: impl text::IntoFragment<'a>,
+    inset: f32,
+) -> Element<'a, M> {
+    container(label_w(
+        title,
+        theme::text::SMALL,
+        s.ink_dim,
+        theme::SEMIBOLD,
+    ))
+    .padding([theme::tok::NONE, inset])
+    .into()
+}
+
+/// Where a list would be when it is empty *because of what was typed or chosen* (a search, a
+/// path, a filter): says why, centred, where the first rows would start. Not for a list that is
+/// simply empty: that shows `empty` (an icon, no words: the user's first rule, 2026-11-13).
+pub fn empty_reason<'a, M: 'a>(s: Scheme, why: String, height: f32) -> Element<'a, M> {
+    container(label(why, theme::text::BODY, s.ink_dim))
+        .center_x(Length::Fill)
+        .padding(iced::Padding {
+            top: 2.0 * theme::tok::XXXL,
+            ..iced::Padding::ZERO
+        })
+        .height(height)
+        .into()
+}
+
 /// Muted centred message for empty lists.
 /// Where a list or picture would be and there is nothing (yet): only a faint icon of what
 /// belongs there. No words: "Nothing here" labels were the user's first rule (2026-11-13).

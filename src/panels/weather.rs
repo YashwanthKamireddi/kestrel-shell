@@ -125,9 +125,7 @@ fn sun_next(w: &Weather) -> (Icon, String, &'static str) {
 }
 
 fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
-    container(label_w(title, text::SMALL, s.ink_dim, theme::SEMIBOLD))
-        .padding([tok::NONE, tok::S])
-        .into()
+    crate::ui::section(s, title, tok::S)
 }
 
 /// The next hours: time, condition, temperature.

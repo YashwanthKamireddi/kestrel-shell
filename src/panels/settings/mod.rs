@@ -2175,13 +2175,9 @@ fn group<'a>(
             ..container::Style::default()
         });
     Some(match title {
-        Some(t) => column![
-            container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD))
-                .padding([tok::NONE, tok::XS]),
-            card
-        ]
-        .spacing(tok::M)
-        .into(),
+        Some(t) => column![crate::ui::section(s, t, tok::XS), card]
+            .spacing(tok::M)
+            .into(),
         None => card.into(),
     })
 }
