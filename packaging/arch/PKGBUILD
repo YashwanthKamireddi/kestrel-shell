@@ -27,13 +27,17 @@ pkgver() {
 build() {
     cd "$_repo"
     export CARGO_TARGET_DIR="$_repo/target"
-    cargo build --release --locked
+    # The same environment as `make check`, so this reuses what it compiled: makepkg's CFLAGS /
+    # LDFLAGS made every C dependency (aws-lc-sys…) rebuild on each install (~2 min).
+    env -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS -u RUSTFLAGS -u LTOFLAGS \
+        cargo build --release --locked
 }
 
 check() {
     cd "$_repo"
     export CARGO_TARGET_DIR="$_repo/target"
-    cargo test --release --locked
+    env -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS -u RUSTFLAGS -u LTOFLAGS \
+        cargo test --release --locked
 }
 
 package() {

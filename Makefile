@@ -18,6 +18,8 @@ build:
 install: check
 	$(SCOPE) cargo build --release
 	cd packaging/arch && $(SCOPE) makepkg -f --noconfirm --nocheck >/dev/null && sudo pacman -U --noconfirm kestrel-shell-*.pkg.tar.zst >/dev/null && rm -rf kestrel-shell-*.pkg.tar.zst pkg src
+	# makepkg stamps the version into PKGBUILD; put the committed line back (only that line).
+	sed -i "s/^pkgver=.*/$$(git show HEAD:packaging/arch/PKGBUILD | grep '^pkgver=')/" packaging/arch/PKGBUILD
 	systemctl --user restart kestrel
 
 # Dev mode: the shell runs from this tree and restarts on every save that builds. A failing
