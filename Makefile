@@ -13,8 +13,11 @@ build:
 	$(SCOPE) cargo build --release
 
 # Package, install and restart the running shell. Refuses to install if the checks fail.
+# The binary is built once, here, in the same environment as the checks (makepkg reuses it), and
+# the tests are not run a second time (--nocheck: `check` just ran them).
 install: check
-	cd packaging/arch && $(SCOPE) makepkg -f --noconfirm >/dev/null && sudo pacman -U --noconfirm kestrel-shell-*.pkg.tar.zst >/dev/null && rm -rf kestrel-shell-*.pkg.tar.zst pkg src
+	$(SCOPE) cargo build --release
+	cd packaging/arch && $(SCOPE) makepkg -f --noconfirm --nocheck >/dev/null && sudo pacman -U --noconfirm kestrel-shell-*.pkg.tar.zst >/dev/null && rm -rf kestrel-shell-*.pkg.tar.zst pkg src
 	systemctl --user restart kestrel
 
 # Dev mode: the shell runs from this tree and restarts on every save that builds. A failing

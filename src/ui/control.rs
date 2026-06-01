@@ -45,9 +45,6 @@ pub enum Kind {
     Bare,
     /// A clear button on an accent fill (the icon at the start of a filled slider).
     OnAccent,
-    /// The close button over a picture: a scrim to stay legible on anything, red when it would
-    /// close.
-    Dismiss,
 }
 
 pub struct Control<'a, M> {
@@ -212,7 +209,6 @@ impl<'a, M> Control<'a, M> {
                 s.on_accent.scale_alpha(1.5 * HOVER),
                 s.on_accent.scale_alpha(1.5 * PRESS),
             ),
-            Kind::Dismiss => (s.base.scale_alpha(0.85), s.bad, over(s.bad, PRESS)),
         };
         self.rest = rest;
         self.hover = hover;

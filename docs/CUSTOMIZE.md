@@ -98,6 +98,6 @@ Placeholders (`#rrggbb`, or `r, g, b` with `.rgb`): `{{base}} {{surface}} {{surf
 
 `kestrel <command>` (what keybinds call; Settings › Developer copies them):
 `toggle <panel>`, `close`, `volume up|down|mute|+N|-N`, `mic mute`, `brightness +N|-N`,
-`osd caps|num`, `game-mode`, `open-default <kind> [path]`. Panels: `launcher
+`osd caps|num`, `game-mode`, `open-default <kind> [path]`. Panels: `launcher overview
 control calendar power clipboard emoji wallpaper keys capture monitor weather files media
 settings` (also `wifi`, `bluetooth`, `sound` for the control centre).
