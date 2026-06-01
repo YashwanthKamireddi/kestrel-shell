@@ -715,14 +715,6 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
     Task::batch(tasks)
 }
 
-/// The page scrolled to its end (where a rule opened from the overview is).
-pub fn to_end() -> Task<AppMessage> {
-    Task::Iced(iced::widget::snap_to(
-        BODY_ID.clone(),
-        iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
-    ))
-}
-
 static BODY_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("settings-body"));
 
@@ -1836,8 +1828,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::Rules(r, a) => {
             let st = &mut app.panels.settings;
-            // A rule opened before the saved ones were read (from the overview): its saved
-            // form, if it has one.
+            // A rule opened before the saved ones were read: its saved form, if it has one.
             if let Some(e) = &st.rule_edit
                 && let Some(saved) = r.iter().find(|x| x.class == e.class)
             {

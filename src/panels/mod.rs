@@ -13,7 +13,6 @@ pub mod launcher;
 pub mod media;
 pub mod monitor;
 pub mod notifications;
-pub mod overview;
 pub mod pods;
 pub mod power;
 pub mod settings;
@@ -37,7 +36,6 @@ pub enum PanelKind {
     Wallpaper,
     Keys,
     Island,
-    Overview,
     Clipboard,
     Emoji,
     Settings,
@@ -68,7 +66,6 @@ impl PanelKind {
             "wallpaper" => Self::Wallpaper,
             "keys" | "cheatsheet" => Self::Keys,
             "island" | "dashboard" => Self::Island,
-            "overview" => Self::Overview,
             "clipboard" => Self::Clipboard,
             "emoji" => Self::Emoji,
             "settings" => Self::Settings,
@@ -80,22 +77,12 @@ impl PanelKind {
         })
     }
 
-    /// The panel's width for what it shows now (the overview fits its cards).
+    /// The panel's width for what it shows now.
     pub fn width_for(self, app: &App) -> f32 {
         match self {
-            Self::Overview => overview::width(app),
             // Nothing playing: only as wide as its quiet icon (a wide empty box looked broken).
             Self::Media if media::current(app).is_none() => media::EMPTY_WIDTH,
             _ => self.width(),
-        }
-    }
-
-    /// The panel's height when it can be worked out before drawing (the overview, from its
-    /// rows); others are measured.
-    pub fn height_for(self, app: &App) -> Option<f32> {
-        match self {
-            Self::Overview => Some(overview::height(app)),
-            _ => None,
         }
     }
 
@@ -112,7 +99,6 @@ impl PanelKind {
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
             Self::Island => 400.0,
-            Self::Overview => overview::WIDTH,
             Self::Clipboard => clipboard::WIDTH,
             Self::Emoji => emoji::WIDTH,
             Self::Settings => settings::WIDTH,
@@ -137,7 +123,6 @@ pub struct State {
     pub launcher: launcher::State,
     pub wallpaper: wallpaper::State,
     pub keys: keys::State,
-    pub overview: overview::State,
     pub clipboard: clipboard::State,
     pub emoji: emoji::State,
     pub settings: settings::State,
@@ -158,7 +143,6 @@ pub enum Message {
     Launcher(launcher::Message),
     Wallpaper(wallpaper::Message),
     Keys(keys::Message),
-    Overview(overview::Message),
     Clipboard(clipboard::Message),
     Emoji(emoji::Message),
     Settings(settings::Message),
@@ -215,7 +199,6 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Launcher => return launcher::open(app),
         PanelKind::Wallpaper => return wallpaper::open(app),
         PanelKind::Keys => return keys::open(app),
-        PanelKind::Overview => return overview::open(app),
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
@@ -246,7 +229,6 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Launcher(m) => launcher::update(app, m),
         Message::Wallpaper(m) => wallpaper::update(app, m),
         Message::Keys(m) => keys::update(app, m),
-        Message::Overview(m) => overview::update(app, m),
         Message::Clipboard(m) => clipboard::update(app, m),
         Message::Emoji(m) => emoji::update(app, m),
         Message::Settings(m) => settings::update(app, m),
@@ -256,7 +238,6 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
             Some(PanelKind::Emoji) => emoji::key(app, k),
-            Some(PanelKind::Overview) => overview::key(app, k),
             Some(PanelKind::Control) => control::key(app, k),
             Some(PanelKind::Power) => power::key(app, k),
             Some(PanelKind::Capture) => capture::key(app, k),
@@ -333,26 +314,6 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         subs.push(
             crate::subs::bt_visible()
                 .map(|()| Message::Control(control::Message::Page(control::Page::Bluetooth))),
-        );
-    }
-    // The overview's pictures move with their windows while it is open (a playing video
-    // plays): the compositor hands over a new picture each time a window changes.
-    // A window pressed on in the overview: the release ends the click or the drag wherever it
-    // happens (outside a card too).
-    if open == Some(PanelKind::Overview) && app.panels.overview.press.is_some() {
-        subs.push(iced::event::listen_raw(|e, _, _| match e {
-            iced::event::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                iced::mouse::Button::Left,
-            )) => Some(Message::Overview(overview::Message::Released)),
-            _ => None,
-        }));
-    }
-    if open == Some(PanelKind::Overview) {
-        subs.push(
-            Subscription::run_with(overview::live_jobs(app), |j| {
-                crate::services::previews::live(j.clone())
-            })
-            .map(|f| Message::Overview(overview::Message::Live(f))),
         );
     }
     // The clipboard's scrollbar, while held: follow the pointer wherever it goes and end the
@@ -438,7 +399,6 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
         PanelKind::Island => island::view(app, s),
-        PanelKind::Overview => overview::view(app, s),
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
         PanelKind::Settings => settings::view(app, s),

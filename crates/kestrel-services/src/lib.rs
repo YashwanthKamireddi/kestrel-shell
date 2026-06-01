@@ -31,7 +31,6 @@ pub mod network;
 pub mod notifications;
 pub mod polkit;
 pub mod power;
-pub mod previews;
 pub mod region;
 pub mod sounds;
 pub mod stream;

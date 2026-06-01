@@ -20,7 +20,7 @@ pub(super) const COMMANDS: [(&str, &str); 10] = [
 ];
 
 /// Panels `kestrel toggle` opens.
-pub(super) const PANELS: &str = "launcher overview control calendar power clipboard emoji wallpaper keys capture monitor weather files media settings";
+pub(super) const PANELS: &str = "launcher control calendar power clipboard emoji wallpaper keys capture monitor weather files media settings";
 
 pub(super) fn developer_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     let st = &app.panels.settings;
