@@ -19,13 +19,36 @@ pub const PILL_MARGIN: f32 = 8.0;
 pub const SLOT_GAP: f32 = 2.0;
 
 /// Left edge and width of the highlight behind the active workspace.
-pub fn pill_geometry(_h: &hyprland::State, _monitor: &str, active: i32, _min: u32) -> (f32, f32) {
-    ((active.max(1) - 1) as f32 * (SLOT + SLOT_GAP), SLOT)
+pub fn pill_geometry(_h: &hyprland::State, _monitor: &str, active: i32, n: u32) -> (f32, f32) {
+    let (first, _) = group(active, n);
+    ((active.max(1) - first) as f32 * (SLOT + SLOT_GAP), SLOT)
 }
 
-pub fn slot_count(h: &hyprland::State, min: u32) -> usize {
-    let max_id = h.workspaces.iter().map(|w| w.id).max().unwrap_or(1).max(1) as u32;
-    max_id.max(min) as usize
+/// The workspaces the bar shows: the group of `n` holding `active` (1–5, 6–10, …), as ii does.
+/// It used to show every number up to the highest workspace, so one stray workspace 28 put 28
+/// slots in the bar.
+pub fn group(active: i32, n: u32) -> (i32, usize) {
+    let n = n.max(1) as i32;
+    (((active.max(1) - 1) / n) * n + 1, n as usize)
+}
+
+/// Where scrolling over the workspaces goes from `active` (`step` ±1): through the workspaces
+/// with windows and the shown group's slots, wrapping. Never past them: scrolling used to walk on
+/// into new empty workspaces without end.
+pub fn scroll_target(h: &hyprland::State, active: i32, n: u32, step: i32) -> i32 {
+    let (first, count) = group(active, n);
+    let mut ids: Vec<i32> = h
+        .workspaces
+        .iter()
+        .filter(|w| w.id > 0 && w.windows > 0)
+        .map(|w| w.id)
+        .chain(first..first + count as i32)
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let at = ids.iter().position(|&i| i == active).unwrap_or(0) as i32;
+    let len = ids.len() as i32;
+    ids[(at + step).rem_euclid(len) as usize]
 }
 
 /// The bar surface: the bar itself (its band in the full style, the pills) and the frame's top

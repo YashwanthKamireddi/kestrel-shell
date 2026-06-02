@@ -23,7 +23,10 @@ pub fn view<'a>(
 }
 
 fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
-    let n = crate::shell::bar::slot_count(&app.hypr, app.config.workspaces);
+    let active = app.hypr.active_on(&o.name).unwrap_or(1);
+    let (first, n) = crate::shell::bar::group(active, app.config.workspaces);
+    let prev = crate::shell::bar::scroll_target(&app.hypr, active, app.config.workspaces, -1);
+    let next = crate::shell::bar::scroll_target(&app.hypr, active, app.config.workspaces, 1);
     let stride = SLOT + SLOT_GAP;
     // The circle and the occupied shapes: a little smaller than a slot.
     const DOT: f32 = 22.0;
@@ -35,8 +38,8 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     };
     // The active circle's span (left and right edges, springing separately).
     let (cap_l, cap_r) = (o.pill_x.value, o.pill_r.value.max(o.pill_x.value + SLOT));
-    let slots = row((1..=n as i32).map(|id| {
-        let left = (id - 1) as f32 * stride;
+    let slots = row((first..first + n as i32).map(|id| {
+        let left = (id - first) as f32 * stride;
         // How much of the active circle covers this slot: its content turns dark as it does.
         let over = ((cap_r.min(left + SLOT) - cap_l.max(left)) / SLOT).clamp(0.0, 1.0);
         let ws = app
@@ -62,9 +65,9 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
             .on_press(Message::Dispatch(
                 crate::services::compositor::Action::FocusWorkspace(id),
             ))
-            .on_scroll(|lines| {
-                Message::Dispatch(crate::services::compositor::Action::CycleWorkspace(
-                    if lines > 0.0 { -1 } else { 1 },
+            .on_scroll(move |lines| {
+                Message::Dispatch(crate::services::compositor::Action::FocusWorkspace(
+                    if lines > 0.0 { prev } else { next },
                 ))
             })
             .into()
@@ -73,17 +76,18 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let width = n as f32 * stride - SLOT_GAP;
     let mut layers = stack![].width(width).height(SLOT);
     // Occupied runs: one rounded shape from the first to the last of each run.
-    let mut id = 1;
-    while id <= n as i32 {
+    let last = first + n as i32 - 1;
+    let mut id = first;
+    while id <= last {
         if !occupied(id) {
             id += 1;
             continue;
         }
         let start = id;
-        while id < n as i32 && occupied(id + 1) {
+        while id < last && occupied(id + 1) {
             id += 1;
         }
-        let x = (start - 1) as f32 * stride;
+        let x = (start - first) as f32 * stride;
         let w = (id - start + 1) as f32 * stride - SLOT_GAP;
         let blob = container(Space::new())
             .width(w - (SLOT - DOT))

@@ -7,8 +7,6 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     FocusWorkspace(i32),
-    /// The next (+1) or previous (-1) workspace on the focused monitor.
-    CycleWorkspace(i32),
     /// A window by its compositor address.
     FocusWindow(String),
     /// A command line, run by the user's shell.
@@ -55,7 +53,6 @@ fn hyprland_lua(a: &Action) -> String {
     let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     match a {
         Action::FocusWorkspace(id) => format!("hl.dsp.focus({{ workspace = \"{id}\" }})"),
-        Action::CycleWorkspace(d) => format!("hl.dsp.focus({{ workspace = \"m{d:+}\" }})"),
         Action::FocusWindow(addr) => {
             format!("hl.dsp.focus({{ window = \"address:{}\" }})", quote(addr))
         }
@@ -75,8 +72,8 @@ mod tests {
     #[test]
     fn hyprland_dispatchers() {
         assert_eq!(
-            hyprland_lua(&Action::CycleWorkspace(-1)),
-            "hl.dsp.focus({ workspace = \"m-1\" })"
+            hyprland_lua(&Action::FocusWorkspace(3)),
+            "hl.dsp.focus({ workspace = \"3\" })"
         );
         assert_eq!(
             hyprland_lua(&Action::Exec("kitty --title \"x\"".into())),
