@@ -84,6 +84,30 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
 /// compositor is slow, it opens anyway after `WAIT` with what it has.
 pub fn prepare(app: &mut App, output: iced::OutputId, at: iced::Rectangle) -> Task<AppMessage> {
     const WAIT: std::time::Duration = std::time::Duration::from_millis(90);
+    // Every window has a picture already (taken when it opened, kept fresh while shown): open at
+    // once and refresh them behind it. Waiting for fresh ones every time put ~40 ms between the
+    // key and the overview (the user's "delay").
+    let complete = app
+        .hypr
+        .windows
+        .iter()
+        .filter(|w| w.workspace > 0)
+        .all(|w| app.panels.overview.previews.contains_key(&w.address));
+    if complete {
+        let open = app.open_panel(PanelKind::Overview, output, at);
+        let jobs = live_jobs(app);
+        let fresh = Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    crate::services::previews::snapshot(&jobs, WAIT)
+                })
+                .await
+                .unwrap_or_default()
+            },
+            |frames| msg(Message::Live(frames)),
+        );
+        return Task::batch([open, fresh]);
+    }
     let st = &mut app.panels.overview;
     st.token += 1;
     let token = st.token;
