@@ -22,6 +22,8 @@ mod ui;
 use iced::{KeyboardInteractivity, Layer, LayerShellSettings};
 
 fn main() -> anyhow::Result<()> {
+    // TLS (weather, updates) through ring, installed once before any request.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Started by the browser for the "kestrel media" extension (it passes its origin).
     if args

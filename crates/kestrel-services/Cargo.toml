@@ -23,4 +23,7 @@ wayland-backend = "0.3"
 wayland-scanner = "0.31"
 bitflags = "2"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
+# TLS through ring: aws-lc (reqwest's default) is a large C library whose build script
+# re-ran on every build (~1 min each time).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }

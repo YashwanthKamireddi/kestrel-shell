@@ -24,23 +24,11 @@ pkgver() {
     printf "0.1.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
-build() {
-    cd "$_repo"
-    export CARGO_TARGET_DIR="$_repo/target"
-    # The same environment as `make check`, so this reuses what it compiled: makepkg's CFLAGS /
-    # LDFLAGS made every C dependency (aws-lc-sys…) rebuild on each install (~2 min).
-    env -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS -u RUSTFLAGS -u LTOFLAGS \
-        cargo build --release --locked
-}
-
-check() {
-    cd "$_repo"
-    export CARGO_TARGET_DIR="$_repo/target"
-    env -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS -u RUSTFLAGS -u LTOFLAGS \
-        cargo test --release --locked
-}
-
+# No build() or check(): `make install` compiles once and runs the tests in its own `check`
+# (makepkg's environment rebuilt every C dependency, ~2.5 min per install). This packages the
+# binary it just built.
 package() {
+    [ -x "$_repo/target/release/kestrel" ] || { echo "Build first: make install" >&2; return 1; }
     install -Dm755 "$_repo/target/release/kestrel" "$pkgdir/usr/bin/kestrel"
     install -Dm644 "$startdir/kestrel.service" "$pkgdir/usr/lib/systemd/user/kestrel.service"
     install -Dm644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
