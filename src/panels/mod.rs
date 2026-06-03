@@ -197,11 +197,10 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
         PanelKind::Island => {
             app.panels.calendar = calendar::State::default();
-            // The rings sweep in from empty.
-            for g in &mut app.gauges {
-                g.snap(0.0);
-            }
+            // The rings show their values the moment it opens (a sweep in from empty on every
+            // open read as loading: design call 2026-11-15); later changes move them.
             app.aim_gauges();
+            app.settle_gauges();
         }
         PanelKind::Power => app.panels.power = power::State::default(),
         PanelKind::Control => {
