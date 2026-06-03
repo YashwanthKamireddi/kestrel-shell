@@ -460,7 +460,7 @@ fn card<'a>(
         control(Space::new().width(width).height(height))
             .width(width)
             .height(height)
-            .radius(tok::FULL)
+            .radius(tok::R_CARD)
             .kind(
                 s,
                 if current {
