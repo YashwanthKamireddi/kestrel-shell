@@ -2405,7 +2405,14 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // A comfortable reading width however wide the window (rows and sliders stretched over a
     // whole screen read badly).
     let body = iced::widget::scrollable(
-        container(container(body.max_width(760)).padding([20, 22])).center_x(Length::Fill),
+        // The limit on the padded box itself: on the column alone the box still stretched to the
+        // window and the content hugged the left of a wide window.
+        container(
+            container(body)
+                .padding([tok::XXL, tok::XXL])
+                .max_width(760.0 + 2.0 * tok::XXL),
+        )
+        .center_x(Length::Fill),
     )
     .id(BODY_ID.clone())
     .height(Length::Fill)
