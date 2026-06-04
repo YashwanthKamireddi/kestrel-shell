@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with nine
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with ten
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -55,3 +55,5 @@ is acknowledged with a bare commit, not a new frame (2026-11-15).
 9. `NOT_READY` as a redraw key: the surface is not presented at all, even for a configure (the
 wallpaper waits for its picture). Together with 8: the wallpaper surface presents once, so the
 compositor holds one 8 MB buffer instead of two; screen buffers 17 → 8.8 MB PSS.
+10. The blur region is no longer committed on its own before the buffer: it rides the present's
+commit, so a panel never shows one frame of blurred empty area before its content (2026-11-15).
