@@ -14,6 +14,8 @@ use std::time::SystemTime;
 #[derive(Clone, Debug)]
 pub enum Message {
     Dismiss(u32),
+    /// The pointer is on this card (None: on none).
+    Hover(Option<u32>),
     Action(u32, String),
     ClearAll,
 }
@@ -24,6 +26,10 @@ fn msg(m: Message) -> AppMessage {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
+        Message::Hover(id) => {
+            app.notif_hover = id;
+            Task::none()
+        }
         Message::Dismiss(id) => {
             app.notifications.retain(|n| n.id != id);
             app.toasts.retain(|t| t.id != id);
@@ -308,7 +314,12 @@ fn lines_of(text: &str, size: f32, width: f32, lines: usize) -> String {
 
 /// One notification. In the list it is a card of its own; as a banner (`boxed` false) the
 /// banner's box is its card, so there is no box inside a box.
-pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMessage> {
+pub fn card<'a>(
+    s: Scheme,
+    n: &Notification,
+    boxed: bool,
+    hovered: bool,
+) -> Element<'a, AppMessage> {
     // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
     // one quiet line, the title, then the message wrapped over up to four lines.
     // kestrel's own entries (a screenshot, a recording) need no app line: the title says it.
@@ -333,11 +344,21 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             theme::MEDIUM,
         ),
         Space::new().width(Length::Fill),
-        label(ago(n.time), text::CAPTION, s.ink_faint),
-        control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Tonal)
-            .on_press(msg(Message::Dismiss(n.id))),
+        // When it came at rest, the close button in its place under the pointer (as macOS):
+        // one quiet corner instead of a time and a button on every card.
+        container(if hovered {
+            Element::from(
+                control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
+                    .radius(tok::FULL)
+                    .kind(s, crate::ui::control::Kind::Tonal)
+                    .on_press(msg(Message::Dismiss(n.id))),
+            )
+        } else {
+            label(ago(n.time), text::CAPTION, s.ink_faint).into()
+        })
+        .align_x(Alignment::End)
+        .center_y(20)
+        .width(40),
     ]
     .spacing(tok::S)
     .align_y(Alignment::Center);
@@ -440,6 +461,8 @@ pub fn card<'a>(s: Scheme, n: &Notification, boxed: bool) -> Element<'a, AppMess
             },
         )
         .no_press_scale()
+        .on_enter(msg(Message::Hover(Some(n.id))))
+        .on_exit(msg(Message::Hover(None)))
         .on_press_maybe(default.map(|k| msg(Message::Action(n.id, k))))
         .into()
 }
@@ -458,7 +481,13 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .align_y(Alignment::Center)
     .padding([tok::NONE, tok::XS]);
-    let list = column(app.notifications.iter().rev().map(|n| card(s, n, true))).spacing(tok::M);
+    let list = column(
+        app.notifications
+            .iter()
+            .rev()
+            .map(|n| card(s, n, true, app.notif_hover == Some(n.id))),
+    )
+    .spacing(tok::M);
     let list = scrollable(list)
         .height(Length::Shrink)
         .direction(scrollable::Direction::Vertical(

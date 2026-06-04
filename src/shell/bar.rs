@@ -282,6 +282,18 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if let Some(p) = panel {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);
+        if std::env::var_os("KESTREL_TRACE").is_some() {
+            eprintln!(
+                "PANELDBG {:?} h={} hf={:?} nat={} alpha={} drop={:?} t={}",
+                p.kind,
+                p.h.value,
+                p.kind.height_for(app),
+                natural,
+                alpha,
+                panel_drop.map(|d| d.2),
+                p.t.value
+            );
+        }
         let (x, width) = panel_span(app, p, o.size.width, edge);
         let content = panels::view(app, p.kind, s.faded(alpha));
         let kind = p.kind;
@@ -303,7 +315,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             app.notifications
                 .iter()
                 .find(|n| n.id == t.id)
-                .map(|n| panels::notifications::card(fs, n, false))
+                .map(|n| panels::notifications::card(fs, n, false, app.notif_hover == Some(n.id)))
         }))
         .spacing(tok::XXS)
         .padding(tok::XS);

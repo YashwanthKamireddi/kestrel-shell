@@ -43,12 +43,14 @@ fn pods<'a>(
         // Inset from the circle's edge: a band of the pill's black keeps the ring apart from
         // the wallpaper (a ring on the very edge melted into a wallpaper of the same colour).
         ui::control(stack![
+            // Slim: the charge in a 2 px arc over a barely-there track (a 3 px ring on a bright
+            // track read as a heavy outline: design call 2026-11-15).
             container(ui::ring::ring_on(
                 value,
                 d - 6.0,
-                3.0,
+                2.0,
                 tint,
-                s.ink.scale_alpha(0.16 * s.opacity),
+                s.ink.scale_alpha(0.07 * s.opacity),
                 crate::theme::surface(s),
             ))
             .center(d),

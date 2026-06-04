@@ -399,7 +399,28 @@ const FRAME: std::time::Duration = std::time::Duration::from_millis(33);
 
 /// Follows `jobs`' windows while the receiver lives: each time a window changes (at most
 /// about 30 times a second) its new picture is sent. Blocking: runs on its own thread.
+/// Until when (ms since the epoch) screen captures are kestrel's own: Hyprland announces every
+/// capture as a `screencast`, and the overview's pictures lit the "screen shared" indicator.
+static OWN_UNTIL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
+/// Marks the captures of the next 1.5 s as kestrel's own.
+fn own_capture_now() {
+    OWN_UNTIL.store(now_ms() + 1500, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether a capture happening now is kestrel's (window pictures), not a share or a recording.
+pub fn own_capture() -> bool {
+    now_ms() < OWN_UNTIL.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 fn follow(jobs: Vec<Job>, tx: &futures::channel::mpsc::UnboundedSender<Vec<Frame>>) -> Option<()> {
+    own_capture_now();
     use std::os::fd::AsRawFd;
     use std::time::Instant;
     let conn = Connection::connect_to_env().ok()?;
@@ -430,6 +451,7 @@ fn follow(jobs: Vec<Job>, tx: &futures::channel::mpsc::UnboundedSender<Vec<Frame
         .collect();
     let mut batch: Vec<Frame> = Vec::new();
     loop {
+        own_capture_now();
         if tx.is_closed() {
             return Some(());
         }

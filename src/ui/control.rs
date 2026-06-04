@@ -342,7 +342,13 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         );
         let bounds = layout.bounds();
         let pressable = self.on_press.is_some() || self.on_press_at.is_some();
-        let interactive = pressable || self.on_right_press.is_some() || self.on_scroll.is_some();
+        // Hover is tracked for anything that acts on it or asks to hear it (a notification card
+        // with no default action still swaps its time for a close button under the pointer).
+        let interactive = pressable
+            || self.on_right_press.is_some()
+            || self.on_scroll.is_some()
+            || self.on_enter.is_some()
+            || self.on_exit.is_some();
         let state = tree.state.downcast_mut::<State>();
         let over = interactive && cursor.is_over(bounds);
 
@@ -460,7 +466,9 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         use iced::advanced::Renderer as _;
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
-        let (rest, hover) = fade_pair(self.rest, self.hover);
+        // Only what can be pressed lifts under the pointer.
+        let lifts = self.on_press.is_some() || self.on_press_at.is_some();
+        let (rest, hover) = fade_pair(self.rest, if lifts { self.hover } else { self.rest });
         let mut bg = mix(rest, hover, ease(state.hover_t));
         if state.pressed && state.hovered {
             bg = self.press;
