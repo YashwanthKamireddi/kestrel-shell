@@ -132,11 +132,32 @@ fn join_browser_players(players: &mut Vec<Player>) {
     // It is stale when the browser says something plays and it says nothing does: the
     // playing tab is one it does not follow (an old Apple Music tab paused, YouTube playing in
     // another). Then the browser's own player is the truth.
+    // It is also stale when the browser is playing something else: the helper follows one tab
+    // and can keep saying "playing" for it after you moved to another (2026-11-15: it showed
+    // the Omarchy video at 0:00 while the herdr video played; the browser's player was right).
+    let norm = |t: &str| {
+        let t = t.trim().to_lowercase();
+        t.strip_suffix(" - youtube")
+            .unwrap_or(&t)
+            .trim()
+            .to_string()
+    };
+    let same = |a: &str, b: &str| {
+        let (a, b) = (norm(a), norm(b));
+        a.is_empty() || b.is_empty() || a.contains(&b) || b.contains(&a)
+    };
     let stale = |helper: &Player, all: &[Player]| {
         !helper.playing
             && all
                 .iter()
                 .any(|p| !p.bus.contains(".kestrel_browser.") && p.pid == helper.pid && p.playing)
+    };
+    // The browser's own player for the same video as a trusted helper is a duplicate; one for
+    // a different video (two tabs, two windows) is another player and stays.
+    let duplicate = |p: &Player, helpers: &[&Player]| {
+        helpers
+            .iter()
+            .any(|h| h.pid == p.pid && same(&h.title, &p.title))
     };
     let snapshot = players.clone();
     let trusted = |p: &Player| {
@@ -153,20 +174,25 @@ fn join_browser_players(players: &mut Vec<Player>) {
         for helper in players.iter_mut() {
             if trusted(helper) && helper.art.is_none() {
                 let pid = helper.pid;
+                // Only from the same video: another tab's thumbnail would be wrong.
+                let title = helper.title.clone();
                 helper.art = snapshot
                     .iter()
                     .find(|p| {
-                        !p.bus.contains(".kestrel_browser.") && p.pid == pid && p.art.is_some()
+                        !p.bus.contains(".kestrel_browser.")
+                            && p.pid == pid
+                            && p.art.is_some()
+                            && same(&p.title, &title)
                     })
                     .and_then(|p| p.art.clone());
             }
         }
+        let helpers: Vec<Player> = snapshot.iter().filter(|p| trusted(p)).cloned().collect();
+        let helpers: Vec<&Player> = helpers.iter().collect();
         players.retain(|p| {
             trusted(p)
-                || !(p.pid.is_some_and(|pid| own.contains(&pid))
-                    || p.bus.contains(".kestrel_browser.")
-                    || p.bus.contains("browser-integration")
-                    || p.bus.contains("browser_integration"))
+                || !(p.bus.contains(".kestrel_browser.")
+                    || (p.pid.is_some_and(|pid| own.contains(&pid)) && duplicate(p, &helpers)))
         });
         return;
     }
@@ -394,6 +420,30 @@ mod join_tests {
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].title, "Video, exact title");
         assert_eq!(v[0].art.as_deref(), Some("/tmp/thumb"));
+    }
+
+    #[test]
+    fn two_videos_in_two_tabs_are_two_players() {
+        let native = Player {
+            bus: "org.mpris.MediaPlayer2.chromium.instance1".into(),
+            title: "I LOVE the herdr desktop app".into(),
+            playing: true,
+            pid: Some(1),
+            ..Player::default()
+        };
+        let helper = Player {
+            bus: "org.mpris.MediaPlayer2.kestrel_browser.instance1".into(),
+            title: "So I've Been Using Omarchy for 357 Days".into(),
+            playing: true,
+            pid: Some(1),
+            ..Player::default()
+        };
+        let mut v = vec![native, helper];
+        join_browser_players(&mut v);
+        // Two windows, two videos: both shown, each its own player.
+        assert_eq!(v.len(), 2);
+        assert!(v.iter().any(|p| p.title == "I LOVE the herdr desktop app"));
+        assert!(v.iter().any(|p| p.title.starts_with("So I've Been")));
     }
 
     #[test]

@@ -455,13 +455,7 @@ pub fn image_file_faded<'a, M: 'a>(
     size: f32,
     opacity: f32,
 ) -> Element<'a, M> {
-    if path.extension().is_some_and(|e| e == "svg") {
-        iced::widget::svg(iced::widget::svg::Handle::from_path(path))
-            .width(size)
-            .height(size)
-            .opacity(opacity)
-            .into()
-    } else if let Some(h) = sharp_file(path, size) {
+    if let Some(h) = sharp_file(path, size) {
         snap::snap(
             iced::widget::image(h)
                 .width(size)
@@ -507,6 +501,37 @@ pub fn sharp_image(img: &::image::RgbaImage, size: f32) -> iced::widget::image::
 
 /// A picture file prepared by `sharp_image` (decoded by content, once per file and size).
 /// None when it does not decode (the renderer aborts on undecodable pictures).
+/// An SVG file rendered to `size` logical px (aspect kept, centred in a square).
+fn svg_pixels(path: &std::path::Path, size: f32) -> Option<iced::widget::image::Handle> {
+    use resvg::{tiny_skia, usvg};
+    let data = std::fs::read(path).ok()?;
+    let tree = usvg::Tree::from_data(&data, &usvg::Options::default()).ok()?;
+    let px = (size * PICTURE_SCALE).round().max(1.0) as u32;
+    let mut pixmap = tiny_skia::Pixmap::new(px, px)?;
+    let s = tree.size();
+    let k = px as f32 / s.width().max(s.height());
+    let (dx, dy) = (
+        (px as f32 - s.width() * k) / 2.0,
+        (px as f32 - s.height() * k) / 2.0,
+    );
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_row(k, 0.0, 0.0, k, dx, dy),
+        &mut pixmap.as_mut(),
+    );
+    // tiny-skia keeps premultiplied alpha; images take straight RGBA.
+    let mut rgba = pixmap.take();
+    for p in rgba.as_chunks_mut::<4>().0 {
+        let a = u16::from(p[3]);
+        if a > 0 && a < 255 {
+            for c in &mut p[..3] {
+                *c = ((u16::from(*c) * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+    }
+    Some(iced::widget::image::Handle::from_rgba(px, px, rgba))
+}
+
 fn sharp_file(path: &std::path::Path, size: f32) -> Option<iced::widget::image::Handle> {
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};
@@ -517,11 +542,17 @@ fn sharp_file(path: &std::path::Path, size: f32) -> Option<iced::widget::image::
     if let Some(hit) = CACHE.lock().ok()?.get(&key) {
         return hit.clone();
     }
-    let made = ::image::ImageReader::open(path)
-        .ok()
-        .and_then(|r| r.with_guessed_format().ok())
-        .and_then(|r| r.decode().ok())
-        .map(|i| sharp_image(&i.to_rgba8(), size));
+    let made = if path.extension().is_some_and(|e| e == "svg" || e == "svgz") {
+        // Drawn once at the size it shows, then only those pixels are kept: the renderer's own
+        // SVG path held every parsed icon for good (a panel full of app icons left ~8 MB).
+        svg_pixels(path, size)
+    } else {
+        ::image::ImageReader::open(path)
+            .ok()
+            .and_then(|r| r.with_guessed_format().ok())
+            .and_then(|r| r.decode().ok())
+            .map(|i| sharp_image(&i.to_rgba8(), size))
+    };
     if let Ok(mut m) = CACHE.lock() {
         if m.len() > 512 {
             m.clear();
