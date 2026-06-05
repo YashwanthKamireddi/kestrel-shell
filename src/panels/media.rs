@@ -281,7 +281,8 @@ fn art_data(path: &str) -> Option<(::image::RgbaImage, Color)> {
         Some((cut, avg))
     })();
     let mut cache = CACHE.lock().ok()?;
-    if cache.len() > 8 {
+    // Each entry is up to 512 × 512 pixels (~1 MB): the current track and the last two.
+    if cache.len() > 3 {
         cache.clear();
     }
     cache.insert(path.to_string(), made.clone());
