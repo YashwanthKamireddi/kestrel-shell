@@ -26,14 +26,14 @@ New code follows it; code that doesn't is a bug.
 ├─────────────────────────────────────────────────────────────────┤
 │ Shell             kestrel (bin)        src/shell/*              │  surfaces, bar, panels host
 ├─────────────────────────────────────────────────────────────────┤
-│ Component kit     crates/kestrel-ui    widgets, theme, motion   │  depends on iced
+│ Component kit     src/ui, src/theme    widgets, tokens, motion  │  depends on iced
 ├─────────────────────────────────────────────────────────────────┤
 │ Services          crates/kestrel-services                       │  no UI, no iced
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 Dependencies only point down. `kestrel-services` never imports iced or anything visual;
-`kestrel-ui` never imports a service.
+the kit (`src/ui`, `src/theme`) never imports a service.
 
 ### Services (`crates/kestrel-services`)
 
@@ -52,15 +52,18 @@ pub async fn command(cmd: Command)                          // actions (if the s
   signal says so in its doc comment and states its polling interval.
 - No helper processes for data. The exceptions are documented where they occur (cliphist,
   checkupdates, hyprsunset), and they run only on demand.
-- Each service is behind a cargo feature of the same name, so a build can leave it out.
+- A service only the switched-off modules need is never started (`modules::needs`).
 - Parsing is pure and unit-tested.
 
-### Component kit (`crates/kestrel-ui`)
+### Component kit (`src/ui`, `src/theme`)
 
-Design tokens (`theme`: OKLCH colour roles from the wallpaper, type, spacing, shape), motion
-(springs), and the widgets every screen is built from: `Control` (the one interactive element),
-`Slider`, `Reveal`, surface shapes, icons, rows, tiles, cards. Controls clip their content; nothing
-can overflow its box.
+Design tokens (`theme::tok`: spacing, radii, heights, state alphas, motion; `theme`: colour roles
+from the wallpaper, type), motion (springs), and the widgets every screen is built from: `Control`
+(the one interactive element, drawn in a `Kind`: Ghost, Tonal, Chosen, Primary, Danger, Bare,
+OnAccent), `Slider`, `Reveal`, `section`, `empty_reason`, surface shapes, icons, rows, tiles,
+cards. Controls clip their content; nothing can overflow its box. Panels use only these:
+`tools/lint/tokens.sh` (in `make check`) fails on new literal radii, paddings, gaps or colour
+triples outside the kit (docs/DESIGN.md).
 
 ### Shell (`src/shell`)
 
@@ -93,6 +96,12 @@ not enabled, and its subscription is never created.
 - The process runs under systemd (`Restart=on-failure`).
 
 ### Performance rules
+
+- Measured, not assumed: `KESTREL_TRACE=1` logs every present, damage and frame cost; claims
+  about speed or memory come with a number.
+- A panel shows complete on its first frame: no loading sweeps, no fade-ins; data a panel needs
+  is kept or read before it opens.
+- Hyprland requests that must land with a frame (blur region) ride that frame's commit.
 
 - Animation ticks follow the compositor's frame callbacks; nothing animates while idle.
 - Static surfaces (wallpaper, frame) skip redraws (`redraw_key`); surfaces are never resized per
@@ -133,13 +142,14 @@ notification (once per failing widget). A panic on that thread ends the Lua laye
 
 ## Quality gate
 
-`make check` = `cargo fmt --check` + `cargo clippy --all-targets -- -D warnings` + `cargo test`.
-Nothing is installed that fails it.
+`make check` = `cargo fmt --check` + design-kit lint + `cargo clippy --all-targets -- -D warnings`
++ `cargo test`. `make install` = check, one release build, package that binary, install, restart.
+Nothing is installed that fails it. GUI changes are tested in the rig (`tools/rig/rig.sh`) first.
 
 ## Decisions
 
-- 2026-11-12: Rust + iced 0.14 on MalpenZibo's `iced_layershell` (vendored with three documented
-  patches), tiny-skia CPU renderer.
+- 2026-11-12: Rust + iced 0.14 on MalpenZibo's `iced_layershell` (vendored, with the kestrel patches
+  listed in vendor/README.md), tiny-skia CPU renderer.
 - 2026-11-12: one process with per-module crash guards (not one process per applet).
 - 2026-11-12: customisation = config + Lua layer (not WASM plugins, not QML).
 - 2026-11-13: the bar surface is only the bar's strip (+ room for the frame's corners); panels,
@@ -152,3 +162,7 @@ Nothing is installed that fails it.
 - 2026-11-13: colours from the wallpaper the Material You way (material-colors, a port of
   Google's material-color-utilities): Celebi quantizer + score pick the source colour, a
   Material 3 Vibrant dark scheme (spec 2025) gives the roles; the base stays true black.
+- 2026-11-15: stay on iced with the CPU renderer (measured: 0 % idle, frames 0.1–10 ms, panel
+  on screen 12 ms idle / 22 ms at 92 % CPU); no GPUI or bare-metal rewrite. A GPU renderer stays
+  possible later as a backend change (panels are written against iced, not tiny-skia).
+- 2026-11-15: one design kit, enforced by a lint ratchet (docs/DESIGN.md).
