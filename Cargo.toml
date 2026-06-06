@@ -64,3 +64,6 @@ panic = "unwind"
 # A heap tracer for finding what holds memory (`kestrel memdump` writes a report). Debug only:
 # `cargo build --release --features memtrace`; never in the installed package.
 memtrace = []
+# `kestrel preview <prompt>` opens a system prompt with a made-up request, for testing its look
+# in the rig (the real agents only answer the live session). Answers go nowhere.
+devtools = []
