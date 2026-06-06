@@ -320,6 +320,19 @@ pub fn card<'a>(
     boxed: bool,
     hovered: bool,
 ) -> Element<'a, AppMessage> {
+    card_in(s, n, boxed, hovered, false, false)
+}
+
+/// `card`, optionally as a later message in an app's group (`continued`): no icon or app name
+/// again, only its own time and close button, lined up under the first message's text.
+fn card_in<'a>(
+    s: Scheme,
+    n: &Notification,
+    boxed: bool,
+    hovered: bool,
+    continued: bool,
+    grouped: bool,
+) -> Element<'a, AppMessage> {
     // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
     // one quiet line, the title, then the message wrapped over up to four lines.
     // kestrel's own entries (a screenshot, a recording) need no app line: the title says it.
@@ -332,17 +345,23 @@ pub fn card<'a>(
     // The card's inner width: the control centre's list or a banner, both ~368 px wide.
     const INNER: f32 = 368.0 - 24.0;
     let text_w = INNER - 32.0 - 12.0 - pic.as_ref().map_or(0.0, |_| picture_size(n).0 + 12.0);
-    let top = row![
+    let app_name: Element<'a, AppMessage> = if continued {
+        Space::new().into()
+    } else {
         label_w(
             ui::fit(
                 if own { "kestrel" } else { &n.app },
                 text::CAPTION,
-                text_w - 70.0
+                text_w - 70.0,
             ),
             text::CAPTION,
             s.ink_dim,
             theme::MEDIUM,
-        ),
+        )
+        .into()
+    };
+    let top = row![
+        app_name,
         Space::new().width(Length::Fill),
         // When it came at rest, the close button in its place under the pointer (as macOS):
         // one quiet corner instead of a time and a button on every card.
@@ -435,9 +454,12 @@ pub fn card<'a>(
             }),
         );
     }
-    let body = row![app_icon(s, n), texts]
-        .spacing(tok::L)
-        .align_y(Alignment::Start);
+    let lead: Element<'a, AppMessage> = if continued {
+        Space::new().width(32).into()
+    } else {
+        app_icon(s, n)
+    };
+    let body = row![lead, texts].spacing(tok::L).align_y(Alignment::Start);
     let col = column![body];
     // What a click on the card does: the app's default action, or for kestrel's own entries
     // (a recording, a picture) opening it.
@@ -446,8 +468,20 @@ pub fn card<'a>(
         .iter()
         .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))
         .map(|(k, _)| k.clone());
+    // In a group the messages sit close: less room under each, none above a later one (its
+    // time row is the gap).
+    let pad = if grouped {
+        iced::Padding {
+            top: if continued { tok::NONE } else { tok::L },
+            bottom: tok::S,
+            left: tok::L,
+            right: tok::L,
+        }
+    } else {
+        iced::Padding::from(tok::L)
+    };
     control(col)
-        .padding(tok::L)
+        .padding(pad)
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
         // A card that opens something lifts on hover (one with no default action does not
@@ -481,12 +515,39 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .align_y(Alignment::Center)
     .padding([tok::NONE, tok::XS]);
-    let list = column(
-        app.notifications
-            .iter()
-            .rev()
-            .map(|n| card(s, n, true, app.notif_hover == Some(n.id))),
-    )
+    // Consecutive messages from one app share one card (as on phones and macOS): the app once,
+    // its messages under it; a single message is its own card as before.
+    let newest: Vec<&Notification> = app.notifications.iter().rev().collect();
+    let mut groups: Vec<Vec<&Notification>> = Vec::new();
+    for n in newest {
+        match groups.last_mut() {
+            Some(g) if g[0].app == n.app => g.push(n),
+            _ => groups.push(vec![n]),
+        }
+    }
+    let hover = app.notif_hover;
+    let list = column(groups.into_iter().map(|g| {
+        if g.len() == 1 {
+            return card(s, g[0], true, hover == Some(g[0].id));
+        }
+        let inner = column(
+            g.iter()
+                .enumerate()
+                .map(|(k, n)| card_in(s, n, false, hover == Some(n.id), k > 0, true)),
+        );
+        container(inner)
+            .width(Length::Fill)
+            .padding(iced::Padding {
+                bottom: tok::XS,
+                ..iced::Padding::ZERO
+            })
+            .style(move |_| container::Style {
+                background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
+                border: iced::Border::default().rounded(size::CARD_RADIUS),
+                ..container::Style::default()
+            })
+            .into()
+    }))
     .spacing(tok::M);
     let list = scrollable(list)
         .height(Length::Shrink)
