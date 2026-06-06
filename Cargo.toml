@@ -59,3 +59,8 @@ strip = true
 opt-level = 3
 # Unwind, so a bug in one module is caught (guard::run) instead of ending the shell.
 panic = "unwind"
+
+[features]
+# A heap tracer for finding what holds memory (`kestrel memdump` writes a report). Debug only:
+# `cargo build --release --features memtrace`; never in the installed package.
+memtrace = []

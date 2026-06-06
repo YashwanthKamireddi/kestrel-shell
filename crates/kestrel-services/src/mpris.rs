@@ -146,6 +146,42 @@ fn join_browser_players(players: &mut Vec<Player>) {
         let (a, b) = (norm(a), norm(b));
         a.is_empty() || b.is_empty() || a.contains(&b) || b.contains(&a)
     };
+    // The browser's own player leads whenever there is one for that browser: its state, position
+    // and controls have been right every time, while the helper fell behind (the wrong tab,
+    // "Stopped" with no title while a video played: 0:00, paused, no visualiser). The helper only
+    // fills in what the browser's player lacks for the same video (an exact title, a picture),
+    // then goes.
+    let helpers: Vec<Player> = players
+        .iter()
+        .filter(|p| p.bus.contains(".kestrel_browser."))
+        .cloned()
+        .collect();
+    let is_native = |p: &Player| {
+        !p.bus.contains(".kestrel_browser.")
+            && !p.bus.contains("browser_integration")
+            && !p.bus.contains("browser-integration")
+    };
+    let mut led: Vec<String> = Vec::new();
+    for n in players
+        .iter_mut()
+        .filter(|p| is_native(p) && p.pid.is_some())
+    {
+        for h in helpers.iter().filter(|h| h.pid == n.pid) {
+            led.push(h.bus.clone());
+            if !h.title.trim().is_empty() && same(&n.title, &h.title) {
+                if n.art.is_none() {
+                    n.art.clone_from(&h.art);
+                }
+                if h.title.len() > n.title.len() {
+                    n.title.clone_from(&h.title);
+                }
+                if n.artist.trim().is_empty() {
+                    n.artist.clone_from(&h.artist);
+                }
+            }
+        }
+    }
+    players.retain(|p| !led.contains(&p.bus));
     let stale = |helper: &Player, all: &[Player]| {
         !helper.playing
             && all
@@ -417,13 +453,15 @@ mod join_tests {
         };
         let mut v = vec![native, helper];
         join_browser_players(&mut v);
+        // The browser's player leads (its controls and position), with the helper's exact title.
         assert_eq!(v.len(), 1);
+        assert!(v[0].bus.contains(".chromium."));
         assert_eq!(v[0].title, "Video, exact title");
         assert_eq!(v[0].art.as_deref(), Some("/tmp/thumb"));
     }
 
     #[test]
-    fn two_videos_in_two_tabs_are_two_players() {
+    fn the_browsers_own_player_leads() {
         let native = Player {
             bus: "org.mpris.MediaPlayer2.chromium.instance1".into(),
             title: "I LOVE the herdr desktop app".into(),
@@ -440,10 +478,9 @@ mod join_tests {
         };
         let mut v = vec![native, helper];
         join_browser_players(&mut v);
-        // Two windows, two videos: both shown, each its own player.
-        assert_eq!(v.len(), 2);
-        assert!(v.iter().any(|p| p.title == "I LOVE the herdr desktop app"));
-        assert!(v.iter().any(|p| p.title.starts_with("So I've Been")));
+        // Chromium's own player is the truth for its browser; the helper's other tab goes.
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].title, "I LOVE the herdr desktop app");
     }
 
     #[test]

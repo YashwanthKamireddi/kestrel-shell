@@ -8,6 +8,8 @@ mod hypr_settings;
 mod ipc;
 mod look;
 mod lua;
+#[cfg(feature = "memtrace")]
+mod memtrace;
 mod modules;
 mod motion;
 mod panels;
