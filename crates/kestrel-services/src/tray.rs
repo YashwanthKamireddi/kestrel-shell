@@ -79,7 +79,10 @@ impl Watcher {
         let (bus, path) = split_service(&service, &sender);
         let key = format!("{bus}{path}");
         {
-            let mut items = self.items.lock().unwrap();
+            let mut items = self
+                .items
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if items.contains(&key) {
                 return;
             }
@@ -93,7 +96,10 @@ impl Watcher {
 
     #[zbus(property)]
     fn registered_status_notifier_items(&self) -> Vec<String> {
-        self.items.lock().unwrap().clone()
+        self.items
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
     #[zbus(property)]
     fn is_status_notifier_host_registered(&self) -> bool {
@@ -347,7 +353,9 @@ pub fn stream() -> impl Stream<Item = State> {
                     .get_property::<Vec<String>>("RegisteredStatusNotifierItems")
                     .await
                 {
-                    *items.lock().unwrap() = list;
+                    *items
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = list;
                 }
             }
         }
@@ -388,7 +396,10 @@ pub fn stream() -> impl Stream<Item = State> {
         let mut last = None;
         loop {
             // Drop items whose owner has gone.
-            let keys = items.lock().unwrap().clone();
+            let keys = items
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
             let mut alive = Vec::new();
             let mut state = State::default();
             for k in keys {
@@ -413,7 +424,9 @@ pub fn stream() -> impl Stream<Item = State> {
                     }
                 }
             }
-            *items.lock().unwrap() = alive;
+            *items
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = alive;
             if last.as_ref() != Some(&state) {
                 last = Some(state.clone());
                 let _ = out.send(state).await;

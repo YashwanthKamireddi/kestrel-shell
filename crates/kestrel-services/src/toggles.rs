@@ -61,7 +61,9 @@ fn hyprctl(args: &[&str]) {
 
 /// Makes hyprsunset match the tint: started, told, or stopped.
 fn apply(t: &Tint) {
-    let mut g = SUNSET.lock().unwrap();
+    let mut g = SUNSET
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(c) = g.as_mut()
         && c.try_wait().ok().flatten().is_some()
     {
@@ -75,7 +77,9 @@ fn apply(t: &Tint) {
             let _ = c.wait();
         }
         // One started elsewhere (e.g. before kestrel) is stopped too.
-        *ADOPTED.lock().unwrap() = None;
+        *ADOPTED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         // Only this session's (pkill -x stopped every hyprsunset on the machine).
         if let Some(pid) = hyprsunset_pid() {
             let _ = Command::new("kill").arg(pid.to_string()).status();
@@ -86,7 +90,9 @@ fn apply(t: &Tint) {
         if g.is_none()
             && let Some(pid) = hyprsunset_pid()
         {
-            let mut a = ADOPTED.lock().unwrap();
+            let mut a = ADOPTED
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if *a != Some(pid) {
                 *a = Some(pid);
                 watch(pid);
@@ -135,14 +141,18 @@ fn watch(pid: u32) {
             // Safety: one valid pollfd; blocks until the process ends.
             while unsafe { libc::poll(&mut pfd, 1, -1) } < 0 {}
             std::thread::sleep(std::time::Duration::from_secs(1));
-            let t = TINT.lock().unwrap();
+            let t = TINT
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let ours = SUNSET
                 .lock()
                 .unwrap()
                 .as_ref()
                 .is_some_and(|c| c.id() == pid)
                 || {
-                    let mut a = ADOPTED.lock().unwrap();
+                    let mut a = ADOPTED
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     (*a == Some(pid)).then(|| *a = None).is_some()
                 };
             // Stopped on purpose (taken out of SUNSET first) or replaced: nothing to do.
@@ -155,13 +165,17 @@ fn watch(pid: u32) {
 
 /// Whether night light is on (also when a hyprsunset was already running at start).
 pub fn night_light() -> bool {
-    let t = TINT.lock().unwrap();
+    let t = TINT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     t.night.is_some() || (t.gamma == 100 && hyprsunset_running())
 }
 
 /// Turns night light on at `kelvin`, or off.
 pub fn set_night_light(on: bool, kelvin: u32) {
-    let mut t = TINT.lock().unwrap();
+    let mut t = TINT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     t.night = on.then_some(kelvin);
     apply(&t);
 }
@@ -169,7 +183,9 @@ pub fn set_night_light(on: bool, kelvin: u32) {
 /// Changes night light's warmth at once (while it is on).
 pub async fn set_temperature(kelvin: u32) {
     let _ = tokio::task::spawn_blocking(move || {
-        let mut t = TINT.lock().unwrap();
+        let mut t = TINT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if t.night.is_some() {
             t.night = Some(kelvin);
             apply(&t);
@@ -180,13 +196,18 @@ pub async fn set_temperature(kelvin: u32) {
 
 /// Software dimming, 0 to 1 (for screens without a settable backlight).
 pub fn dim_level() -> f32 {
-    TINT.lock().unwrap().gamma as f32 / 100.0
+    TINT.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .gamma as f32
+        / 100.0
 }
 
 pub async fn set_dim(level: f32) {
     let gamma = ((level.clamp(0.0, 1.0) * 100.0).round() as u32).max(MIN_GAMMA);
     let _ = tokio::task::spawn_blocking(move || {
-        let mut t = TINT.lock().unwrap();
+        let mut t = TINT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if t.gamma != gamma {
             t.gamma = gamma;
             apply(&t);
@@ -196,12 +217,18 @@ pub async fn set_dim(level: f32) {
 }
 
 pub fn caffeine() -> bool {
-    INHIBIT.lock().unwrap().is_some()
+    INHIBIT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .is_some()
 }
 
 pub async fn set_caffeine(on: bool) {
     if !on {
-        INHIBIT.lock().unwrap().take();
+        INHIBIT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         return;
     }
     let r = async {
@@ -219,7 +246,11 @@ pub async fn set_caffeine(on: bool) {
     }
     .await;
     match r {
-        Ok(fd) => *INHIBIT.lock().unwrap() = Some(fd),
+        Ok(fd) => {
+            *INHIBIT
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(fd)
+        }
         Err(e) => log::warn!("caffeine: {e}"),
     }
 }

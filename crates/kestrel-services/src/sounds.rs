@@ -109,7 +109,9 @@ pub fn lookup(name: &str) -> Option<PathBuf> {
 pub fn play(sound: &Sound, volume: f32) {
     static LAST: Mutex<Option<Instant>> = Mutex::new(None);
     {
-        let mut last = LAST.lock().unwrap();
+        let mut last = LAST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if last.is_some_and(|t| t.elapsed() < Duration::from_millis(400)) {
             return;
         }

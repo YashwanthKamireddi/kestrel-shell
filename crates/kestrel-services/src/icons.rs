@@ -109,7 +109,11 @@ pub fn lookup(name: &str) -> Option<PathBuf> {
     }
     static CACHE: OnceLock<Mutex<HashMap<String, Option<PathBuf>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
-    if let Some(hit) = cache.lock().unwrap().get(name) {
+    if let Some(hit) = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(name)
+    {
         return hit.clone();
     }
     let found = search(name).or_else(|| search(&name.to_lowercase()));

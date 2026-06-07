@@ -2690,7 +2690,9 @@ fn hz_name(r: f32) -> &'static str {
 /// distinct text is made once (rates, percents: a handful), so this never grows with redraws.
 fn kept(text: String) -> &'static str {
     static TEXTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
-    let mut texts = TEXTS.lock().unwrap();
+    let mut texts = TEXTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(t) = texts.iter().find(|t| **t == text) {
         return t;
     }

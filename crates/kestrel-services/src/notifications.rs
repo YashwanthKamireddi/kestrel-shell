@@ -170,7 +170,10 @@ impl Server {
         let id = if replaces_id > 0 {
             replaces_id
         } else {
-            let mut n = self.next.lock().unwrap();
+            let mut n = self
+                .next
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             *n += 1;
             *n
         };
