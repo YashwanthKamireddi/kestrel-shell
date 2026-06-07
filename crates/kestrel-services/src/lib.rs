@@ -11,6 +11,7 @@ pub mod audio;
 pub mod autostart;
 pub mod bluetooth;
 pub mod browser_host;
+pub mod camera;
 pub mod clipboard;
 pub mod clock;
 pub mod compositor;

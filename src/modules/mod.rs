@@ -144,7 +144,7 @@ pub const MODULES: &[Info] = &[
     Info { id: "tray", name: "Tray icons", icon: Icon::Package, home: Home::Right, options: &[], view: tray::view },
     Info { id: "system", name: "CPU and memory", icon: Icon::Cpu, home: Home::Right, options: &[], view: system::view },
     Info { id: "updates", name: "Updates", icon: Icon::Cube, home: Home::Right, options: &[], view: updates::view },
-    Info { id: "privacy", name: "Microphone and screen in use", icon: Icon::Mic, home: Home::Right, options: &[], view: privacy::view },
+    Info { id: "privacy", name: "Microphone, camera and screen in use", icon: Icon::Mic, home: Home::Right, options: &[], view: privacy::view },
     Info { id: "network", name: "Network", icon: Icon::Wifi, home: Home::Right, options: &[], view: network::view },
     Info { id: "bluetooth", name: "Bluetooth", icon: Icon::Bluetooth, home: Home::Right, options: &[], view: bluetooth::view },
     Info { id: "volume", name: "Sound", icon: Icon::Volume2, home: Home::Right, options: &[], view: volume::view },
@@ -176,6 +176,8 @@ pub struct Needs {
     pub updates: bool,
     pub weather: bool,
     pub airpods: bool,
+    /// Whether a camera is in use (the privacy indicator).
+    pub camera: bool,
 }
 
 pub fn needs(bar: &BarConfig) -> Needs {
@@ -191,6 +193,7 @@ pub fn needs(bar: &BarConfig) -> Needs {
         updates: on("updates"),
         weather: on("weather") || island,
         airpods: on("airpods"),
+        camera: on("privacy"),
     }
 }
 

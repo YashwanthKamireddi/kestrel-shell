@@ -1,5 +1,5 @@
 //! Shown only while something is in use: a screen recording (red dot and its time; a click
-//! stops it), the screen shared, or an app recording from a microphone.
+//! stops it), the screen shared, a camera in use, or an app recording from a microphone.
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
@@ -64,6 +64,10 @@ pub fn view<'a>(
     } else if app.hypr.screencast {
         // Shared (a call or a browser showing the screen): the accent mark.
         items.push(indicator(s, Icon::ScreenShare));
+    }
+    // A camera is on (held open by an app for more than a moment).
+    if app.camera_on {
+        items.push(indicator(s, Icon::Video));
     }
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
