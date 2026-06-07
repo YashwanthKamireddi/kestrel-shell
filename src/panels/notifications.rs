@@ -169,10 +169,13 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     const D: f32 = 32.0;
     // Kestrel's own entries: its own glyph on a soft round, like its other icons.
     if n.app == "kestrel" {
-        let glyph = if n.app_icon == "media-record" {
-            Icon::Video
-        } else {
-            Icon::Camera
+        // By what it is about: a screenshot, a recording, the battery; anything else (a config
+        // error, a part that stopped) the plain info mark, not a camera.
+        let glyph = match n.app_icon.as_str() {
+            "camera" => Icon::Camera,
+            "media-record" => Icon::Video,
+            i if i.starts_with("battery") => Icon::Battery,
+            _ => Icon::Info,
         };
         return container(icon(glyph, 17.0, s.ink))
             .center(D)
