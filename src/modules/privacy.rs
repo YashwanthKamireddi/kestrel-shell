@@ -53,9 +53,12 @@ pub fn view<'a>(
                 .align_y(Alignment::Center),
                 true,
             )
-            .on_press(Message::Dispatch(
-                crate::services::compositor::Action::Exec("pkill -INT -x wf-recorder".into()),
-            ))
+            // Only the recorder shown (pkill -x stopped every wf-recorder on the machine).
+            .on_press_maybe(app.hypr.recording_pid.map(|pid| {
+                Message::Dispatch(crate::services::compositor::Action::Exec(format!(
+                    "kill -INT {pid}"
+                )))
+            }))
             .into(),
         );
     } else if app.hypr.screencast {
