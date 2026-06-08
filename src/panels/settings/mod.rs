@@ -2386,8 +2386,41 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 Page::About => about_page(app, s),
             })
     } else {
+        // Pages first: by name or by what they hold ("wifi" → Network, "blue" → Bluetooth), the
+        // same words the launcher finds them by; a click opens the page.
+        let pages: Vec<Page> = Page::all()
+            .filter(|p| {
+                p.name().to_lowercase().contains(&q)
+                    || p.words().split_whitespace().any(|w| w.starts_with(&q))
+            })
+            .collect();
+        let page_rows = (!pages.is_empty()).then(|| {
+            let mut c = column![].spacing(tok::XXS);
+            for p in pages {
+                c = c.push(
+                    control(
+                        row![
+                            icon(p.icon(), 16.0, s.ink_dim),
+                            label_w(p.name(), text::BODY, s.ink, theme::MEDIUM).width(Length::Fill),
+                            icon(Icon::ChevronRight, 14.0, s.ink_faint),
+                        ]
+                        .spacing(tok::L)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding([tok::NONE, tok::L])
+                    .height(40)
+                    .width(Length::Fill)
+                    .radius(tok::R_ROW)
+                    .kind(s, crate::ui::control::Kind::Tonal)
+                    .no_press_scale()
+                    .on_press(msg(Message::Page(p))),
+                );
+            }
+            Element::from(c)
+        });
         column![label_w("Search", text::HEADING, s.ink, theme::SEMIBOLD)]
             .spacing(tok::XL)
+            .extend(page_rows)
             .extend(bar_page(app, s))
             .extend(appearance_page(app, s))
             .extend(time_page(app, s))
