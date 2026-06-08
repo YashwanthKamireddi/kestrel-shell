@@ -18,7 +18,7 @@ pub struct Slider<'a, M> {
     on_change: Box<dyn Fn(f32) -> M + 'a>,
     on_release: Option<M>,
     /// Over-amplification: where 100 % sits on the track (0–1) and the colour of the part past
-    /// it (GNOME's model: a notch at 100 %, the boost in the danger colour).
+    /// it, in the danger colour (no notch: the colour change marks 100 %).
     boost: Option<(f32, Color)>,
 }
 
@@ -204,7 +204,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
         match self.boost {
             Some((mark, over)) if state.shown > mark => {
                 // Past 100 %: the boost first (its own rounded end), the normal fill over it up
-                // to the notch, square there so the two meet edge to edge.
+                // to 100 %, square there so the two meet edge to edge.
                 renderer.fill_quad(
                     renderer::Quad {
                         bounds: Rectangle { width: fill_w, ..b },
@@ -241,23 +241,6 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
                 },
                 self.fill,
             ),
-        }
-        // The notch at 100 %: a short hairline, visible on the track and on the fill.
-        if let Some((mark, _)) = self.boost {
-            let h = b.height * 0.42;
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: Rectangle {
-                        x: b.x + at(mark) - 1.0,
-                        y: b.y + (b.height - h) / 2.0,
-                        width: 2.0,
-                        height: h,
-                    },
-                    border: Border::default().rounded(1.0),
-                    ..renderer::Quad::default()
-                },
-                Color::BLACK.scale_alpha(0.28),
-            );
         }
         renderer.with_layer(b, |renderer| {
             self.content.as_widget().draw(

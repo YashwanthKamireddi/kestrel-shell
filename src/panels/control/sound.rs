@@ -369,7 +369,12 @@ pub(super) fn app_row<'a>(
             }))),
         );
     }
-    let value = if a.muted { 0.0 } else { a.volume.min(1.0) };
+    // An app playing may be boosted past 100 % like the output (the real level shown, the boost
+    // past 100 % in red); a recording stays at 100 %.
+    let most = if recording { 1.0 } else { boost_top(app) };
+    let value = if a.muted { 0.0 } else { a.volume.min(most) };
+    let top = if value > 1.0 { most } else { 1.0 };
+    let on_track = value / top;
     let ids2 = ids.clone();
     let bar = slider(
         row![
@@ -377,22 +382,27 @@ pub(super) fn app_row<'a>(
             label(
                 format!("{:.0}%", value * 100.0),
                 text::CAPTION,
-                if value > 0.86 { s.on_accent } else { s.ink_dim }
+                if on_track > 0.86 {
+                    s.on_accent
+                } else {
+                    s.ink_dim
+                }
             ),
             Space::new().width(10),
         ]
         .align_y(Alignment::Center),
-        value,
+        on_track,
         22.0,
         (s.ink.scale_alpha(0.07 * s.opacity), s.accent),
         move |v| {
             msg(if recording {
-                Message::RecVolume(ids2.clone(), v)
+                Message::RecVolume(ids2.clone(), v * top)
             } else {
-                Message::AppVolume(ids2.clone(), v)
+                Message::AppVolume(ids2.clone(), v * top)
             })
         },
-    );
+    )
+    .boost(1.0 / top, s.bad);
     let mut body = column![title, bar].spacing(tok::XS).width(Length::Fill);
     if !recording {
         body = body.push(meter(s, if a.muted { 0.0 } else { level }));

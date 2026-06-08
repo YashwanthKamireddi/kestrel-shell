@@ -388,8 +388,8 @@ pub fn subpage_header<'a, M: Clone + 'static>(
 }
 
 /// A thin level bar (the OSD's): `value` 0–`top` (1 normally; 1.5 when a volume may reach
-/// 150 %), `width` × `height`. Past 100 % a notch marks 100 % and the boost is in the danger
-/// colour, as on the control centre's slider; at 0 the fill is a faint dot.
+/// 150 %), `width` × `height`. Past 100 % the bar runs to `top` and the
+/// boost is in the danger colour, as on the control centre's slider; at 0 the fill is a faint dot.
 pub fn level_bar<'a, M: 'a>(
     s: Scheme,
     value: f32,
@@ -397,8 +397,10 @@ pub fn level_bar<'a, M: 'a>(
     width: f32,
     height: f32,
 ) -> Element<'a, M> {
-    use iced::widget::{Space, pin, stack};
-    let top = top.max(1.0);
+    use iced::widget::{Space, stack};
+    // Up to 100 % the plain 0–100 bar; only a boosted level rescales it to `top`, the part past
+    // 100 % in red (design call 2026-11-15: no notch cutting the bar).
+    let top = if value > 1.0 { top.max(1.0) } else { 1.0 };
     let r = height / 2.0;
     let piece = move |w: f32, c: Color, radius: iced::border::Radius| {
         container(Space::new())
@@ -429,16 +431,6 @@ pub fn level_bar<'a, M: 'a>(
         bar = bar.push(piece(mark, fill, left));
     } else {
         bar = bar.push(piece((width * on).max(height), fill, round));
-    }
-    if top > 1.0 {
-        bar = bar.push(
-            pin(piece(
-                2.0,
-                Color::BLACK.scale_alpha(0.28),
-                iced::border::Radius::from(1.0),
-            ))
-            .x(mark - 1.0),
-        );
     }
     bar.width(width).height(height).into()
 }

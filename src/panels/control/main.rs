@@ -241,8 +241,8 @@ pub(super) fn level_row<'a>(
     level_row_to(s, i, value, 1.0, on_change, on_icon, details)
 }
 
-/// `level_row` whose track runs to `top` (1.5: 150 %), with a notch at 100 % and the boost past
-/// it in the danger colour, when the volume may go above 100 %.
+/// `level_row` whose track runs to `top` (1.5: 150 %), the boost past 100 % in the
+/// danger colour, when the volume may go above 100 %.
 pub(super) fn level_row_to<'a>(
     s: Scheme,
     i: Icon,
@@ -252,7 +252,9 @@ pub(super) fn level_row_to<'a>(
     on_icon: Message,
     details: Option<AppMessage>,
 ) -> Element<'a, AppMessage> {
-    let top = top.max(1.0);
+    // The plain 0–100 slider until the volume is boosted (keys can go past 100 %); then the
+    // track runs to the maximum with the boost in red.
+    let top = if value > 1.0 { top.max(1.0) } else { 1.0 };
     let on_track = (value / top).clamp(0.0, 1.0);
     // Once the fill reaches the value text, the text switches to the on-accent colour.
     let covered = on_track > 0.86;

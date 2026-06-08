@@ -384,8 +384,8 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
     const VALUE_W: f32 = 30.0;
     let track_w = OSD_WIDTH - 2.0 * PAD - 18.0 - VALUE_W - 2.0 * 12.0;
     // The track a tint of the ink; the number says the real level (a boosted volume reads 120).
-    // A volume that may go past 100 %: the track runs to the maximum, a notch marks 100 % and
-    // the part past it is in the warning colour (as the control centre's slider).
+    // A volume that may go past 100 %: the track runs to the maximum and the part
+    // past 100 % is red (as the control centre's slider).
     let top = if is_volume(osd.icon) { top_volume } else { 1.0 };
     let track = ui::level_bar(s, osd.value, top, track_w, 6.0);
     row![
