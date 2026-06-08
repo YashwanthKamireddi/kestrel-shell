@@ -100,10 +100,12 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
     let mut out = column![heading("Output")].spacing(tok::S);
     let sink = app.audio.sink();
     if let Some(d) = sink {
-        out = out.push(level_row(
+        let top = boost_top(app);
+        out = out.push(level_row_to(
             s,
             level_icon(Some(d)),
-            if d.muted { 0.0 } else { d.volume.min(1.0) },
+            if d.muted { 0.0 } else { d.volume.min(top) },
+            top,
             Message::SinkVolume,
             Message::SinkMute,
             None,

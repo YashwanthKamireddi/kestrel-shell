@@ -115,10 +115,12 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let mut levels = column![].spacing(tok::M);
     let sink = app.audio.sink();
     if let Some(d) = sink {
-        levels = levels.push(level_row(
+        let top = boost_top(app);
+        levels = levels.push(level_row_to(
             s,
             level_icon(Some(d)),
-            if d.muted { 0.0 } else { d.volume.min(1.0) },
+            if d.muted { 0.0 } else { d.volume.min(top) },
+            top,
             Message::SinkVolume,
             Message::SinkMute,
             Some(msg(Message::Page(Page::Output))),
@@ -223,6 +225,11 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .into()
 }
 
+/// How far the output's volume may go (1.5 = 150 %): `[sound] max`, at least 100 %.
+pub(super) fn boost_top(app: &App) -> f32 {
+    (app.config.sound.max as f32 / 100.0).max(1.0)
+}
+
 pub(super) fn level_row<'a>(
     s: Scheme,
     i: Icon,
@@ -231,8 +238,24 @@ pub(super) fn level_row<'a>(
     on_icon: Message,
     details: Option<AppMessage>,
 ) -> Element<'a, AppMessage> {
+    level_row_to(s, i, value, 1.0, on_change, on_icon, details)
+}
+
+/// `level_row` whose track runs to `top` (1.5: 150 %), with a notch at 100 % and the boost past
+/// it in the danger colour, when the volume may go above 100 %.
+pub(super) fn level_row_to<'a>(
+    s: Scheme,
+    i: Icon,
+    value: f32,
+    top: f32,
+    on_change: fn(f32) -> Message,
+    on_icon: Message,
+    details: Option<AppMessage>,
+) -> Element<'a, AppMessage> {
+    let top = top.max(1.0);
+    let on_track = (value / top).clamp(0.0, 1.0);
     // Once the fill reaches the value text, the text switches to the on-accent colour.
-    let covered = value > 0.86;
+    let covered = on_track > 0.86;
     let pct = label(
         format!("{:.0}%", value * 100.0),
         text::SMALL,
@@ -250,11 +273,12 @@ pub(super) fn level_row<'a>(
     .align_y(Alignment::Center);
     let bar = slider(
         inner,
-        value,
+        on_track,
         32.0,
         (s.ink.scale_alpha(0.07 * s.opacity), s.accent),
-        move |v| msg(on_change(v)),
-    );
+        move |v| msg(on_change(v * top)),
+    )
+    .boost(1.0 / top, s.bad);
     let mut r = row![bar].spacing(tok::XS).align_y(Alignment::Center);
     if let Some(d) = details {
         r = r.push(icon_button(s, Icon::ChevronRight, d, false));

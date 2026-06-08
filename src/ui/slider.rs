@@ -17,6 +17,9 @@ pub struct Slider<'a, M> {
     fill: Color,
     on_change: Box<dyn Fn(f32) -> M + 'a>,
     on_release: Option<M>,
+    /// Over-amplification: where 100 % sits on the track (0–1) and the colour of the part past
+    /// it (GNOME's model: a notch at 100 %, the boost in the danger colour).
+    boost: Option<(f32, Color)>,
 }
 
 /// `content` is drawn over the track (icon on the left, value on the right).
@@ -35,12 +38,20 @@ pub fn slider<'a, M>(
         fill,
         on_change: Box::new(on_change),
         on_release: None,
+        boost: None,
     }
 }
 
 impl<M> Slider<'_, M> {
     pub fn on_release(mut self, m: M) -> Self {
         self.on_release = Some(m);
+        self
+    }
+    /// The track runs past 100 %: `mark` is where 100 % sits (0–1); past it the fill is `over`.
+    pub fn boost(mut self, mark: f32, over: Color) -> Self {
+        if mark < 1.0 {
+            self.boost = Some((mark.clamp(0.0, 1.0), over));
+        }
         self
     }
 }
@@ -188,15 +199,66 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
             },
             self.track,
         );
-        let fill_w = b.height + (b.width - b.height) * state.shown;
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds: Rectangle { width: fill_w, ..b },
-                border: Border::default().rounded(r),
-                ..renderer::Quad::default()
-            },
-            self.fill,
-        );
+        let at = |v: f32| b.height + (b.width - b.height) * v;
+        let fill_w = at(state.shown);
+        match self.boost {
+            Some((mark, over)) if state.shown > mark => {
+                // Past 100 %: the boost first (its own rounded end), the normal fill over it up
+                // to the notch, square there so the two meet edge to edge.
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: Rectangle { width: fill_w, ..b },
+                        border: Border::default().rounded(r),
+                        ..renderer::Quad::default()
+                    },
+                    over,
+                );
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: Rectangle {
+                            width: at(mark),
+                            ..b
+                        },
+                        border: Border {
+                            radius: iced::border::Radius {
+                                top_left: r,
+                                bottom_left: r,
+                                top_right: 0.0,
+                                bottom_right: 0.0,
+                            },
+                            ..Border::default()
+                        },
+                        ..renderer::Quad::default()
+                    },
+                    self.fill,
+                );
+            }
+            _ => renderer.fill_quad(
+                renderer::Quad {
+                    bounds: Rectangle { width: fill_w, ..b },
+                    border: Border::default().rounded(r),
+                    ..renderer::Quad::default()
+                },
+                self.fill,
+            ),
+        }
+        // The notch at 100 %: a short hairline, visible on the track and on the fill.
+        if let Some((mark, _)) = self.boost {
+            let h = b.height * 0.42;
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: Rectangle {
+                        x: b.x + at(mark) - 1.0,
+                        y: b.y + (b.height - h) / 2.0,
+                        width: 2.0,
+                        height: h,
+                    },
+                    border: Border::default().rounded(1.0),
+                    ..renderer::Quad::default()
+                },
+                Color::BLACK.scale_alpha(0.28),
+            );
+        }
         renderer.with_layer(b, |renderer| {
             self.content.as_widget().draw(
                 &tree.children[0],

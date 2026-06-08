@@ -387,6 +387,62 @@ pub fn subpage_header<'a, M: Clone + 'static>(
     .into()
 }
 
+/// A thin level bar (the OSD's): `value` 0–`top` (1 normally; 1.5 when a volume may reach
+/// 150 %), `width` × `height`. Past 100 % a notch marks 100 % and the boost is in the danger
+/// colour, as on the control centre's slider; at 0 the fill is a faint dot.
+pub fn level_bar<'a, M: 'a>(
+    s: Scheme,
+    value: f32,
+    top: f32,
+    width: f32,
+    height: f32,
+) -> Element<'a, M> {
+    use iced::widget::{Space, pin, stack};
+    let top = top.max(1.0);
+    let r = height / 2.0;
+    let piece = move |w: f32, c: Color, radius: iced::border::Radius| {
+        container(Space::new())
+            .width(w)
+            .height(height)
+            .style(move |_| container::Style {
+                background: Some(c.into()),
+                border: iced::Border {
+                    radius,
+                    ..iced::Border::default()
+                },
+                ..container::Style::default()
+            })
+    };
+    let round = iced::border::Radius::from(r);
+    let left = iced::border::Radius {
+        top_left: r,
+        bottom_left: r,
+        top_right: 0.0,
+        bottom_right: 0.0,
+    };
+    let on = (value / top).clamp(0.0, 1.0);
+    let mark = width / top;
+    let mut bar = stack![piece(width, s.ink.scale_alpha(0.16 * s.opacity), round)];
+    let fill = if value > 0.0 { s.accent } else { s.ink_faint };
+    if value > 1.0 && top > 1.0 {
+        bar = bar.push(piece((width * on).max(height), s.bad, round));
+        bar = bar.push(piece(mark, fill, left));
+    } else {
+        bar = bar.push(piece((width * on).max(height), fill, round));
+    }
+    if top > 1.0 {
+        bar = bar.push(
+            pin(piece(
+                2.0,
+                Color::BLACK.scale_alpha(0.28),
+                iced::border::Radius::from(1.0),
+            ))
+            .x(mark - 1.0),
+        );
+    }
+    bar.width(width).height(height).into()
+}
+
 /// A group's heading over its rows: SMALL, semibold, dim. `inset` lines it up with the rows'
 /// own content (the one thing that differs between places).
 pub fn section<'a, M: 'a>(

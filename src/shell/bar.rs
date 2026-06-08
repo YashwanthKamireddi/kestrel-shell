@@ -321,11 +321,13 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         let a = app.osd_sheet.alpha();
         let fs = s.faded(a);
         layers.push(
-            pin(
-                ui::reveal(osd_view(fs, osd), OSD_WIDTH, app.osd_sheet.h.value)
-                    .offset((1.0 - a) * 4.0)
-                    .on_measure(Message::MeasuredOsd),
+            pin(ui::reveal(
+                osd_view(fs, osd, (app.config.sound.max as f32 / 100.0).max(1.0)),
+                OSD_WIDTH,
+                app.osd_sheet.h.value,
             )
+            .offset((1.0 - a) * 4.0)
+            .on_measure(Message::MeasuredOsd))
             .position(Point::new(osd_x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -348,7 +350,16 @@ fn panel_span(app: &App, p: &crate::app::Panel, screen_w: f32, edge: f32) -> (f3
 }
 
 /// Icon, level bar, value.
-fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
+/// Whether an OSD is the output volume's.
+pub fn is_volume(i: crate::ui::Icon) -> bool {
+    use crate::ui::Icon;
+    matches!(
+        i,
+        Icon::Volume | Icon::Volume1 | Icon::Volume2 | Icon::VolumeX
+    )
+}
+
+fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a, Message> {
     const PAD: f32 = 16.0;
     if let Some(t) = &osd.text {
         let mut words = iced::widget::column![label_w(
@@ -372,22 +383,11 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd) -> Element<'a, Message> {
     }
     const VALUE_W: f32 = 30.0;
     let track_w = OSD_WIDTH - 2.0 * PAD - 18.0 - VALUE_W - 2.0 * 12.0;
-    let bar = |w: f32, c: iced::Color| {
-        container(Space::new())
-            .width(w)
-            .height(6)
-            .style(move |_| container::Style {
-                background: Some(c.into()),
-                border: iced::Border::default().rounded(tok::FULL),
-                ..container::Style::default()
-            })
-    };
-    // The track a tint of the ink (a surface colour vanished on the card); the fill stops at
-    // its end, while the number says the real level (a boosted volume reads 120).
-    let track = stack![
-        bar(track_w, s.ink.scale_alpha(0.16 * s.opacity)),
-        bar((track_w * osd.value.clamp(0.0, 1.0)).max(6.0), s.accent),
-    ];
+    // The track a tint of the ink; the number says the real level (a boosted volume reads 120).
+    // A volume that may go past 100 %: the track runs to the maximum, a notch marks 100 % and
+    // the part past it is in the warning colour (as the control centre's slider).
+    let top = if is_volume(osd.icon) { top_volume } else { 1.0 };
+    let track = ui::level_bar(s, osd.value, top, track_w, 6.0);
     row![
         ui::icon(osd.icon, 18.0, s.ink),
         container(track).center_y(18),

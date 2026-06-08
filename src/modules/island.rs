@@ -134,7 +134,11 @@ pub fn bar<'a>(
             .as_ref()
             .filter(|o| o.until > std::time::Instant::now())
     {
-        content = content.push(osd_row(osd, s));
+        content = content.push(osd_row(
+            osd,
+            s,
+            (app.config.sound.max as f32 / 100.0).max(1.0),
+        ));
         // A click acts on what it shows (the level's controls, say).
         return match osd.action.clone() {
             Some(a) => finish_with(content, o, s, active, a),
@@ -218,7 +222,7 @@ pub fn bar<'a>(
 }
 
 /// A level (icon, bar, value) or an event (icon, title, line under it), sized for the island.
-fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme) -> Element<'a, Message> {
+fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a, Message> {
     if let Some(title) = &osd.text {
         let mut r = row![
             icon(osd.icon, 15.0, s.accent),
@@ -241,30 +245,19 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme) -> Element<'a, Message> {
         return r.into();
     }
     const TRACK: f32 = 150.0;
-    let bar = |w: f32, c: iced::Color| {
-        iced::widget::container(iced::widget::Space::new())
-            .width(w)
-            .height(5)
-            .style(move |_| iced::widget::container::Style {
-                background: Some(c.into()),
-                border: iced::Border::default().rounded(3),
-                ..iced::widget::container::Style::default()
-            })
+    let top = if crate::shell::bar::is_volume(osd.icon) {
+        top_volume
+    } else {
+        1.0
     };
-    let level = osd.value.clamp(0.0, 1.0);
+    let level = osd.value.max(0.0);
     row![
         icon(
             osd.icon,
             15.0,
             if level > 0.0 { s.accent } else { s.ink_dim }
         ),
-        iced::widget::stack![
-            bar(TRACK, s.raised_hi),
-            bar(
-                (TRACK * level).max(5.0),
-                if level > 0.0 { s.accent } else { s.ink_faint }
-            ),
-        ],
+        ui::level_bar(s, level, top, TRACK, 5.0),
         label_w(
             format!("{:.0}", level * 100.0),
             text::SMALL,
