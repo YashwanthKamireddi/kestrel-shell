@@ -157,7 +157,7 @@ fn reason(e: &zbus::Error) -> String {
     } else if text.contains("AuthenticationFailed") || text.contains("AuthenticationTimeout") {
         "Pairing failed".into()
     } else if text.contains("ConnectionAttemptFailed") || text.contains("page-timeout") {
-        "Not in range".into()
+        "Not answering: off, in its case or out of range".into()
     } else if text.contains("AlreadyExists") {
         "Already paired".into()
     } else {
