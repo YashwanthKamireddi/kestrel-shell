@@ -60,7 +60,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 s.ink_dim
             ),
         ]
-        .spacing(1)
+        .spacing(tok::HAIR)
         .width(Length::Fill),
         control(label("Disconnect", text::CAPTION, s.ink))
             .pill(s, crate::ui::control::Pill::Plain)

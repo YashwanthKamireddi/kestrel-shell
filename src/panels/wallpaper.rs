@@ -468,7 +468,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                             )
                             .width(THUMB_W)
                             .height(THUMB_H)
-                            .padding(7)
+                            .padding(tok::S)
                             .align_x(Alignment::End)
                             .align_y(Alignment::Start),
                         );
@@ -493,7 +493,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     }
                     r = r.push(
                         control(tile)
-                            .padding(3)
+                            .padding(tok::XS)
                             .radius(size::ROW_RADIUS)
                             .kind(s, crate::ui::control::Kind::Bare)
                             .no_press_scale()

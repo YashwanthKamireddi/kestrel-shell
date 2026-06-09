@@ -28,7 +28,7 @@ pub(super) fn level<'a>(
             16.0,
             if muted { s.bad } else { s.ink_dim }
         ))
-        .padding(5)
+        .padding(tok::S)
         .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(on_mute),
@@ -125,7 +125,7 @@ pub(super) fn choice_row<'a>(
             ]
             .align_y(Alignment::Center),
         )
-        .padding([0, 28])
+        .padding([tok::NONE, tok::INDENT])
         .height(36)
         .width(Length::Fill)
         .kind(s, crate::ui::control::Kind::Ghost)

@@ -551,7 +551,7 @@ fn card<'a>(
             s.on_accent,
             theme::SEMIBOLD,
         ))
-        .padding([1, 8])
+        .padding([tok::HAIR, tok::M])
         .style(move |_| container::Style {
             background: Some(s.fade(s.accent).into()),
             border: iced::Border::default().rounded(tok::R_CONTROL),

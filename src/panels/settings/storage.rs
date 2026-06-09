@@ -89,7 +89,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                             label(v.name.clone(), text::BODY, s.ink),
                             label(line, text::CAPTION, s.ink_dim)
                         ]
-                        .spacing(1)
+                        .spacing(tok::HAIR)
                         .width(Length::Fill),
                         actions,
                     ]

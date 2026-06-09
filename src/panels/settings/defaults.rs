@@ -65,7 +65,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         ]
                         .align_y(Alignment::Center),
                     )
-                    .padding([0, 28])
+                    .padding([tok::NONE, tok::INDENT])
                     .height(36)
                     .width(Length::Fill)
                     .kind(s, crate::ui::control::Kind::Ghost)

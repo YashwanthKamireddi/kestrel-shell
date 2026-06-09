@@ -71,7 +71,7 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
     Some(
         ui::snap::snap(
             iced::widget::row(bars)
-                .spacing(3)
+                .spacing(tok::XS)
                 .height(18)
                 .align_y(Alignment::Center),
         )

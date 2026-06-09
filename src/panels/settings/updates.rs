@@ -115,7 +115,8 @@ pub(super) fn package_updates(app: &App, s: Scheme) -> Vec<Element<'_, AppMessag
                         label(format!("{}  →  {}", p.from, p.to), text::SMALL, s.ink_dim),
                         if p.aur {
                             Element::from(
-                                container(label("AUR", text::CAPTION, s.ink_dim)).padding([1, 6]),
+                                container(label("AUR", text::CAPTION, s.ink_dim))
+                                    .padding([tok::HAIR, tok::S]),
                             )
                         } else {
                             iced::widget::Space::new().into()

@@ -173,7 +173,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(m),
         )
-        .padding(1)
+        .padding(tok::HAIR)
         .style(move |_| container::Style {
             border: iced::Border {
                 color: if on { s.ink } else { Color::TRANSPARENT },

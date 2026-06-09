@@ -5,7 +5,9 @@ left and listed, for a person to decide. Usage: to_tokens.py FILE..."""
 import re, sys
 
 MAP = {0: "NONE", 2: "XXS", 4: "XS", 6: "S", 8: "M", 10: "L", 12: "L", 14: "L", 16: "XL",
-       18: "XL", 20: "XXL", 24: "XXXL"}
+       18: "XL", 20: "XXL", 24: "XXXL", 28: "INDENT",
+       # One-pixel nudges snap to the grid's nearest step.
+       3: "XS", 5: "S", 7: "S", 1: "HAIR"}
 
 
 def tok(v):

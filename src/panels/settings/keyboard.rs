@@ -62,7 +62,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
     for code in &now {
         let remove: Element<'_, AppMessage> = if now.len() > 1 {
             control(icon(Icon::X, 15.0, s.ink_dim))
-                .padding(5)
+                .padding(tok::S)
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::LayoutRemove(code.clone())))

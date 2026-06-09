@@ -51,10 +51,10 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                         label(now.clone(), text::SMALL, s.ink),
                         icon(Icon::ChevronDown, 14.0, s.ink_dim)
                     ]
-                    .spacing(6)
+                    .spacing(tok::S)
                     .align_y(Alignment::Center),
                 )
-                .padding([4, 10])
+                .padding([tok::XS, tok::L])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .on_press(msg(Message::QuietOpen((!open).then_some(which))))
@@ -62,12 +62,12 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
             ));
             if open {
                 // Every half hour of the day, a few per line.
-                let mut grid = column![].spacing(2);
+                let mut grid = column![].spacing(tok::XXS);
                 let times: Vec<String> = (0..48)
                     .map(|h| format!("{:02}:{:02}", h / 2, (h % 2) * 30))
                     .collect();
                 for chunk in times.chunks(6) {
-                    let mut r = row![].spacing(2);
+                    let mut r = row![].spacing(tok::XXS);
                     for t in chunk {
                         let on = t == now;
                         let pick = if which == 0 {
@@ -84,7 +84,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                                 ))
                                 .center_x(Length::Fill),
                             )
-                            .padding([5, 0])
+                            .padding([tok::S, tok::NONE])
                             .width(Length::Fill)
                             .radius(tok::FULL)
                             .kind(
@@ -101,7 +101,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                     }
                     grid = grid.push(r);
                 }
-                dnd_rows.push(Some(container(grid).padding([4, 12]).into()));
+                dnd_rows.push(Some(container(grid).padding([tok::XS, tok::L]).into()));
             }
         }
     }
@@ -179,10 +179,10 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                         sound_toggle(s, &name, now, rules),
                         segments(s, &opts)
                     ]
-                    .spacing(10)
+                    .spacing(tok::L)
                     .align_y(Alignment::Center),
                 )
-                .padding([0, 16])
+                .padding([tok::NONE, tok::XL])
                 .height(46)
                 .align_y(Alignment::Center)
                 .into(),
@@ -213,7 +213,7 @@ pub(super) fn sound_toggle<'a>(
         16.0,
         if on { s.ink } else { s.ink_dim },
     ))
-    .padding(7)
+    .padding(tok::S)
     .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::NotifySilent(name.to_string(), !on)))

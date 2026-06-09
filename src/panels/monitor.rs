@@ -174,7 +174,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Space::new().into()
         } else if armed {
             control(label_w("End?", text::CAPTION, s.base, theme::SEMIBOLD))
-                .padding([3, 8])
+                .padding([tok::XS, tok::M])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
                 .on_press(msg(Message::End(*pid)))

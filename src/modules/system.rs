@@ -2,6 +2,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{Scheme, text};
 use crate::ui::{Icon, icon, label};
 use iced::widget::row;
@@ -22,7 +23,7 @@ pub fn view<'a>(
         icon(Icon::MemoryStick, 14.0, warn(sys.mem >= 85)),
         label(format!("{}%", sys.mem), text::SMALL, warn(sys.mem >= 85)),
     ]
-    .spacing(5)
+    .spacing(tok::S)
     .align_y(Alignment::Center);
     if let Some(t) = sys.temp {
         r = r

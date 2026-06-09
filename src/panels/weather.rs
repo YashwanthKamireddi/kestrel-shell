@@ -78,7 +78,7 @@ fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
             label_w(value, text::BODY, s.ink, theme::SEMIBOLD),
             label(name, text::CAPTION, s.ink_dim),
         ]
-        .spacing(3)
+        .spacing(tok::XS)
         .align_x(Alignment::Center)
         .width(Length::Fill)
     };

@@ -262,6 +262,10 @@ pub mod tok {
     pub const XL: f32 = 16.0;
     pub const XXL: f32 = 20.0;
     pub const XXXL: f32 = 24.0;
+    /// A row's text lined up under the text of a row with an icon (icon 16 + gap 12).
+    pub const INDENT: f32 = 28.0;
+    /// A one-pixel frame around a picture.
+    pub const HAIR: f32 = 1.0;
 
     // Radii, concentric: a panel (24) padded 12 holds cards of 12; rows 10; small controls 8.
     // A pill is half its height (`pill`).

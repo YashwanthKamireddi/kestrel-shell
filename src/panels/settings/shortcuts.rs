@@ -7,7 +7,7 @@ use iced::widget::column;
 
 /// Keys ("SUPER + SHIFT + T") as chips.
 pub(super) fn key_chips<'a>(s: Scheme, keys: &str) -> Element<'a, AppMessage> {
-    let mut r = row![].spacing(3).align_y(Alignment::Center);
+    let mut r = row![].spacing(tok::XS).align_y(Alignment::Center);
     for k in keys.split('+').map(str::trim) {
         let shown = match k {
             "SUPER" => "Super".to_string(),
@@ -18,7 +18,7 @@ pub(super) fn key_chips<'a>(s: Scheme, keys: &str) -> Element<'a, AppMessage> {
         };
         r = r.push(
             container(label(shown, text::CAPTION, s.ink))
-                .padding([2, 7])
+                .padding([tok::XXS, tok::S])
                 .style(move |_| container::Style {
                     background: Some(s.raised_hi.into()),
                     border: iced::Border::default().rounded(5),
@@ -145,11 +145,11 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                             label(c.name.clone(), text::BODY, s.ink),
                             label(c.command.clone(), text::CAPTION, s.ink_dim)
                         ]
-                        .spacing(1)
+                        .spacing(tok::HAIR)
                         .width(Length::Fill),
                         key_chips(s, &c.keys),
                         control(icon(Icon::X, 15.0, s.ink_dim))
-                            .padding(5)
+                            .padding(tok::S)
                             .radius(tok::FULL)
                             .kind(s, crate::ui::control::Kind::Ghost)
                             .on_press(msg(Message::RemoveShortcut(c.keys.clone()))),

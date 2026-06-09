@@ -146,7 +146,7 @@ pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, AppMessage> {
 /// The round "i" at the end of a row: opens its details.
 pub(super) fn info_button<'a>(s: Scheme, m: AppMessage) -> Element<'a, AppMessage> {
     crate::ui::control(icon(Icon::Info, 18.0, s.ink_dim))
-        .padding(5)
+        .padding(tok::S)
         .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(m)

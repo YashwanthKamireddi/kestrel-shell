@@ -231,7 +231,7 @@ fn preview<'a>(s: Scheme, n: &Notification, width: f32) -> Option<Element<'a, Ap
     let handle = ui::rounded_file(path, width, h, 10.0)?;
     Some(
         container(image(handle).width(width).height(h))
-            .padding(1)
+            .padding(tok::HAIR)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(0.10 * s.opacity).into()),
                 border: iced::Border::default().rounded(11),

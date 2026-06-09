@@ -4,6 +4,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::{Message as PanelMessage, PanelKind, control};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, icon, label_w};
 use iced::widget::row;
@@ -44,7 +45,7 @@ pub fn view<'a>(
         icon(Icon::BellDot, size::ICON, s.accent),
         label_w(count, text::SMALL, s.accent, theme::SEMIBOLD),
     ]
-    .spacing(4)
+    .spacing(tok::XS)
     .align_y(Alignment::Center);
     vec![
         super::chip(s, content, active)
