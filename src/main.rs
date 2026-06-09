@@ -90,7 +90,10 @@ fn env_logger() {
         fn log(&self, r: &log::Record) {
             // kestrel's own messages at the chosen level; everyone else's warnings and errors.
             let ours = self.enabled(r.metadata()) && r.target().starts_with("kestrel");
-            if ours || r.level() <= log::Level::Warn {
+            // The SVG parser warns about attributes it skips (`marker-start="none"` in icon
+            // files) while drawing them fine: only its errors are worth a line.
+            let noise = r.target().starts_with("usvg") && r.level() > log::Level::Error;
+            if !noise && (ours || r.level() <= log::Level::Warn) {
                 eprintln!("{} {}: {}", r.level(), r.target(), r.args());
             }
         }
