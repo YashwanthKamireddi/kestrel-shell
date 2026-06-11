@@ -22,24 +22,28 @@ pub fn view<'a>(
     let id = o.id;
     let low = p.percent < 15.0 && !p.charging;
     let charging = p.charging && p.percent < 99.5;
-    let color = if low {
-        s.bad
-    } else if charging {
-        s.ink.scale_alpha(app.breath())
-    } else {
-        s.ink
+    let color = if low { s.bad } else { s.ink };
+    // Charging: the icon breathes by itself (redrawing only the bar, ~20×/s).
+    let glyph = |px: f32| -> Element<'a, Message> {
+        if charging {
+            crate::ui::breathe::breathe(control::battery_icon(p), px, color).into()
+        } else {
+            icon(control::battery_icon(p), px, color).into()
+        }
     };
     let active = super::control_on(app, open, control::Page::Power);
     let press = move |r| Message::ControlAt(control::Page::Power, id, r);
     if !app.config.bar.battery_percent {
         return vec![
-            super::icon_chip(s, control::battery_icon(p), color, active)
+            crate::ui::control(iced::widget::container(glyph(size::ICON)).center(size::CONTROL))
+                .radius(size::CONTROL / 2.0)
+                .bar(s, active)
                 .on_press_at(press)
                 .into(),
         ];
     }
     let content = row![
-        icon(control::battery_icon(p), size::ICON, color),
+        glyph(size::ICON),
         label(
             format!("{:.0}%", p.percent),
             text::SMALL,

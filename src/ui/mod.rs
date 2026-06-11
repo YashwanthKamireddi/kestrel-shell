@@ -1,5 +1,6 @@
 //! kestrel's component kit. Screens are assembled only from these.
 
+pub mod breathe;
 pub mod control;
 pub mod icon;
 pub mod morph;

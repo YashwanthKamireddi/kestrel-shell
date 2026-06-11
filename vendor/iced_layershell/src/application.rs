@@ -397,16 +397,34 @@ where
     let mut pending_creations = PendingCreations::default();
 
     let mut first_frame = true;
+    // kestrel patch: widgets' `RedrawRequest::At(t)` (a slow pulse asking for its next step):
+    // the loop sleeps until the earliest one, then redraws only those surfaces. Before, `At` was
+    // dropped in the draw pass and such a widget never drew again.
+    let mut wake_at: HashMap<SurfaceId, std::time::Instant> = HashMap::new();
     while running {
         let timeout = if first_frame {
             first_frame = false;
             Some(std::time::Duration::ZERO)
         } else {
-            None
+            wake_at
+                .values()
+                .min()
+                .map(|t| t.saturating_duration_since(std::time::Instant::now()))
         };
         event_loop
             .dispatch(timeout, &mut wl_state)
             .map_err(|e| Error::EventLoop(e.to_string()))?;
+        let now = std::time::Instant::now();
+        wake_at.retain(|id, t| {
+            if *t <= now {
+                if let Some(s) = iced_surfaces.get_mut(id) {
+                    s.needs_redraw = true;
+                }
+                false
+            } else {
+                true
+            }
+        });
 
         if exit_flag.load(Ordering::Relaxed) {
             break;
@@ -815,6 +833,13 @@ where
                         ..
                     }
                 );
+                if let iced_runtime::user_interface::State::Updated {
+                    redraw_request: iced_core::window::RedrawRequest::At(t),
+                    ..
+                } = ui_state
+                {
+                    wake_at.insert(*surface_id, t);
+                }
 
                 // Draw. `blur_container` widgets record their regions as they draw.
                 let blur_enabled = wl_state.bg_effect_supports_blur;
