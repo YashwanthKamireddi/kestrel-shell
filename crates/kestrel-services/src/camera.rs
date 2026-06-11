@@ -118,8 +118,17 @@ pub fn stream() -> impl Stream<Item = Vec<String>> {
         let _ = std::thread::Builder::new()
             .name("kestrel-camera".into())
             .spawn(move || {
-                let Ok(mut child) = std::process::Command::new("pw-dump")
-                    .args(["--monitor", "--no-colors"])
+                use std::os::unix::process::CommandExt;
+                let mut cmd = std::process::Command::new("pw-dump");
+                cmd.args(["--monitor", "--no-colors"]);
+                // Safety: prctl only asks the kernel to end pw-dump when kestrel ends.
+                unsafe {
+                    cmd.pre_exec(|| {
+                        libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                        Ok(())
+                    });
+                }
+                let Ok(mut child) = cmd
                     .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::null())
                     .spawn()
