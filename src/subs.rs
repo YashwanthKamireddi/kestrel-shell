@@ -16,7 +16,7 @@ pub fn clock() -> Subscription<()> {
 pub fn seconds() -> Subscription<()> {
     Subscription::run(clock::seconds)
 }
-pub fn camera() -> Subscription<bool> {
+pub fn camera() -> Subscription<Vec<String>> {
     Subscription::run(crate::services::camera::stream)
 }
 pub fn audio() -> Subscription<audio::State> {

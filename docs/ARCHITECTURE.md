@@ -51,7 +51,7 @@ pub async fn command(cmd: Command)                          // actions (if the s
 - Event-driven: re-read state after a (debounced) change signal. A service that has no change
   signal says so in its doc comment and states its polling interval.
 - No helper processes for data. The exceptions are documented where they occur (cliphist,
-  checkupdates, hyprsunset), and they run only on demand.
+  checkupdates, hyprsunset, `pw-dump --monitor` for cameras used through PipeWire), and they run only on demand.
 - A service only the switched-off modules need is never started (`modules::needs`).
 - Parsing is pure and unit-tested.
 

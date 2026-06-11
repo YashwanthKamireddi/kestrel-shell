@@ -167,7 +167,12 @@ pub fn name_for_class(class: &str) -> String {
         return n;
     }
     // Fallback: "org.gnome.Nautilus" -> "Nautilus", "kitty" -> "Kitty".
-    let last = class.rsplit('.').next().unwrap_or(class);
+    // Only a reverse-DNS name's last word: "gst-launch-1.0" is not "0".
+    let last = class
+        .rsplit('.')
+        .next()
+        .filter(|w| w.chars().any(char::is_alphabetic))
+        .unwrap_or(class);
     let mut c = last.chars();
     c.next()
         .map(|f| f.to_uppercase().collect::<String>() + c.as_str())

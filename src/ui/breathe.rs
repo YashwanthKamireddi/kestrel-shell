@@ -37,6 +37,15 @@ pub fn breathe<'a, M: 'a>(i: Icon, size: f32, color: Color) -> Breathe<'a, M> {
     }
 }
 
+/// `i` as a plain icon, or breathing while `pulse` (something in progress).
+pub fn icon_or<'a, M: 'a>(i: Icon, size: f32, color: Color, pulse: bool) -> Element<'a, M> {
+    if pulse {
+        breathe(i, size, color).into()
+    } else {
+        crate::ui::icon(i, size, color).into()
+    }
+}
+
 fn strength() -> f32 {
     static EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
     let t = EPOCH.elapsed().as_secs_f32();

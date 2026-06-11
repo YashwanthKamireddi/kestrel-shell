@@ -66,7 +66,7 @@ pub fn view<'a>(
         items.push(indicator(s, Icon::ScreenShare));
     }
     // A camera is on (held open by an app for more than a moment).
-    if app.camera_on {
+    if !app.camera_apps.is_empty() {
         items.push(indicator(s, Icon::Video));
     }
     // Privacy: something is recording from a microphone.
@@ -79,12 +79,18 @@ pub fn view<'a>(
 
 /// A privacy dot: an accent circle with what is in use. No hover text (design call 2026-11-13).
 fn indicator<'a>(s: Scheme, i: Icon) -> Element<'a, Message> {
-    iced::widget::container(icon(i, 14.0, s.on_accent))
-        .center(22)
-        .style(move |_| iced::widget::container::Style {
-            background: Some(s.accent.into()),
-            border: iced::Border::default().rounded(tok::FULL),
-            ..iced::widget::container::Style::default()
-        })
-        .into()
+    // A click says which apps (the island names them).
+    crate::ui::control(
+        iced::widget::container(icon(i, 14.0, s.on_accent))
+            .center(22)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(s.accent.into()),
+                border: iced::Border::default().rounded(tok::FULL),
+                ..iced::widget::container::Style::default()
+            }),
+    )
+    .radius(tok::FULL)
+    .kind(s, crate::ui::control::Kind::Bare)
+    .on_press(Message::PrivacyWho)
+    .into()
 }

@@ -49,18 +49,16 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         };
         list = list.push(list_row(
             s,
-            icon(
+            ui::breathe::icon_or(
                 strength_icon(net.strength),
                 size::ICON,
-                if busy.is_some() {
-                    s.accent.scale_alpha(app.breath())
-                } else if net.active {
+                if busy.is_some() || net.active {
                     s.accent
                 } else {
                     s.ink
                 },
-            )
-            .into(),
+                busy.is_some(),
+            ),
             net.ssid.clone(),
             sub,
             trailing,

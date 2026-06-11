@@ -132,15 +132,6 @@ pub fn in_progress(app: &App, key: &str) -> Option<bool> {
     (!done).then_some(*want)
 }
 
-/// Whether anything is being connected or disconnected.
-pub fn busy(app: &App) -> bool {
-    app.panels
-        .control
-        .pending
-        .as_ref()
-        .is_some_and(|(k, _, _)| in_progress(app, k).is_some())
-}
-
 #[derive(Clone, Debug)]
 pub enum Message {
     Page(Page),

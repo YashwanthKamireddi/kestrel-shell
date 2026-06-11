@@ -74,18 +74,16 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         };
         list = list.push(list_row(
             s,
-            icon(
+            ui::breathe::icon_or(
                 device_icon(&d.icon),
                 size::ICON,
-                if busy.is_some() {
-                    s.accent.scale_alpha(app.breath())
-                } else if d.connected {
+                if busy.is_some() || d.connected {
                     s.accent
                 } else {
                     s.ink
                 },
-            )
-            .into(),
+                busy.is_some(),
+            ),
             d.name.clone(),
             sub,
             forget,
@@ -95,14 +93,15 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
     // Devices nearby (searched for while this page is open): a click pairs, trusts and
     // connects. The search icon breathes while searching.
-    let searching = icon(
+    let searching = ui::breathe::icon_or(
         Icon::Search,
         14.0,
         if b.discovering {
-            s.ink_dim.scale_alpha(app.breath())
+            s.ink_dim
         } else {
             s.ink_faint
         },
+        b.discovering,
     );
     list = list.push(
         container(
@@ -131,16 +130,12 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         };
         list = list.push(list_row(
             s,
-            icon(
+            ui::breathe::icon_or(
                 device_icon(&d.icon),
                 size::ICON,
-                if pairing {
-                    s.accent.scale_alpha(app.breath())
-                } else {
-                    s.ink_dim
-                },
-            )
-            .into(),
+                if pairing { s.accent } else { s.ink_dim },
+                pairing,
+            ),
             d.name.clone(),
             sub,
             Space::new().into(),

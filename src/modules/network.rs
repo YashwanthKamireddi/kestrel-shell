@@ -16,14 +16,17 @@ pub fn view<'a>(
         return Vec::new();
     }
     let id = o.id;
-    let color = if app.net.connecting {
-        s.ink.scale_alpha(app.breath())
-    } else {
-        s.ink
-    };
     let active = super::control_on(app, open, control::Page::Wifi);
+    let glyph = crate::ui::breathe::icon_or(
+        control::wifi_icon(&app.net),
+        crate::theme::size::ICON,
+        s.ink,
+        app.net.connecting,
+    );
     vec![
-        super::icon_chip(s, control::wifi_icon(&app.net), color, active)
+        crate::ui::control(iced::widget::container(glyph).center(crate::theme::size::CONTROL))
+            .radius(crate::theme::size::CONTROL / 2.0)
+            .bar(s, active)
             .on_press_at(move |r| Message::ControlAt(control::Page::Wifi, id, r))
             .into(),
     ]
