@@ -15,7 +15,8 @@ pub fn view<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
-    let _ = (o, open);
+    let id = o.id;
+    let shown = open == Some(PanelKind::Privacy);
     let mut items: Vec<Element<'a, Message>> = Vec::new();
     // Recording (wf-recorder): its own pill, a red dot and the time it has run, like a
     // phone's; a click stops it and the island says where it was saved.
@@ -63,23 +64,23 @@ pub fn view<'a>(
         );
     } else if app.hypr.screencast {
         // Shared (a call or a browser showing the screen): the accent mark.
-        items.push(indicator(s, Icon::ScreenShare));
+        items.push(indicator(s, Icon::ScreenShare, id, shown));
     }
     // A camera is on (held open by an app for more than a moment).
     if !app.camera_apps.is_empty() {
-        items.push(indicator(s, Icon::Video));
+        items.push(indicator(s, Icon::Video, id, shown));
     }
     // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
-        items.push(indicator(s, Icon::Mic));
+        items.push(indicator(s, Icon::Mic, id, shown));
     }
 
     items
 }
 
 /// A privacy dot: an accent circle with what is in use. No hover text (design call 2026-11-13).
-fn indicator<'a>(s: Scheme, i: Icon) -> Element<'a, Message> {
-    // A click says which apps (the island names them).
+fn indicator<'a>(s: Scheme, i: Icon, id: iced::OutputId, open: bool) -> Element<'a, Message> {
+    // A click opens the menu of what is using it (a second click closes it).
     crate::ui::control(
         iced::widget::container(icon(i, 14.0, s.on_accent))
             .center(22)
@@ -89,8 +90,9 @@ fn indicator<'a>(s: Scheme, i: Icon) -> Element<'a, Message> {
                 ..iced::widget::container::Style::default()
             }),
     )
+    .padding(tok::XXS)
     .radius(tok::FULL)
-    .kind(s, crate::ui::control::Kind::Bare)
-    .on_press(Message::PrivacyWho)
+    .bar(s, open)
+    .on_press_at(move |r| Message::Toggle(PanelKind::Privacy, id, r))
     .into()
 }

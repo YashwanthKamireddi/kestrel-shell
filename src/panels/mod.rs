@@ -16,6 +16,7 @@ pub mod notifications;
 pub mod overview;
 pub mod pods;
 pub mod power;
+pub mod privacy;
 pub mod settings;
 pub mod tray;
 pub mod wallpaper;
@@ -50,6 +51,8 @@ pub enum PanelKind {
     Capture,
     /// System monitor: cores, memory, busiest processes.
     Monitor,
+    /// What is using the camera, microphone and screen (under the privacy indicator).
+    Privacy,
 }
 
 impl PanelKind {
@@ -76,6 +79,7 @@ impl PanelKind {
             "airpods" | "pods" => Self::Pods,
             "files" => Self::Files,
             "tray" => Self::Tray,
+            "privacy" => Self::Privacy,
             _ => return None,
         })
     }
@@ -108,6 +112,7 @@ impl PanelKind {
             Self::Capture => capture::WIDTH,
             Self::Monitor => monitor::WIDTH,
             Self::Tray => 260.0,
+            Self::Privacy => privacy::WIDTH,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
@@ -218,6 +223,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
         PanelKind::Tray
+        | PanelKind::Privacy
         | PanelKind::Weather
         | PanelKind::Pods
         | PanelKind::Files
@@ -422,6 +428,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Control => control::view(app, s),
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
+        PanelKind::Privacy => privacy::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
