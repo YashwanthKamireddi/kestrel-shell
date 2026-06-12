@@ -145,8 +145,10 @@ fn entry_for_class(class: &str) -> Option<(String, String)> {
             }
             m.insert(id, v.clone());
             if !a.wm_class.is_empty() {
-                m.insert(a.wm_class.to_lowercase(), v);
+                m.insert(a.wm_class.to_lowercase(), v.clone());
             }
+            // By its shown name last (an app that reports "Camera": Snapshot), never over an id.
+            m.entry(a.name.to_lowercase()).or_insert(v);
         }
         m
     });

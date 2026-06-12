@@ -62,28 +62,37 @@ pub fn view<'a>(
             }))
             .into(),
         );
-    } else if app.hypr.screencast {
-        // Shared (a call or a browser showing the screen): the accent mark.
-        items.push(indicator(s, Icon::ScreenShare, id, shown));
     }
-    // A camera is on (held open by an app for more than a moment).
+    // What is in use, together in one accent capsule (as iOS and macOS show it): the screen
+    // shared, the camera, the microphone. One click target opens the menu of who uses them.
+    let mut glyphs: Vec<Icon> = Vec::new();
+    if app.hypr.screencast && app.hypr.recording.is_none() {
+        glyphs.push(Icon::ScreenShare);
+    }
     if !app.camera_apps.is_empty() {
-        items.push(indicator(s, Icon::Video, id, shown));
+        glyphs.push(Icon::Video);
     }
-    // Privacy: something is recording from a microphone.
     if !app.audio.recording.is_empty() {
-        items.push(indicator(s, Icon::Mic, id, shown));
+        glyphs.push(Icon::Mic);
+    }
+    if !glyphs.is_empty() {
+        items.push(capsule(s, &glyphs, id, shown));
     }
 
     items
 }
 
 /// A privacy dot: an accent circle with what is in use. No hover text (design call 2026-11-13).
-fn indicator<'a>(s: Scheme, i: Icon, id: iced::OutputId, open: bool) -> Element<'a, Message> {
-    // A click opens the menu of what is using it (a second click closes it).
+/// The in-use capsule: one accent pill with an icon for each thing in use.
+fn capsule<'a>(s: Scheme, glyphs: &[Icon], id: iced::OutputId, open: bool) -> Element<'a, Message> {
+    let icons = row(glyphs.iter().map(|g| icon(*g, 14.0, s.on_accent).into()))
+        .spacing(tok::S)
+        .align_y(Alignment::Center);
     crate::ui::control(
-        iced::widget::container(icon(i, 14.0, s.on_accent))
-            .center(22)
+        iced::widget::container(icons)
+            .padding([tok::NONE, tok::M])
+            .height(22)
+            .center_y(22)
             .style(move |_| iced::widget::container::Style {
                 background: Some(s.accent.into()),
                 border: iced::Border::default().rounded(tok::FULL),
