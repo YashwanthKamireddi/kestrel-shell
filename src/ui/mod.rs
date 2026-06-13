@@ -581,6 +581,12 @@ fn svg_pixels(path: &std::path::Path, size: f32) -> Option<iced::widget::image::
     Some(iced::widget::image::Handle::from_rgba(px, px, rgba))
 }
 
+/// Makes `path`'s picture at `size` ahead of time (off the UI thread), so drawing it later
+/// is only a cache look-up.
+pub fn warm_picture(path: &std::path::Path, size: f32) {
+    let _ = sharp_file(path, size);
+}
+
 fn sharp_file(path: &std::path::Path, size: f32) -> Option<iced::widget::image::Handle> {
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};
