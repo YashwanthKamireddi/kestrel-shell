@@ -63,38 +63,74 @@ pub fn view<'a>(
             .into(),
         );
     }
-    // What is in use, together in one accent capsule (as iOS and macOS show it): the screen
-    // shared, the camera, the microphone. One click target opens the menu of who uses them.
-    let mut glyphs: Vec<Icon> = Vec::new();
-    if app.hypr.screencast && app.hypr.recording.is_none() {
-        glyphs.push(Icon::ScreenShare);
-    }
-    if !app.camera_apps.is_empty() {
-        glyphs.push(Icon::Video);
-    }
-    if !app.audio.recording.is_empty() {
-        glyphs.push(Icon::Mic);
-    }
-    if !glyphs.is_empty() {
-        items.push(capsule(s, &glyphs, id, shown));
+    // What is in use, together in one accent capsule (as iOS and macOS show it); when it all
+    // stops, the capsule fades and narrows away (app.privacy_fade) instead of vanishing.
+    let k = app.privacy_fade.value.clamp(0.0, 1.0);
+    if k > 0.02 && !app.privacy_glyphs.is_empty() {
+        items.push(capsule(
+            s,
+            &app.privacy_glyphs,
+            k,
+            app.privacy_w.value,
+            id,
+            shown,
+        ));
     }
 
     items
 }
 
 /// A privacy dot: an accent circle with what is in use. No hover text (design call 2026-11-13).
-/// The in-use capsule: one accent pill with an icon for each thing in use.
-fn capsule<'a>(s: Scheme, glyphs: &[Icon], id: iced::OutputId, open: bool) -> Element<'a, Message> {
-    let icons = row(glyphs.iter().map(|g| icon(*g, 14.0, s.on_accent).into()))
-        .spacing(tok::S)
-        .align_y(Alignment::Center);
+/// What is in use now, as the capsule's icons: the screen shared, the camera, the microphone.
+pub fn glyphs(app: &App) -> Vec<Icon> {
+    let mut g = Vec::new();
+    if app.hypr.screencast && app.hypr.recording.is_none() {
+        g.push(Icon::ScreenShare);
+    }
+    if !app.camera_apps.is_empty() {
+        g.push(Icon::Video);
+    }
+    if !app.audio.recording.is_empty() {
+        g.push(Icon::Mic);
+    }
+    g
+}
+
+/// The capsule's full width for `n` icons.
+pub fn capsule_width(n: usize) -> f32 {
+    let n = n.max(1) as f32;
+    n * 14.0 + (n - 1.0) * tok::S + 2.0 * tok::M
+}
+
+/// The in-use capsule: one accent pill with an icon for each thing in use, at strength `k`
+/// (1 shown; going to 0 it fades and narrows to nothing).
+fn capsule<'a>(
+    s: Scheme,
+    glyphs: &[Icon],
+    k: f32,
+    width: f32,
+    id: iced::OutputId,
+    open: bool,
+) -> Element<'a, Message> {
+    let full = if width > 1.0 {
+        width
+    } else {
+        capsule_width(glyphs.len())
+    };
+    let icons = row(glyphs
+        .iter()
+        .map(|g| icon(*g, 14.0, s.on_accent.scale_alpha(k)).into()))
+    .spacing(tok::S)
+    .align_y(Alignment::Center);
     crate::ui::control(
         iced::widget::container(icons)
             .padding([tok::NONE, tok::M])
+            .width(full * k)
             .height(22)
             .center_y(22)
+            .clip(true)
             .style(move |_| iced::widget::container::Style {
-                background: Some(s.accent.into()),
+                background: Some(s.accent.scale_alpha(k).into()),
                 border: iced::Border::default().rounded(tok::FULL),
                 ..iced::widget::container::Style::default()
             }),

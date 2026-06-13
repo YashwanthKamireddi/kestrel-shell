@@ -15,6 +15,39 @@ pub(super) fn privacy_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         return Vec::new();
     };
     let mut out = Vec::new();
+    // Camera and microphone: what uses them now and what did in the last 10 minutes.
+    {
+        let mut rows: Vec<Option<Element<'_, AppMessage>>> = Vec::new();
+        let now = |device: &'static str, apps: &[String]| {
+            if apps.is_empty() {
+                None
+            } else {
+                value_row(s, device, format!("{} (now)", apps.join(", ")))
+            }
+        };
+        rows.push(now("Camera", &app.camera_apps));
+        rows.push(now("Microphone", &app.audio.recording));
+        for (d, n, t) in &app.privacy_recent {
+            let what = if *d == crate::ui::Icon::Video {
+                "Camera"
+            } else {
+                "Microphone"
+            };
+            rows.push(value_row(
+                s,
+                what,
+                format!("{n} · {}", crate::panels::privacy::ago(*t)),
+            ));
+        }
+        if rows.iter().all(Option::is_none) {
+            rows = vec![value_row(
+                s,
+                "Camera and microphone",
+                "Not used in the last 10 minutes".into(),
+            )];
+        }
+        out.extend(group(s, Some("Camera and microphone"), rows));
+    }
     if let Some(on) = lock {
         out.extend(group(
             s,

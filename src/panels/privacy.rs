@@ -52,6 +52,47 @@ fn group<'a>(s: Scheme, i: Icon, what: &'a str, apps: &[String]) -> Element<'a, 
     c.into()
 }
 
+/// "now", "2 min ago".
+pub fn ago(t: std::time::Instant) -> String {
+    match t.elapsed().as_secs() / 60 {
+        0 => "Just now".into(),
+        m => format!("{m} min ago"),
+    }
+}
+
+/// Camera and microphone use that ended in the last 10 minutes, newest first.
+pub fn recent<'a>(s: Scheme, app: &App) -> Option<Element<'a, AppMessage>> {
+    if app.privacy_recent.is_empty() {
+        return None;
+    }
+    let mut c =
+        column![label_w("Recently", text::SMALL, s.ink_dim, theme::SEMIBOLD),].spacing(tok::XXS);
+    for (device, name, at) in &app.privacy_recent {
+        let what = if *device == Icon::Video {
+            "Camera"
+        } else {
+            "Microphone"
+        };
+        let glyph: Element<'a, AppMessage> = match icons::lookup(&apps::icon_for_class(name)) {
+            Some(p) => ui::image_file_faded(&p, 20.0, s.opacity),
+            None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
+        };
+        c = c.push(
+            row![
+                container(glyph).center(24),
+                column![
+                    label_w(name.clone(), text::BODY, s.ink, theme::MEDIUM),
+                    label(format!("{what} · {}", ago(*at)), text::CAPTION, s.ink_dim),
+                ]
+                .width(Length::Fill),
+            ]
+            .spacing(tok::L)
+            .align_y(Alignment::Center),
+        );
+    }
+    Some(c.into())
+}
+
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let mut body = column![].spacing(tok::L);
     if !app.camera_apps.is_empty() {
@@ -73,6 +114,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             container(label("Nothing is using them now", text::BODY, s.ink_dim))
                 .padding([tok::S, tok::M]),
         );
+    }
+    if let Some(r) = recent(s, app) {
+        body = body.push(container(r).padding([tok::NONE, tok::M]));
     }
     container(body).padding(tok::M).width(Length::Fill).into()
 }
