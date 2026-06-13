@@ -87,6 +87,15 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
     Task::Iced(iced::widget::focus(INPUT_ID.clone()))
 }
 
+/// Reads the emoji font in the background (done at start: the first open read it on the UI
+/// thread, ~40 ms).
+pub fn warm() -> iced::Task<AppMessage> {
+    Task::future(async {
+        let _ = tokio::task::spawn_blocking(|| drawable().len()).await;
+    })
+    .discard()
+}
+
 /// The emoji (from the list) the installed emoji font can draw. Newer ones than the font
 /// (Twemoji lags Unicode) drew as empty cells; they are left out. Read once.
 fn drawable() -> &'static [(&'static str, &'static str)] {

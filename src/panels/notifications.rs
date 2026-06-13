@@ -14,6 +14,8 @@ use std::time::SystemTime;
 #[derive(Clone, Debug)]
 pub enum Message {
     Dismiss(u32),
+    /// Show every notification group, or only the newest few.
+    ShowAll(bool),
     /// The pointer is on this card (None: on none).
     Hover(Option<u32>),
     Action(u32, String),
@@ -26,6 +28,10 @@ fn msg(m: Message) -> AppMessage {
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
+        Message::ShowAll(on) => {
+            app.notif_all = on;
+            Task::none()
+        }
         Message::Hover(id) => {
             app.notif_hover = id;
             Task::none()
@@ -529,6 +535,13 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
     }
     let hover = app.notif_hover;
+    // The newest few groups in full, the rest behind "Show N more" (a long list cut off at the
+    // panel's edge looked unfinished).
+    const FIRST: usize = 3;
+    let more = groups.len().saturating_sub(FIRST);
+    if !app.notif_all {
+        groups.truncate(FIRST);
+    }
     let list = column(groups.into_iter().map(|g| {
         if g.len() == 1 {
             return card(s, g[0], true, hover == Some(g[0].id));
@@ -552,12 +565,33 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .into()
     }))
     .spacing(tok::M);
-    let list = scrollable(list)
-        .height(Length::Shrink)
-        .direction(scrollable::Direction::Vertical(
-            scrollable::Scrollbar::new().width(0).scroller_width(0),
-        ));
-    column![header, container(crate::ui::smooth(list)).max_height(380)]
-        .spacing(tok::M)
-        .into()
+    let toggle = (more > 0).then(|| {
+        control(label(
+            if app.notif_all {
+                "Show fewer".to_string()
+            } else {
+                format!("Show {more} more")
+            },
+            text::SMALL,
+            s.ink_dim,
+        ))
+        .pill(s, crate::ui::control::Pill::Quiet)
+        .on_press(msg(Message::ShowAll(!app.notif_all)))
+    });
+    let body: Element<'_, AppMessage> = if app.notif_all {
+        let list =
+            scrollable(list)
+                .height(Length::Shrink)
+                .direction(scrollable::Direction::Vertical(
+                    scrollable::Scrollbar::new().width(0).scroller_width(0),
+                ));
+        container(crate::ui::smooth(list)).max_height(520).into()
+    } else {
+        list.into()
+    };
+    let mut c = column![header, body].spacing(tok::M);
+    if let Some(t) = toggle {
+        c = c.push(container(t).center_x(Length::Fill));
+    }
+    c.into()
 }

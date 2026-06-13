@@ -207,7 +207,10 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // A click anywhere on the gauges opens the system monitor (cores, memory, processes).
     card(
         s,
+        // Room inside, so the hover lift frames the rings and their names instead of clipping
+        // the names at its edge.
         ui::control(r.align_y(Alignment::Start))
+            .padding([tok::L, tok::S])
             .kind(s, crate::ui::control::Kind::Ghost)
             .radius(theme::size::CARD_RADIUS)
             .no_press_scale()
