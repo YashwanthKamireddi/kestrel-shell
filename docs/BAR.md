@@ -37,7 +37,7 @@ merge network, sound and battery into one button; kestrel does not: one function
 | tray | tray icons | per icon | per icon |
 | system | CPU and memory | system monitor | — |
 | updates | pending updates (when any) | Settings › Updates | — |
-| privacy | microphone / camera / screen in use (when in use) | — | — |
+| privacy | one capsule: screen / camera / microphone in use; click: who uses them, and recently | — | — |
 | network | Wi-Fi strength, Ethernet, offline | control centre › Wi-Fi | — |
 | bluetooth | on / connected (when on) | control centre › Bluetooth | — |
 | volume | output level | control centre › Sound | scroll: volume; middle: mute |
