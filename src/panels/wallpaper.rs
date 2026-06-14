@@ -517,10 +517,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     };
     container(column![header, body].spacing(tok::L))
         .padding(iced::Padding {
-            top: 10.0,
-            right: 14.0,
-            bottom: 14.0,
-            left: 14.0,
+            top: tok::L,
+            right: tok::XL,
+            bottom: tok::XL,
+            left: tok::XL,
         })
         .into()
 }

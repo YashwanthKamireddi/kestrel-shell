@@ -2289,17 +2289,17 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         container(label_w("Settings", text::HEADING, s.ink, theme::SEMIBOLD))
             .padding([tok::S, tok::L]),
         container(search).padding(iced::Padding {
-            bottom: 8.0,
+            bottom: tok::M,
             ..iced::Padding::ZERO
         }),
     ]
     .spacing(tok::XXS);
     let heading = |t: &'static str| {
         container(label_w(t, text::CAPTION, s.ink_faint, theme::SEMIBOLD)).padding(iced::Padding {
-            top: 10.0,
-            right: 10.0,
-            bottom: 4.0,
-            left: 10.0,
+            top: tok::L,
+            right: tok::M,
+            bottom: tok::XS,
+            left: tok::M,
         })
     };
     let mut entries: Vec<Option<Page>> = shell_pages.into_iter().map(Some).collect();

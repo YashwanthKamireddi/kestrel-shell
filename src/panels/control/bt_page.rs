@@ -112,10 +112,10 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .align_y(Alignment::Center),
         )
         .padding(iced::Padding {
-            top: 10.0,
-            right: 12.0,
-            bottom: 4.0,
-            left: 12.0,
+            top: tok::L,
+            right: tok::L,
+            bottom: tok::XS,
+            left: tok::L,
         }),
     );
     for d in &b.nearby {

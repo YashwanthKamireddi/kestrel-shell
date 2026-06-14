@@ -70,7 +70,7 @@ pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> 
     // Exactly under the slider: its width, then the percentage's room (8 + 44) to its right.
     .width(220.0 + 8.0 + 44.0)
     .padding(iced::Padding {
-        right: 52.0,
+        right: tok::M + 44.0,
         ..iced::Padding::ZERO
     })
     .into()

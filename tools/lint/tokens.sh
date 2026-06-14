@@ -9,10 +9,14 @@ count() { grep -hoE "$1" $files | wc -l | tr -d ' '; }
 radius=$(count '\.radius\([0-9][0-9.]*\)|rounded\([0-9][0-9.]*\)')
 padding=$(count '\.padding\((\[[0-9][0-9., ]*\]|[0-9][0-9.]*)\)')
 spacing=$(count '\.spacing\([0-9][0-9.]*\)')
+gaps=$(count 'Space::new\(\)\.(height|width)\([0-9][0-9.]*\)')
+edges=$(count '(top|right|bottom|left): [0-9][0-9.]*,')
 colors=$(count '\.colors\(')
 now="radius $radius
 padding $padding
 spacing $spacing
+edges $edges
+gaps $gaps
 colors $colors"
 base=tools/lint/tokens.baseline
 if [ "$1" = "--update" ]; then

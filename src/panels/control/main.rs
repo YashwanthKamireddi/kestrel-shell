@@ -270,7 +270,7 @@ pub(super) fn level_row_to<'a>(
             .on_press(msg(on_icon)),
         Space::new().width(Length::Fill),
         pct,
-        Space::new().width(12),
+        Space::new().width(tok::L),
     ]
     .align_y(Alignment::Center);
     let bar = slider(

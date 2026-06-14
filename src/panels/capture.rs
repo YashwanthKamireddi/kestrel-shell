@@ -242,9 +242,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ),
     ]
     .spacing(tok::M);
-    let mut delays = row![icon(Icon::Timer, 16.0, s.ink_dim), Space::new().width(4)]
-        .spacing(tok::XXS)
-        .align_y(Alignment::Center);
+    let mut delays = row![
+        icon(Icon::Timer, 16.0, s.ink_dim),
+        Space::new().width(tok::XS)
+    ]
+    .spacing(tok::XXS)
+    .align_y(Alignment::Center);
     for d in [0u32, 3, 5, 10] {
         delays = delays.push(chip(
             s,
@@ -259,9 +262,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
     // Recording: where its sound comes from.
     let sound = st.record.then(|| {
-        let mut r = row![icon(Icon::Volume2, 16.0, s.ink_dim), Space::new().width(4)]
-            .spacing(tok::XXS)
-            .align_y(Alignment::Center);
+        let mut r = row![
+            icon(Icon::Volume2, 16.0, s.ink_dim),
+            Space::new().width(tok::XS)
+        ]
+        .spacing(tok::XXS)
+        .align_y(Alignment::Center);
         for (v, name) in [
             (Sound::None, "No sound"),
             (Sound::Computer, "Computer"),

@@ -75,12 +75,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .spacing(tok::XXS);
 
-    column![header, Space::new().height(16), month(app, s)]
+    column![header, Space::new().height(tok::XL), month(app, s)]
         .padding(iced::Padding {
-            top: 14.0,
-            right: 14.0,
-            bottom: 16.0,
-            left: 14.0,
+            top: tok::XL,
+            right: tok::XL,
+            bottom: tok::XL,
+            left: tok::XL,
         })
         .into()
 }
@@ -147,9 +147,9 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     });
     column![
         nav,
-        Space::new().height(8),
+        Space::new().height(tok::M),
         weekdays,
-        Space::new().height(6),
+        Space::new().height(tok::S),
         weeks
     ]
     .into()

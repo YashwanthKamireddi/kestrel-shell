@@ -435,7 +435,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             (s.ink.scale_alpha(0.14), s.accent),
             move |f| msg(Message::Seek(b2.clone(), f)),
         );
-        meta = meta.push(Space::new().height(4));
+        meta = meta.push(Space::new().height(tok::XS));
         meta = meta.push(
             column![
                 bar,

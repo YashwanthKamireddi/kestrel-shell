@@ -129,10 +129,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .spacing(tok::L),
     )
     .padding(iced::Padding {
-        top: 12.0,
-        right: 16.0,
-        bottom: 12.0,
-        left: 16.0,
+        top: tok::L,
+        right: tok::XL,
+        bottom: tok::L,
+        left: tok::XL,
     })
     .into()
 }

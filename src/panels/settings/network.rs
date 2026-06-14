@@ -205,10 +205,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 .align_y(Alignment::Center),
             )
             .padding(iced::Padding {
-                top: 10.0,
-                right: 16.0,
-                bottom: 2.0,
-                left: 16.0,
+                top: tok::L,
+                right: tok::XL,
+                bottom: tok::XXS,
+                left: tok::XL,
             })
             .into(),
         )];

@@ -388,7 +388,7 @@ pub(super) fn app_row<'a>(
                     s.ink_dim
                 }
             ),
-            Space::new().width(10),
+            Space::new().width(tok::L),
         ]
         .align_y(Alignment::Center),
         on_track,

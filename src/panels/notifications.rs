@@ -431,7 +431,7 @@ fn card_in<'a>(
     let mut texts = column![top, main].spacing(tok::XS).width(Length::Fill);
     if let Some(p) = preview(s, n, INNER - 32.0 - 12.0 - 2.0) {
         texts = texts.push(container(p).padding(iced::Padding {
-            top: 4.0,
+            top: tok::XS,
             ..iced::Padding::ZERO
         }));
     }
@@ -458,7 +458,7 @@ fn card_in<'a>(
                 .spacing(tok::S),
             )
             .padding(iced::Padding {
-                top: 6.0,
+                top: tok::S,
                 ..iced::Padding::ZERO
             }),
         );

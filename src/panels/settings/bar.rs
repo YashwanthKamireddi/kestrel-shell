@@ -72,10 +72,8 @@ pub(super) fn module_options<'a>(
             row_of(s, o.label, None, control).map(|e| {
                 container(e)
                     .padding(iced::Padding {
-                        left: 26.0,
-                        right: 0.0,
-                        top: 0.0,
-                        bottom: 0.0,
+                        left: tok::INDENT,
+                        ..iced::Padding::ZERO
                     })
                     .into()
             })

@@ -28,7 +28,7 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             text::SMALL,
             if v > 0.82 { s.on_accent } else { s.ink_dim }
         ),
-        Space::new().width(12),
+        Space::new().width(tok::L),
     ]
     .align_y(Alignment::Center);
     let warm = iced::Color::from_rgb8(0xFF, 0xA8, 0x55);
