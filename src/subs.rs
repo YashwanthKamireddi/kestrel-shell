@@ -189,3 +189,14 @@ pub fn meters(apps: Vec<(u32, String)>) -> Subscription<crate::services::meters:
 pub fn level() -> Subscription<crate::services::level::Bands> {
     Subscription::run(crate::services::level::stream)
 }
+
+/// One message at `at` (then nothing): a deadline, instead of polling for it.
+pub fn at(at: std::time::Instant) -> Subscription<std::time::Instant> {
+    Subscription::run_with(at, |at: &std::time::Instant| {
+        let at = *at;
+        futures::stream::once(async move {
+            tokio::time::sleep_until(at.into()).await;
+            at
+        })
+    })
+}
