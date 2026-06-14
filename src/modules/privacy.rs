@@ -112,11 +112,8 @@ fn capsule<'a>(
     id: iced::OutputId,
     open: bool,
 ) -> Element<'a, Message> {
-    let full = if width > 1.0 {
-        width
-    } else {
-        capsule_width(glyphs.len())
-    };
+    // Springs from nothing as it appears and back to nothing as it leaves.
+    let full = width.max(0.0);
     let icons = row(glyphs
         .iter()
         .map(|g| icon(*g, 14.0, s.on_accent.scale_alpha(k)).into()))
@@ -125,7 +122,7 @@ fn capsule<'a>(
     crate::ui::control(
         iced::widget::container(icons)
             .padding([tok::NONE, tok::M])
-            .width(full * k)
+            .width(full)
             .height(22)
             .center_y(22)
             .clip(true)
