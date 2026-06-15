@@ -61,17 +61,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
     Task::none()
 }
 
-fn chip<'a>(s: Scheme, k: &str) -> Element<'a, AppMessage> {
-    container(label(k.to_string(), text::CAPTION, s.ink))
-        .padding([tok::XXS, tok::S])
-        .style(move |_| container::Style {
-            background: Some(s.raised_hi.into()),
-            border: iced::Border::default().rounded(5),
-            ..container::Style::default()
-        })
-        .into()
-}
-
 /// The list's most height before it scrolls (a 1080 p screen less the bar and margins).
 const MAX_LIST_H: f32 = 900.0;
 
@@ -92,7 +81,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let mut g =
             column![label_w(name.clone(), text::SMALL, s.accent, theme::MEDIUM)].spacing(tok::S);
         for b in binds {
-            let keys = row(b.keys.iter().map(|k| chip(s, k))).spacing(tok::XS);
+            let keys = row(b.keys.iter().map(|k| crate::ui::keycap(s, k.clone()))).spacing(tok::XS);
             g = g.push(
                 row![
                     label(crate::ui::ellipsize(&b.what, 44), text::SMALL, s.ink_dim)

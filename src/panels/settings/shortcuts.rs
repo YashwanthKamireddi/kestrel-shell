@@ -16,15 +16,7 @@ pub(super) fn key_chips<'a>(s: Scheme, keys: &str) -> Element<'a, AppMessage> {
             "SHIFT" => "Shift".to_string(),
             k => k.to_string(),
         };
-        r = r.push(
-            container(label(shown, text::CAPTION, s.ink))
-                .padding([tok::XXS, tok::S])
-                .style(move |_| container::Style {
-                    background: Some(s.raised_hi.into()),
-                    border: iced::Border::default().rounded(5),
-                    ..container::Style::default()
-                }),
-        );
+        r = r.push(crate::ui::keycap(s, shown));
     }
     r.into()
 }

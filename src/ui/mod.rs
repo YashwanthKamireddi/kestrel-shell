@@ -436,6 +436,18 @@ pub fn level_bar<'a, M: 'a>(
     bar.width(width).height(height).into()
 }
 
+/// A key as a small raised cap ("Super", "T"): shortcut lists and the keys sheet.
+pub fn keycap<'a, M: 'a>(s: crate::theme::Scheme, k: impl Into<String>) -> Element<'a, M> {
+    iced::widget::container(label(k.into(), crate::theme::text::CAPTION, s.ink))
+        .padding([crate::theme::tok::XXS, crate::theme::tok::S])
+        .style(move |_| iced::widget::container::Style {
+            background: Some(s.raised_hi.into()),
+            border: iced::Border::default().rounded(5),
+            ..iced::widget::container::Style::default()
+        })
+        .into()
+}
+
 /// A group's heading over its rows: SMALL, semibold, dim. `inset` lines it up with the rows'
 /// own content (the one thing that differs between places).
 pub fn section<'a, M: 'a>(
