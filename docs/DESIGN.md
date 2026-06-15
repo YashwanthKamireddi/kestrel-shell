@@ -129,6 +129,13 @@ laid over its container:
 | Selected / open | 0.14 | at once |
 | Disabled | content at 0.38 | no hover |
 
+Fills at rest have three levels (`tok`): `TONAL` 0.06 (fields, chips, quiet tiles), `FILL` 0.08
+(slider and meter tracks, picture placeholders), `FILL_STRONG` 0.10 (an icon's circle on a
+card). Fields, keycaps and app icons are one kit function each (`ui::input_style`,
+`ui::keycap`, `ui::app_icon`). `tools/lint/tokens.sh` also counts struct paddings
+(`top: 10.0`), spacer gaps (`Space::new().height(8)`) and ink alphas, so none of them drift
+back.
+
 The motion table above said hover fades in over 110 ms; it later snapped on instantly (the user's "no
 lag" rule), which made clear-at-rest buttons (Clear all, ×) flash a pill out of nothing as the
 pointer crossed them: the "cheap and glitchy" hover in the user's recording of 2026-11-15. 70 ms keeps
