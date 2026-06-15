@@ -104,6 +104,13 @@ not enabled, and its subscription is never created.
 - Hyprland requests that must land with a frame (blur region) ride that frame's commit.
 
 - Animation ticks follow the compositor's frame callbacks; nothing animates while idle.
+- An animation that starts from nothing on screen gets its first step as a message
+  (`update`: `Task::done(Message::Frame)`) — a frame callback only follows a drawn change, so a
+  spring from 0 never moved. Anything moving per frame (springs, visualiser) goes through
+  `animating()` and `tick`, never a 16 ms timer (it drifts against vsync).
+- No polling for something that announces itself: deadlines are one wake at the earliest
+  (`subs::at`), a process's end is its pidfd, devices are inotify, Hyprland is its event socket
+  (a burst read once, 8 ms after its first event).
 - Static surfaces (wallpaper, frame) skip redraws (`redraw_key`); surfaces are never resized per
   frame.
 - Image handles are created once and stored, never in `view`.
