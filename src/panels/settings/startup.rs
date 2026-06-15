@@ -39,12 +39,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
             };
             let remove: Element<'_, AppMessage> = if e.user_only {
-                control(icon(Icon::X, 15.0, s.ink_dim))
-                    .padding(tok::S)
-                    .radius(tok::FULL)
-                    .kind(s, crate::ui::control::Kind::Ghost)
-                    .on_press(msg(Message::StartupRemove(e.id.clone())))
-                    .into()
+                crate::ui::remove_button(s, msg(Message::StartupRemove(e.id.clone())))
             } else {
                 iced::widget::Space::new().into()
             };

@@ -61,12 +61,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
     let mut rows: Vec<Option<Element<'_, AppMessage>>> = Vec::new();
     for code in &now {
         let remove: Element<'_, AppMessage> = if now.len() > 1 {
-            control(icon(Icon::X, 15.0, s.ink_dim))
-                .padding(tok::S)
-                .radius(tok::FULL)
-                .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(msg(Message::LayoutRemove(code.clone())))
-                .into()
+            crate::ui::remove_button(s, msg(Message::LayoutRemove(code.clone())))
         } else {
             iced::widget::Space::new().into()
         };

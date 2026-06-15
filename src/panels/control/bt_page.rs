@@ -65,12 +65,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .on_press(msg(Message::Forget(d.path.clone())))
                 .into()
         } else {
-            crate::ui::control(icon(Icon::X, 16.0, s.ink_dim))
-                .padding(tok::S)
-                .radius(tok::FULL)
-                .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(msg(Message::Forget(d.path.clone())))
-                .into()
+            crate::ui::remove_button(s, msg(Message::Forget(d.path.clone())))
         };
         list = list.push(list_row(
             s,

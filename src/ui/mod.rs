@@ -451,6 +451,17 @@ pub fn level_bar<'a, M: 'a>(
     bar.width(width).height(height).into()
 }
 
+/// The × at the end of a row that removes it (a startup app, a layout, a shortcut, a device, a
+/// clipboard item): one size and look everywhere, a 28 px ghost circle.
+pub fn remove_button<'a, M: Clone + 'a>(s: crate::theme::Scheme, on: M) -> Element<'a, M> {
+    control(icon(Icon::X, crate::theme::size::ICON, s.ink_dim))
+        .padding(crate::theme::tok::S)
+        .radius(crate::theme::tok::FULL)
+        .kind(s, control::Kind::Ghost)
+        .on_press(on)
+        .into()
+}
+
 /// A key as a small raised cap ("Super", "T"): shortcut lists and the keys sheet.
 pub fn keycap<'a, M: 'a>(s: crate::theme::Scheme, k: impl Into<String>) -> Element<'a, M> {
     iced::widget::container(label(k.into(), crate::theme::text::CAPTION, s.ink))

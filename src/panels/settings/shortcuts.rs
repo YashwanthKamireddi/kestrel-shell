@@ -133,11 +133,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         .spacing(tok::HAIR)
                         .width(Length::Fill),
                         key_chips(s, &c.keys),
-                        control(icon(Icon::X, 15.0, s.ink_dim))
-                            .padding(tok::S)
-                            .radius(tok::FULL)
-                            .kind(s, crate::ui::control::Kind::Ghost)
-                            .on_press(msg(Message::RemoveShortcut(c.keys.clone()))),
+                        crate::ui::remove_button(s, msg(Message::RemoveShortcut(c.keys.clone()))),
                     ]
                     .spacing(tok::L)
                     .align_y(Alignment::Center),
