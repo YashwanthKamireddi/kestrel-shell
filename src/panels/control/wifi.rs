@@ -79,14 +79,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                             .padding([tok::M, tok::L])
                             .size(text::BODY)
                             .font(theme::FONT)
-                            .style(move |_, _| text_input::Style {
-                                background: iced::Color::TRANSPARENT.into(),
-                                border: iced::Border::default(),
-                                icon: s.ink_dim,
-                                placeholder: s.ink_faint,
-                                value: s.ink,
-                                selection: s.accent_soft,
-                            }),
+                            .style(crate::ui::input_style(s)),
                     )
                     // The same quiet capsule as every other field (no accent outline on focus).
                     .style(move |_| ui::field_style(s)),
@@ -277,14 +270,7 @@ pub(super) fn hidden_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .padding([tok::M, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
-                .style(move |_, _| text_input::Style {
-                    background: iced::Color::TRANSPARENT.into(),
-                    border: iced::Border::default(),
-                    icon: s.ink_dim,
-                    placeholder: s.ink_faint,
-                    value: s.ink,
-                    selection: s.accent_soft,
-                }),
+                .style(crate::ui::input_style(s)),
         )
         .style(move |_| ui::field_style(s))
     };

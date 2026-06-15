@@ -11,7 +11,7 @@ use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 
 pub const WIDTH: f32 = 400.0;
 
@@ -222,14 +222,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .padding([tok::L, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
-            .style(move |_, _| text_input::Style {
-                background: Color::TRANSPARENT.into(),
-                border: iced::Border::default(),
-                icon: s.ink_dim,
-                placeholder: s.ink_faint,
-                value: s.ink,
-                selection: s.accent_soft,
-            }),
+            .style(crate::ui::input_style(s)),
     )
     .style(move |_| ui::field_style(s));
     let mut body = column![head, message, field].spacing(tok::L);
@@ -322,14 +315,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
                     .padding([tok::L, tok::L])
                     .size(text::BODY)
                     .font(theme::FONT)
-                    .style(move |_, _| text_input::Style {
-                        background: Color::TRANSPARENT.into(),
-                        border: iced::Border::default(),
-                        icon: s.ink_dim,
-                        placeholder: s.ink_faint,
-                        value: s.ink,
-                        selection: s.accent_soft,
-                    }),
+                    .style(crate::ui::input_style(s)),
             )
             .style(move |_| ui::field_style(s)),
         );
@@ -388,14 +374,7 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
             .padding([tok::L, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
-            .style(move |_, _| text_input::Style {
-                background: Color::TRANSPARENT.into(),
-                border: iced::Border::default(),
-                icon: s.ink_dim,
-                placeholder: s.ink_faint,
-                value: s.ink,
-                selection: s.accent_soft,
-            }),
+            .style(crate::ui::input_style(s)),
     )
     .style(move |_| ui::field_style(s));
     let mut body = column![head, field].spacing(tok::L);

@@ -121,6 +121,21 @@ pub fn icon(i: Icon, size: f32, color: Color) -> iced::widget::Text<'static> {
 }
 
 /// The box around a search field (44 px high), the same in every panel: a light translucent
+/// A text field's own style inside its capsule (`field_style`): no fill or border of its own,
+/// the ink, its placeholder faint, the selection in the soft accent.
+pub fn input_style(
+    s: Scheme,
+) -> impl Fn(&iced::Theme, iced::widget::text_input::Status) -> iced::widget::text_input::Style {
+    move |_, _| iced::widget::text_input::Style {
+        background: iced::Color::TRANSPARENT.into(),
+        border: iced::Border::default(),
+        icon: s.ink_dim,
+        placeholder: s.ink_faint,
+        value: s.ink,
+        selection: s.accent_soft,
+    }
+}
+
 /// fill that sits as well on the black look as on the frost.
 pub fn field_style(s: Scheme) -> iced::widget::container::Style {
     iced::widget::container::Style {

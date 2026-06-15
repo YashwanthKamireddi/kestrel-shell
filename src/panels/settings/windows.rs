@@ -116,14 +116,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                             .padding([tok::M, tok::L])
                             .size(text::BODY)
                             .font(theme::FONT)
-                            .style(move |_, _| text_input::Style {
-                                background: Color::TRANSPARENT.into(),
-                                border: iced::Border::default(),
-                                icon: s.ink_dim,
-                                placeholder: s.ink_faint,
-                                value: s.ink,
-                                selection: s.accent_soft,
-                            }),
+                            .style(crate::ui::input_style(s)),
                     )
                     .width(Length::Fill)
                     .style(move |_| ui::field_style(s)),

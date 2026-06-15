@@ -61,14 +61,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
-                .style(move |_, _| text_input::Style {
-                    background: Color::TRANSPARENT.into(),
-                    border: iced::Border::default(),
-                    icon: s.ink_dim,
-                    placeholder: s.ink_faint,
-                    value: s.ink,
-                    selection: s.accent_soft,
-                }),
+                .style(crate::ui::input_style(s)),
         )
         .style(move |_| ui::field_style(s));
         let mut list = column![search].spacing(tok::XXS);

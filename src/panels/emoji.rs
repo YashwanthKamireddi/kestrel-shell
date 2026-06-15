@@ -9,7 +9,7 @@ use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, mouse_area, row, text_input};
-use iced::{Alignment, Color, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task};
 
 const COLUMNS: usize = 10;
 const ROWS: usize = 6;
@@ -268,14 +268,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .padding([tok::L, tok::L])
         .size(text::TITLE)
         .font(theme::FONT)
-        .style(move |_, _| text_input::Style {
-            background: Color::TRANSPARENT.into(),
-            border: iced::Border::default(),
-            icon: s.ink_dim,
-            placeholder: s.ink_faint,
-            value: s.ink,
-            selection: s.accent_soft,
-        });
+        .style(crate::ui::input_style(s));
     let field = container(
         row![icon(Icon::Search, 18.0, s.ink_dim), input]
             .spacing(tok::XS)

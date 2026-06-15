@@ -2260,14 +2260,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .padding([tok::S, tok::XS])
                 .size(text::BODY)
                 .font(theme::FONT)
-                .style(move |_, _| text_input::Style {
-                    background: Color::TRANSPARENT.into(),
-                    border: iced::Border::default(),
-                    icon: s.ink_dim,
-                    placeholder: s.ink_faint,
-                    value: s.ink,
-                    selection: s.accent_soft,
-                })
+                .style(crate::ui::input_style(s))
         ]
         .spacing(tok::XS)
         .align_y(Alignment::Center),
@@ -2536,14 +2529,7 @@ fn field<'a>(
         .size(text::BODY)
         .font(theme::FONT)
         .width(240)
-        .style(move |_, _| text_input::Style {
-            background: Color::TRANSPARENT.into(),
-            border: iced::Border::default(),
-            icon: s.ink_dim,
-            placeholder: s.ink_faint,
-            value: s.ink,
-            selection: s.accent_soft,
-        });
+        .style(crate::ui::input_style(s));
     if let Some(m) = on_submit {
         t = t.on_submit(m);
     }
@@ -2601,14 +2587,7 @@ fn pick_search<'a>(
             .padding([tok::S, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
-            .style(move |_, _| text_input::Style {
-                background: Color::TRANSPARENT.into(),
-                border: iced::Border::default(),
-                icon: s.ink_dim,
-                placeholder: s.ink_faint,
-                value: s.ink,
-                selection: s.accent_soft,
-            }),
+            .style(crate::ui::input_style(s)),
     )
     .style(move |_| ui::field_style(s))
     .into()
