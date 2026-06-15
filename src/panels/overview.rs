@@ -181,12 +181,19 @@ fn tile_rect(w: &hyprland::Window, cw: f32, ch: f32) -> (f32, f32, f32, f32) {
     const INSET: f32 = 5.0;
     let (sw, _) = w.screen;
     let k = (cw - 2.0 * INSET) / sw.max(1.0);
-    let (x, y) = (INSET + (w.x * k).max(0.0), INSET + (w.y * k).max(0.0));
+    // At least 16 × 12, and always on the card: a window at a screen's edge (or past it) used
+    // to put its corner so far in that less than the minimum was left, and `clamp(min, max)`
+    // with max < min panicked: kestrel crashed on every start while that window stayed there
+    // (76 times on 2026-11-15).
+    let (min_w, min_h) = (16.0, 12.0);
+    let finite = |v: f32| if v.is_finite() { v } else { 0.0 };
+    let x = INSET + finite(w.x * k).clamp(0.0, (cw - 2.0 * INSET - min_w).max(0.0));
+    let y = INSET + finite(w.y * k).clamp(0.0, (ch - 2.0 * INSET - min_h).max(0.0));
     (
         x,
         y,
-        (w.w * k).clamp(16.0, cw - INSET - x),
-        (w.h * k).clamp(12.0, ch - INSET - y),
+        (w.w * k).min(cw - INSET - x).max(min_w),
+        (w.h * k).min(ch - INSET - y).max(min_h),
     )
 }
 
@@ -582,4 +589,37 @@ fn focus_msg(address: &str) -> AppMessage {
         )),
         AppMessage::Close,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    fn window(x: f32, y: f32, w: f32, h: f32) -> super::hyprland::Window {
+        super::hyprland::Window {
+            x,
+            y,
+            w,
+            h,
+            screen: (1920.0, 1080.0),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_window_at_or_past_the_edge_stays_on_its_card() {
+        let (cw, ch) = super::card_size();
+        for w in [
+            window(0.0, 1075.0, 800.0, 600.0),
+            window(1915.0, 0.0, 800.0, 600.0),
+            window(5000.0, 5000.0, 10.0, 10.0),
+            window(-50.0, -50.0, 4000.0, 4000.0),
+            window(f32::NAN, 0.0, 100.0, 100.0),
+        ] {
+            let (x, y, bw, bh) = super::tile_rect(&w, cw, ch);
+            assert!(
+                x + bw <= cw + 0.01 && y + bh <= ch + 0.01,
+                "{x} {y} {bw} {bh}"
+            );
+            assert!(bw >= 16.0 && bh >= 12.0);
+        }
+    }
 }
