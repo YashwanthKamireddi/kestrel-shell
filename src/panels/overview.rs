@@ -499,7 +499,7 @@ fn card<'a>(
                 .center_x(bw)
                 .center_y(bh)
                 .style(move |_| container::Style {
-                    background: Some(s.ink.scale_alpha(0.08 * alpha * s.opacity).into()),
+                    background: Some(s.ink.scale_alpha(tok::FILL * alpha * s.opacity).into()),
                     border: iced::Border::default().rounded(7),
                     ..container::Style::default()
                 })

@@ -74,7 +74,7 @@ fn bar<'a>(s: Scheme, v: f32, h: f32) -> Element<'a, AppMessage> {
             .width(Length::FillPortion((((1.0 - v) * 1000.0) as u16).max(1)))
             .height(h)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
                 border: iced::Border::default().rounded(h / 2.0),
                 ..container::Style::default()
             }),

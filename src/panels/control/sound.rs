@@ -192,7 +192,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             v,
             28.0,
             (
-                s.ink.scale_alpha(0.07 * s.opacity),
+                s.ink.scale_alpha(tok::TONAL * s.opacity),
                 s.accent.scale_alpha(0.35 * s.opacity),
             ),
             |v| msg(Message::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
@@ -393,7 +393,7 @@ pub(super) fn app_row<'a>(
         .align_y(Alignment::Center),
         on_track,
         22.0,
-        (s.ink.scale_alpha(0.07 * s.opacity), s.accent),
+        (s.ink.scale_alpha(tok::TONAL * s.opacity), s.accent),
         move |v| {
             msg(if recording {
                 Message::RecVolume(ids2.clone(), v * top)

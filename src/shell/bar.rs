@@ -518,7 +518,7 @@ pub fn pill_style(m: crate::config::Material, s: Scheme, radius: f32) -> contain
         border: iced::Border {
             color: match m {
                 Material::Black => iced::Color::TRANSPARENT,
-                Material::Frosted => s.ink.scale_alpha(0.08 * s.opacity),
+                Material::Frosted => s.ink.scale_alpha(tok::FILL * s.opacity),
             },
             width: if m == Material::Black { 0.0 } else { 1.0 },
             radius: radius.into(),

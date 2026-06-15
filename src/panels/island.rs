@@ -173,7 +173,13 @@ fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let size = 72.0;
         column![
             iced::widget::stack![
-                ui::ring::ring(drawn, size, 7.0, tone, s.ink.scale_alpha(0.08 * s.opacity)),
+                ui::ring::ring(
+                    drawn,
+                    size,
+                    7.0,
+                    tone,
+                    s.ink.scale_alpha(tok::FILL * s.opacity)
+                ),
                 container(label_w(shown, text::BODY, s.ink, theme::SEMIBOLD)).center(size),
             ],
             label(name, text::SMALL, s.ink_dim),

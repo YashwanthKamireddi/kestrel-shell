@@ -36,7 +36,7 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         inner,
         v,
         32.0,
-        (s.ink.scale_alpha(0.07 * s.opacity), s.fade(warm)),
+        (s.ink.scale_alpha(tok::TONAL * s.opacity), s.fade(warm)),
         |v| msg(Message::Warmth(v)),
     )
     .on_release(msg(Message::WarmthDone));

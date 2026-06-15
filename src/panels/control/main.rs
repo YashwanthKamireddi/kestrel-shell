@@ -213,7 +213,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     .height(h)
                     .align_y(Alignment::Center)
                     .style(move |_| iced::widget::container::Style {
-                        background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
+                        background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
                         border: iced::Border::default().rounded(h / 2.0),
                         ..iced::widget::container::Style::default()
                     }),
@@ -277,7 +277,7 @@ pub(super) fn level_row_to<'a>(
         inner,
         on_track,
         32.0,
-        (s.ink.scale_alpha(0.07 * s.opacity), s.accent),
+        (s.ink.scale_alpha(tok::TONAL * s.opacity), s.accent),
         move |v| msg(on_change(v * top)),
     )
     .boost(1.0 / top, s.bad);

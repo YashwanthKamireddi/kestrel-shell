@@ -186,7 +186,7 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         return container(icon(glyph, 17.0, s.ink))
             .center(D)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
                 border: iced::Border::default().rounded(D / 2.0),
                 ..container::Style::default()
             })
@@ -202,7 +202,7 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         None => container(icon(Icon::Bell, 18.0, s.ink))
             .center(D)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
                 border: iced::Border::default().rounded(D / 2.0),
                 ..container::Style::default()
             })
@@ -239,7 +239,7 @@ fn preview<'a>(s: Scheme, n: &Notification, width: f32) -> Option<Element<'a, Ap
         container(image(handle).width(width).height(h))
             .padding(tok::HAIR)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.10 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
                 border: iced::Border::default().rounded(11),
                 ..container::Style::default()
             })

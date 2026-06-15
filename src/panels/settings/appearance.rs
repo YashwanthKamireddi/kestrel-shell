@@ -188,7 +188,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
         container(icon(Icon::Image, 12.0, s.ink))
             .center(18)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.14 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::SELECTED * s.opacity).into()),
                 border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             })

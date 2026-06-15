@@ -3,6 +3,7 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::shell::bar::{SLOT, SLOT_GAP};
+use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, label_w};
 use iced::Element;
@@ -93,7 +94,7 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
             .width(w - (SLOT - DOT))
             .height(DOT)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
                 border: iced::Border::default().rounded(DOT / 2.0),
                 ..container::Style::default()
             });

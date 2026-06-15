@@ -207,7 +207,7 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
             .width(TRACK)
             .height(5)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
                 border: iced::Border::default().rounded(3),
                 ..container::Style::default()
             });

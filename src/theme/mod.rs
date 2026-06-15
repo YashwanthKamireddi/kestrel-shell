@@ -296,6 +296,10 @@ pub mod tok {
     pub const DISABLED: f32 = 0.38;
     /// A tonal container at rest (a quiet filled button, a chip).
     pub const TONAL: f32 = 0.06;
+    /// A track or tile's fill (slider and meter tracks, picture placeholders).
+    pub const FILL: f32 = 0.08;
+    /// A fill that must read against a tonal one (an icon's circle on a card).
+    pub const FILL_STRONG: f32 = 0.10;
 
     // Motion, in seconds.
     pub const HOVER_IN: f32 = 0.07;

@@ -190,7 +190,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         container(icon(Icon::Lock, 20.0, s.ink))
             .center(40)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
                 border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
@@ -279,7 +279,7 @@ fn bt_view<'a>(st: &'a State, a: &'a bluetooth::Ask, s: Scheme) -> Element<'a, A
         container(icon(Icon::Bluetooth, 20.0, s.ink))
             .center(40)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
                 border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
@@ -353,7 +353,7 @@ fn wifi_view<'a>(st: &'a State, ssid: &'a str, wrong: bool, s: Scheme) -> Elemen
         container(icon(Icon::Wifi, 20.0, s.ink))
             .center(40)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.1 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
                 border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),

@@ -58,7 +58,7 @@ pub(super) fn summary<'a>(
                     if on {
                         s.accent
                     } else {
-                        s.ink.scale_alpha(0.08 * s.opacity)
+                        s.ink.scale_alpha(tok::FILL * s.opacity)
                     }
                     .into()
                 ),

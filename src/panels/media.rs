@@ -390,7 +390,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             container(label(p.identity.clone(), text::CAPTION, s.ink_dim))
                 .padding([tok::XXS, tok::M])
                 .style(move |_| container::Style {
-                    background: Some(s.ink.scale_alpha(0.08).into()),
+                    background: Some(s.ink.scale_alpha(tok::FILL).into()),
                     border: iced::Border::default().rounded(tok::R_CONTROL),
                     ..container::Style::default()
                 }),
@@ -432,7 +432,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Space::new(),
             frac,
             6.0,
-            (s.ink.scale_alpha(0.14), s.accent),
+            (s.ink.scale_alpha(tok::SELECTED), s.accent),
             move |f| msg(Message::Seek(b2.clone(), f)),
         );
         meta = meta.push(Space::new().height(tok::XS));

@@ -2,6 +2,7 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::tok;
 use crate::theme::{Scheme, size};
 use crate::ui::{self, Icon, icon};
 use iced::Element;
@@ -50,7 +51,7 @@ fn pods<'a>(
                 d - 6.0,
                 2.0,
                 tint,
-                s.ink.scale_alpha(0.07 * s.opacity),
+                s.ink.scale_alpha(tok::TONAL * s.opacity),
                 crate::theme::surface(s),
             ))
             .center(d),

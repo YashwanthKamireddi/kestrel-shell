@@ -2159,7 +2159,7 @@ fn group<'a>(
                         .width(Length::Fill)
                         .height(1)
                         .style(move |_| container::Style {
-                            background: Some(s.ink.scale_alpha(0.07 * s.opacity).into()),
+                            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
                             ..container::Style::default()
                         }),
                 )
@@ -2170,7 +2170,7 @@ fn group<'a>(
     let card = container(card)
         .width(Length::Fill)
         .style(move |_| container::Style {
-            background: Some(s.ink.scale_alpha(0.055 * s.opacity).into()),
+            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
             border: iced::Border::default().rounded(size::CARD_RADIUS),
             ..container::Style::default()
         });
@@ -2208,7 +2208,7 @@ fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'
     container(r)
         .padding(tok::XXS)
         .style(move |_| container::Style {
-            background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
+            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
             border: iced::Border::default().rounded(tok::FULL),
             ..container::Style::default()
         })
@@ -2453,7 +2453,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .width(1)
         .height(Length::Fill)
         .style(move |_| container::Style {
-            background: Some(s.ink.scale_alpha(0.07 * s.opacity).into()),
+            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
             ..container::Style::default()
         });
     row![side, divider, body].height(Length::Fill).into()
@@ -2665,7 +2665,7 @@ fn hypr_row<'a>(
                 iced::widget::Space::new().width(Length::Fill),
                 ((n - min) / (max - min)).clamp(0.0, 1.0),
                 22.0,
-                (s.ink.scale_alpha(0.08 * s.opacity), s.accent),
+                (s.ink.scale_alpha(tok::FILL * s.opacity), s.accent),
                 move |t| {
                     let raw = min + t * (max - min);
                     let v = ((raw / step).round() * step).clamp(min, max);

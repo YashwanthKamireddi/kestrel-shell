@@ -109,7 +109,7 @@ fn part<'a>(
                 ..container::Style::default()
             })
     };
-    let mut track = stack![bar(TRACK, s.ink.scale_alpha(0.12 * s.opacity))];
+    let mut track = stack![bar(TRACK, s.ink.scale_alpha(tok::FILL_STRONG * s.opacity))];
     if fill > 0.0 {
         track = track.push(bar((TRACK * fill).round().max(6.0), s.fade(color)));
     }

@@ -12,7 +12,7 @@ pub(super) fn time_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         .font(theme::FONT)
         .width(200)
         .style(move |_, _| text_input::Style {
-            background: s.ink.scale_alpha(0.08 * s.opacity).into(),
+            background: s.ink.scale_alpha(tok::FILL * s.opacity).into(),
             border: iced::Border::default().rounded(size::ROW_RADIUS),
             icon: s.ink_dim,
             placeholder: s.ink_faint,

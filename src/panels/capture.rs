@@ -214,7 +214,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     )
     .padding(tok::XXS)
     .style(move |_| container::Style {
-        background: Some(s.ink.scale_alpha(0.06 * s.opacity).into()),
+        background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
         border: iced::Border::default().rounded(tok::FULL),
         ..container::Style::default()
     });

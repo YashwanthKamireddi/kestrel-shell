@@ -50,7 +50,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 ))
                 .height(4)
                 .style(move |_| container::Style {
-                    background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
+                    background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
                     border: iced::Border::default().rounded(tok::FULL),
                     ..container::Style::default()
                 }),

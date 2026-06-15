@@ -336,7 +336,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             iced::widget::Space::new().width(Length::Fill),
             v,
             22.0,
-            (s.ink.scale_alpha(0.08 * s.opacity), s.fade(warm)),
+            (s.ink.scale_alpha(tok::FILL * s.opacity), s.fade(warm)),
             |v| snd(C::Warmth(v)),
         )
         .on_release(snd(C::WarmthDone));

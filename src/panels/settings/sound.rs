@@ -19,7 +19,7 @@ pub(super) fn level<'a>(
         iced::widget::Space::new().width(Length::Fill),
         v,
         22.0,
-        (s.ink.scale_alpha(0.08 * s.opacity), s.accent),
+        (s.ink.scale_alpha(tok::FILL * s.opacity), s.accent),
         on_change,
     );
     row![
@@ -62,7 +62,7 @@ pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> 
             .width(Length::FillPortion((((1.0 - v) * 1000.0) as u16).max(1)))
             .height(4)
             .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(0.08 * s.opacity).into()),
+                background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
                 border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             }),
@@ -250,7 +250,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 v,
                 22.0,
                 (
-                    s.ink.scale_alpha(0.08 * s.opacity),
+                    s.ink.scale_alpha(tok::FILL * s.opacity),
                     s.accent.scale_alpha(0.35 * s.opacity),
                 ),
                 |v| snd(C::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),

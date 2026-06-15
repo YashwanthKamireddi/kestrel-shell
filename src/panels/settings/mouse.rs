@@ -73,7 +73,7 @@ pub(super) fn device_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMes
                 iced::widget::Space::new().width(Length::Fill),
                 ((now + 1.0) / 2.0).clamp(0.0, 1.0),
                 22.0,
-                (s.ink.scale_alpha(0.08 * s.opacity), s.accent),
+                (s.ink.scale_alpha(tok::FILL * s.opacity), s.accent),
                 move |t| {
                     let v = ((t * 2.0 - 1.0) / 0.05).round() * 0.05;
                     msg(Message::DeviceSpeed(n1.clone(), v.clamp(-1.0, 1.0), false))
