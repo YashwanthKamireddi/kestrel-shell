@@ -165,12 +165,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                 .into_iter()
                 .map(|(l, r)| (l, now == r, msg(Message::NotifyRule(name.clone(), r))))
                 .collect();
-            let ic: Element<'_, AppMessage> =
-                match crate::services::icons::lookup(&crate::services::apps::icon_for_class(&name))
-                {
-                    Some(p) => ui::image_file_faded(&p, 18.0, s.opacity),
-                    None => icon(Icon::Bell, 16.0, s.ink_dim).into(),
-                };
+            let ic = ui::app_icon(s, &name, 18.0, Icon::Bell);
             Some(
                 container(
                     row![

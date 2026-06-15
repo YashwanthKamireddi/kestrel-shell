@@ -7,10 +7,10 @@
 use super::Message as PanelMessage;
 use super::PanelKind;
 use crate::app::{App, Message as AppMessage};
-use crate::services::{apps, hyprland, icons};
+use crate::services::{apps, hyprland};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
-use crate::ui::{self, Icon, control, icon, label, label_w};
+use crate::ui::{self, Icon, control, label, label_w};
 use iced::widget::{Space, column, container, pin, row, stack};
 use iced::{Alignment, Element, Task};
 
@@ -415,10 +415,7 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
 }
 
 fn app_icon<'a>(class: &str, px: f32, s: Scheme) -> Element<'a, AppMessage> {
-    match icons::lookup(&apps::icon_for_class(class)) {
-        Some(p) => ui::image_file_faded(&p, px, s.opacity),
-        None => icon(Icon::AppWindow, px * 0.8, s.ink_dim).into(),
-    }
+    ui::app_icon(s, class, px, Icon::AppWindow)
 }
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {

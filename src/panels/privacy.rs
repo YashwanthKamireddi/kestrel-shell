@@ -3,7 +3,6 @@
 //! name; the screen with its recording's stop. Opened by a click on any indicator.
 
 use crate::app::{App, Message as AppMessage};
-use crate::services::{apps, icons};
 use crate::theme::{self, Scheme, text, tok};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{column, container, row};
@@ -13,10 +12,7 @@ pub const WIDTH: f32 = 280.0;
 
 /// An app's row: its icon (from its desktop entry) and its name.
 fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {
-    let glyph: Element<'a, AppMessage> = match icons::lookup(&apps::icon_for_class(name)) {
-        Some(p) => ui::image_file_faded(&p, 20.0, s.opacity),
-        None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
-    };
+    let glyph = ui::app_icon(s, name, 20.0, Icon::AppWindow);
     row![
         container(glyph).center(24),
         label_w(name.to_string(), text::BODY, s.ink, theme::MEDIUM).width(Length::Fill),
@@ -73,10 +69,7 @@ pub fn recent<'a>(s: Scheme, app: &App) -> Option<Element<'a, AppMessage>> {
         } else {
             "Microphone"
         };
-        let glyph: Element<'a, AppMessage> = match icons::lookup(&apps::icon_for_class(name)) {
-            Some(p) => ui::image_file_faded(&p, 20.0, s.opacity),
-            None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
-        };
+        let glyph = ui::app_icon(s, name, 20.0, Icon::AppWindow);
         c = c.push(
             row![
                 container(glyph).center(24),

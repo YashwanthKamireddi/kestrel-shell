@@ -510,6 +510,21 @@ pub fn image_file<'a, M: 'a>(path: &std::path::Path, size: f32) -> Element<'a, M
     image_file_faded(path, size, 1.0)
 }
 
+/// An app's icon by its window class or name (from its desktop entry), at `px`; without one,
+/// `fallback` drawn a little smaller in the dim ink.
+pub fn app_icon<'a, M: 'a>(
+    s: crate::theme::Scheme,
+    class: &str,
+    px: f32,
+    fallback: Icon,
+) -> Element<'a, M> {
+    use crate::services::{apps, icons};
+    match icons::lookup(&apps::icon_for_class(class)) {
+        Some(p) => image_file_faded(&p, px, s.opacity),
+        None => icon(fallback, (px * 0.85).round(), s.ink_dim).into(),
+    }
+}
+
 /// `image_file` at `opacity` (a panel's fade: `Scheme::opacity`).
 pub fn image_file_faded<'a, M: 'a>(
     path: &std::path::Path,

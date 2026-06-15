@@ -28,11 +28,7 @@ pub(super) fn windows_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
 /// An app by its window class: its icon and its name.
 pub(super) fn class_chip<'a>(s: Scheme, class: &str) -> (Element<'a, AppMessage>, String) {
     use crate::services::apps;
-    let icon_el: Element<'a, AppMessage> =
-        match crate::services::icons::lookup(&apps::icon_for_class(class)) {
-            Some(p) => ui::image_file_faded(&p, 20.0, s.opacity),
-            None => icon(Icon::AppWindow, 18.0, s.ink_dim).into(),
-        };
+    let icon_el = ui::app_icon(s, class, 20.0, Icon::AppWindow);
     (icon_el, apps::name_for_class(class))
 }
 
