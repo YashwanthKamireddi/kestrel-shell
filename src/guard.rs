@@ -81,10 +81,9 @@ mod tests {
         // Switched off: not even called again.
         assert_eq!(super::run("test-part", || 1, || 8), 8);
         assert!(super::take_unreported().iter().any(|m| m.contains("boom")));
-    }
 
-    #[test]
-    fn a_panicking_update_is_dropped_and_reported_once() {
+        // An update: dropped, reported once, not switched off. (One test: both share the
+        // report list, and parallel tests would take each other's reports.)
         let hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
         let a = super::isolate("test-update", || -> i32 { panic!("bad event") }, || 0);
