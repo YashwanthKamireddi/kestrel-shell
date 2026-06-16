@@ -20,7 +20,16 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         list = list.push(ui::waiting(s, Icon::Search, "Looking for networks…"));
     }
     let pw = &app.panels.control.password;
-    for net in n.networks.iter().filter(|_| n.wifi_enabled).take(12) {
+    // In the order they had when the page opened (`keep_order`).
+    let order = &app.panels.control.wifi_order;
+    let mut shown: Vec<&network::Network> = n.networks.iter().collect();
+    shown.sort_by_key(|net| {
+        order
+            .iter()
+            .position(|s| *s == net.ssid)
+            .unwrap_or(usize::MAX)
+    });
+    for net in shown.into_iter().filter(|_| n.wifi_enabled).take(12) {
         let busy = in_progress(app, &net.ssid);
         let sub = if let Some(want) = busy {
             Some(

@@ -998,6 +998,15 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.query.clear();
             st.error = None;
             st.zones_open = false;
+            if p == Page::Network {
+                // Networks sorted fresh on opening, then kept in place (as the control
+                // centre's Wi-Fi page).
+                app.panels.control.wifi_order.clear();
+                crate::panels::control::keep_order(
+                    &mut app.panels.control.wifi_order,
+                    &app.net.networks,
+                );
+            }
             // Each page starts at its top (the last page's scroll carried over).
             return Task::batch([
                 load(p),

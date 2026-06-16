@@ -56,6 +56,9 @@ pub enum Page {
 #[derive(Default)]
 pub struct State {
     pub page: Page,
+    /// The Wi-Fi list's order while its page is open (ssids): sorted fresh on opening, then
+    /// kept, so a rescan never moves the row under the pointer; new networks join at the end.
+    pub wifi_order: Vec<String>,
     /// The tile the keyboard is on (arrows move it, Enter toggles, Right opens its page).
     pub focus: Option<usize>,
     /// Network waiting for a password: (ssid, access point, typed text).
@@ -233,6 +236,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.password = None;
             match p {
                 Page::Wifi => {
+                    st.wifi_order.clear();
+                    keep_order(&mut st.wifi_order, &app.net.networks);
                     return Task::future(network::command(network::Command::Scan)).discard();
                 }
                 Page::Hidden => {
@@ -891,5 +896,16 @@ mod mode_tests {
             super::mode_name("High Fidelity Playback (A2DP Sink)"),
             "High quality"
         );
+    }
+}
+
+/// Keeps `order` (the Wi-Fi rows shown) for networks still in range and adds new ones at the
+/// end, in the service's order.
+pub fn keep_order(order: &mut Vec<String>, now: &[network::Network]) {
+    order.retain(|s| now.iter().any(|n| n.ssid == *s));
+    for n in now {
+        if !order.contains(&n.ssid) {
+            order.push(n.ssid.clone());
+        }
     }
 }

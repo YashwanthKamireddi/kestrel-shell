@@ -37,7 +37,15 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         let mut current = Vec::new();
         let mut rows = Vec::new();
         let pw = &app.panels.control.password;
-        for net in n.networks.iter().take(14) {
+        let order = &app.panels.control.wifi_order;
+        let mut shown: Vec<_> = n.networks.iter().collect();
+        shown.sort_by_key(|net| {
+            order
+                .iter()
+                .position(|s| *s == net.ssid)
+                .unwrap_or(usize::MAX)
+        });
+        for net in shown.into_iter().take(14) {
             if !matches(&net.ssid) && !matches("wi-fi") {
                 continue;
             }
