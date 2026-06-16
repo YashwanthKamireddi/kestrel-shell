@@ -9,8 +9,34 @@ pub(super) fn updates_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
     let mut out = package_updates(app, s);
     // Firmware (fwupd, from the LVFS): each update a row; Update runs fwupd's own updater in
     // the terminal (it asks before anything, and says what it needs).
-    let fw = &app.panels.settings.firmware;
-    if !fw.is_empty() {
+    let st = &app.panels.settings;
+    // Asked only on request: fwupd stays running once asked.
+    let Some(fw) = &st.firmware else {
+        let check = control(label(
+            if st.firmware_checking {
+                "Checking…"
+            } else {
+                "Check"
+            },
+            text::SMALL,
+            s.ink,
+        ))
+        .pill(s, crate::ui::control::Pill::Plain)
+        .on_press_maybe((!st.firmware_checking).then(|| msg(Message::CheckFirmware)));
+        out.extend(group(
+            s,
+            Some("Firmware"),
+            vec![row_of(s, "Device firmware", None, check.into())],
+        ));
+        return out;
+    };
+    if fw.is_empty() {
+        out.extend(group(
+            s,
+            Some("Firmware"),
+            vec![value_row(s, "Up to date", String::new())],
+        ));
+    } else {
         let rows = fw
             .iter()
             .map(|f| {

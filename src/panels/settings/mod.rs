@@ -265,7 +265,10 @@ pub struct State {
     /// which Clear was pressed once (asks before clearing).
     privacy: Option<(Option<bool>, bool, i32)>,
     /// Firmware updates fwupd offers.
-    firmware: Vec<crate::services::updates::Firmware>,
+    /// Firmware updates, once checked this session (None: not asked; fwupd is a daemon that
+    /// stays once started, so it is asked only when the user presses Check).
+    firmware: Option<Vec<crate::services::updates::Firmware>>,
+    firmware_checking: bool,
     /// Developer: Restart was pressed once.
     restart_armed: bool,
     /// Mouse & touchpad: the pointing devices and the speeds set for them.
@@ -622,6 +625,8 @@ pub enum Message {
     Restart,
     /// Firmware updates (fwupd), read; one to install (fwupd's own updater, in the terminal).
     Firmware(Vec<crate::services::updates::Firmware>),
+    /// Ask fwupd for firmware updates (only on request: asking starts its daemon).
+    CheckFirmware,
     FirmwareUpdate(String),
     /// Run a command in the default terminal (read when pressed), with this window title.
     InTerminal(&'static str, &'static str),
@@ -853,14 +858,9 @@ fn load(p: Page) -> Task<AppMessage> {
             ))
             .discard(),
         ]),
-        Page::Updates => Task::batch([
-            Task::perform(crate::services::updates::list(), |v| {
-                msg(Message::Updates(v))
-            }),
-            Task::perform(crate::services::updates::firmware(), |v| {
-                msg(Message::Firmware(v))
-            }),
-        ]),
+        Page::Updates => Task::perform(crate::services::updates::list(), |v| {
+            msg(Message::Updates(v))
+        }),
         Page::Startup => Task::perform(
             async {
                 tokio::task::spawn_blocking(|| {
@@ -1608,7 +1608,16 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             })
             .discard();
         }
-        Message::Firmware(v) => app.panels.settings.firmware = v,
+        Message::Firmware(v) => {
+            app.panels.settings.firmware = Some(v);
+            app.panels.settings.firmware_checking = false;
+        }
+        Message::CheckFirmware => {
+            app.panels.settings.firmware_checking = true;
+            return Task::perform(crate::services::updates::firmware(), |v| {
+                msg(Message::Firmware(v))
+            });
+        }
         Message::FirmwareUpdate(id) => {
             // The device id is fwupd's hex: nothing else reaches the shell.
             let id: String = id.chars().filter(char::is_ascii_hexdigit).collect();
