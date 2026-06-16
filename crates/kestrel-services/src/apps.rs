@@ -217,7 +217,13 @@ pub fn score(query: &str, text: &str) -> Option<i32> {
     }
     if let Some(i) = tl.find(&ql) {
         // Word starts beat middles.
-        let word = i == 0 || !t[tl[..i].chars().count() - 1].is_alphanumeric();
+        // The character before, read in the same (lowercased) text the match was found in:
+        // lowercasing can change the length ('İ' is two characters), so an index into the
+        // original could miss or overrun.
+        let word = !tl[..i]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric);
         return Some(if word { 800 } else { 600 } - i as i32);
     }
     let mut score = 0;
@@ -268,6 +274,14 @@ pub fn score_contains(query: &str, text: &str) -> Option<i32> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn letters_that_grow_when_lowercased_do_not_break_search() {
+        // 'İ' lowercases to two characters: the match index is past the original's length.
+        assert!(super::score("x", "İİİİ x").is_some());
+        assert!(super::score("b", "İa b").is_some());
+        assert!(super::score_contains("b", "İİ b").is_some());
+    }
+
     use super::*;
 
     #[test]
