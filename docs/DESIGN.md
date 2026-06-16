@@ -148,3 +148,12 @@ switch, slider and segmented control. A screen built from anything else adds it 
 **The check.** `tools/lint/tokens.sh` counts literal radii, paddings, gaps and colour triples
 outside `src/ui` and `src/theme`; `make check` fails if a count rises above the recorded baseline,
 which only goes down as panels move onto the kit.
+
+## Nothing moves under the pointer (2026-11-15)
+
+A list that is open keeps its rows where they are: Wi-Fi networks and nearby Bluetooth devices
+are sorted when their page opens, then found ones join at the end and lost ones drop out
+(`control::keep_order` / `in_order`); a rescan used to reorder them by signal or name under
+the pointer. A change the user started holds the picture the user chose until it lands: switching a
+Bluetooth mode keeps the device and the new mode shown while PipeWire rebuilds the output
+(`App::mode_switch`), instead of flashing the speaker for a second.
