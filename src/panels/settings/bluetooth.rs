@@ -144,7 +144,10 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
 
     // Devices nearby, found while this page is open: Pair pairs, trusts and connects.
     let mut near = Vec::new();
-    for d in &b.nearby {
+    // Found devices join at the end (the order kept since the page opened).
+    for d in
+        crate::panels::control::in_order(&b.nearby, &app.panels.control.nearby_order, |d| &d.path)
+    {
         if !matches(&d.name) && !matches("bluetooth") {
             continue;
         }

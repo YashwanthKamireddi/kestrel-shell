@@ -59,6 +59,8 @@ pub struct State {
     /// The Wi-Fi list's order while its page is open (ssids): sorted fresh on opening, then
     /// kept, so a rescan never moves the row under the pointer; new networks join at the end.
     pub wifi_order: Vec<String>,
+    /// The same for Bluetooth's nearby devices (paths): found ones join at the end.
+    pub nearby_order: Vec<String>,
     /// The tile the keyboard is on (arrows move it, Enter toggles, Right opens its page).
     pub focus: Option<usize>,
     /// Network waiting for a password: (ssid, access point, typed text).
@@ -235,9 +237,15 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.page = p;
             st.password = None;
             match p {
+                Page::Bluetooth => {
+                    st.nearby_order.clear();
+                }
                 Page::Wifi => {
                     st.wifi_order.clear();
-                    keep_order(&mut st.wifi_order, &app.net.networks);
+                    keep_order(
+                        &mut st.wifi_order,
+                        app.net.networks.iter().map(|n| n.ssid.as_str()),
+                    );
                     return Task::future(network::command(network::Command::Scan)).discard();
                 }
                 Page::Hidden => {
@@ -899,13 +907,20 @@ mod mode_tests {
     }
 }
 
-/// Keeps `order` (the Wi-Fi rows shown) for networks still in range and adds new ones at the
-/// end, in the service's order.
-pub fn keep_order(order: &mut Vec<String>, now: &[network::Network]) {
-    order.retain(|s| now.iter().any(|n| n.ssid == *s));
+/// Keeps `order` (a list's rows as shown, by key) for the ones still there and adds new ones
+/// at the end, in the service's order: a list that is open never moves a row under the pointer.
+pub fn keep_order<'a>(order: &mut Vec<String>, now: impl Iterator<Item = &'a str> + Clone) {
+    order.retain(|k| now.clone().any(|n| n == k));
     for n in now {
-        if !order.contains(&n.ssid) {
-            order.push(n.ssid.clone());
+        if !order.iter().any(|k| k == n) {
+            order.push(n.to_string());
         }
     }
+}
+
+/// `items` in `order`'s order (ones not in it last, as they came).
+pub fn in_order<'a, T>(items: &'a [T], order: &[String], key: impl Fn(&T) -> &str) -> Vec<&'a T> {
+    let mut v: Vec<&T> = items.iter().collect();
+    v.sort_by_key(|i| order.iter().position(|k| k == key(i)).unwrap_or(usize::MAX));
+    v
 }

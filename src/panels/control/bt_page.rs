@@ -113,7 +113,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             left: tok::L,
         }),
     );
-    for d in &b.nearby {
+    for d in in_order(&b.nearby, &st.nearby_order, |d| &d.path) {
         let pairing = st.pairing.as_deref() == Some(d.path.as_str());
         let sub = if pairing {
             Some("Pairing…".to_string())
