@@ -717,9 +717,12 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             if let Some(k) = app.audio.cards.iter_mut().find(|k| k.index == card) {
                 k.active = profile.clone();
             }
+            app.mode_switch = Some((card, profile.clone(), std::time::Instant::now()));
             audio::command(audio::Command::CardProfile(card, profile));
         }
         Message::Sink(name) => {
+            // Choosing an output ends any mode switch's hold: the user's choice is what shows.
+            app.mode_switch = None;
             app.audio.default_sink = name.clone();
             audio::command(audio::Command::DefaultSink(name));
         }
