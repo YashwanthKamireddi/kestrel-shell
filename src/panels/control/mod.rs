@@ -792,7 +792,7 @@ pub fn volume_icon(d: Option<&audio::Device>) -> Icon {
 /// The battery as it is: Material's horizontal battery filled to its charge, the bolt while
 /// charging, the alert when nearly empty.
 pub fn battery_icon(p: &power::State) -> Icon {
-    if p.charging && p.percent < 99.5 {
+    if (p.charging || p.held) && p.percent < 99.5 {
         return Icon::BatteryFrameBolt;
     }
     match p.percent {

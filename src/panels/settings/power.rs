@@ -46,6 +46,8 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     " · Full"
                 } else if app.power.charging {
                     " · Charging"
+                } else if app.power.held {
+                    " · Charging on hold"
                 } else {
                     ""
                 }

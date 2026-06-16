@@ -19,6 +19,8 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             }
         } else if p.charging {
             "Charging".to_string()
+        } else if p.held {
+            "Charging on hold".to_string()
         } else {
             "On battery".to_string()
         };
@@ -26,7 +28,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             icon(
                 battery_icon(p),
                 size::ICON,
-                if p.percent < 15.0 && !p.charging {
+                if p.percent < 15.0 && !p.charging && !p.held {
                     s.bad
                 } else {
                     s.ink

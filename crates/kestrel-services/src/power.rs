@@ -58,6 +58,9 @@ pub struct State {
     pub on_battery: bool,
     pub percent: f32,
     pub charging: bool,
+    /// Plugged in and deliberately not charging (UPower's "pending charge": a charge limit or
+    /// adaptive charging holding it). Not charging: no pulse, the bolt stays still.
+    pub held: bool,
     pub full: bool,
     /// Seconds until empty (discharging) or full (charging); 0 when unknown.
     pub time_left: i64,
@@ -231,7 +234,9 @@ async fn read(c: &Connection) -> State {
     let state: u32 = dbus::get(c, UPOWER, DISPLAY, DEVICE, "State")
         .await
         .unwrap_or(0);
-    let charging = state == 1 || state == 5;
+    // 1 charging; 5 pending charge (held below full by a limit), which is not charging.
+    let charging = state == 1;
+    let held = state == 5;
     let time_left: i64 = dbus::get(
         c,
         UPOWER,
@@ -260,6 +265,7 @@ async fn read(c: &Connection) -> State {
         on_battery,
         percent: percent as f32,
         charging,
+        held,
         full: state == 4,
         time_left,
         profile,

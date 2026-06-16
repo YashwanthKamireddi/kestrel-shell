@@ -20,7 +20,7 @@ pub fn view<'a>(
         return Vec::new();
     }
     let id = o.id;
-    let low = p.percent < 15.0 && !p.charging;
+    let low = p.percent < 15.0 && !p.charging && !p.held;
     let charging = p.charging && p.percent < 99.5;
     let color = if low { s.bad } else { s.ink };
     // Charging: the icon breathes by itself (redrawing only the bar, ~20×/s).
