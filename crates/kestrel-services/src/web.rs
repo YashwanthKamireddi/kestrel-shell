@@ -24,7 +24,38 @@ async fn get(url: &str) -> Option<Value> {
 
 // --- Weather -------------------------------------------------------------------------------
 
-#[derive(Clone, Debug, Default, PartialEq)]
+/// Where the last weather is kept, so the bar shows it on its first frame after a start (it
+/// popped in seconds later, when the network answered, and pushed the bar's items aside).
+fn weather_file() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|p| std::path::PathBuf::from(p).join(".cache")))?;
+    Some(base.join("kestrel").join("weather.json"))
+}
+
+/// The last weather read, if any.
+pub fn cached_weather() -> Option<Weather> {
+    serde_json::from_slice(&std::fs::read(weather_file()?).ok()?).ok()
+}
+
+/// Keeps `w` for the next start (written off the caller's thread).
+pub fn keep_weather(w: &Weather) {
+    let (Some(f), Ok(bytes)) = (weather_file(), serde_json::to_vec(w)) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        if let Some(d) = f.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let tmp = f.with_extension("json.tmp");
+        if std::fs::write(&tmp, bytes).is_ok() {
+            let _ = std::fs::rename(&tmp, &f);
+        }
+    });
+}
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Weather {
     pub place: String,
     pub temp: f32,
