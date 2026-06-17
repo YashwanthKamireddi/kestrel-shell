@@ -194,7 +194,9 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     }
     let found = icons::lookup(&n.app_icon)
         .or_else(|| icons::lookup(&n.app.to_lowercase()))
-        .or_else(|| icons::lookup(&n.app.to_lowercase().replace(' ', "-")));
+        .or_else(|| icons::lookup(&n.app.to_lowercase().replace(' ', "-")))
+        // By its desktop entry, as everywhere else ("Thunar" → org.xfce.thunar).
+        .or_else(|| icons::lookup(&crate::services::apps::icon_for_class(&n.app)));
     match found {
         Some(p) => container(ui::image_file_faded(&p, D, s.opacity))
             .center(D)
@@ -329,7 +331,7 @@ pub fn card<'a>(
     boxed: bool,
     hovered: bool,
 ) -> Element<'a, AppMessage> {
-    card_in(s, n, boxed, hovered, false, false)
+    card_in(s, n, boxed, hovered, false, false, true)
 }
 
 /// `card`, optionally as a later message in an app's group (`continued`): no icon or app name
@@ -341,6 +343,7 @@ fn card_in<'a>(
     hovered: bool,
     continued: bool,
     grouped: bool,
+    show_time: bool,
 ) -> Element<'a, AppMessage> {
     // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
     // one quiet line, the title, then the message wrapped over up to four lines.
@@ -381,8 +384,11 @@ fn card_in<'a>(
                     .kind(s, crate::ui::control::Kind::Tonal)
                     .on_press(msg(Message::Dismiss(n.id))),
             )
-        } else {
+        } else if show_time {
             label(ago(n.time), text::CAPTION, s.ink_faint).into()
+        } else {
+            // A later message from the same moment: the group's time above says it.
+            Space::new().into()
         })
         .align_x(Alignment::End)
         .center_y(20)
@@ -546,11 +552,12 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         if g.len() == 1 {
             return card(s, g[0], true, hover == Some(g[0].id));
         }
-        let inner = column(
-            g.iter()
-                .enumerate()
-                .map(|(k, n)| card_in(s, n, false, hover == Some(n.id), k > 0, true)),
-        );
+        // Each message's time only where it differs from the one above ("now", "now", "now"
+        // on every line was noise).
+        let inner = column(g.iter().enumerate().map(|(k, n)| {
+            let show_time = k == 0 || ago(g[k - 1].time) != ago(n.time);
+            card_in(s, n, false, hover == Some(n.id), k > 0, true, show_time)
+        }));
         container(inner)
             .width(Length::Fill)
             .padding(iced::Padding {

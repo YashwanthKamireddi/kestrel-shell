@@ -108,7 +108,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             top,
             Message::SinkVolume,
             Message::SinkMute,
-            None,
+            Trail::Bare,
         ));
         out = out.push(meter(s, if d.muted { 0.0 } else { app.meters.output }));
     }
@@ -209,7 +209,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             if d.muted { 0.0 } else { d.volume.min(1.0) },
             Message::SourceVolume,
             Message::SourceMute,
-            None,
+            Trail::Bare,
         ));
         input = input.push(meter(s, if d.muted { 0.0 } else { app.meters.input }));
         let sources: Vec<&audio::Device> = app

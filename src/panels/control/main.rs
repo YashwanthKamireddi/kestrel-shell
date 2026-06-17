@@ -125,7 +125,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             top,
             Message::SinkVolume,
             Message::SinkMute,
-            Some(msg(Message::Page(Page::Output))),
+            Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
         ));
     }
     if let Some(d) = app.audio.source() {
@@ -135,7 +135,8 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             if d.muted { 0.0 } else { d.volume.min(1.0) },
             Message::SourceVolume,
             Message::SourceMute,
-            None,
+            // The Sound page has the microphones too.
+            Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
         ));
     }
     // Brightness: the laptop panel's backlight while that screen is on; otherwise (docked to
@@ -151,7 +152,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 v,
                 Message::Brightness,
                 Message::BrightnessDone,
-                None,
+                Trail::Room,
             ));
         }
         // An external monitor that answers DDC/CI: its real backlight.
@@ -163,7 +164,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 app.ddc_level.get(&bus).copied().unwrap_or(0.5),
                 Message::DdcBrightness,
                 Message::BrightnessDone,
-                None,
+                Trail::Room,
             ));
         }
         None => {
@@ -173,7 +174,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 app.dim,
                 Message::Dim,
                 Message::BrightnessDone,
-                None,
+                Trail::Room,
             ));
         }
     }
@@ -232,13 +233,21 @@ pub(super) fn boost_top(app: &App) -> f32 {
     (app.config.sound.max as f32 / 100.0).max(1.0)
 }
 
+/// What sits at a level row's end: nothing (the Sound page's full-width rows), the room a
+/// button takes (so rows with and without one line up), or the button opening its page.
+pub(super) enum Trail {
+    Bare,
+    Room,
+    Open(Box<AppMessage>),
+}
+
 pub(super) fn level_row<'a>(
     s: Scheme,
     i: Icon,
     value: f32,
     on_change: fn(f32) -> Message,
     on_icon: Message,
-    details: Option<AppMessage>,
+    details: Trail,
 ) -> Element<'a, AppMessage> {
     level_row_to(s, i, value, 1.0, on_change, on_icon, details)
 }
@@ -252,7 +261,7 @@ pub(super) fn level_row_to<'a>(
     top: f32,
     on_change: fn(f32) -> Message,
     on_icon: Message,
-    details: Option<AppMessage>,
+    details: Trail,
 ) -> Element<'a, AppMessage> {
     // The plain 0–100 slider until the volume is boosted (keys can go past 100 %); then the
     // track runs to the maximum with the boost in red.
@@ -284,8 +293,11 @@ pub(super) fn level_row_to<'a>(
     )
     .boost(1.0 / top, s.bad);
     let mut r = row![bar].spacing(tok::XS).align_y(Alignment::Center);
-    if let Some(d) = details {
-        r = r.push(icon_button(s, Icon::ChevronRight, d, false));
+    // Every row keeps the details button's room, so the tracks all end at one line.
+    match details {
+        Trail::Bare => {}
+        Trail::Room => r = r.push(Space::new().width(size::CONTROL)),
+        Trail::Open(d) => r = r.push(icon_button(s, Icon::ChevronRight, *d, false)),
     }
     r.into()
 }
