@@ -69,7 +69,9 @@ pub fn overlay_busy(app: &App, o: &Output) -> bool {
     let focused = app.focused_output() == Some(o.id) && app.panel.is_none();
     let island = crate::policy::island_owns_osd(app);
     app.panel.as_ref().is_some_and(|p| p.output == o.id)
-        || (focused && (app.toast_sheet.visible() || !app.toasts.is_empty()))
+        || (focused
+            && !crate::policy::island_owns_notifications(app)
+            && (app.toast_sheet.visible() || !app.toasts.is_empty()))
         || (focused && !island && app.osd.is_some())
 }
 
@@ -118,9 +120,11 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         let (x, w) = panel_span(app, p, o.size.width, edge);
         panel_drop = Some((drop(x, w, h), k, h));
     }
-    // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
-    // one line in the island they were hard to read); the island keeps the short pop-ups.
-    let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
+    // Banners under the bar, unless the island announces notifications (`policy`, design call
+    // 2026-11-15).
+    let show_toasts = focused
+        && !crate::policy::island_owns_notifications(app)
+        && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
     let show_osd = focused && app.osd.is_some() && !crate::policy::island_owns_osd(app);
     if show_toasts {

@@ -137,6 +137,12 @@ const ACTIVITIES: &[Activity] = &[
         face: osd_face,
     },
     Activity {
+        id: "notification",
+        priority: 25,
+        active: |app| crate::policy::island_owns_notifications(app) && !app.toasts.is_empty(),
+        face: notification_face,
+    },
+    Activity {
         id: "flash",
         priority: 20,
         active: |app| app.flash.is_some(),
@@ -180,6 +186,58 @@ fn osd_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element
         Some(a) => finish_with(content, o, s, active, a),
         None => finish(content, o, s, active),
     }
+}
+
+/// What just came in: the app's icon, the title and a line of the message; a click drops its
+/// full card under the island (`panels::notice`).
+fn notification_face<'a>(
+    app: &'a App,
+    o: &'a Output,
+    s: Scheme,
+    active: bool,
+) -> Element<'a, Message> {
+    let Some(n) = app
+        .toasts
+        .last()
+        .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
+    else {
+        return time_face(app, o, s, active);
+    };
+    let title = if n.summary.trim().is_empty() {
+        n.app.clone()
+    } else {
+        n.summary.trim().to_string()
+    };
+    let body: String = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut content = row![
+        ui::app_icon(s, &n.app, 18.0, ui::Icon::Bell),
+        label_w(
+            ui::fit(&title, text::SMALL, 200.0),
+            text::SMALL,
+            s.ink,
+            theme::SEMIBOLD
+        ),
+    ]
+    .spacing(tok::M)
+    .align_y(Alignment::Center);
+    if !body.is_empty() {
+        content = content.push(label(
+            ui::fit(&body, text::SMALL, 220.0),
+            text::SMALL,
+            s.ink_dim,
+        ));
+    }
+    let more = app.toasts.len().saturating_sub(1);
+    if more > 0 {
+        content = content.push(label(format!("+{more}"), text::SMALL, s.ink_dim));
+    }
+    finish_to(content, o, s, active || open_notice(app), PanelKind::Notice)
+}
+
+fn open_notice(app: &App) -> bool {
+    app.panel
+        .as_ref()
+        .is_some_and(|p| p.open && p.kind == PanelKind::Notice)
 }
 
 /// Something copied, a screenshot, a recording saved: for a moment; a click opens it.

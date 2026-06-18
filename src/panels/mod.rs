@@ -12,6 +12,7 @@ pub mod keys;
 pub mod launcher;
 pub mod media;
 pub mod monitor;
+pub mod notice;
 pub mod notifications;
 pub mod overview;
 pub mod pods;
@@ -53,6 +54,8 @@ pub enum PanelKind {
     Monitor,
     /// What is using the camera, microphone and screen (under the privacy indicator).
     Privacy,
+    /// The island's notification, expanded: its full card under the island.
+    Notice,
 }
 
 impl PanelKind {
@@ -80,6 +83,7 @@ impl PanelKind {
             "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
+            "notice" => Self::Notice,
             _ => return None,
         })
     }
@@ -113,6 +117,7 @@ impl PanelKind {
             Self::Monitor => monitor::WIDTH,
             Self::Tray => 260.0,
             Self::Privacy => privacy::WIDTH,
+            Self::Notice => notice::WIDTH,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
@@ -224,6 +229,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Settings => return settings::open(app),
         PanelKind::Tray
         | PanelKind::Privacy
+        | PanelKind::Notice
         | PanelKind::Weather
         | PanelKind::Pods
         | PanelKind::Files
@@ -429,6 +435,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Privacy => privacy::view(app, s),
+        PanelKind::Notice => notice::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
