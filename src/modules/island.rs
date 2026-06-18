@@ -11,12 +11,6 @@ use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
-/// Whether volume, brightness and other pop-ups show inside the island (pill style with the
-/// island in the bar) rather than as a separate drop.
-pub fn hosts_osd(app: &App) -> bool {
-    app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
-}
-
 /// The island: the time pill. It always shows the time and date; music (unless it has its
 /// own bubble), the visualiser while music plays, and the weather (unless it has its own
 /// circle) join it, and pop-ups take it over for a moment.
@@ -127,24 +121,6 @@ pub fn bar<'a>(
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
-    // A pop-up (volume, brightness, a device) takes the island while it lasts.
-    if hosts_osd(app)
-        && let Some(osd) = app
-            .osd
-            .as_ref()
-            .filter(|o| o.until > std::time::Instant::now())
-    {
-        content = content.push(osd_row(
-            osd,
-            s,
-            (app.config.sound.max as f32 / 100.0).max(1.0),
-        ));
-        // A click acts on what it shows (the level's controls, say).
-        return match osd.action.clone() {
-            Some(a) => finish_with(content, o, s, active, a),
-            None => finish(content, o, s, active),
-        };
-    }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
         let lead: Element<'a, Message> = match &f.thumb {
@@ -219,57 +195,6 @@ pub fn bar<'a>(
         );
     }
     finish(content, o, s, active)
-}
-
-/// A level (icon, bar, value) or an event (icon, title, line under it), sized for the island.
-fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a, Message> {
-    if let Some(title) = &osd.text {
-        let mut r = row![
-            icon(osd.icon, 15.0, s.accent),
-            label_w(
-                ui::fit(title, text::SMALL, 200.0),
-                text::SMALL,
-                s.ink,
-                theme::SEMIBOLD
-            ),
-        ]
-        .spacing(tok::M)
-        .align_y(Alignment::Center);
-        if let Some(sub) = &osd.sub {
-            r = r.push(label(
-                ui::fit(sub, text::SMALL, 160.0),
-                text::SMALL,
-                s.ink_dim,
-            ));
-        }
-        return r.into();
-    }
-    const TRACK: f32 = 150.0;
-    let top = if crate::shell::bar::is_volume(osd.icon) {
-        top_volume
-    } else {
-        1.0
-    };
-    let level = osd.value.max(0.0);
-    row![
-        icon(
-            osd.icon,
-            15.0,
-            if level > 0.0 { s.accent } else { s.ink_dim }
-        ),
-        ui::level_bar(s, level, top, TRACK, 5.0),
-        label_w(
-            format!("{:.0}", level * 100.0),
-            text::SMALL,
-            s.ink,
-            theme::SEMIBOLD
-        )
-        .width(26)
-        .align_x(Alignment::End),
-    ]
-    .spacing(tok::L)
-    .align_y(Alignment::Center)
-    .into()
 }
 
 /// The island's pill around whatever it shows, springing to its width.

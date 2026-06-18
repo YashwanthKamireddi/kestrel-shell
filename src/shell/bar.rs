@@ -67,10 +67,9 @@ pub fn overlay<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
 /// Whether the overlay has anything to show on `o`.
 pub fn overlay_busy(app: &App, o: &Output) -> bool {
     let focused = app.focused_output() == Some(o.id) && app.panel.is_none();
-    let island = crate::modules::island::hosts_osd(app);
     app.panel.as_ref().is_some_and(|p| p.output == o.id)
         || (focused && (app.toast_sheet.visible() || !app.toasts.is_empty()))
-        || (focused && !island && app.osd.is_some())
+        || (focused && app.osd.is_some())
 }
 
 fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message> {
@@ -122,7 +121,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // one line in the island they were hard to read); the island keeps the short pop-ups.
     let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
-    let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
+    let show_osd = focused && app.osd.is_some();
     if show_toasts {
         drops.push(drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value));
     }
@@ -387,7 +386,31 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
     // A volume that may go past 100 %: the track runs to the maximum and the part
     // past 100 % is red (as the control centre's slider).
     let top = if is_volume(osd.icon) { top_volume } else { 1.0 };
-    let track = ui::level_bar(s, osd.value, top, track_w, 6.0);
+    // A level that can be set is a slider: drag it where you see it (the keyboard layout and
+    // other icon-only OSDs are a plain bar).
+    let settable = is_volume(osd.icon)
+        || matches!(
+            osd.icon,
+            crate::ui::Icon::Mic | crate::ui::Icon::MicOff | crate::ui::Icon::Sun
+        );
+    let track: Element<'a, Message> = if settable {
+        let shown = if osd.value > 1.0 { top.max(1.0) } else { 1.0 };
+        let shown = if is_volume(osd.icon) { shown } else { 1.0 };
+        container(
+            ui::slider::slider(
+                Space::new(),
+                (osd.value / shown).clamp(0.0, 1.0),
+                18.0,
+                (s.ink.scale_alpha(tok::FILL * s.opacity), s.ink),
+                move |v| Message::OsdSet(v * shown / top.max(1.0)),
+            )
+            .boost(1.0 / shown, s.bad),
+        )
+        .width(track_w)
+        .into()
+    } else {
+        ui::level_bar(s, osd.value, top, track_w, 6.0)
+    };
     row![
         ui::icon(osd.icon, 18.0, s.ink),
         container(track).center_y(18),
