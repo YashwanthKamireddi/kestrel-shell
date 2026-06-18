@@ -299,13 +299,35 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a,
         1.0
     };
     let level = osd.value.max(0.0);
+    // A level that can be set is a slider in the island: drag it where you see it (Caelestia's
+    // OSD is a control, not a picture). Anything else (keyboard layout) is a plain bar.
+    let settable = crate::shell::bar::is_volume(osd.icon)
+        || matches!(osd.icon, ui::Icon::Mic | ui::Icon::MicOff | ui::Icon::Sun);
+    let track: Element<'a, Message> = if settable {
+        // The plain 0–100 % track until boosted, then up to the maximum with the boost red.
+        let span = if level > 1.0 { top.max(1.0) } else { 1.0 };
+        iced::widget::container(
+            ui::slider::slider(
+                iced::widget::Space::new(),
+                (level / span).clamp(0.0, 1.0),
+                14.0,
+                (s.ink.scale_alpha(tok::FILL * s.opacity), s.accent),
+                move |v| Message::OsdSet(v * span),
+            )
+            .boost(1.0 / span, s.bad),
+        )
+        .width(TRACK)
+        .into()
+    } else {
+        ui::level_bar(s, level, top, TRACK, 5.0)
+    };
     row![
         icon(
             osd.icon,
             15.0,
             if level > 0.0 { s.accent } else { s.ink_dim }
         ),
-        ui::level_bar(s, level, top, TRACK, 5.0),
+        track,
         label_w(
             format!("{:.0}", level * 100.0),
             text::SMALL,
