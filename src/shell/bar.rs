@@ -67,7 +67,7 @@ pub fn overlay<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
 /// Whether the overlay has anything to show on `o`.
 pub fn overlay_busy(app: &App, o: &Output) -> bool {
     let focused = app.focused_output() == Some(o.id) && app.panel.is_none();
-    let island = crate::modules::island::hosts_osd(app);
+    let island = crate::policy::island_owns_osd(app);
     app.panel.as_ref().is_some_and(|p| p.output == o.id)
         || (focused && (app.toast_sheet.visible() || !app.toasts.is_empty()))
         || (focused && !island && app.osd.is_some())
@@ -122,7 +122,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // one line in the island they were hard to read); the island keeps the short pop-ups.
     let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
-    let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
+    let show_osd = focused && app.osd.is_some() && !crate::policy::island_owns_osd(app);
     if show_toasts {
         drops.push(drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value));
     }

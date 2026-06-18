@@ -13,6 +13,7 @@ mod memtrace;
 mod modules;
 mod motion;
 mod panels;
+mod policy;
 mod subs;
 // The system-integration crate, under its short name.
 pub(crate) use kestrel_services as services;

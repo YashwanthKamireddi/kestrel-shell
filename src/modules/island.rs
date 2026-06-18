@@ -11,12 +11,6 @@ use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
-/// Whether volume, brightness and other pop-ups show inside the island (pill style with the
-/// island in the bar) rather than as a separate drop.
-pub fn hosts_osd(app: &App) -> bool {
-    app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
-}
-
 /// The island: the time pill. It always shows the time and date; music (unless it has its
 /// own bubble), the visualiser while music plays, and the weather (unless it has its own
 /// circle) join it, and pop-ups take it over for a moment.
@@ -117,6 +111,45 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
     )
 }
 
+/// One thing the island can show: what it is, how much it matters (the highest active one
+/// shows), whether it is happening, and its face. Adding one is a function and a line in
+/// `ACTIVITIES` (p3dro's `IslandRegistry`: the old way was a chain of ifs).
+struct Activity {
+    #[allow(dead_code)]
+    id: &'static str,
+    priority: u8,
+    active: fn(&App) -> bool,
+    face: for<'a> fn(&'a App, &'a Output, Scheme, bool) -> Element<'a, Message>,
+}
+
+/// Everything the island can show, the time last (always active).
+const ACTIVITIES: &[Activity] = &[
+    Activity {
+        id: "osd",
+        priority: 30,
+        active: |app| {
+            crate::policy::island_owns_osd(app)
+                && app
+                    .osd
+                    .as_ref()
+                    .is_some_and(|o| o.until > std::time::Instant::now())
+        },
+        face: osd_face,
+    },
+    Activity {
+        id: "flash",
+        priority: 20,
+        active: |app| app.flash.is_some(),
+        face: flash_face,
+    },
+    Activity {
+        id: "time",
+        priority: 0,
+        active: |_| true,
+        face: time_face,
+    },
+];
+
 pub fn bar<'a>(
     app: &'a App,
     o: &'a Output,
@@ -124,28 +157,34 @@ pub fn bar<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Island);
-    let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
-    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
+    let now = ACTIVITIES
+        .iter()
+        .filter(|a| (a.active)(app))
+        .max_by_key(|a| a.priority)
+        .unwrap_or(&ACTIVITIES[ACTIVITIES.len() - 1]);
+    (now.face)(app, o, s, active)
+}
+
+/// A level (volume, brightness) or a device event, while it lasts; a click acts on it.
+fn osd_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element<'a, Message> {
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
-    // A pop-up (volume, brightness, a device) takes the island while it lasts.
-    if hosts_osd(app)
-        && let Some(osd) = app
-            .osd
-            .as_ref()
-            .filter(|o| o.until > std::time::Instant::now())
-    {
-        content = content.push(osd_row(
-            osd,
-            s,
-            (app.config.sound.max as f32 / 100.0).max(1.0),
-        ));
-        // A click acts on what it shows (the level's controls, say).
-        return match osd.action.clone() {
-            Some(a) => finish_with(content, o, s, active, a),
-            None => finish(content, o, s, active),
-        };
+    let Some(osd) = app.osd.as_ref() else {
+        return time_face(app, o, s, active);
+    };
+    content = content.push(osd_row(
+        osd,
+        s,
+        (app.config.sound.max as f32 / 100.0).max(1.0),
+    ));
+    match osd.action.clone() {
+        Some(a) => finish_with(content, o, s, active, a),
+        None => finish(content, o, s, active),
     }
-    // A flash (something copied) takes the whole island for a moment.
+}
+
+/// Something copied, a screenshot, a recording saved: for a moment; a click opens it.
+fn flash_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element<'a, Message> {
+    let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
     if let Some(f) = &app.flash {
         let lead: Element<'a, Message> = match &f.thumb {
             Some(h) => ui::cover(h.clone(), 34.0, 20.0, 4.0),
@@ -174,6 +213,15 @@ pub fn bar<'a>(
             None => finish(content, o, s, active),
         };
     }
+    time_face(app, o, s, active)
+}
+
+/// The resting face: the time and date, with music, its visualiser and the weather when
+/// they have no module of their own.
+fn time_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element<'a, Message> {
+    let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
+    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
+    let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
     // Music without a bubble of its own: a small round cover and the title, before the time.
     if !app.config.bar.contains("media")
         && let Some(p) = app.media.main()
