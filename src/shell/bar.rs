@@ -425,31 +425,31 @@ fn with_actions<'a>(
     app: &'a App,
     items: Vec<Element<'a, Message>>,
 ) -> Vec<Element<'a, Message>> {
-    let Some(m) = app.config.modules.get(id) else {
-        return items;
-    };
     if items.is_empty() {
         return items;
     }
+    // The bar's one gesture table, with the config's `[modules.<id>]` over it.
+    let g = crate::modules::gestures(id, app);
+    let m = app.config.modules.get(id);
     let mut area = mouse_area(row(items).spacing(tok::XS).align_y(Alignment::Center));
-    if let Some(c) = &m.right {
-        area = area.on_right_press(action(c));
+    if let Some(r) = m.and_then(|m| m.right.as_deref()).map(action).or(g.right) {
+        area = area.on_right_press(r);
     }
-    if let Some(c) = &m.middle {
-        area = area.on_middle_press(action(c));
+    if let Some(r) = m.and_then(|m| m.middle.as_deref()).map(action).or(g.middle) {
+        area = area.on_middle_press(r);
     }
-    if m.scroll_up.is_some() || m.scroll_down.is_some() {
+    let lines = |d: iced::mouse::ScrollDelta| match d {
+        iced::mouse::ScrollDelta::Lines { y, .. } => y,
+        iced::mouse::ScrollDelta::Pixels { y, .. } => y / 40.0,
+    };
+    if let Some(m) = m.filter(|m| m.scroll_up.is_some() || m.scroll_down.is_some()) {
         let (up, down) = (m.scroll_up.clone(), m.scroll_down.clone());
-        area = area.on_scroll(move |d| {
-            let y = match d {
-                iced::mouse::ScrollDelta::Lines { y, .. }
-                | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
-            };
-            match if y > 0.0 { &up } else { &down } {
-                Some(c) => action(c),
-                None => Message::Batch(Vec::new()),
-            }
+        area = area.on_scroll(move |d| match if lines(d) > 0.0 { &up } else { &down } {
+            Some(c) => action(c),
+            None => Message::Batch(Vec::new()),
         });
+    } else if let Some(f) = g.scroll {
+        area = area.on_scroll(move |d| f(lines(d)));
     }
     vec![area.into()]
 }
