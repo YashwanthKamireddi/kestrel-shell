@@ -12,7 +12,7 @@ use iced::widget::row;
 use iced::{Alignment, Element};
 
 /// The island: the time pill. It always shows the time and date; music (unless it has its
-/// own bubble), the visualiser while music plays, and the weather (unless it has its own
+/// own module), the visualiser while music plays, and the weather (unless it has its own
 /// circle) join it, and pop-ups take it over for a moment.
 /// The module's view (the island's items).
 pub fn view<'a>(
@@ -68,44 +68,6 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
                 .spacing(tok::XS)
                 .height(18)
                 .align_y(Alignment::Center),
-        )
-        .into(),
-    )
-}
-
-/// Diameter of the music bubble: the same height as the pills, so they line up.
-pub const BUBBLE: f32 = size::BAR - 6.0;
-
-/// The music bubble: a black pill circle with the cover inside, dimmed while paused. Opens the
-/// media panel. None when there is no player.
-pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
-    // Stays while paused: the bubble is the player, not just the sound. A browser playing
-    // something with no picture (a hover preview) gets none.
-    let p = app.media.main().filter(|p| !media::is_bare_browser(p))?;
-    let id = o.id;
-    let art = BUBBLE - 8.0;
-    // Snapped as one piece: the circle and the cover land on the same pixels, so the cover
-    // sits exactly in the middle.
-    Some(
-        ui::snap::snap(
-            ui::control(
-                iced::widget::container(media::art_plain(
-                    s.faded(if p.playing { 1.0 } else { 0.5 }),
-                    p,
-                    art,
-                    art / 2.0,
-                ))
-                .center(BUBBLE)
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(crate::theme::surface(s).into()),
-                    border: iced::Border::default().rounded(BUBBLE / 2.0),
-                    ..iced::widget::container::Style::default()
-                }),
-            )
-            .width(BUBBLE)
-            .height(BUBBLE)
-            .radius(BUBBLE / 2.0)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
         )
         .into(),
     )
@@ -280,8 +242,8 @@ fn time_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Elemen
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
-    // Music without a bubble of its own: a small round cover and the title, before the time.
-    if !app.config.bar.contains("media")
+    // Music without a module of its own: a small round cover and the title, before the time.
+    if crate::policy::island_shows(app, "media")
         && let Some(p) = app.media.main()
     {
         content = content.push(
@@ -307,7 +269,7 @@ fn time_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Elemen
     if let Some(v) = visualiser(app, s) {
         content = content.push(v);
     }
-    if !app.config.bar.contains("weather")
+    if crate::policy::island_shows(app, "weather")
         && let Some(w) = &app.weather
     {
         content = content.push(
@@ -421,7 +383,7 @@ fn finish_with<'a>(
     let id = o.id;
     let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
-    let h = size::BAR - 6.0;
+    let h = size::CONTROL;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)
@@ -443,7 +405,7 @@ fn finish_to<'a>(
     let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
     // As tall as a pill, so in the pill style it is the pill.
-    let h = size::BAR - 6.0;
+    let h = size::CONTROL;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)

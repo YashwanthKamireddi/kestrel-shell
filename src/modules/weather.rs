@@ -16,6 +16,10 @@ pub fn view<'a>(
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
     let id = o.id;
+    // Beside the island it is the island's (`policy`).
+    if crate::policy::island_hosts(app, "weather") {
+        return Vec::new();
+    }
     let Some(w) = &app.weather else {
         return Vec::new();
     };

@@ -12,7 +12,7 @@ use iced::{Alignment, Color, Element, Length};
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // Weather and music with pills of their own have their own panels: not repeated here.
     let mut col = column![today(app, s)].spacing(tok::L);
-    if !app.config.bar.contains("media")
+    if crate::policy::island_shows(app, "media")
         && let Some(p) = media::current(app)
     {
         col = col.push(playing(s, p));
@@ -27,7 +27,7 @@ fn today(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(w) = app
         .weather
         .as_ref()
-        .filter(|_| !app.config.bar.contains("weather"))
+        .filter(|_| crate::policy::island_shows(app, "weather"))
     else {
         return container(clock(app, s.ink, s.ink_dim))
             .padding([tok::XS, tok::S])

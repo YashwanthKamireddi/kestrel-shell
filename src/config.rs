@@ -227,9 +227,6 @@ pub struct BarConfig {
     pub left: Vec<String>,
     pub center: Vec<String>,
     pub right: Vec<String>,
-    /// Pill style: modules that share one pill when they sit next to each other, e.g.
-    /// `groups = [["network", "bluetooth", "volume", "battery"]]`. Everything else stands alone.
-    pub groups: Vec<Vec<String>>,
     /// The music visualiser in the time pill.
     pub visualiser: bool,
     /// The battery's percentage beside its icon.
@@ -253,16 +250,6 @@ impl Default for BarConfig {
                 "notifications",
                 "power",
             ]),
-            groups: vec![v(&[
-                "tray",
-                "privacy",
-                "network",
-                "bluetooth",
-                "volume",
-                "battery",
-                "notifications",
-                "power",
-            ])],
             visualiser: true,
             battery_percent: true,
         }
@@ -270,11 +257,6 @@ impl Default for BarConfig {
 }
 
 impl BarConfig {
-    /// Which group `id` belongs to, if any.
-    pub fn group_of(&self, id: &str) -> Option<usize> {
-        self.groups.iter().position(|g| g.iter().any(|m| m == id))
-    }
-
     /// An older layout in today's terms: the combined `status` button becomes the separate
     /// network, bluetooth, volume and battery buttons, with the notifications bell that lived
     /// inside it (a separate `notifications` entry, which drew nothing then, goes with it).
@@ -299,9 +281,6 @@ impl BarConfig {
         expand(&mut self.left);
         expand(&mut self.center);
         expand(&mut self.right);
-        for g in &mut self.groups {
-            expand(g);
-        }
     }
 
     pub fn contains(&self, id: &str) -> bool {
@@ -478,7 +457,6 @@ mod bar_tests {
             right: ["updates", "privacy", "status", "power", "notifications"]
                 .map(String::from)
                 .to_vec(),
-            groups: vec![["privacy", "status", "power"].map(String::from).to_vec()],
             ..BarConfig::default()
         };
         b.normalize();
@@ -495,15 +473,6 @@ mod bar_tests {
                 "power"
             ]
         );
-        assert!(b.groups[0].contains(&"volume".to_string()));
-        // A group that never held `status` keeps its bell.
-        let mut g = BarConfig {
-            right: ["status", "notifications"].map(String::from).to_vec(),
-            groups: vec![["battery", "notifications"].map(String::from).to_vec()],
-            ..BarConfig::default()
-        };
-        g.normalize();
-        assert_eq!(g.groups[0], ["battery", "notifications"]);
         // Already in today's terms: unchanged.
         let before = b.clone();
         b.normalize();

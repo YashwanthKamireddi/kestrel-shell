@@ -454,9 +454,9 @@ fn with_actions<'a>(
     vec![area.into()]
 }
 
-/// One bar section: its modules' items in order. In the pill style every module sits on its
-/// own floating pill, except neighbours of one `[bar] groups` entry, which share one (none
-/// when empty).
+/// One bar section: its modules' items in order. In the pill style the section is one
+/// floating pill (none when empty): every item on the same pill at the same inset, as ii and
+/// Noctalia group theirs (separate bubbles, circles and capsules read as random).
 fn section<'a>(
     ids: &'a [String],
     app: &'a App,
@@ -476,38 +476,23 @@ fn section<'a>(
             .into();
     }
     let material = app.config.material;
-    // Neighbours of the same group share a pill; every other module is a pill alone.
-    let mut groups: Vec<Vec<Element<'a, Message>>> = Vec::new();
-    let mut last: Option<usize> = None;
-    for id in ids {
-        let items = with_actions(id, app, crate::modules::items(id, app, o, s, open));
-        if items.is_empty() {
-            continue;
-        }
-        let group = app.config.bar.group_of(id);
-        if group.is_some() && group == last {
-            if let Some(g) = groups.last_mut() {
-                g.extend(items);
-            }
-        } else {
-            groups.push(items);
-        }
-        last = group;
+    let items: Vec<Element<'a, Message>> = ids
+        .iter()
+        .flat_map(|id| with_actions(id, app, crate::modules::items(id, app, o, s, open)))
+        .collect();
+    if items.is_empty() {
+        return Space::new().into();
     }
-    let pills_row = groups.into_iter().map(|items| {
-        // A pill with one item (the island) is that item: it fills the pill edge to edge.
-        let single = items.len() == 1;
-        let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
-            .padding([0, if single { 0 } else { 4 }])
-            .height(size::BAR - 6.0)
-            .center_y(size::BAR - 6.0)
-            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
-        frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
-    });
-    row(pills_row)
-        .spacing(tok::S)
-        .align_y(Alignment::Center)
-        .into()
+    // The pill's height from the bar, never from what is in it (Noctalia's rule); every item
+    // is a control of one height, inset the same from the pill's edge.
+    let h = size::BAR - 6.0;
+    let inset = (h - size::CONTROL) / 2.0;
+    let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
+        .padding([0.0, inset])
+        .height(h)
+        .center_y(h)
+        .style(move |_| pill_style(material, s, h / 2.0));
+    frosted(app, o, h / 2.0, s.opacity, pill)
 }
 
 /// A pill's box in each material. Frosted has no fill of its own: the frost (`ui::frost`) is
