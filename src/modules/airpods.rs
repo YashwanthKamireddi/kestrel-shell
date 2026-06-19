@@ -28,7 +28,7 @@ fn pods<'a>(
     crate::panels::pods::device(app)?;
     let id = o.id;
     let d = size::BAR - 6.0;
-    let active = open == Some(PanelKind::Pods);
+    let active = super::control_on(app, open, crate::panels::control::Page::Bluetooth);
     let charge = app.pods.as_ref().and_then(|p| {
         Some(crate::services::airpods::Charge {
             level: p.level()?,
@@ -62,7 +62,7 @@ fn pods<'a>(
         .center_x()
         .radius(d / 2.0)
         .bar(s, active)
-        .on_press_at(move |r| Message::Toggle(PanelKind::Pods, id, r))
+        .on_press_at(move |r| Message::ControlAt(crate::panels::control::Page::Bluetooth, id, r))
         .into(),
     )
 }

@@ -43,8 +43,6 @@ pub enum PanelKind {
     Clipboard,
     Emoji,
     Settings,
-    Weather,
-    Pods,
     Files,
     /// The password prompt for administrator rights (kestrel's polkit agent).
     Auth,
@@ -78,8 +76,10 @@ impl PanelKind {
             "clipboard" => Self::Clipboard,
             "emoji" => Self::Emoji,
             "settings" => Self::Settings,
-            "weather" => Self::Weather,
-            "airpods" | "pods" => Self::Pods,
+            // The weather lives in the day view.
+            "weather" => Self::Island,
+            // AirPods live in the Bluetooth page.
+            "airpods" | "pods" => Self::Control,
             "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
@@ -121,13 +121,11 @@ impl PanelKind {
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
-            Self::Island => 400.0,
+            Self::Island => 420.0,
             Self::Overview => overview::WIDTH,
             Self::Clipboard => clipboard::WIDTH,
             Self::Emoji => emoji::WIDTH,
             Self::Settings => settings::WIDTH,
-            Self::Weather => weather::WIDTH,
-            Self::Pods => pods::WIDTH,
             Self::Files => files::WIDTH,
             Self::Auth => auth::WIDTH,
         }
@@ -205,12 +203,7 @@ pub enum Key {
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
     match kind {
         PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
-        PanelKind::Island => {
-            app.panels.calendar = calendar::State::default();
-            // The rings show their values the moment it opens (a sweep in from empty on every
-            // open read as loading: design call 2026-11-15), and jump to each new reading.
-            app.aim_gauges();
-        }
+        PanelKind::Island => app.panels.calendar = calendar::State::default(),
         PanelKind::Power => app.panels.power = power::State::default(),
         PanelKind::Control => {
             app.panels.control = control::State::default();
@@ -230,8 +223,6 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Tray
         | PanelKind::Privacy
         | PanelKind::Notice
-        | PanelKind::Weather
-        | PanelKind::Pods
         | PanelKind::Files
         | PanelKind::Auth
         | PanelKind::Capture
@@ -444,8 +435,6 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
         PanelKind::Settings => settings::view(app, s),
-        PanelKind::Weather => weather::view(app, s),
-        PanelKind::Pods => pods::view(app, s),
         PanelKind::Files => files::view(app, s),
         PanelKind::Auth => auth::view(app, s),
     }

@@ -23,7 +23,7 @@ pub fn view<'a>(
     let Some(w) = &app.weather else {
         return Vec::new();
     };
-    let active = open == Some(PanelKind::Weather);
+    let active = open == Some(PanelKind::Island);
     let content = row![
         icon(
             crate::ui::weather_icon(w),
@@ -36,7 +36,7 @@ pub fn view<'a>(
     .align_y(Alignment::Center);
     vec![
         super::chip(s, content, active)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
+            .on_press_at(move |r| Message::Toggle(PanelKind::Island, id, r))
             .into(),
     ]
 }
