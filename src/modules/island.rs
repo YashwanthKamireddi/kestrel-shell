@@ -243,21 +243,28 @@ fn time_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Elemen
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
     // Music without a module of its own: a small round cover and the title, before the time.
+    // The song is its own target: a click on it opens the player; anywhere else, the day.
     if crate::policy::island_shows(app, "media")
-        && let Some(p) = app.media.main()
+        && let Some(p) = app.media.main().filter(|p| !media::is_bare_browser(p))
     {
+        let id = o.id;
         content = content.push(
-            row![
-                media::art(s.faded(if p.playing { 1.0 } else { 0.5 }), p, 22.0, 11.0),
-                label_w(
-                    ui::fit(&p.title, text::SMALL, 170.0),
-                    text::SMALL,
-                    if p.playing { s.ink } else { s.ink_dim },
-                    theme::MEDIUM
-                ),
-            ]
-            .spacing(tok::M)
-            .align_y(Alignment::Center),
+            ui::control(
+                row![
+                    media::art(s.faded(if p.playing { 1.0 } else { 0.5 }), p, 22.0, 11.0),
+                    label_w(
+                        ui::fit(&p.title, text::SMALL, 170.0),
+                        text::SMALL,
+                        if p.playing { s.ink } else { s.ink_dim },
+                        theme::MEDIUM
+                    ),
+                ]
+                .spacing(tok::M)
+                .align_y(Alignment::Center),
+            )
+            .kind(s, ui::control::Kind::Bare)
+            .no_press_scale()
+            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
         );
     }
     content = content.push(if app.config.clock.date {
