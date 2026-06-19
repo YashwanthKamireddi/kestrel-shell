@@ -43,10 +43,42 @@ pub(super) fn module_options<'a>(
     m: &'static crate::modules::Info,
 ) -> Vec<Option<Element<'a, AppMessage>>> {
     let doc = &app.panels.settings.doc;
-    m.options
-        .iter()
-        .enumerate()
-        .map(|(oi, o)| {
+    // Its shape on the pill bar, for every module (p3dro's per-widget style).
+    let shape: Option<Option<Element<'a, AppMessage>>> = (app.config.bar.style == BarStyle::Pills)
+        .then(|| {
+            use crate::config::Shape;
+            let now = app
+                .config
+                .modules
+                .get(m.id)
+                .map(|c| c.shape)
+                .unwrap_or_default();
+            let opts: Vec<(&str, bool, AppMessage)> = [
+                ("Attached", Shape::Attached, "attached"),
+                ("Bubble", Shape::Bubble, "bubble"),
+                ("Plain", Shape::Plain, "plain"),
+            ]
+            .into_iter()
+            .map(|(label, sh, key)| {
+                (
+                    label,
+                    now == sh,
+                    msg(Message::ModuleShape(m.id.to_string(), key)),
+                )
+            })
+            .collect();
+            row_of(s, "Shape", None, segments(s, &opts)).map(|e| {
+                container(e)
+                    .padding(iced::Padding {
+                        left: tok::INDENT,
+                        ..iced::Padding::ZERO
+                    })
+                    .into()
+            })
+        });
+    shape
+        .into_iter()
+        .chain(m.options.iter().enumerate().map(|(oi, o)| {
             let v = o.value(doc);
             let control: Element<'_, AppMessage> = match o.kind {
                 crate::modules::OptKind::Switch(_) => {
@@ -77,7 +109,7 @@ pub(super) fn module_options<'a>(
                     })
                     .into()
             })
-        })
+        }))
         .collect()
 }
 
@@ -119,7 +151,8 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             if !matches(&name) && !matches("bar") {
                 continue;
             }
-            let has_options = info.is_some_and(|m| !m.options.is_empty());
+            // Every module has its shape on the pill bar; some have options too.
+            let has_options = info.is_some_and(|m| pills || !m.options.is_empty());
             let open = st.bar_open.as_deref() == Some(id.as_str());
             let lead: Element<'_, AppMessage> =
                 icon(info.map_or(Icon::Code, |m| m.icon), 16.0, s.ink_dim).into();

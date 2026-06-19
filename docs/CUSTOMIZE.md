@@ -19,7 +19,8 @@ hand is the same as using Settings). Copying it to another machine is the export
 | `weather_city`, `weather_units` | `"celsius"` / `"fahrenheit"` |
 | `night_light_temperature`, `night_light_schedule` | kelvin; sunset to sunrise |
 | `cursor_size` | pointer size |
-| `[bar]` | `style` (`"pills"` / `"full"`), `left`, `center`, `right` (module ids in order), `groups` (modules that share a pill), `visualiser`, `battery_percent` |
+| `[bar]` | `style` (`"pills"` / `"full"`), `left`, `center`, `right` (module ids in order), `visualiser`, `battery_percent` |
+| `[modules.<id>]` | `shape` (`"attached"`: shares its section's pill, the default; `"bubble"`: a pill of its own; `"plain"`: no pill), `right`, `middle`, `scroll_up`, `scroll_down` (a command, or `kestrel:<command>`) over the bar's gesture table |
 | `[clock]` | `format` (`"24h"` / `"12h"`), `date`, `seconds`, `week_starts_sunday` |
 | `[sound]` | `step`, `max` (volume keys), `alerts` (alert volume %), `feedback`, `screenshot` |
 | `[notifications]` | `muted`, `quiet`, `silent` (app lists), `sound`, `banner` (seconds), `urgent_in_dnd` |

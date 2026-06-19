@@ -475,24 +475,59 @@ fn section<'a>(
             .align_y(Alignment::Center)
             .into();
     }
+    use crate::config::Shape;
     let material = app.config.material;
-    let items: Vec<Element<'a, Message>> = ids
-        .iter()
-        .flat_map(|id| with_actions(id, app, crate::modules::items(id, app, o, s, open)))
-        .collect();
-    if items.is_empty() {
-        return Space::new().into();
-    }
     // The pill's height from the bar, never from what is in it (Noctalia's rule); every item
     // is a control of one height, inset the same from the pill's edge.
     let h = size::BAR - 6.0;
     let inset = (h - size::CONTROL) / 2.0;
-    let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
-        .padding([0.0, inset])
-        .height(h)
-        .center_y(h)
-        .style(move |_| pill_style(material, s, h / 2.0));
-    frosted(app, o, h / 2.0, s.opacity, pill)
+    let pill = |items: Vec<Element<'a, Message>>| {
+        let p = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
+            .padding([0.0, inset])
+            .height(h)
+            .center_y(h)
+            .style(move |_| pill_style(material, s, h / 2.0));
+        frosted(app, o, h / 2.0, s.opacity, p)
+    };
+    // Each module in its shape (`[modules.<id>] shape`): neighbours that are `attached` share
+    // one pill; a `bubble` is a pill alone; `plain` sits on the bar with none.
+    let mut out: Vec<Element<'a, Message>> = Vec::new();
+    let mut run: Vec<Element<'a, Message>> = Vec::new();
+    for id in ids {
+        let items = with_actions(id, app, crate::modules::items(id, app, o, s, open));
+        if items.is_empty() {
+            continue;
+        }
+        let shape = app
+            .config
+            .modules
+            .get(id.as_str())
+            .map(|m| m.shape)
+            .unwrap_or_default();
+        if shape == Shape::Attached {
+            run.extend(items);
+            continue;
+        }
+        if !run.is_empty() {
+            out.push(pill(std::mem::take(&mut run)));
+        }
+        match shape {
+            Shape::Bubble => out.push(pill(items)),
+            _ => out.push(
+                row(items)
+                    .spacing(tok::XS)
+                    .align_y(Alignment::Center)
+                    .into(),
+            ),
+        }
+    }
+    if !run.is_empty() {
+        out.push(pill(run));
+    }
+    if out.is_empty() {
+        return Space::new().into();
+    }
+    row(out).spacing(tok::S).align_y(Alignment::Center).into()
 }
 
 /// A pill's box in each material. Frosted has no fill of its own: the frost (`ui::frost`) is

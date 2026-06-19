@@ -207,6 +207,19 @@ pub struct ModuleConfig {
     pub middle: Option<String>,
     pub scroll_up: Option<String>,
     pub scroll_down: Option<String>,
+    /// Its shape on the pill bar (p3dro's per-widget style): `attached` shares the section's
+    /// pill with its neighbours (the default), `bubble` is a pill of its own, `plain` has
+    /// no pill at all.
+    pub shape: Shape,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Shape {
+    #[default]
+    Attached,
+    Bubble,
+    Plain,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
