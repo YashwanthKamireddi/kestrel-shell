@@ -3,7 +3,7 @@
 //! or off.
 
 use crate::app::{App, Message, Output};
-use crate::panels::{PanelKind, control};
+use crate::panels::{Message as PanelMessage, PanelKind, control};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{Icon, icon, label_w};
@@ -19,10 +19,12 @@ pub fn view<'a>(
     let id = o.id;
     let active = super::control_on(app, open, control::Page::Main);
     let press = move |r| Message::ControlAt(control::Page::Main, id, r);
+    let dnd = Message::Panel(PanelMessage::Control(control::Message::Dnd));
     if app.dnd {
         return vec![
             super::icon_chip(s, Icon::BellOff, s.ink_dim, active)
                 .on_press_at(press)
+                .on_right_press(dnd)
                 .into(),
         ];
     }
@@ -30,6 +32,7 @@ pub fn view<'a>(
         return vec![
             super::icon_chip(s, Icon::Bell, s.ink, active)
                 .on_press_at(press)
+                .on_right_press(dnd)
                 .into(),
         ];
     }
@@ -44,5 +47,10 @@ pub fn view<'a>(
     ]
     .spacing(tok::XS)
     .align_y(Alignment::Center);
-    vec![super::chip(s, content, active).on_press_at(press).into()]
+    vec![
+        super::chip(s, content, active)
+            .on_press_at(press)
+            .on_right_press(dnd)
+            .into(),
+    ]
 }

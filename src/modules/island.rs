@@ -11,8 +11,14 @@ use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
+/// Whether volume, brightness and other pop-ups show inside the island (pill style with the
+/// island in the bar) rather than as a separate drop.
+pub fn hosts_osd(app: &App) -> bool {
+    app.config.bar.style == crate::config::BarStyle::Pills && app.config.bar.contains("island")
+}
+
 /// The island: the time pill. It always shows the time and date; music (unless it has its
-/// own module), the visualiser while music plays, and the weather (unless it has its own
+/// own bubble), the visualiser while music plays, and the weather (unless it has its own
 /// circle) join it, and pop-ups take it over for a moment.
 /// The module's view (the island's items).
 pub fn view<'a>(
@@ -73,50 +79,43 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
     )
 }
 
-/// One thing the island can show: what it is, how much it matters (the highest active one
-/// shows), whether it is happening, and its face. Adding one is a function and a line in
-/// `ACTIVITIES` (p3dro's `IslandRegistry`: the old way was a chain of ifs).
-struct Activity {
-    #[allow(dead_code)]
-    id: &'static str,
-    priority: u8,
-    active: fn(&App) -> bool,
-    face: for<'a> fn(&'a App, &'a Output, Scheme, bool) -> Element<'a, Message>,
-}
+/// Diameter of the music bubble: the same height as the pills, so they line up.
+pub const BUBBLE: f32 = size::BAR - 6.0;
 
-/// Everything the island can show, the time last (always active).
-const ACTIVITIES: &[Activity] = &[
-    Activity {
-        id: "osd",
-        priority: 30,
-        active: |app| {
-            crate::policy::island_owns_osd(app)
-                && app
-                    .osd
-                    .as_ref()
-                    .is_some_and(|o| o.until > std::time::Instant::now())
-        },
-        face: osd_face,
-    },
-    Activity {
-        id: "notification",
-        priority: 25,
-        active: |app| crate::policy::island_owns_notifications(app) && !app.toasts.is_empty(),
-        face: notification_face,
-    },
-    Activity {
-        id: "flash",
-        priority: 20,
-        active: |app| app.flash.is_some(),
-        face: flash_face,
-    },
-    Activity {
-        id: "time",
-        priority: 0,
-        active: |_| true,
-        face: time_face,
-    },
-];
+/// The music bubble: a black pill circle with the cover inside, dimmed while paused. Opens the
+/// media panel. None when there is no player.
+pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, Message>> {
+    // Stays while paused: the bubble is the player, not just the sound. A browser playing
+    // something with no picture (a hover preview) gets none.
+    let p = app.media.main().filter(|p| !media::is_bare_browser(p))?;
+    let id = o.id;
+    let art = BUBBLE - 8.0;
+    // Snapped as one piece: the circle and the cover land on the same pixels, so the cover
+    // sits exactly in the middle.
+    Some(
+        ui::snap::snap(
+            ui::control(
+                iced::widget::container(media::art_plain(
+                    s.faded(if p.playing { 1.0 } else { 0.5 }),
+                    p,
+                    art,
+                    art / 2.0,
+                ))
+                .center(BUBBLE)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(crate::theme::surface(s).into()),
+                    border: iced::Border::default().rounded(BUBBLE / 2.0),
+                    ..iced::widget::container::Style::default()
+                }),
+            )
+            .width(BUBBLE)
+            .height(BUBBLE)
+            .radius(BUBBLE / 2.0)
+            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
+        )
+        .into(),
+    )
+}
 
 pub fn bar<'a>(
     app: &'a App,
@@ -125,99 +124,28 @@ pub fn bar<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Island);
-    let now = ACTIVITIES
-        .iter()
-        .filter(|a| (a.active)(app))
-        .max_by_key(|a| a.priority)
-        .unwrap_or(&ACTIVITIES[ACTIVITIES.len() - 1]);
-    (now.face)(app, o, s, active)
-}
-
-/// A level (volume, brightness) or a device event, while it lasts; a click acts on it.
-fn osd_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element<'a, Message> {
+    let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
+    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
-    let Some(osd) = app.osd.as_ref() else {
-        return time_face(app, o, s, active);
-    };
-    content = content.push(osd_row(
-        osd,
-        s,
-        (app.config.sound.max as f32 / 100.0).max(1.0),
-    ));
-    match osd.action.clone() {
-        Some(a) => finish_with(content, o, s, active, a),
-        None => finish(content, o, s, active),
-    }
-}
-
-/// What just came in: the app's icon, the title and a line of the message; a click drops its
-/// full card under the island (`panels::notice`).
-fn notification_face<'a>(
-    app: &'a App,
-    o: &'a Output,
-    s: Scheme,
-    active: bool,
-) -> Element<'a, Message> {
-    let Some(n) = app
-        .toasts
-        .last()
-        .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
-    else {
-        return time_face(app, o, s, active);
-    };
-    let title = if n.summary.trim().is_empty() {
-        n.app.clone()
-    } else {
-        n.summary.trim().to_string()
-    };
-    let body: String = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut content = row![
-        ui::app_icon(s, &n.app, 18.0, ui::Icon::Bell),
-        label_w(
-            ui::fit(&title, text::SMALL, 200.0),
-            text::SMALL,
-            s.ink,
-            theme::SEMIBOLD
-        ),
-    ]
-    .spacing(tok::M)
-    .align_y(Alignment::Center);
-    if !body.is_empty() {
-        content = content.push(label(
-            ui::fit(&body, text::SMALL, 220.0),
-            text::SMALL,
-            s.ink_dim,
+    // A pop-up (volume, brightness, a device) takes the island while it lasts.
+    if hosts_osd(app)
+        && let Some(osd) = app
+            .osd
+            .as_ref()
+            .filter(|o| o.until > std::time::Instant::now())
+    {
+        content = content.push(osd_row(
+            osd,
+            s,
+            (app.config.sound.max as f32 / 100.0).max(1.0),
         ));
+        // A click acts on what it shows (the level's controls, say).
+        return match osd.action.clone() {
+            Some(a) => finish_with(content, o, s, active, a),
+            None => finish(content, o, s, active),
+        };
     }
-    let more = app.toasts.len().saturating_sub(1);
-    if more > 0 {
-        content = content.push(label(format!("+{more}"), text::SMALL, s.ink_dim));
-    }
-    // The pointer resting on it holds its countdown (it resumes with the time it had left).
-    let id = o.id;
-    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
-        .on_measure(move |w| Message::IslandMeasured(id, w));
-    let h = size::CONTROL;
-    ui::control(inner)
-        .padding([tok::NONE, tok::L])
-        .height(h)
-        .radius(h / 2.0)
-        .bar(s, active || open_notice(app))
-        .on_enter(Message::HoldToasts(true))
-        .on_exit(Message::HoldToasts(false))
-        .on_press_at(move |r| Message::Toggle(PanelKind::Notice, id, r))
-        .into()
-}
-
-fn open_notice(app: &App) -> bool {
-    app.panel
-        .as_ref()
-        .is_some_and(|p| p.open && p.kind == PanelKind::Notice)
-}
-
-/// Something copied, a screenshot, a recording saved: for a moment; a click opens it.
-fn flash_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element<'a, Message> {
-    let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
+    // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
         let lead: Element<'a, Message> = match &f.thumb {
             Some(h) => ui::cover(h.clone(), 34.0, 20.0, 4.0),
@@ -246,38 +174,22 @@ fn flash_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Eleme
             None => finish(content, o, s, active),
         };
     }
-    time_face(app, o, s, active)
-}
-
-/// The resting face: the time and date, with music, its visualiser and the weather when
-/// they have no module of their own.
-fn time_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Element<'a, Message> {
-    let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
-    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
-    let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
-    // Music without a module of its own: a small round cover and the title, before the time.
-    // The song is its own target: a click on it opens the player; anywhere else, the day.
-    if crate::policy::island_shows(app, "media")
-        && let Some(p) = app.media.main().filter(|p| !media::is_bare_browser(p))
+    // Music without a bubble of its own: a small round cover and the title, before the time.
+    if !app.config.bar.contains("media")
+        && let Some(p) = app.media.main()
     {
-        let id = o.id;
         content = content.push(
-            ui::control(
-                row![
-                    media::art(s.faded(if p.playing { 1.0 } else { 0.5 }), p, 22.0, 11.0),
-                    label_w(
-                        ui::fit(&p.title, text::SMALL, 170.0),
-                        text::SMALL,
-                        if p.playing { s.ink } else { s.ink_dim },
-                        theme::MEDIUM
-                    ),
-                ]
-                .spacing(tok::M)
-                .align_y(Alignment::Center),
-            )
-            .kind(s, ui::control::Kind::Bare)
-            .no_press_scale()
-            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
+            row![
+                media::art(s.faded(if p.playing { 1.0 } else { 0.5 }), p, 22.0, 11.0),
+                label_w(
+                    ui::fit(&p.title, text::SMALL, 170.0),
+                    text::SMALL,
+                    if p.playing { s.ink } else { s.ink_dim },
+                    theme::MEDIUM
+                ),
+            ]
+            .spacing(tok::M)
+            .align_y(Alignment::Center),
         );
     }
     content = content.push(if app.config.clock.date {
@@ -289,7 +201,7 @@ fn time_face<'a>(app: &'a App, o: &'a Output, s: Scheme, active: bool) -> Elemen
     if let Some(v) = visualiser(app, s) {
         content = content.push(v);
     }
-    if crate::policy::island_shows(app, "weather")
+    if !app.config.bar.contains("weather")
         && let Some(w) = &app.weather
     {
         content = content.push(
@@ -339,35 +251,13 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a,
         1.0
     };
     let level = osd.value.max(0.0);
-    // A level that can be set is a slider in the island: drag it where you see it (Caelestia's
-    // OSD is a control, not a picture). Anything else (keyboard layout) is a plain bar.
-    let settable = crate::shell::bar::is_volume(osd.icon)
-        || matches!(osd.icon, ui::Icon::Mic | ui::Icon::MicOff | ui::Icon::Sun);
-    let track: Element<'a, Message> = if settable {
-        // The plain 0–100 % track until boosted, then up to the maximum with the boost red.
-        let span = if level > 1.0 { top.max(1.0) } else { 1.0 };
-        iced::widget::container(
-            ui::slider::slider(
-                iced::widget::Space::new(),
-                (level / span).clamp(0.0, 1.0),
-                14.0,
-                (s.ink.scale_alpha(tok::FILL * s.opacity), s.accent),
-                move |v| Message::OsdSet(v * span),
-            )
-            .boost(1.0 / span, s.bad),
-        )
-        .width(TRACK)
-        .into()
-    } else {
-        ui::level_bar(s, level, top, TRACK, 5.0)
-    };
     row![
         icon(
             osd.icon,
             15.0,
             if level > 0.0 { s.accent } else { s.ink_dim }
         ),
-        track,
+        ui::level_bar(s, level, top, TRACK, 5.0),
         label_w(
             format!("{:.0}", level * 100.0),
             text::SMALL,
@@ -403,7 +293,7 @@ fn finish_with<'a>(
     let id = o.id;
     let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
-    let h = size::CONTROL;
+    let h = size::BAR - 6.0;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)
@@ -425,7 +315,7 @@ fn finish_to<'a>(
     let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
     // As tall as a pill, so in the pill style it is the pill.
-    let h = size::CONTROL;
+    let h = size::BAR - 6.0;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)

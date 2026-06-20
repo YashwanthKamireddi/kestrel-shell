@@ -484,8 +484,6 @@ pub enum Message {
     Plugin(String, bool),
     /// A module's option (module and option index in `modules::MODULES`) to a value.
     Opt(usize, usize, OptValue),
-    /// A bar module's shape (module id, `attached` / `bubble` / `plain`).
-    ModuleShape(String, &'static str),
     About(crate::services::about::About),
     Time(crate::services::timedate::State),
     Ntp(bool),
@@ -2043,10 +2041,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 config::set(opt.table, opt.key, item);
                 app.panels.settings.doc = read_doc();
             }
-        }
-        Message::ModuleShape(id, shape) => {
-            config::set(&["modules", &id], "shape", toml_edit::value(shape));
-            app.panels.settings.doc = read_doc();
         }
         Message::Plugin(id, on) => {
             config::set(&["plugins", &id], "enabled", toml_edit::value(on));

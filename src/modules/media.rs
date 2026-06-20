@@ -1,4 +1,4 @@
-//! Now playing: cover and title; opens the media panel.
+//! Now playing: cover and title (in the pill style, a round bubble); opens the media panel.
 
 use crate::app::{App, Message, Output};
 use crate::panels::{PanelKind, media};
@@ -11,13 +11,12 @@ pub fn view<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
-    let id = o.id;
-    // Beside the island it is the island's (`policy`).
-    if crate::policy::island_hosts(app, "media") {
-        return Vec::new();
+    // Pill style: the music is a round bubble (one thing, one circle).
+    if app.config.bar.style == crate::config::BarStyle::Pills {
+        return super::island::bubble(app, o, s).into_iter().collect();
     }
-    // A browser playing something with no picture (a hover preview) shows nothing.
-    let Some(p) = app.media.main().filter(|p| !media::is_bare_browser(p)) else {
+    let id = o.id;
+    let Some(p) = app.media.main() else {
         return Vec::new();
     };
     let active = open == Some(PanelKind::Media);

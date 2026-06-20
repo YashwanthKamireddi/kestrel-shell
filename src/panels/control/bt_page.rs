@@ -85,10 +85,6 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             d.connected,
             Some(msg(Message::Device(d.path.clone(), d.connected))),
         ));
-        // AirPods: each bud's and the case's charge under their row.
-        if d.connected && crate::services::airpods::is_airpods(&d.modalias, &d.icon) {
-            list = list.push(crate::panels::pods::parts(app, s));
-        }
     }
     // Devices nearby (searched for while this page is open): a click pairs, trusts and
     // connects. The search icon breathes while searching.

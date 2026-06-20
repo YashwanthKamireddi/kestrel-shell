@@ -67,11 +67,9 @@ pub fn overlay<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
 /// Whether the overlay has anything to show on `o`.
 pub fn overlay_busy(app: &App, o: &Output) -> bool {
     let focused = app.focused_output() == Some(o.id) && app.panel.is_none();
-    let island = crate::policy::island_owns_osd(app);
+    let island = crate::modules::island::hosts_osd(app);
     app.panel.as_ref().is_some_and(|p| p.output == o.id)
-        || (focused
-            && !crate::policy::island_owns_notifications(app)
-            && (app.toast_sheet.visible() || !app.toasts.is_empty()))
+        || (focused && (app.toast_sheet.visible() || !app.toasts.is_empty()))
         || (focused && !island && app.osd.is_some())
 }
 
@@ -120,13 +118,11 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         let (x, w) = panel_span(app, p, o.size.width, edge);
         panel_drop = Some((drop(x, w, h), k, h));
     }
-    // Banners under the bar, unless the island announces notifications (`policy`, design call
-    // 2026-11-15).
-    let show_toasts = focused
-        && !crate::policy::island_owns_notifications(app)
-        && (app.toast_sheet.visible() || !app.toasts.is_empty());
+    // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
+    // one line in the island they were hard to read); the island keeps the short pop-ups.
+    let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
-    let show_osd = focused && app.osd.is_some() && !crate::policy::island_owns_osd(app);
+    let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
     if show_toasts {
         drops.push(drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value));
     }
@@ -425,38 +421,38 @@ fn with_actions<'a>(
     app: &'a App,
     items: Vec<Element<'a, Message>>,
 ) -> Vec<Element<'a, Message>> {
+    let Some(m) = app.config.modules.get(id) else {
+        return items;
+    };
     if items.is_empty() {
         return items;
     }
-    // The bar's one gesture table, with the config's `[modules.<id>]` over it.
-    let g = crate::modules::gestures(id, app);
-    let m = app.config.modules.get(id);
     let mut area = mouse_area(row(items).spacing(tok::XS).align_y(Alignment::Center));
-    if let Some(r) = m.and_then(|m| m.right.as_deref()).map(action).or(g.right) {
-        area = area.on_right_press(r);
+    if let Some(c) = &m.right {
+        area = area.on_right_press(action(c));
     }
-    if let Some(r) = m.and_then(|m| m.middle.as_deref()).map(action).or(g.middle) {
-        area = area.on_middle_press(r);
+    if let Some(c) = &m.middle {
+        area = area.on_middle_press(action(c));
     }
-    let lines = |d: iced::mouse::ScrollDelta| match d {
-        iced::mouse::ScrollDelta::Lines { y, .. } => y,
-        iced::mouse::ScrollDelta::Pixels { y, .. } => y / 40.0,
-    };
-    if let Some(m) = m.filter(|m| m.scroll_up.is_some() || m.scroll_down.is_some()) {
+    if m.scroll_up.is_some() || m.scroll_down.is_some() {
         let (up, down) = (m.scroll_up.clone(), m.scroll_down.clone());
-        area = area.on_scroll(move |d| match if lines(d) > 0.0 { &up } else { &down } {
-            Some(c) => action(c),
-            None => Message::Batch(Vec::new()),
+        area = area.on_scroll(move |d| {
+            let y = match d {
+                iced::mouse::ScrollDelta::Lines { y, .. }
+                | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
+            };
+            match if y > 0.0 { &up } else { &down } {
+                Some(c) => action(c),
+                None => Message::Batch(Vec::new()),
+            }
         });
-    } else if let Some(f) = g.scroll {
-        area = area.on_scroll(move |d| f(lines(d)));
     }
     vec![area.into()]
 }
 
-/// One bar section: its modules' items in order. In the pill style the section is one
-/// floating pill (none when empty): every item on the same pill at the same inset, as ii and
-/// Noctalia group theirs (separate bubbles, circles and capsules read as random).
+/// One bar section: its modules' items in order. In the pill style every module sits on its
+/// own floating pill, except neighbours of one `[bar] groups` entry, which share one (none
+/// when empty).
 fn section<'a>(
     ids: &'a [String],
     app: &'a App,
@@ -475,59 +471,39 @@ fn section<'a>(
             .align_y(Alignment::Center)
             .into();
     }
-    use crate::config::Shape;
     let material = app.config.material;
-    // The pill's height from the bar, never from what is in it (Noctalia's rule); every item
-    // is a control of one height, inset the same from the pill's edge.
-    let h = size::BAR - 6.0;
-    let inset = (h - size::CONTROL) / 2.0;
-    let pill = |items: Vec<Element<'a, Message>>| {
-        let p = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
-            .padding([0.0, inset])
-            .height(h)
-            .center_y(h)
-            .style(move |_| pill_style(material, s, h / 2.0));
-        frosted(app, o, h / 2.0, s.opacity, p)
-    };
-    // Each module in its shape (`[modules.<id>] shape`): neighbours that are `attached` share
-    // one pill; a `bubble` is a pill alone; `plain` sits on the bar with none.
-    let mut out: Vec<Element<'a, Message>> = Vec::new();
-    let mut run: Vec<Element<'a, Message>> = Vec::new();
+    // Neighbours of the same group share a pill; every other module is a pill alone.
+    let mut groups: Vec<Vec<Element<'a, Message>>> = Vec::new();
+    let mut last: Option<usize> = None;
     for id in ids {
         let items = with_actions(id, app, crate::modules::items(id, app, o, s, open));
         if items.is_empty() {
             continue;
         }
-        let shape = app
-            .config
-            .modules
-            .get(id.as_str())
-            .map(|m| m.shape)
-            .unwrap_or_default();
-        if shape == Shape::Attached {
-            run.extend(items);
-            continue;
+        let group = app.config.bar.group_of(id);
+        if group.is_some() && group == last {
+            if let Some(g) = groups.last_mut() {
+                g.extend(items);
+            }
+        } else {
+            groups.push(items);
         }
-        if !run.is_empty() {
-            out.push(pill(std::mem::take(&mut run)));
-        }
-        match shape {
-            Shape::Bubble => out.push(pill(items)),
-            _ => out.push(
-                row(items)
-                    .spacing(tok::XS)
-                    .align_y(Alignment::Center)
-                    .into(),
-            ),
-        }
+        last = group;
     }
-    if !run.is_empty() {
-        out.push(pill(run));
-    }
-    if out.is_empty() {
-        return Space::new().into();
-    }
-    row(out).spacing(tok::S).align_y(Alignment::Center).into()
+    let pills_row = groups.into_iter().map(|items| {
+        // A pill with one item (the island) is that item: it fills the pill edge to edge.
+        let single = items.len() == 1;
+        let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
+            .padding([0, if single { 0 } else { 4 }])
+            .height(size::BAR - 6.0)
+            .center_y(size::BAR - 6.0)
+            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
+        frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
+    });
+    row(pills_row)
+        .spacing(tok::S)
+        .align_y(Alignment::Center)
+        .into()
 }
 
 /// A pill's box in each material. Frosted has no fill of its own: the frost (`ui::frost`) is

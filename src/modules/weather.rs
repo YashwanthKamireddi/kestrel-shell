@@ -16,14 +16,10 @@ pub fn view<'a>(
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
     let id = o.id;
-    // Beside the island it is the island's (`policy`).
-    if crate::policy::island_hosts(app, "weather") {
-        return Vec::new();
-    }
     let Some(w) = &app.weather else {
         return Vec::new();
     };
-    let active = open == Some(PanelKind::Island);
+    let active = open == Some(PanelKind::Weather);
     let content = row![
         icon(
             crate::ui::weather_icon(w),
@@ -36,7 +32,7 @@ pub fn view<'a>(
     .align_y(Alignment::Center);
     vec![
         super::chip(s, content, active)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Island, id, r))
+            .on_press_at(move |r| Message::Toggle(PanelKind::Weather, id, r))
             .into(),
     ]
 }

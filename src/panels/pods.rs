@@ -1,14 +1,16 @@
-//! AirPods: each bud's and the case's charge, shown under the AirPods in the control centre's
-//! Bluetooth page (their own panel is gone, design call 2026-11-15: one home each).
+//! AirPods, opened from their circle in the bar: each bud's and the case's charge, and a way
+//! to disconnect.
 
 use crate::app::{App, Message as AppMessage};
 use crate::services::airpods::Charge;
 use crate::services::bluetooth;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
-use crate::ui::{Icon, icon, label, label_w};
+use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row, stack};
 use iced::{Alignment, Color, Element, Length};
+
+pub const WIDTH: f32 = 330.0;
 
 /// The connected AirPods, if any.
 pub fn device(app: &App) -> Option<&bluetooth::Device> {
@@ -30,9 +32,43 @@ pub fn tint(s: Scheme, c: Charge) -> Color {
     }
 }
 
-/// Each part's charge, a line each (left, right and the case while it reports; or the
-/// headphones), for under the AirPods row.
-pub fn parts(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    let name = device(app).map_or("AirPods", |d| d.name.as_str());
+    let disconnect = device(app).map(|d| {
+        AppMessage::Panel(super::Message::Control(super::control::Message::Device(
+            d.path.clone(),
+            true,
+        )))
+    });
+    let header = row![
+        column![
+            label_w(
+                ui::fit(name, text::TITLE, 200.0),
+                text::TITLE,
+                s.ink,
+                theme::SEMIBOLD
+            ),
+            label(
+                if device(app)
+                    .is_some_and(|d| super::control::in_progress(app, &d.path) == Some(false))
+                {
+                    "Disconnecting…"
+                } else {
+                    "Connected"
+                },
+                text::CAPTION,
+                s.ink_dim
+            ),
+        ]
+        .spacing(tok::HAIR)
+        .width(Length::Fill),
+        control(label("Disconnect", text::CAPTION, s.ink))
+            .pill(s, crate::ui::control::Pill::Plain)
+            .on_press_maybe(disconnect),
+    ]
+    .spacing(tok::L)
+    .align_y(Alignment::Center);
+
     let p = app.pods.clone().unwrap_or_default();
     let mut list = column![].spacing(tok::L);
     if let Some(h) = p.headset {
@@ -46,8 +82,8 @@ pub fn parts(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             list = list.push(part(s, Icon::EarbudCase, "Case", p.case));
         }
     }
-    container(list.width(Length::Fill))
-        .padding([tok::S, tok::L])
+    container(column![header, list].spacing(tok::XL).width(Length::Fill))
+        .padding([tok::XL, tok::XL])
         .into()
 }
 

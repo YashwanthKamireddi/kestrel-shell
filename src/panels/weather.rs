@@ -1,16 +1,77 @@
-//! The weather's sections in the day view (`panels::island`): the details (feels like,
-//! humidity, wind, sun), the next hours and the coming days.
+//! Weather, opened from the weather circle: now on a sky that matches it, the details (feels
+//! like, humidity, wind, sun), the next hours and the coming days. Only the weather.
 
 use crate::app::{App, Message as AppMessage};
 use crate::services::web::Weather;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, text};
+use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Color, Element, Length};
 
+pub const WIDTH: f32 = 420.0;
+
+pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    let Some(w) = &app.weather else {
+        // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
+        return crate::ui::empty(s, Icon::Cloud);
+    };
+    let mut col = column![now(app, w, s), details(app, w, s)].spacing(tok::L);
+    if w.hours.len() > 1 {
+        col = col.push(hours(app, w, s));
+    }
+    if w.days.len() > 1 {
+        col = col.push(days(app, w, s));
+    }
+    container(col).padding(tok::L).into()
+}
+
+/// Now: place, temperature, condition and today's range, on the sky.
+fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+    let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
+    let soft = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC).scale_alpha(0.78));
+    let left = column![
+        label_w(
+            ui::fit(&w.place, text::BODY, 220.0),
+            text::BODY,
+            white,
+            theme::SEMIBOLD
+        ),
+        label_w(app.temp(w.temp), 48.0, white, theme::MEDIUM),
+        label(
+            format!("H {}  L {}", app.temp(w.high), app.temp(w.low)),
+            text::SMALL,
+            soft
+        ),
+    ]
+    .spacing(tok::NONE)
+    .width(Length::Fill);
+    let right = column![
+        icon(ui::weather_icon(w), 52.0, s.fade(ui::weather_tint(w))),
+        label_w(w.describe(), text::BODY, white, theme::MEDIUM),
+    ]
+    .spacing(tok::S)
+    .align_x(Alignment::End);
+    let (top, bottom) = ui::weather_sky(w);
+    let (top, bottom) = (s.fade(top), s.fade(bottom));
+    container(row![left, right].align_y(Alignment::Center))
+        .padding([tok::XL, tok::XXL])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(
+                iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
+                    .add_stop(0.0, top)
+                    .add_stop(1.0, bottom)
+                    .into(),
+            ),
+            border: iced::Border::default().rounded(size::CARD_RADIUS),
+            ..container::Style::default()
+        })
+        .into()
+}
+
 /// Feels like, humidity, wind, and the sun: four even columns.
-pub fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cell = |i: Icon, tint: Color, value: String, name: &'static str| {
         column![
             icon(i, 18.0, s.fade(tint)),
@@ -68,7 +129,7 @@ fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
 }
 
 /// The next hours: time, condition, temperature.
-pub fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cells = w
         .hours
         .iter()
@@ -108,7 +169,7 @@ pub fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage
 }
 
 /// The coming days: name, condition, and the range as a bar on the week's scale.
-pub fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let lo = w.days.iter().map(|d| d.3).fold(f32::INFINITY, f32::min);
     let hi = w.days.iter().map(|d| d.2).fold(f32::NEG_INFINITY, f32::max);
     let span = (hi - lo).max(1.0);

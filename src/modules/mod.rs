@@ -197,46 +197,6 @@ pub fn needs(bar: &BarConfig) -> Needs {
     }
 }
 
-/// What a bar item does besides its left click (which opens its place): one table for the
-/// whole bar, as Noctalia's `widget_gesture_defaults.cpp` and ashell's `ModulePress`. Right =
-/// its quick action, scroll = adjust, middle = its settings. `[modules.<id>]` in the config
-/// overrides any of them.
-pub struct Gestures {
-    pub right: Option<Message>,
-    pub scroll: Option<fn(f32) -> Message>,
-    pub middle: Option<Message>,
-}
-
-pub fn gestures(id: &str, app: &App) -> Gestures {
-    use crate::panels::Message as P;
-    use crate::panels::control::Message as C;
-    let control = |m: C| Some(Message::Panel(P::Control(m)));
-    let right = match id {
-        "volume" => control(C::SinkMute),
-        "network" => control(C::Wifi(!app.net.wifi_enabled)),
-        "bluetooth" => control(C::Bluetooth(!app.bt.powered)),
-        "notifications" => control(C::Dnd),
-        "battery" => control(C::Profile),
-        _ => None,
-    };
-    let scroll: Option<fn(f32) -> Message> = match id {
-        "volume" => Some(Message::VolumeStep),
-        _ => None,
-    };
-    // Middle: its settings (the bar's page, where every module's options are).
-    let middle = Some(Message::Batch(vec![
-        Message::Ipc("open settings".into()),
-        Message::Panel(P::Settings(crate::panels::settings::Message::Page(
-            crate::panels::settings::Page::Bar,
-        ))),
-    ]));
-    Gestures {
-        right,
-        scroll,
-        middle,
-    }
-}
-
 /// The bar items for module `id` (empty when it has nothing to show right now).
 pub fn items<'a>(
     id: &str,
