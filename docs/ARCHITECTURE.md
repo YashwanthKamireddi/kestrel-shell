@@ -125,10 +125,10 @@ handlers for shell events (`kestrel.on`: workspace, window, notification, media,
 power, battery), sent only when the thing really changes; and moments in the island
 (`kestrel.island{}`).
 
-In `config.toml`, `[bar] groups = [["privacy", "status", "power"]]` decides which neighbouring
-modules share a pill, and `[modules.<id>]` adds mouse actions to a module (`right`, `middle`,
-`scroll_up`, `scroll_down`: a command, or `kestrel:<command>` for kestrel's own); they fill
-buttons the module does not use. A mistake in the file keeps the running settings and is
+In `config.toml`, `[modules.<id>]` sets a module's `shape` on the pill bar (`attached`,
+`bubble`, `plain`) and overrides its gestures (`right`, `middle`, `scroll_up`,
+`scroll_down`: a command, or `kestrel:<command>` for kestrel's own) over the bar's one
+gesture table (`modules::gestures`). Who shows what is decided once, in `policy.rs`. A mistake in the file keeps the running settings and is
 reported once with its line.
 
 Plugins are folders in `~/.config/kestrel/plugins/<id>/`: a `plugin.toml` (name, description,

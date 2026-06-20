@@ -25,32 +25,37 @@ merge network, sound and battery into one button; kestrel does not: one function
 
 ## Modules
 
-| id | Shows | Click | Other input |
-|---|---|---|---|
-| workspaces | workspaces, open apps' icons | switch workspace | scroll: next/previous |
-| app | focused app's name | — | — |
-| island | time, date, music visualiser, OSD | dashboard | — |
-| clock | time (without the island) | calendar | — |
-| media | music (pill: a bubble) | media panel | — |
-| weather | temperature, icon | weather panel | — |
-| airpods | AirPods battery ring | AirPods panel | — |
-| tray | tray icons | per icon | per icon |
-| system | CPU and memory | system monitor | — |
-| updates | pending updates (when any) | Settings › Updates | — |
-| privacy | one capsule: screen / camera / microphone in use; click: who uses them, and recently | — | — |
-| network | Wi-Fi strength, Ethernet, offline | control centre › Wi-Fi | — |
-| bluetooth | on / connected (when on) | control centre › Bluetooth | — |
-| volume | output level | control centre › Sound | scroll: volume; middle: mute |
-| battery | charge (optional %) | control centre › Power | — |
-| notifications | bell: unseen count, Do not disturb | control centre | — |
-| power | power button | power menu | — |
+Every item answers one gesture table (`modules::gestures`, docs/SYSTEM.md): **left** opens
+its place, **right** its quick action, **scroll** adjusts, **middle** opens Settings › Bar.
+`[modules.<id>]` overrides any of them.
+
+| id | Shows | Left | Right | Scroll |
+|---|---|---|---|---|
+| workspaces | workspaces, open apps' icons | switch workspace | — | next/previous |
+| app | focused app's name | — | — | — |
+| island | what is happening now: the time and date, music (its song opens the player), the weather, the visualiser; a volume/brightness slider; an incoming notification (a click drops its card); something copied | the day (weather, forecast, month) | — | — |
+| clock | time (without the island) | calendar | — | — |
+| media | music (beside the island: inside it) | music player | — | — |
+| weather | temperature, icon (beside the island: inside it) | the day | — | — |
+| airpods | AirPods battery ring | control centre › Bluetooth (each bud's charge) | — | — |
+| tray | tray icons | per icon | per icon | — |
+| system | CPU and memory | system monitor | — | — |
+| updates | pending updates (when any) | Settings › Updates | — | — |
+| privacy | one capsule: screen / camera / microphone in use | who uses them, and recently | — | — |
+| network | Wi-Fi strength, Ethernet, offline | control centre › Wi-Fi | Wi-Fi on/off | — |
+| bluetooth | on / connected (when on) | control centre › Bluetooth | Bluetooth on/off | — |
+| volume | output level | control centre › Sound | mute | volume |
+| battery | charge (optional %) | control centre › Power | next power mode | — |
+| notifications | bell: unseen count, Do not disturb | control centre | Do not disturb | — |
+| power | power button | power menu | — | — |
 
 `status` (the old combined button) is read as `network, bluetooth, volume, battery`, so an
 older config keeps working and shows the separate buttons.
 
 ## Pills
 
-In the pill style, neighbouring modules of one group share a pill (`[bar] groups`); each is
-still its own button inside it, with its own hover. The default groups the status buttons
-(network, bluetooth, volume, battery, notifications) the way macOS keeps its status items
-together.
+In the pill style each section is one pill (Noctalia's rule: its height from the bar, never
+from its content). A module's `shape` changes that: `attached` (default) shares the
+section's pill, `bubble` is a pill of its own, `plain` has none (Settings › Bar, or
+`[modules.<id>] shape`). Music and weather beside the island live inside it, unless given
+a shape of their own.
