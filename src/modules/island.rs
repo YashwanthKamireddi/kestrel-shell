@@ -193,7 +193,20 @@ fn notification_face<'a>(
     if more > 0 {
         content = content.push(label(format!("+{more}"), text::SMALL, s.ink_dim));
     }
-    finish_to(content, o, s, active || open_notice(app), PanelKind::Notice)
+    // The pointer resting on it holds its countdown (it resumes with the time it had left).
+    let id = o.id;
+    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
+        .on_measure(move |w| Message::IslandMeasured(id, w));
+    let h = size::CONTROL;
+    ui::control(inner)
+        .padding([tok::NONE, tok::L])
+        .height(h)
+        .radius(h / 2.0)
+        .bar(s, active || open_notice(app))
+        .on_enter(Message::HoldToasts(true))
+        .on_exit(Message::HoldToasts(false))
+        .on_press_at(move |r| Message::Toggle(PanelKind::Notice, id, r))
+        .into()
 }
 
 fn open_notice(app: &App) -> bool {

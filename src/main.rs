@@ -4,6 +4,7 @@ mod app;
 mod apptheme;
 mod config;
 mod guard;
+mod history;
 mod hypr_settings;
 mod ipc;
 mod look;
