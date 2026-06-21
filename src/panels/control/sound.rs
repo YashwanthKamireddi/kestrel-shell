@@ -59,16 +59,8 @@ pub fn mode_name(description: &str) -> String {
 /// the microphone (level, live meter, device), every app playing sound (its own level, live
 /// meter, mute, output) and every app recording (its level, mute, microphone).
 pub(super) fn output_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    ui::smooth(
-        iced::widget::scrollable(sound(app, s, true))
-            .height(Length::Shrink)
-            .direction(iced::widget::scrollable::Direction::Vertical(
-                iced::widget::scrollable::Scrollbar::new()
-                    .width(0)
-                    .scroller_width(0),
-            )),
-    )
-    .into()
+    // The control centre scrolls as a whole: no scroll of its own.
+    sound(app, s, true).into()
 }
 
 /// The whole mixer (output, microphone, apps, recording): in the control centre's Sound page

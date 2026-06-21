@@ -830,7 +830,26 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         Page::Network => network_page(app, s),
         Page::Hidden => hidden_page(app, s),
     };
-    container(body).padding(tok::L).into()
+    // Never past the screen: at most the height under the bar (a few tall notifications, a
+    // screenshot's picture, ran the panel off the bottom edge); taller pages scroll.
+    let room = app
+        .panel
+        .as_ref()
+        .and_then(|p| app.output(p.output))
+        .map_or(f32::INFINITY, |o| {
+            o.size.height - crate::theme::size::BAR - 2.0 * tok::XL
+        });
+    container(crate::ui::smooth(
+        iced::widget::scrollable(container(body).padding(tok::L))
+            .height(Length::Shrink)
+            .direction(iced::widget::scrollable::Direction::Vertical(
+                iced::widget::scrollable::Scrollbar::new()
+                    .width(0)
+                    .scroller_width(0),
+            )),
+    ))
+    .max_height(room)
+    .into()
 }
 
 /// Keys on the main page: arrows move between tiles (two per row), Space flips the tile,

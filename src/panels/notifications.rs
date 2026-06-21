@@ -7,7 +7,7 @@ use crate::services::notifications::{self, Image, Notification, Reason};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
-use iced::widget::{Space, column, container, image, row, scrollable};
+use iced::widget::{Space, column, container, image, row};
 use iced::{Alignment, Color, Element, Length, Task};
 use std::time::SystemTime;
 
@@ -37,6 +37,9 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             Task::none()
         }
         Message::Dismiss(id) => {
+            if app.notif_hover == Some(id) {
+                app.notif_hover = None;
+            }
             app.notifications.retain(|n| n.id != id);
             app.toasts.retain(|t| t.id != id);
             Task::future(notifications::closed(id, Reason::Dismissed)).discard()
@@ -496,6 +499,7 @@ fn card_in<'a>(
         iced::Padding::from(tok::L)
     };
     control(col)
+        .identity(u64::from(n.id))
         .padding(pad)
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
@@ -585,17 +589,8 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .pill(s, crate::ui::control::Pill::Quiet)
         .on_press(msg(Message::ShowAll(!app.notif_all)))
     });
-    let body: Element<'_, AppMessage> = if app.notif_all {
-        let list =
-            scrollable(list)
-                .height(Length::Shrink)
-                .direction(scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new().width(0).scroller_width(0),
-                ));
-        container(crate::ui::smooth(list)).max_height(520).into()
-    } else {
-        list.into()
-    };
+    // The control centre scrolls as a whole (never past the screen): no scroll of its own.
+    let body: Element<'_, AppMessage> = list.into();
     let mut c = column![header, body].spacing(tok::M);
     if let Some(t) = toggle {
         c = c.push(container(t).center_x(Length::Fill));

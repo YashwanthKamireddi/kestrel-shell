@@ -69,6 +69,12 @@ pub struct Control<'a, M> {
     /// Bar style: drawn over the content at rest and lifted on hover, so the pointer brightens
     /// what is there instead of laying a grey block over it.
     veil: Color,
+    /// What this control stands for in a list (a notification's id). iced keeps a widget's
+    /// state by its place, so when one goes the next slides into its place with its state:
+    /// a changed identity drops the hover it inherited, and the pointer resting there is
+    /// heard entering the new one (closing a notification left the next, now under the
+    /// pointer, showing its time instead of its close button).
+    identity: Option<u64>,
 }
 
 pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
@@ -91,6 +97,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         press_scale: false,
         center_x: false,
         veil: Color::TRANSPARENT,
+        identity: None,
     }
 }
 
@@ -105,6 +112,11 @@ impl<'a, M> Control<'a, M> {
     }
     pub fn on_exit(mut self, m: M) -> Self {
         self.on_exit = Some(m);
+        self
+    }
+    /// What it stands for in a list (see `identity`).
+    pub fn identity(mut self, id: u64) -> Self {
+        self.identity = Some(id);
         self
     }
 
@@ -231,6 +243,7 @@ impl<'a, M> Control<'a, M> {
 }
 
 struct State {
+    identity: Option<u64>,
     hovered: bool,
     pressed: bool,
     /// 0 = rest, 1 = hovered.
@@ -271,6 +284,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
 
     fn state(&self) -> tree::State {
         tree::State::new(State {
+            identity: self.identity,
             hovered: false,
             pressed: false,
             hover_t: 0.0,
@@ -414,6 +428,14 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             shell.request_redraw();
         }
 
+        // Another item now in this place: it starts unhovered, so the pointer already over it
+        // is heard entering it.
+        if state.identity != self.identity {
+            state.identity = self.identity;
+            state.hovered = false;
+            state.pressed = false;
+            state.hover_t = 0.0;
+        }
         if state.hovered != over {
             state.hovered = over;
             // The redraw below starts the ease (every surface a control can be on redraws while
