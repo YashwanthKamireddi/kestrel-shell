@@ -52,6 +52,12 @@ impl<M> canvas::Program<M> for BarShape {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
+        // Nothing to paint (the Frosted look's panels: the compositor's blur is their fill):
+        // no path at all. An invisible fill still traced the panel's whole outline,
+        // anti-aliased, on every frame of a scroll.
+        if self.color.a <= 0.001 {
+            return Vec::new();
+        }
         vec![state.draw(self, renderer, bounds.size(), |frame| {
             let w = bounds.width;
             if self.band {
@@ -208,6 +214,9 @@ impl<M> canvas::Program<M> for FrameShape {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
+        if self.color.a <= 0.001 {
+            return Vec::new();
+        }
         vec![state.draw(self, renderer, bounds.size(), |frame| {
             let (w, h, t, r) = (bounds.width, bounds.height, self.frame, self.corner);
             match self.edge {

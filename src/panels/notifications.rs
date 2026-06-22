@@ -394,7 +394,9 @@ fn app_name(n: &Notification) -> &str {
     }
 }
 
-/// The header: icon, app, count, time, then the close/arrow slot.
+/// The header: the app's icon (the close button in its place under the pointer, as macOS),
+/// the app's name, the open/fold button with the count, and the time flush right. Nothing in
+/// it moves: the close takes the icon's slot, the time keeps the edge.
 fn head<'a>(
     s: Scheme,
     n: &Notification,
@@ -403,10 +405,14 @@ fn head<'a>(
     arrow: Option<(bool, AppMessage)>,
     with_time: bool,
 ) -> Element<'a, AppMessage> {
+    let first: Element<'a, AppMessage> = match close_on {
+        Some(m) => container(close(s, Some(m))).center(28).into(),
+        None => lead(s, n),
+    };
     let mut r = row![
-        lead(s, n),
+        first,
         label_w(
-            ui::fit(app_name(n), text::CAPTION, TEXT - 120.0),
+            ui::fit(app_name(n), text::CAPTION, TEXT - 140.0),
             text::CAPTION,
             s.ink_dim,
             theme::MEDIUM
@@ -414,46 +420,34 @@ fn head<'a>(
     ]
     .spacing(tok::L)
     .align_y(Alignment::Center);
-    if count > 1 {
+    // The count is the button that opens the group (one meaning, not a stray badge).
+    if let Some((open, m)) = arrow {
+        let mut inner = row![].spacing(tok::XXS).align_y(Alignment::Center);
+        if count > 1 {
+            inner = inner.push(label(count.to_string(), text::CAPTION, s.ink_dim));
+        }
+        inner = inner.push(icon(
+            if open {
+                Icon::ChevronUp
+            } else {
+                Icon::ChevronDown
+            },
+            12.0,
+            s.ink_dim,
+        ));
         r = r.push(
-            container(label(count.to_string(), text::CAPTION, s.ink_dim))
-                .padding([tok::NONE, tok::S])
-                .style(move |_| container::Style {
-                    background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
-                    border: iced::Border::default().rounded(tok::FULL),
-                    ..container::Style::default()
-                }),
+            control(inner)
+                .padding([tok::XXS, tok::S])
+                .radius(tok::FULL)
+                .kind(s, crate::ui::control::Kind::Tonal)
+                .on_press(m),
         );
     }
     r = r.push(Space::new().width(Length::Fill));
     if with_time {
         r = r.push(label(ago(n.time), text::CAPTION, s.ink_faint));
     }
-    r = r.push(close(s, close_on));
-    // The arrow's slot is kept even with nothing to open, so every card's time lines up.
-    if arrow.is_none() {
-        r = r.push(Space::new().width(SLOT).height(SLOT));
-    }
-    if let Some((open, m)) = arrow {
-        r = r.push(
-            control(
-                container(icon(
-                    if open {
-                        Icon::ChevronUp
-                    } else {
-                        Icon::ChevronDown
-                    },
-                    14.0,
-                    s.ink_dim,
-                ))
-                .center(20),
-            )
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(m),
-        );
-    }
-    r.into()
+    r.height(28).into()
 }
 
 /// The action buttons (the app's own, never "default"), at most three.
@@ -527,8 +521,8 @@ fn message<'a>(
     ));
     if with_time {
         title = title.push(label(ago(n.time), text::CAPTION, s.ink_faint));
-        title = title.push(close(s, hovered.then(|| msg(Message::Dismiss(n.id)))));
     }
+    let _ = hovered;
     let mut c = column![title].spacing(tok::XS);
     let body = flat(&n.body);
     let pic_side = (!wide).then(|| thumb(n)).flatten();
@@ -713,22 +707,24 @@ fn group<'a>(
     let mut c = column![head(s, n, g.len(), None, arrow, false)].spacing(tok::S);
     for m in g {
         let hovered = hover == Some(m.id);
-        let item = control(
-            row![
-                Space::new().width(LEAD - tok::L),
-                message(s, m, hovered, true, true)
-            ]
-            .spacing(tok::L),
-        )
-        .identity(u64::from(m.id))
-        .padding([tok::XS, tok::NONE])
-        .width(Length::Fill)
-        .radius(size::ROW_RADIUS)
-        .kind(s, crate::ui::control::Kind::Bare)
-        .no_press_scale()
-        .on_enter(msg(Message::Hover(Some(m.id))))
-        .on_exit(msg(Message::Hover(None)))
-        .on_press_maybe(default_action(m));
+        // Its close in the gutter under the app's icon, on hover (the time keeps the edge).
+        let gutter: Element<'_, AppMessage> = if hovered {
+            container(close(s, Some(msg(Message::Dismiss(m.id)))))
+                .width(LEAD - tok::L)
+                .into()
+        } else {
+            Space::new().width(LEAD - tok::L).into()
+        };
+        let item = control(row![gutter, message(s, m, hovered, true, true)].spacing(tok::L))
+            .identity(u64::from(m.id))
+            .padding([tok::XS, tok::NONE])
+            .width(Length::Fill)
+            .radius(size::ROW_RADIUS)
+            .kind(s, crate::ui::control::Kind::Bare)
+            .no_press_scale()
+            .on_enter(msg(Message::Hover(Some(m.id))))
+            .on_exit(msg(Message::Hover(None)))
+            .on_press_maybe(default_action(m));
         c = c.push(item);
     }
     style_card(c.into(), None)
