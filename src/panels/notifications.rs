@@ -20,6 +20,10 @@ pub enum Message {
     Hover(Option<u32>),
     Action(u32, String),
     ClearAll,
+    /// A group (by app) opened to show every message in full, or folded back.
+    Open(String, bool),
+    /// A whole group dismissed (its ×, folded).
+    DismissAll(Vec<u32>),
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -78,6 +82,25 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             app.notifications.retain(|n| n.id != id);
             app.toasts.retain(|t| t.id != id);
             Task::future(notifications::invoke(id, key)).discard()
+        }
+        Message::Open(group, on) => {
+            if on {
+                app.notif_open.insert(group);
+            } else {
+                app.notif_open.remove(&group);
+            }
+            Task::none()
+        }
+        Message::DismissAll(ids) => {
+            app.notifications.retain(|n| !ids.contains(&n.id));
+            app.toasts.retain(|t| !ids.contains(&t.id));
+            if app.notif_hover.is_some_and(|h| ids.contains(&h)) {
+                app.notif_hover = None;
+            }
+            Task::batch(
+                ids.into_iter()
+                    .map(|id| Task::future(notifications::closed(id, Reason::Dismissed)).discard()),
+            )
         }
         Message::ClearAll => {
             let ids: Vec<u32> = app.notifications.iter().map(|n| n.id).collect();
@@ -215,43 +238,6 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
     }
 }
 
-/// The picture's size on the card's right (a screenshot is wider, as screens are).
-fn picture_size(n: &Notification) -> (f32, f32) {
-    if n.app == "kestrel" {
-        (72.0, 44.0)
-    } else {
-        (44.0, 44.0)
-    }
-}
-
-/// A screenshot (or recording) of kestrel's own: shown under the title across the text's
-/// width at its own shape (height kept between 70 and 150 px), on a faint backing so a dark
-/// picture still shows its edges. A 72 px chip beside the title read as a clipped sliver.
-fn preview<'a>(s: Scheme, n: &Notification, width: f32) -> Option<Element<'a, AppMessage>> {
-    if n.app != "kestrel" {
-        return None;
-    }
-    let Some(Image::Path(p)) = n.image.as_ref() else {
-        return None;
-    };
-    let path = std::path::Path::new(p);
-    let (iw, ih) = image_size(path)?;
-    let h = (width * ih as f32 / iw.max(1) as f32)
-        .clamp(70.0, 150.0)
-        .round();
-    let handle = ui::rounded_file(path, width, h, 10.0)?;
-    Some(
-        container(image(handle).width(width).height(h))
-            .padding(tok::HAIR)
-            .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
-                border: iced::Border::default().rounded(11),
-                ..container::Style::default()
-            })
-            .into(),
-    )
-}
-
 /// A picture file's size, read from its header once per file.
 fn image_size(path: &std::path::Path) -> Option<(u32, u32)> {
     use std::collections::HashMap;
@@ -263,28 +249,11 @@ fn image_size(path: &std::path::Path) -> Option<(u32, u32)> {
         return Some(*sz);
     }
     let sz = ::image::image_dimensions(path).ok()?;
-    // A handful of screenshots at most are listed; the table stays small.
     if map.len() > 64 {
         map.clear();
     }
     map.insert(path.to_path_buf(), sz);
     Some(sz)
-}
-
-fn picture<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
-    // kestrel's own pictures are a preview under the title (`preview`), not a chip.
-    if n.app == "kestrel" && matches!(n.image, Some(Image::Path(_))) {
-        return None;
-    }
-    let (w, h) = picture_size(n);
-    match n.image.as_ref()? {
-        // Decoded first: an app's unreadable file must never reach the renderer.
-        Image::Path(p) => {
-            let handle = ui::rounded_file(std::path::Path::new(p), w, h, 8.0)?;
-            Some(image(handle).width(w).height(h).into())
-        }
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), w, h, 8.0)),
-    }
 }
 
 /// `text` cut to at most `lines` lines of `width` at `size` (wrapping by word), with an
@@ -326,185 +295,301 @@ fn lines_of(text: &str, size: f32, width: f32, lines: usize) -> String {
     s
 }
 
-/// One notification. In the list it is a card of its own; as a banner (`boxed` false) the
-/// banner's box is its card, so there is no box inside a box.
+// --- One card system (design call 2026-11-15, after ii's and Caelestia's groups) ---------------
+//
+// Every notification is built from the same three pieces, so nothing drifts apart:
+// - `head`: the app's icon and name, the count, the time, and one fixed slot at the end for
+//   the close button (shown on hover) and the open/fold arrow. The time never moves.
+// - folded: the newest message's title and a line of it, a small square picture on the
+//   right; a group shows the next title faded under it. No big pictures, no buttons.
+// - open (`message`): every message in full: title, time and close on one line, the text,
+//   its picture across the text's width (capped), its buttons last.
+// A banner is one message, open, with the small picture: readable at once, never a wall.
+
+/// The card's inner width: the control centre's list and a banner are both ~368 px wide.
+const INNER: f32 = 368.0 - 24.0;
+/// The app's icon and the gap after it: the text column starts here.
+const LEAD: f32 = 28.0 + 12.0;
+const TEXT: f32 = INNER - LEAD;
+/// The small square picture beside a folded message or a banner.
+const THUMB: f32 = 40.0;
+/// An open message's picture: across the text, never taller than this.
+const PICTURE_MAX: f32 = 120.0;
+/// The close button's and the arrow's slot (kept when empty, so nothing moves).
+const SLOT: f32 = 20.0;
+
+/// The small square picture, if the notification has one.
+fn thumb<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
+    match n.image.as_ref()? {
+        // Decoded first: an app's unreadable file must never reach the renderer.
+        Image::Path(p) => {
+            let handle = ui::rounded_file(std::path::Path::new(p), THUMB, THUMB, 8.0)?;
+            Some(image(handle).width(THUMB).height(THUMB).into())
+        }
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), THUMB, THUMB, 8.0)),
+    }
+}
+
+/// The picture across the text's width at its own shape, capped at `PICTURE_MAX`.
+fn picture_wide<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
+    match n.image.as_ref()? {
+        Image::Path(p) => {
+            let path = std::path::Path::new(p);
+            let (iw, ih) = image_size(path)?;
+            let h = (TEXT * ih as f32 / iw.max(1) as f32)
+                .clamp(48.0, PICTURE_MAX)
+                .round();
+            let handle = ui::rounded_file(path, TEXT, h, 10.0)?;
+            Some(image(handle).width(TEXT).height(h).into())
+        }
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), TEXT, PICTURE_MAX, 10.0)),
+    }
+}
+
+/// The app's icon at the card's size (`app_icon` is drawn at 32; scaled in its slot).
+fn lead<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
+    container(app_icon(s, n)).center(28).into()
+}
+
+/// The quiet close button (fixed 20 px slot: present or not, nothing moves).
+fn close<'a>(s: Scheme, on: Option<AppMessage>) -> Element<'a, AppMessage> {
+    match on {
+        Some(m) => control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
+            .radius(tok::FULL)
+            .kind(s, crate::ui::control::Kind::Tonal)
+            .on_press(m)
+            .into(),
+        None => Space::new().width(SLOT).height(SLOT).into(),
+    }
+}
+
+fn text_line<'a>(t: String, size: f32, color: Color, bold: bool) -> Element<'a, AppMessage> {
+    iced::widget::text(t)
+        .size(size)
+        .color(color)
+        .font(if bold {
+            iced::Font {
+                weight: theme::SEMIBOLD,
+                ..theme::FONT
+            }
+        } else {
+            theme::FONT
+        })
+        .line_height(iced::widget::text::LineHeight::Relative(1.3))
+        .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+        .width(Length::Fill)
+        .into()
+}
+
+fn flat(t: &str) -> String {
+    t.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The app's name for the header ("kestrel" for its own).
+fn app_name(n: &Notification) -> &str {
+    if n.app.is_empty() {
+        "Notification"
+    } else {
+        &n.app
+    }
+}
+
+/// The header: icon, app, count, time, then the close/arrow slot.
+fn head<'a>(
+    s: Scheme,
+    n: &Notification,
+    count: usize,
+    close_on: Option<AppMessage>,
+    arrow: Option<(bool, AppMessage)>,
+    with_time: bool,
+) -> Element<'a, AppMessage> {
+    let mut r = row![
+        lead(s, n),
+        label_w(
+            ui::fit(app_name(n), text::CAPTION, TEXT - 120.0),
+            text::CAPTION,
+            s.ink_dim,
+            theme::MEDIUM
+        ),
+    ]
+    .spacing(tok::L)
+    .align_y(Alignment::Center);
+    if count > 1 {
+        r = r.push(
+            container(label(count.to_string(), text::CAPTION, s.ink_dim))
+                .padding([tok::NONE, tok::S])
+                .style(move |_| container::Style {
+                    background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
+                    border: iced::Border::default().rounded(tok::FULL),
+                    ..container::Style::default()
+                }),
+        );
+    }
+    r = r.push(Space::new().width(Length::Fill));
+    if with_time {
+        r = r.push(label(ago(n.time), text::CAPTION, s.ink_faint));
+    }
+    r = r.push(close(s, close_on));
+    // The arrow's slot is kept even with nothing to open, so every card's time lines up.
+    if arrow.is_none() {
+        r = r.push(Space::new().width(SLOT).height(SLOT));
+    }
+    if let Some((open, m)) = arrow {
+        r = r.push(
+            control(
+                container(icon(
+                    if open {
+                        Icon::ChevronUp
+                    } else {
+                        Icon::ChevronDown
+                    },
+                    14.0,
+                    s.ink_dim,
+                ))
+                .center(20),
+            )
+            .radius(tok::FULL)
+            .kind(s, crate::ui::control::Kind::Ghost)
+            .on_press(m),
+        );
+    }
+    r.into()
+}
+
+/// The action buttons (the app's own, never "default"), at most three.
+fn actions<'a>(s: Scheme, n: &Notification) -> Option<Element<'a, AppMessage>> {
+    let list: Vec<_> = n
+        .actions
+        .iter()
+        .filter(|(k, l)| k != "default" && !l.is_empty())
+        .take(3)
+        .collect();
+    (!list.is_empty()).then(|| {
+        row(list.into_iter().map(|(k, l)| {
+            control(label_w(
+                ui::ellipsize(l, 20),
+                text::SMALL,
+                s.ink,
+                theme::MEDIUM,
+            ))
+            .pill(s, crate::ui::control::Pill::Plain)
+            .on_press(msg(Message::Action(n.id, k.clone())))
+            .into()
+        }))
+        .spacing(tok::S)
+        .into()
+    })
+}
+
+/// What a click on a message does: the app's default action, or for kestrel's own entries
+/// opening the file.
+fn default_action(n: &Notification) -> Option<AppMessage> {
+    n.actions
+        .iter()
+        .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))
+        .map(|(k, _)| msg(Message::Action(n.id, k.clone())))
+}
+
+/// Whether a message has more than its folded summary shows.
+fn has_more(n: &Notification) -> bool {
+    n.image.is_some()
+        || n.actions
+            .iter()
+            .any(|(k, l)| k != "default" && !l.is_empty())
+        || flat(&n.body).chars().count() > 46
+}
+
+/// One message open in full, as a row of the text column: title with its time and close,
+/// the text, the picture across the text (`wide`) or small on the right, the buttons last.
+fn message<'a>(
+    s: Scheme,
+    n: &Notification,
+    hovered: bool,
+    with_time: bool,
+    wide: bool,
+) -> Element<'a, AppMessage> {
+    let mut title = row![].spacing(tok::S).align_y(Alignment::Center);
+    let summary = n.summary.trim();
+    title = title.push(text_line(
+        lines_of(
+            if summary.is_empty() {
+                app_name(n)
+            } else {
+                summary
+            },
+            text::BODY,
+            TEXT - 70.0,
+            2,
+        ),
+        text::BODY,
+        s.ink,
+        true,
+    ));
+    if with_time {
+        title = title.push(label(ago(n.time), text::CAPTION, s.ink_faint));
+        title = title.push(close(s, hovered.then(|| msg(Message::Dismiss(n.id)))));
+    }
+    let mut c = column![title].spacing(tok::XS);
+    let body = flat(&n.body);
+    let pic_side = (!wide).then(|| thumb(n)).flatten();
+    let text_w = TEXT - pic_side.as_ref().map_or(0.0, |_| THUMB + tok::L);
+    if !body.is_empty() || pic_side.is_some() {
+        let mut r = row![
+            container(text_line(
+                lines_of(&body, text::SMALL, text_w, if wide { 6 } else { 3 }),
+                text::SMALL,
+                s.ink_dim,
+                false
+            ))
+            .width(text_w)
+        ]
+        .spacing(tok::L)
+        .align_y(Alignment::Start);
+        if let Some(p) = pic_side {
+            r = r.push(p);
+        }
+        c = c.push(r);
+    }
+    if wide && let Some(p) = picture_wide(n) {
+        c = c.push(p);
+    }
+    if let Some(a) = actions(s, n) {
+        c = c.push(container(a).padding(iced::Padding {
+            top: tok::XS,
+            ..iced::Padding::ZERO
+        }));
+    }
+    c.width(TEXT).into()
+}
+
+/// A banner: one message, open, with the small picture (readable at once, never a wall).
 pub fn card<'a>(
     s: Scheme,
     n: &Notification,
     boxed: bool,
     hovered: bool,
 ) -> Element<'a, AppMessage> {
-    card_in(s, n, boxed, hovered, false, false, true)
-}
-
-/// `card`, optionally as a later message in an app's group (`continued`): no icon or app name
-/// again, only its own time and close button, lined up under the first message's text.
-fn card_in<'a>(
-    s: Scheme,
-    n: &Notification,
-    boxed: bool,
-    hovered: bool,
-    continued: bool,
-    grouped: bool,
-    show_time: bool,
-) -> Element<'a, AppMessage> {
-    // Laid out like a phone's banner: the app's icon on the left; beside it the app and when on
-    // one quiet line, the title, then the message wrapped over up to four lines.
-    // kestrel's own entries (a screenshot, a recording) need no app line: the title says it.
-    // One layout for every notification (screenshots included): the app's icon; beside it
-    // the app and when on one quiet line with the close button, the title (up to two lines),
-    // the message (up to three); a picture, if any, on the right at a fixed size; actions under.
-    // Every piece lives in a text column of a known width, so nothing runs under the picture.
-    let own = n.app == "kestrel";
-    let pic = picture(n);
-    // The card's inner width: the control centre's list or a banner, both ~368 px wide.
-    const INNER: f32 = 368.0 - 24.0;
-    let text_w = INNER - 32.0 - 12.0 - pic.as_ref().map_or(0.0, |_| picture_size(n).0 + 12.0);
-    let app_name: Element<'a, AppMessage> = if continued {
-        Space::new().into()
-    } else {
-        label_w(
-            ui::fit(
-                if own { "kestrel" } else { &n.app },
-                text::CAPTION,
-                text_w - 70.0,
-            ),
-            text::CAPTION,
-            s.ink_dim,
-            theme::MEDIUM,
-        )
-        .into()
-    };
-    let top = row![
-        app_name,
-        Space::new().width(Length::Fill),
-        // When it came at rest, the close button in its place under the pointer (as macOS):
-        // one quiet corner instead of a time and a button on every card.
-        container(if hovered {
-            Element::from(
-                control(container(icon(Icon::X, 11.0, s.ink_dim)).center(20))
-                    .radius(tok::FULL)
-                    .kind(s, crate::ui::control::Kind::Tonal)
-                    .on_press(msg(Message::Dismiss(n.id))),
-            )
-        } else if show_time {
-            label(ago(n.time), text::CAPTION, s.ink_faint).into()
-        } else {
-            // A later message from the same moment: the group's time above says it.
-            Space::new().into()
-        })
-        .align_x(Alignment::End)
-        .center_y(20)
-        .width(40),
+    let body = column![
+        head(
+            s,
+            n,
+            1,
+            hovered.then(|| msg(Message::Dismiss(n.id))),
+            None,
+            true
+        ),
+        row![
+            Space::new().width(LEAD - tok::L),
+            message(s, n, hovered, false, false)
+        ]
+        .spacing(tok::L),
     ]
-    .spacing(tok::S)
-    .align_y(Alignment::Center);
-    let wrapped = |t: String, size: f32, color: Color, bold: bool| {
-        iced::widget::text(t)
-            .size(size)
-            .color(color)
-            .font(if bold {
-                iced::Font {
-                    weight: theme::SEMIBOLD,
-                    ..theme::FONT
-                }
-            } else {
-                theme::FONT
-            })
-            .line_height(iced::widget::text::LineHeight::Relative(1.3))
-            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-            .width(Length::Fill)
-    };
-    let mut words = column![].spacing(tok::XXS).width(text_w);
-    if !n.summary.trim().is_empty() {
-        words = words.push(wrapped(
-            lines_of(n.summary.trim(), text::BODY, text_w, 2),
-            text::BODY,
-            s.ink,
-            true,
-        ));
-    }
-    let body_text = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
-    if !body_text.is_empty() {
-        words = words.push(wrapped(
-            lines_of(&body_text, text::SMALL, text_w, 3),
-            text::SMALL,
-            s.ink_dim,
-            false,
-        ));
-    }
-    let mut main = row![words].spacing(tok::L).align_y(Alignment::Start);
-    if let Some(p) = pic {
-        main = main.push(p);
-    }
-    let mut texts = column![top, main].spacing(tok::XS).width(Length::Fill);
-    if let Some(p) = preview(s, n, INNER - 32.0 - 12.0 - 2.0) {
-        texts = texts.push(container(p).padding(iced::Padding {
-            top: tok::XS,
-            ..iced::Padding::ZERO
-        }));
-    }
-    let actions: Vec<_> = n
-        .actions
-        .iter()
-        .filter(|(k, l)| k != "default" && !l.is_empty())
-        .take(3)
-        .collect();
-    if !actions.is_empty() {
-        texts = texts.push(
-            container(
-                row(actions.into_iter().map(|(k, l)| {
-                    control(label_w(
-                        ui::ellipsize(l, 20),
-                        text::SMALL,
-                        s.ink,
-                        theme::MEDIUM,
-                    ))
-                    .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(msg(Message::Action(n.id, k.clone())))
-                    .into()
-                }))
-                .spacing(tok::S),
-            )
-            .padding(iced::Padding {
-                top: tok::S,
-                ..iced::Padding::ZERO
-            }),
-        );
-    }
-    let lead: Element<'a, AppMessage> = if continued {
-        Space::new().width(32).into()
-    } else {
-        app_icon(s, n)
-    };
-    let body = row![lead, texts].spacing(tok::L).align_y(Alignment::Start);
-    let col = column![body];
-    // What a click on the card does: the app's default action, or for kestrel's own entries
-    // (a recording, a picture) opening it.
-    let default = n
-        .actions
-        .iter()
-        .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))
-        .map(|(k, _)| k.clone());
-    // In a group the messages sit close: less room under each, none above a later one (its
-    // time row is the gap).
-    let pad = if grouped {
-        iced::Padding {
-            top: if continued { tok::NONE } else { tok::L },
-            bottom: tok::S,
-            left: tok::L,
-            right: tok::L,
-        }
-    } else {
-        iced::Padding::from(tok::L)
-    };
-    control(col)
+    .spacing(tok::XS);
+    control(body)
         .identity(u64::from(n.id))
-        .padding(pad)
+        .padding(tok::L)
         .width(Length::Fill)
         .radius(size::CARD_RADIUS)
-        // A card that opens something lifts on hover (one with no default action does not
-        // react: it has nothing to press).
         .kind(
             s,
             if boxed {
@@ -516,12 +601,142 @@ fn card_in<'a>(
         .no_press_scale()
         .on_enter(msg(Message::Hover(Some(n.id))))
         .on_exit(msg(Message::Hover(None)))
-        .on_press_maybe(default.map(|k| msg(Message::Action(n.id, k))))
+        .on_press_maybe(default_action(n))
         .into()
 }
 
-/// Notifications inside the control centre: the newest first, cleared one by one or all at
-/// once. Nothing at all when there are none (no "empty" message).
+/// A group in the list (one app's messages in a row; a single message is a group of one).
+/// Folded: the newest message's title and a line, the next title faded; a click opens a group
+/// (a single message does what the app asks). Open: every message in full.
+fn group<'a>(
+    s: Scheme,
+    g: &[&Notification],
+    open: bool,
+    hover: Option<u32>,
+) -> Element<'a, AppMessage> {
+    let n = g[0];
+    let key = n.app.clone();
+    let expandable = g.len() > 1 || has_more(n);
+    let arrow = expandable.then(|| (open, msg(Message::Open(key.clone(), !open))));
+    let ids: Vec<u32> = g.iter().map(|m| m.id).collect();
+    let card_hovered = hover == Some(n.id);
+    let dismiss = if g.len() == 1 {
+        msg(Message::Dismiss(n.id))
+    } else {
+        msg(Message::DismissAll(ids))
+    };
+    // Folded, the card is one target with one close (the group's); open, each message is.
+    let style_card = |content: Element<'a, AppMessage>, on: Option<AppMessage>| {
+        let c = control(content)
+            .identity(u64::from(n.id))
+            .padding(tok::L)
+            .width(Length::Fill)
+            .radius(size::CARD_RADIUS)
+            .kind(s, crate::ui::control::Kind::Tonal)
+            .no_press_scale();
+        let c = if open {
+            c
+        } else {
+            c.on_enter(msg(Message::Hover(Some(n.id))))
+                .on_exit(msg(Message::Hover(None)))
+        };
+        c.on_press_maybe(on).into()
+    };
+    if !open {
+        // Folded: the summary.
+        let summary = n.summary.trim();
+        let title = if summary.is_empty() {
+            app_name(n)
+        } else {
+            summary
+        };
+        let line = flat(&n.body);
+        let pic = thumb(n);
+        let text_w = TEXT - pic.as_ref().map_or(0.0, |_| THUMB + tok::L);
+        let mut words = column![label_w(
+            ui::fit(title, text::BODY, text_w),
+            text::BODY,
+            s.ink,
+            theme::SEMIBOLD
+        )]
+        .spacing(tok::XXS)
+        .width(text_w);
+        if !line.is_empty() {
+            words = words.push(label(
+                ui::fit(&line, text::SMALL, text_w),
+                text::SMALL,
+                s.ink_dim,
+            ));
+        }
+        if let Some(next) = g.get(1) {
+            let t = next.summary.trim();
+            words = words.push(label(
+                ui::fit(
+                    if t.is_empty() { app_name(next) } else { t },
+                    text::SMALL,
+                    text_w,
+                ),
+                text::SMALL,
+                s.ink_faint,
+            ));
+        }
+        let mut r = row![Space::new().width(LEAD - tok::L), words]
+            .spacing(tok::L)
+            .align_y(Alignment::Center);
+        if let Some(p) = pic {
+            r = r.push(p);
+        }
+        let content = column![
+            head(
+                s,
+                n,
+                g.len(),
+                card_hovered.then(|| dismiss.clone()),
+                arrow,
+                true
+            ),
+            r
+        ]
+        .spacing(tok::XS)
+        .into();
+        // A group opens on a click; a single message does what its app asks (or opens).
+        let on = if g.len() > 1 {
+            Some(msg(Message::Open(key, true)))
+        } else {
+            default_action(n).or_else(|| expandable.then(|| msg(Message::Open(key, true))))
+        };
+        return style_card(content, on);
+    }
+    // Open: every message in full, each its own target (its click, its close).
+    // Open: the header is only who it is from and the arrow; each message has its time and
+    // its close (two closes side by side, and the newest time twice, read as clutter).
+    let mut c = column![head(s, n, g.len(), None, arrow, false)].spacing(tok::S);
+    for m in g {
+        let hovered = hover == Some(m.id);
+        let item = control(
+            row![
+                Space::new().width(LEAD - tok::L),
+                message(s, m, hovered, true, true)
+            ]
+            .spacing(tok::L),
+        )
+        .identity(u64::from(m.id))
+        .padding([tok::XS, tok::NONE])
+        .width(Length::Fill)
+        .radius(size::ROW_RADIUS)
+        .kind(s, crate::ui::control::Kind::Bare)
+        .no_press_scale()
+        .on_enter(msg(Message::Hover(Some(m.id))))
+        .on_exit(msg(Message::Hover(None)))
+        .on_press_maybe(default_action(m));
+        c = c.push(item);
+    }
+    style_card(c.into(), None)
+}
+
+/// Notifications inside the control centre: the newest first, one card per app's run of
+/// messages, folded until opened; cleared one by one, by group or all at once. Nothing at all
+/// when there are none (no "empty" message).
 pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     if app.notifications.is_empty() {
         return Space::new().into();
@@ -534,8 +749,6 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .align_y(Alignment::Center)
     .padding([tok::NONE, tok::XS]);
-    // Consecutive messages from one app share one card (as on phones and macOS): the app once,
-    // its messages under it; a single message is its own card as before.
     let newest: Vec<&Notification> = app.notifications.iter().rev().collect();
     let mut groups: Vec<Vec<&Notification>> = Vec::new();
     for n in newest {
@@ -545,37 +758,18 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
     }
     let hover = app.notif_hover;
-    // The newest few groups in full, the rest behind "Show N more" (a long list cut off at the
-    // panel's edge looked unfinished).
-    const FIRST: usize = 3;
+    // Folded cards are small: the newest five, the rest behind "Show N more".
+    const FIRST: usize = 5;
     let more = groups.len().saturating_sub(FIRST);
     if !app.notif_all {
         groups.truncate(FIRST);
     }
-    let list = column(groups.into_iter().map(|g| {
-        if g.len() == 1 {
-            return card(s, g[0], true, hover == Some(g[0].id));
-        }
-        // Each message's time only where it differs from the one above ("now", "now", "now"
-        // on every line was noise).
-        let inner = column(g.iter().enumerate().map(|(k, n)| {
-            let show_time = k == 0 || ago(g[k - 1].time) != ago(n.time);
-            card_in(s, n, false, hover == Some(n.id), k > 0, true, show_time)
-        }));
-        container(inner)
-            .width(Length::Fill)
-            .padding(iced::Padding {
-                bottom: tok::XS,
-                ..iced::Padding::ZERO
-            })
-            .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-                border: iced::Border::default().rounded(size::CARD_RADIUS),
-                ..container::Style::default()
-            })
-            .into()
-    }))
-    .spacing(tok::M);
+    let list = column(
+        groups
+            .iter()
+            .map(|g| group(s, g, app.notif_open.contains(&g[0].app), hover)),
+    )
+    .spacing(tok::S);
     let toggle = (more > 0).then(|| {
         control(label(
             if app.notif_all {
@@ -589,9 +783,7 @@ pub fn section(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .pill(s, crate::ui::control::Pill::Quiet)
         .on_press(msg(Message::ShowAll(!app.notif_all)))
     });
-    // The control centre scrolls as a whole (never past the screen): no scroll of its own.
-    let body: Element<'_, AppMessage> = list.into();
-    let mut c = column![header, body].spacing(tok::M);
+    let mut c = column![header, list].spacing(tok::M);
     if let Some(t) = toggle {
         c = c.push(container(t).center_x(Length::Fill));
     }
