@@ -839,6 +839,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .map_or(f32::INFINITY, |o| {
             o.size.height - crate::theme::size::BAR - 2.0 * tok::XL
         });
+    // The main page keeps its tiles still and scrolls only its notifications (`main_page`);
+    // other pages scroll whole when taller than the screen.
+    if app.panels.control.page == Page::Main {
+        return container(body).padding(tok::L).into();
+    }
     container(crate::ui::smooth(
         iced::widget::scrollable(container(body).padding(tok::L))
             .height(Length::Shrink)
