@@ -1,7 +1,8 @@
 //! `Swipe`: a card that is swiped sideways to dismiss it, as Android's notifications and DMS's
 //! (`Modules/Notifications/NotificationSwipeRow.qml`): it follows a held drag or a two-finger
 //! sideways scroll; let go past 35 % of its width (or flung that far) it slides out and
-//! `on_dismiss` is sent, short of that it springs back. A click that does not move is a tap
+//! `on_dismiss` is sent at once (the list closes up on that frame: a slide-out first left an
+//! empty slot that read as lag, the user's rule), short of that it springs back. A click that does not move is a tap
 //! (`on_tap`, on release so a drag never taps). Buttons inside keep their own clicks.
 
 use crate::motion::Spring;
@@ -72,7 +73,6 @@ struct State {
     speed: f32,
     moved_at: Option<(Instant, f32)>,
     leaving: bool,
-    sent: bool,
     last: Option<Instant>,
 }
 
@@ -85,7 +85,6 @@ impl State {
             speed: 0.0,
             moved_at: None,
             leaving: false,
-            sent: false,
             last: None,
         }
     }
@@ -101,20 +100,20 @@ impl State {
         self.moved_at = Some((now, x));
     }
 
-    /// Let go: out past the threshold (with its fling), else back.
-    fn release(&mut self, width: f32) {
+    /// Let go: past the threshold (with its fling) it goes, and true is returned; else back.
+    fn release(&mut self, width: f32) -> bool {
         self.grab = Grab::None;
         self.last = None;
         let projected = self.offset.value + self.speed * FLING_SECS;
-        if projected.abs() > width * THRESHOLD {
-            self.leaving = true;
-            self.offset
-                .to(width.copysign(projected) * 1.05, Spring::CLOSE);
-        } else {
-            self.offset.to(0.0, Spring::SNAP);
-        }
         self.speed = 0.0;
         self.moved_at = None;
+        if projected.abs() > width * THRESHOLD {
+            self.leaving = true;
+            true
+        } else {
+            self.offset.to(0.0, Spring::SNAP);
+            false
+        }
     }
 }
 
@@ -188,19 +187,8 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
         );
         let captured = shell.is_event_captured();
         let state = tree.state.downcast_mut::<State>();
+        // Gone: it waits, where it was let go, for the list to drop it.
         if state.leaving {
-            if let Event::Window(window::Event::RedrawRequested(now)) = event {
-                step(state, *now);
-                if state.offset.value.abs() >= width && !state.sent {
-                    state.sent = true;
-                    if let Some(m) = &self.on_dismiss {
-                        shell.publish(m.clone());
-                    }
-                }
-                if !state.sent {
-                    shell.request_redraw();
-                }
-            }
             return;
         }
         let over = cursor.is_over(bounds);
@@ -234,7 +222,11 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
                     }
                 }
                 Grab::Dragging(_) => {
-                    state.release(width);
+                    if state.release(width)
+                        && let Some(m) = &self.on_dismiss
+                    {
+                        shell.publish(m.clone());
+                    }
                     shell.request_redraw();
                     shell.capture_event();
                 }
@@ -242,7 +234,11 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
             },
             Event::Mouse(mouse::Event::CursorLeft) => {
                 if matches!(state.grab, Grab::Dragging(_)) {
-                    state.release(width);
+                    if state.release(width)
+                        && let Some(m) = &self.on_dismiss
+                    {
+                        shell.publish(m.clone());
+                    }
                     shell.request_redraw();
                 } else {
                     state.grab = Grab::None;
@@ -268,8 +264,10 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
             Event::Window(window::Event::RedrawRequested(now)) => {
                 if let Grab::Wheel(t) = state.grab
                     && now.saturating_duration_since(t).as_secs_f32() > WHEEL_IDLE_SECS
+                    && state.release(width)
+                    && let Some(m) = &self.on_dismiss
                 {
-                    state.release(width);
+                    shell.publish(m.clone());
                 }
                 step(state, *now);
                 if !state.offset.settled() || matches!(state.grab, Grab::Wheel(_)) {
@@ -304,19 +302,25 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
             );
             return;
         }
-        renderer.with_translation(Vector::new(dx.round(), 0.0), |renderer| {
-            self.content.as_widget().draw(
-                &tree.children[0],
-                renderer,
-                theme,
-                style,
-                layout.children().next().unwrap(),
-                mouse::Cursor::Unavailable,
-                &Rectangle {
-                    x: viewport.x - dx,
-                    ..*viewport
-                },
-            );
+        // Cut at its own slot: the card slides out of the list, never across the screen.
+        let Some(clip) = layout.bounds().intersection(viewport) else {
+            return;
+        };
+        renderer.with_layer(clip, |renderer| {
+            renderer.with_translation(Vector::new(dx.round(), 0.0), |renderer| {
+                self.content.as_widget().draw(
+                    &tree.children[0],
+                    renderer,
+                    theme,
+                    style,
+                    layout.children().next().unwrap(),
+                    mouse::Cursor::Unavailable,
+                    &Rectangle {
+                        x: clip.x - dx,
+                        ..clip
+                    },
+                );
+            });
         });
     }
 

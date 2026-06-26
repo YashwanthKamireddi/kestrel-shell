@@ -299,14 +299,25 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if show_toasts {
         let a = app.toast_sheet.alpha();
         let fs = s.faded(a);
-        let cards = iced::widget::column(app.toasts.iter().rev().filter_map(|t| {
-            app.notifications
-                .iter()
-                .find(|n| n.id == t.id)
-                .map(|n| panels::notifications::popup(app, fs, n, TOAST_WIDTH - 2.0 * tok::XS))
-        }))
-        .spacing(tok::XXS)
-        .padding(tok::XS);
+        // Each pop-up apart from the next by a hairline (two ran together as one card).
+        let mut cards = iced::widget::column![].spacing(tok::XXS).padding(tok::XS);
+        let shown = app
+            .toasts
+            .iter()
+            .rev()
+            .filter_map(|t| app.notifications.iter().find(|n| n.id == t.id));
+        for (i, n) in shown.enumerate() {
+            if i > 0 {
+                cards = cards
+                    .push(iced::widget::container(ui::divider(fs)).padding([tok::NONE, tok::L]));
+            }
+            cards = cards.push(panels::notifications::popup(
+                app,
+                fs,
+                n,
+                TOAST_WIDTH - 2.0 * tok::XS,
+            ));
+        }
         layers.push(
             pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
                 .offset((1.0 - a) * 6.0)
