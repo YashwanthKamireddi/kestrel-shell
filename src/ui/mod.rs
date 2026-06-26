@@ -11,6 +11,7 @@ pub mod shape;
 pub mod slider;
 pub mod smooth;
 pub mod snap;
+pub mod swipe;
 
 use crate::theme::{self, Scheme, size};
 use iced::widget::{Space, Text, container, row, text};
@@ -20,6 +21,7 @@ pub use control::control;
 pub use icon::Icon;
 pub use reveal::reveal;
 pub use smooth::smooth;
+pub use swipe::swipe;
 
 /// Text in the kestrel type scale.
 pub fn label<'a>(s: impl text::IntoFragment<'a>, size: f32, color: Color) -> Text<'a> {

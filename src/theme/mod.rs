@@ -271,6 +271,8 @@ pub mod tok {
     // A pill is half its height (`pill`).
     pub const R_PANEL: f32 = 24.0;
     pub const R_CARD: f32 = 12.0;
+    /// Where cards of a grouped list meet (Android 16, DMS groupedListInnerRadius).
+    pub const R_JOIN: f32 = 4.0;
     pub const R_ROW: f32 = 10.0;
     pub const R_CONTROL: f32 = 8.0;
 

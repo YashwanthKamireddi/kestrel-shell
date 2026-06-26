@@ -60,6 +60,8 @@ pub struct Control<'a, M> {
     width: Length,
     height: Length,
     radius: f32,
+    /// Top and bottom corners apart (cards in a grouped list: round only at its ends).
+    corners: Option<(f32, f32)>,
     rest: Color,
     hover: Color,
     press: Color,
@@ -90,6 +92,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         width: Length::Shrink,
         height: Length::Shrink,
         radius: crate::theme::size::CONTROL_RADIUS,
+        corners: None,
         rest: Color::TRANSPARENT,
         hover: Color::TRANSPARENT,
         press: Color::TRANSPARENT,
@@ -150,6 +153,24 @@ impl<'a, M> Control<'a, M> {
         self.height = h.into();
         self
     }
+    /// Different top and bottom corners (a card in a grouped list).
+    pub fn corners(mut self, top: f32, bottom: f32) -> Self {
+        self.corners = Some((top, bottom));
+        self
+    }
+
+    fn shape(&self, h: f32) -> iced::border::Radius {
+        match self.corners {
+            Some((t, b)) => iced::border::Radius {
+                top_left: t.min(h / 2.0),
+                top_right: t.min(h / 2.0),
+                bottom_right: b.min(h / 2.0),
+                bottom_left: b.min(h / 2.0),
+            },
+            None => self.radius.min(h / 2.0).into(),
+        }
+    }
+
     pub fn radius(mut self, r: f32) -> Self {
         self.radius = r;
         self
@@ -503,7 +524,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                     renderer::Quad {
                         bounds,
                         border: Border {
-                            radius: self.radius.min(bounds.height / 2.0).into(),
+                            radius: self.shape(bounds.height),
                             width: if self.border.is_some() { 1.0 } else { 0.0 },
                             color: self.border.unwrap_or(Color::TRANSPARENT),
                         },
@@ -537,7 +558,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                     renderer.fill_quad(
                         renderer::Quad {
                             bounds,
-                            border: Border::default().rounded(self.radius.min(bounds.height / 2.0)),
+                            border: Border::default().rounded(self.shape(bounds.height)),
                             ..renderer::Quad::default()
                         },
                         Color {

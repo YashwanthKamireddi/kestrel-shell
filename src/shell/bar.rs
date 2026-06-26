@@ -303,7 +303,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             app.notifications
                 .iter()
                 .find(|n| n.id == t.id)
-                .map(|n| panels::notifications::card(fs, n, false, app.notif_open.contains(&n.app)))
+                .map(|n| panels::notifications::popup(app, fs, n, TOAST_WIDTH - 2.0 * tok::XS))
         }))
         .spacing(tok::XXS)
         .padding(tok::XS);
