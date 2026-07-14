@@ -306,6 +306,11 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
         let Some(clip) = layout.bounds().intersection(viewport) else {
             return;
         };
+        // Dragged wholly out of its slot it shows nothing (drawn, the controls inside found no
+        // visible part and stopped clipping, so the card was painted across the screen).
+        if dx.abs() >= layout.bounds().width {
+            return;
+        }
         renderer.with_layer(clip, |renderer| {
             renderer.with_translation(Vector::new(dx.round(), 0.0), |renderer| {
                 self.content.as_widget().draw(
