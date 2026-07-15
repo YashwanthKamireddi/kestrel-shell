@@ -4,8 +4,8 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
-use crate::ui::{icon, label_w};
+use crate::theme::{Scheme, size};
+use crate::ui::{icon, label};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
@@ -26,7 +26,7 @@ pub fn view<'a>(
             size::ICON,
             crate::ui::weather_tint(w)
         ),
-        label_w(app.temp(w.temp), text::BODY, s.ink, theme::SEMIBOLD),
+        label(app.temp(w.temp), crate::theme::bar::TEXT, s.ink),
     ]
     .spacing(tok::S)
     .align_y(Alignment::Center);

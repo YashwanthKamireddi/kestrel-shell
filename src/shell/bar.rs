@@ -12,10 +12,11 @@ use iced::{Alignment, Element, Length, Point};
 
 /// Workspace slot size and spacing in the bar.
 pub const SLOT: f32 = 28.0;
-/// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
-pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
-/// The floating pills' distance from the screen's sides.
-pub const PILL_MARGIN: f32 = 8.0;
+/// Where the bar's band ends (windows start just below it).
+pub const PILL_BOTTOM: f32 = size::BAR;
+/// The pills' distance from the screen's sides: the same as from its top.
+pub const PILL_MARGIN: f32 =
+    crate::theme::bar::GAP + (crate::theme::bar::H - crate::theme::bar::PILL) / 2.0;
 pub const SLOT_GAP: f32 = 2.0;
 
 /// Left edge and width of the highlight behind the active workspace.
@@ -182,19 +183,26 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 .into(),
         };
         // The side margin goes on each layer: the stack does not pass a container's padding on
-        // (the pills ended up touching the screen's edges).
+        // (the pills ended up touching the screen's edges). The pills float with no bar behind
+        // them (design call 2026-11-16: kestrel's look, DMS's sizes), as far from the screen's
+        // sides as from its top.
+        use crate::theme::bar;
         let margin = if pills { PILL_MARGIN } else { t + 6.0 };
+        let top = if pills { bar::GAP } else { 0.0 };
         let layer = |e: Element<'a, Message>| {
-            container(e)
-                .padding([0.0, margin])
-                .width(Length::Fill)
-                .height(size::BAR)
-                .center_y(size::BAR)
-        };
-        stack![layer(sides.into()), layer(middle)]
+            container(
+                container(e)
+                    .height(size::BAR - top)
+                    .center_y(size::BAR - top),
+            )
+            .padding(iced::Padding::ZERO.left(margin).right(margin).top(top))
             .width(Length::Fill)
             .height(size::BAR)
-            .into()
+        };
+        let content = stack![layer(sides.into()), layer(middle)]
+            .width(Length::Fill)
+            .height(size::BAR);
+        content.into()
     });
 
     if let Some(bar) = bar {
@@ -504,15 +512,25 @@ fn section<'a>(
     let pills_row = groups.into_iter().map(|items| {
         // A pill with one item (the island) is that item: it fills the pill edge to edge.
         let single = items.len() == 1;
-        let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
-            .padding([0, if single { 0 } else { 4 }])
-            .height(size::BAR - 6.0)
-            .center_y(size::BAR - 6.0)
-            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
-        frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
+        // Icon buttons are ITEM wide (the icon and 4 px either side): 4 more at the ends makes
+        // DMS's 8 px widget padding up to the first icon.
+        let pill = container(row(items).align_y(Alignment::Center))
+            .padding([
+                0.0,
+                if single {
+                    0.0
+                } else {
+                    crate::theme::bar::PAD
+                        - (crate::theme::bar::ITEM - crate::theme::bar::ICON) / 2.0
+                },
+            ])
+            .height(crate::theme::bar::PILL)
+            .center_y(crate::theme::bar::PILL)
+            .style(move |_| pill_style(material, s, crate::theme::bar::PILL / 2.0));
+        frosted(app, o, crate::theme::bar::PILL / 2.0, s.opacity, pill)
     });
     row(pills_row)
-        .spacing(tok::S)
+        .spacing(crate::theme::bar::SPACE)
         .align_y(Alignment::Center)
         .into()
 }
@@ -522,8 +540,10 @@ fn section<'a>(
 pub fn pill_style(m: crate::config::Material, s: Scheme, radius: f32) -> container::Style {
     use crate::config::Material;
     container::Style {
+        // On the bar's surface, a step lighter (DMS: surfaceContainerHigh pills on a
+        // surfaceContainer bar).
         background: match m {
-            Material::Black => Some(s.base.into()),
+            Material::Black => Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
             Material::Frosted => None,
         },
         border: iced::Border {

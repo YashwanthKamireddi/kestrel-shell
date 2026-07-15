@@ -302,6 +302,8 @@ pub mod tok {
     pub const FILL: f32 = 0.08;
     /// A fill that must read against a tonal one (an icon's circle on a card).
     pub const FILL_STRONG: f32 = 0.10;
+    /// Quiet ink: an idle indicator (DMS surfaceTextAlpha).
+    pub const QUIET: f32 = 0.3;
 
     // Motion, in seconds.
     pub const HOVER_IN: f32 = 0.07;
@@ -311,9 +313,33 @@ pub mod tok {
 pub const MEDIUM: font::Weight = font::Weight::Medium;
 pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 
+/// The bar's sizes, from DankMaterialShell's default ("comfortable") density
+/// (quickshell/Common/Theme.qml barWidgetThickness/barThickness/barIconSize, DBar defaults
+/// spacing 4, widgetPadding 8). Kestrel keeps its own look, floating pills with no bar behind
+/// them; every bar item's size comes from here, never from its content (design call 2026-11-16).
+pub mod bar {
+    /// The bar band's distance from the screen's top (barConfig.spacing).
+    pub const GAP: f32 = 4.0;
+    /// The band the pills are centred in (Theme.barThickness).
+    pub const H: f32 = 38.0;
+    /// Every item's pill height (Theme.barWidgetThickness).
+    pub const PILL: f32 = 28.0;
+    /// Space inside a pill at its ends (widgetPadding).
+    pub const PAD: f32 = 8.0;
+    /// Space between pills (barConfig.spacing).
+    pub const SPACE: f32 = 4.0;
+    /// Icons in the bar (Theme.barIconSize(38, -4)).
+    pub const ICON: f32 = 16.0;
+    /// An icon button inside a pill: the icon and 4 px either side.
+    pub const ITEM: f32 = ICON + 8.0;
+    /// Text in the bar (Theme.barTextSize at this height: fontSizeSmall, regular weight).
+    pub const TEXT: f32 = 12.0;
+}
+
 /// Spacing and shape.
 pub mod size {
-    pub const BAR: f32 = 40.0;
+    /// The band the bar takes at the top of the screen: its gap and its surface.
+    pub const BAR: f32 = super::bar::GAP + super::bar::H;
     pub const CONTROL: f32 = 30.0;
     pub const PANEL_RADIUS: f32 = 24.0;
     pub const PANEL_PAD: f32 = 12.0;

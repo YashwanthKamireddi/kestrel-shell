@@ -70,11 +70,14 @@ pub fn view<'a>(
         }
         let active = tray_open && crate::panels::tray::showing(app, Some(item));
         let menu = item.clone();
-        let mut ctl =
-            ui::control(iced::widget::container(tray_icon(s, item)).center(size::CONTROL))
-                .radius(size::CONTROL / 2.0)
-                .bar(s, active)
-                .on_right_press(Message::TrayMenu(Some(menu), id, None));
+        let mut ctl = ui::control(
+            iced::widget::container(tray_icon(s, item))
+                .center_x(crate::theme::bar::ITEM)
+                .center_y(crate::theme::bar::PILL),
+        )
+        .radius(crate::theme::tok::FULL)
+        .bar(s, active)
+        .on_right_press(Message::TrayMenu(Some(menu), id, None));
         ctl = if item.item_is_menu {
             let it = item.clone();
             ctl.on_press_at(move |r| Message::TrayMenu(Some(it.clone()), id, Some(r)))
@@ -98,9 +101,10 @@ pub fn view<'a>(
                     size::ICON,
                     s.ink,
                 ))
-                .center(size::CONTROL),
+                .center_x(crate::theme::bar::ITEM)
+                .center_y(crate::theme::bar::PILL),
             )
-            .radius(size::CONTROL / 2.0)
+            .radius(crate::theme::tok::FULL)
             .bar(s, false)
             .on_press(Message::TrayExpand)
             .into(),
