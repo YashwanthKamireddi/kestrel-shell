@@ -302,8 +302,6 @@ pub mod tok {
     pub const FILL: f32 = 0.08;
     /// A fill that must read against a tonal one (an icon's circle on a card).
     pub const FILL_STRONG: f32 = 0.10;
-    /// Quiet ink: an idle indicator (DMS surfaceTextAlpha).
-    pub const QUIET: f32 = 0.3;
 
     // Motion, in seconds.
     pub const HOVER_IN: f32 = 0.07;
