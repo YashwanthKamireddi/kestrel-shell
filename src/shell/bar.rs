@@ -174,7 +174,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                         .width(Length::Fill)
                         .align_x(Alignment::Start),
                 ]
-                .spacing(tok::S)
+                .spacing(crate::theme::bar::SPACE)
                 .align_y(Alignment::Center)
                 .into()
             }

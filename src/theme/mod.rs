@@ -318,22 +318,23 @@ pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 /// spacing 4, widgetPadding 8). Kestrel keeps its own look, floating pills with no bar behind
 /// them; every bar item's size comes from here, never from its content (design call 2026-11-16).
 pub mod bar {
-    /// The bar band's distance from the screen's top (barConfig.spacing).
+    /// The band's distance from the screen's top.
     pub const GAP: f32 = 4.0;
-    /// The band the pills are centred in (Theme.barThickness).
-    pub const H: f32 = 38.0;
-    /// Every item's pill height (Theme.barWidgetThickness).
-    pub const PILL: f32 = 28.0;
-    /// Space inside a pill at its ends (widgetPadding).
-    pub const PAD: f32 = 8.0;
-    /// Space between pills (barConfig.spacing).
-    pub const SPACE: f32 = 4.0;
-    /// Icons in the bar (Theme.barIconSize(38, -4)).
+    /// Every item's pill height: kestrel's control height (DMS's 28 sits on a bar surface;
+    /// floating on the wallpaper it read too small, design call 2026-11-16).
+    pub const PILL: f32 = super::tok::H_CONTROL;
+    /// The band the pills are centred in: the pill and 2 px above and below.
+    pub const H: f32 = PILL + 4.0;
+    /// Space inside a pill at its ends (DMS widgetPadding).
+    pub const PAD: f32 = 10.0;
+    /// Space between pills, the same everywhere.
+    pub const SPACE: f32 = super::tok::M;
+    /// Icons in the bar.
     pub const ICON: f32 = 16.0;
-    /// An icon button inside a pill: the icon and 4 px either side.
-    pub const ITEM: f32 = ICON + 8.0;
-    /// Text in the bar (Theme.barTextSize at this height: fontSizeSmall, regular weight).
-    pub const TEXT: f32 = 12.0;
+    /// An icon button inside a pill: the icon and 5 px either side.
+    pub const ITEM: f32 = ICON + 10.0;
+    /// Text in the bar (regular weight, as DMS).
+    pub const TEXT: f32 = super::text::BODY;
 }
 
 /// Spacing and shape.
