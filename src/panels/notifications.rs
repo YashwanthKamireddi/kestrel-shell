@@ -342,12 +342,24 @@ fn app_name(n: &Notification) -> &str {
     }
 }
 
-/// The notification's picture, a rounded square (DMS: at most THUMB, its own shape).
+/// The notification's picture at its own shape, fitted into THUMB (DMS: the thumbnail is at
+/// most THUMB either way and keeps its aspect; cropped to a square, a wide screenshot of the
+/// bar became a grey blob).
 fn thumb<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
     match n.image.as_ref()? {
-        Image::Path(p) => ui::rounded_file(std::path::Path::new(p), THUMB, THUMB, tok::R_CARD)
-            .map(|h| image(h).width(THUMB).height(THUMB).into()),
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), THUMB, THUMB, tok::R_CARD)),
+        Image::Path(p) => ui::fitted_file(std::path::Path::new(p), THUMB, THUMB, tok::R_CONTROL)
+            .map(|(h, w, ht)| image(h).width(w).height(ht).into()),
+        Image::Rgba(p) => {
+            let (iw, ih) = (p.width.max(1) as f32, p.height.max(1) as f32);
+            let k = (THUMB / iw).min(THUMB / ih);
+            let (w, h) = ((iw * k).round().max(4.0), (ih * k).round().max(4.0));
+            Some(ui::cover(
+                crate::ui::pixels(p),
+                w,
+                h,
+                tok::R_CONTROL.min(h / 2.0),
+            ))
+        }
     }
 }
 

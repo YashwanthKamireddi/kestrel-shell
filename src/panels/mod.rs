@@ -256,6 +256,21 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Settings(m) => settings::update(app, m),
         Message::Files(m) => files::update(app, m),
         Message::Auth(m) => auth::update(app, m),
+        // Tab and Shift+Tab move among the panel's controls (DMS), unless the panel uses them
+        // to move through its own list.
+        Message::Key(k @ (Key::Tab | Key::BackTab))
+            if app
+                .panel
+                .as_ref()
+                .filter(|p| p.open)
+                .is_some_and(|p| !owns_tab(app, p.kind)) =>
+        {
+            if k == Key::Tab {
+                crate::ui::focus::next()
+            } else {
+                crate::ui::focus::previous()
+            }
+        }
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
@@ -286,6 +301,22 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
+    }
+}
+
+/// Panels whose Tab moves through their own list (the launcher's results, the clipboard's
+/// entries, the control centre's tiles...): there Tab keeps that meaning.
+fn owns_tab(app: &App, kind: PanelKind) -> bool {
+    match kind {
+        PanelKind::Launcher
+        | PanelKind::Clipboard
+        | PanelKind::Emoji
+        | PanelKind::Overview
+        | PanelKind::Power
+        | PanelKind::Wallpaper => true,
+        PanelKind::Control => app.panels.control.page == control::Page::Main,
+        PanelKind::Files => app.panels.files.typing_path(),
+        _ => false,
     }
 }
 
@@ -376,7 +407,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     if open.is_some() {
         // Seen even when a text field has the keyboard (it would swallow Delete and Tab).
-        subs.push(iced::event::listen_with(|e, _status, _id| {
+        subs.push(iced::event::listen_with(|e, status, _id| {
             use iced::keyboard::key::Named as N;
             let iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(k),
@@ -399,6 +430,8 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::End => Key::End,
                 N::Delete => Key::Delete,
                 N::Backspace => Key::Backspace,
+                // A focused control took Enter or Space (it pressed itself): not the panel's.
+                N::Enter | N::Space if status == iced::event::Status::Captured => return None,
                 N::Enter if modifiers.shift() => Key::ShiftEnter,
                 N::Enter => Key::Enter,
                 N::Space => Key::Space,
@@ -412,11 +445,14 @@ pub fn subscription(app: &App) -> Subscription<Message> {
 
 pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     // A panel that panics shows nothing (and stays off); the shell carries on.
-    crate::guard::run(
+    // Its content in the focus scope: Tab moves among its controls only (ui::focus).
+    iced::widget::container(crate::guard::run(
         &format!("panel {kind:?}"),
         || view_unguarded(app, kind, s),
         || iced::widget::Space::new().into(),
-    )
+    ))
+    .id(crate::ui::focus::SCOPE)
+    .into()
 }
 
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
