@@ -4,6 +4,7 @@ pub mod breathe;
 pub mod control;
 pub mod focus;
 pub mod icon;
+pub mod inert;
 pub mod measured;
 pub mod morph;
 pub mod reveal;

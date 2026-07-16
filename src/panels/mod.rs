@@ -1,6 +1,7 @@
 //! Panels: what hangs from the bar. Each panel is a view built only from the component kit.
 
 pub mod auth;
+pub mod bar_edit;
 pub mod calendar;
 pub mod capture;
 pub mod clipboard;
@@ -53,6 +54,8 @@ pub enum PanelKind {
     Monitor,
     /// What is using the camera, microphone and screen (under the privacy indicator).
     Privacy,
+    /// Editing the bar in place (a right-click on the bar).
+    BarEdit,
 }
 
 impl PanelKind {
@@ -80,6 +83,7 @@ impl PanelKind {
             "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
+            "bar-edit" | "edit-bar" => Self::BarEdit,
             _ => return None,
         })
     }
@@ -113,6 +117,7 @@ impl PanelKind {
             Self::Monitor => monitor::WIDTH,
             Self::Tray => 260.0,
             Self::Privacy => privacy::WIDTH,
+            Self::BarEdit => bar_edit::WIDTH,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
@@ -148,6 +153,7 @@ pub struct State {
     pub settings: settings::State,
     pub files: files::State,
     pub auth: auth::State,
+    pub bar_edit: bar_edit::State,
 }
 
 #[derive(Clone, Debug)]
@@ -169,6 +175,7 @@ pub enum Message {
     Settings(settings::Message),
     Files(files::Message),
     Auth(auth::Message),
+    BarEdit(bar_edit::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
     /// Left click on a tray icon.
@@ -222,6 +229,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
+        PanelKind::BarEdit => app.panels.bar_edit = bar_edit::State::default(),
         PanelKind::Tray
         | PanelKind::Privacy
         | PanelKind::Weather
@@ -256,6 +264,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Settings(m) => settings::update(app, m),
         Message::Files(m) => files::update(app, m),
         Message::Auth(m) => auth::update(app, m),
+        Message::BarEdit(m) => bar_edit::update(app, m),
         // Tab and Shift+Tab move among the panel's controls (DMS), unless the panel uses them
         // to move through its own list.
         Message::Key(k @ (Key::Tab | Key::BackTab))
@@ -465,6 +474,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Privacy => privacy::view(app, s),
+        PanelKind::BarEdit => bar_edit::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
