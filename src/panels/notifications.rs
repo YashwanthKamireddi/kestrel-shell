@@ -26,6 +26,29 @@ pub enum Message {
     Hide(u32),
     /// The pointer came onto a pop-up or left it: its ✕ shows and its time stops meanwhile.
     Hover(u32, bool),
+    /// A notification's rules menu opened (its right-click) or closed.
+    Menu(Option<u32>),
+    /// A rule for an app, from that menu.
+    Rule(String, Rule),
+}
+
+/// What the rules menu sets for an app (DMS's notification menu, NotificationActions.qml).
+#[derive(Clone, Copy, Debug)]
+pub enum Rule {
+    /// No banners for an hour.
+    QuietHour,
+    /// No banners until tomorrow morning (8:00).
+    QuietTomorrow,
+    /// No banners at all (`quiet`).
+    QuietAlways,
+    /// Banners again.
+    Unquiet,
+    /// Shown even in Do not disturb, or not.
+    Always(bool),
+    /// Shown as a banner and not kept in the list, or kept again.
+    Passing(bool),
+    /// The full rules, in Settings › Notifications.
+    Settings,
 }
 
 fn msg(m: Message) -> AppMessage {
@@ -108,6 +131,14 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::Hide(id) => {
             app.toasts.retain(|t| t.id != id);
             Task::none()
+        }
+        Message::Menu(id) => {
+            app.notif_menu = id;
+            Task::none()
+        }
+        Message::Rule(name, rule) => {
+            app.notif_menu = None;
+            rule_set(app, &name, rule)
         }
         Message::Hover(id, on) => {
             if on {
@@ -202,6 +233,74 @@ fn save_picture(from: &str) -> Option<std::path::PathBuf> {
     ));
     std::fs::copy(from, &to).ok()?;
     Some(to)
+}
+
+/// Sets `rule` for app `name`: in memory now (the next notification already obeys it) and in
+/// config.toml (Settings and later sessions).
+fn rule_set(app: &mut App, name: &str, rule: Rule) -> Task<AppMessage> {
+    use crate::config;
+    let r = &mut app.config.notifications;
+    let without =
+        |l: &[String]| -> Vec<String> { l.iter().filter(|a| *a != name).cloned().collect() };
+    match rule {
+        Rule::QuietHour | Rule::QuietTomorrow => {
+            let now = chrono::Local::now();
+            let until = match rule {
+                Rule::QuietHour => now.timestamp() + 3600,
+                _ => (now.date_naive() + chrono::Days::new(1))
+                    .and_hms_opt(8, 0, 0)
+                    .and_then(|t| t.and_local_timezone(chrono::Local).single())
+                    .map_or(now.timestamp() + 12 * 3600, |t| t.timestamp()),
+            };
+            r.quiet_until.insert(name.to_string(), until);
+            config::set(
+                &["notifications", "quiet_until"],
+                name,
+                toml_edit::value(until),
+            );
+        }
+        Rule::QuietAlways => {
+            r.quiet = without(&r.quiet);
+            r.quiet.push(name.to_string());
+            config::set(&["notifications"], "quiet", config::list(&r.quiet));
+        }
+        Rule::Unquiet => {
+            r.quiet = without(&r.quiet);
+            config::set(&["notifications"], "quiet", config::list(&r.quiet));
+            if r.quiet_until.remove(name).is_some() {
+                config::set(
+                    &["notifications", "quiet_until"],
+                    name,
+                    toml_edit::Item::None,
+                );
+            }
+        }
+        Rule::Always(on) => {
+            r.always = without(&r.always);
+            if on {
+                r.always.push(name.to_string());
+            }
+            config::set(&["notifications"], "always", config::list(&r.always));
+        }
+        Rule::Passing(on) => {
+            r.passing = without(&r.passing);
+            if on {
+                r.passing.push(name.to_string());
+            }
+            config::set(&["notifications"], "passing", config::list(&r.passing));
+        }
+        Rule::Settings => {
+            let open = app.open_settings();
+            let page = super::update(
+                app,
+                PanelMessage::Settings(super::settings::Message::Page(
+                    super::settings::Page::Notifications,
+                )),
+            );
+            return Task::batch([open, page]);
+        }
+    }
+    Task::none()
 }
 
 fn ago(t: SystemTime) -> String {
@@ -445,6 +544,8 @@ struct Place {
     popup: bool,
     hovered: bool,
     more: bool,
+    /// Its rules menu is open (right-click).
+    menu: bool,
 }
 
 /// One notification's card (DMS NotificationCard).
@@ -605,6 +706,8 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
             },
         )
         .no_press_scale();
+    let surface =
+        surface.on_right_press(msg(Message::Menu(if p.menu { None } else { Some(n.id) })));
     let surface: Element<'a, AppMessage> = if p.popup {
         surface
             .on_enter(msg(Message::Hover(n.id, true)))
@@ -631,8 +734,9 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
 }
 
 /// A pop-up (the same card, ✕ and the arrow on hover).
-pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<'a, AppMessage> {
-    card_of(
+pub fn popup<'a>(app: &'a App, s: Scheme, n: &Notification, width: f32) -> Element<'a, AppMessage> {
+    let open = app.notif_menu == Some(n.id);
+    let card = card_of(
         s,
         n,
         Place {
@@ -641,10 +745,98 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
             bottom: tok::R_CARD,
             count: 1,
             popup: true,
-            hovered: app.toast_hover == Some(n.id),
+            // Its menu open, it stays as if the pointer were on it (✕ shown, time held).
+            hovered: open || app.toast_hover == Some(n.id),
             more: app.notif_more.contains(&n.id),
+            menu: open,
         },
-    )
+    );
+    if open {
+        column![card, menu(app, s, n)].spacing(tok::XXS).into()
+    } else {
+        card
+    }
+}
+
+/// A notification's rules menu (its right-click; DMS NotificationActions.qml): mute its app
+/// for an hour, until tomorrow or always (or unmute, with when it ends), let it through Do not
+/// disturb, don't keep it in the list, the full rules in Settings.
+fn menu<'a>(app: &'a App, s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
+    let r = &app.config.notifications;
+    let name = app_name(n).to_string();
+    let rule = |m: Rule| msg(Message::Rule(n.app.clone(), m));
+    let item = |text: String, on: Option<bool>, m: AppMessage| -> Element<'a, AppMessage> {
+        let mut line =
+            row![label(text, text::SMALL, s.ink).width(Length::Fill)].align_y(Alignment::Center);
+        if on == Some(true) {
+            line = line.push(icon(Icon::Check, 14.0, s.accent));
+        }
+        control(line)
+            .padding([tok::S, tok::L])
+            .width(Length::Fill)
+            .radius(tok::R_ROW)
+            .kind(s, crate::ui::control::Kind::Ghost)
+            .on_press(m)
+            .into()
+    };
+    let mut c = column![].spacing(tok::XXS);
+    if r.is_quiet(&n.app) {
+        let when = r
+            .quiet_until(&n.app)
+            .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
+            .map(|t| {
+                format!(
+                    " (until {})",
+                    t.with_timezone(&chrono::Local).format("%-I:%M %p")
+                )
+            })
+            .unwrap_or_default();
+        c = c.push(item(
+            format!("Unmute {name}{when}"),
+            None,
+            rule(Rule::Unquiet),
+        ));
+    } else {
+        c = c
+            .push(item(
+                format!("Mute {name} for 1 hour"),
+                None,
+                rule(Rule::QuietHour),
+            ))
+            .push(item(
+                "Mute until tomorrow".into(),
+                None,
+                rule(Rule::QuietTomorrow),
+            ))
+            .push(item("Mute always".into(), None, rule(Rule::QuietAlways)));
+    }
+    let always = r.always.contains(&n.app);
+    let passing = r.passing.contains(&n.app);
+    c = c
+        .push(item(
+            "Always show, even in Do not disturb".into(),
+            Some(always),
+            rule(Rule::Always(!always)),
+        ))
+        .push(item(
+            "Don't keep in the list".into(),
+            Some(passing),
+            rule(Rule::Passing(!passing)),
+        ))
+        .push(item(
+            "Notification settings…".into(),
+            None,
+            rule(Rule::Settings),
+        ));
+    container(c)
+        .padding(tok::XS)
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
+            border: iced::Border::default().rounded(tok::R_CARD),
+            ..container::Style::default()
+        })
+        .into()
 }
 
 /// The notification centre's width (DMS NotificationMetrics.popupWidth 400).
@@ -693,11 +885,22 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 fn list(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
     // One group per app, the newest first (DMS, ii).
     let mut groups: Vec<Vec<&Notification>> = Vec::new();
-    for n in app.notifications.iter().rev() {
+    for n in app
+        .notifications
+        .iter()
+        .rev()
+        .filter(|n| !app.passing.contains(&n.id))
+    {
         match groups.iter_mut().find(|g| g[0].app == n.app) {
             Some(g) => g.push(n),
             None => groups.push(vec![n]),
         }
+    }
+    // Only "don't keep" ones (they show as banners, not here): the list is empty.
+    if groups.is_empty() {
+        return container(ui::empty(s, Icon::Bell))
+            .center_x(Length::Fill)
+            .into();
     }
     let last = groups.len() - 1;
     let end = |round: bool| if round { tok::R_CARD } else { tok::R_JOIN };
@@ -717,8 +920,12 @@ fn list(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                     popup: false,
                     hovered: false,
                     more: app.notif_more.contains(&n.id),
+                    menu: app.notif_menu == Some(n.id),
                 },
             ));
+            if app.notif_menu == Some(n.id) {
+                list = list.push(menu(app, s, n));
+            }
             continue;
         }
         // Open: the app's name, Dismiss (all of them) and the chip, over each message's card.
@@ -755,8 +962,12 @@ fn list(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                     popup: false,
                     hovered: false,
                     more: app.notif_more.contains(&m.id),
+                    menu: app.notif_menu == Some(m.id),
                 },
             ));
+            if app.notif_menu == Some(m.id) {
+                list = list.push(menu(app, s, m));
+            }
         }
     }
     let list = container(crate::ui::smooth(

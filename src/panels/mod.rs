@@ -232,8 +232,9 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
         PanelKind::BarEdit => app.panels.bar_edit = bar_edit::State::default(),
+        // A rules menu left open last time is closed.
+        PanelKind::Notifications => app.notif_menu = None,
         PanelKind::Tray
-        | PanelKind::Notifications
         | PanelKind::Privacy
         | PanelKind::Weather
         | PanelKind::Pods

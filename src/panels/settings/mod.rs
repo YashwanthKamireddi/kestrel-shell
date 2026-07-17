@@ -1423,12 +1423,20 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .cloned()
                 .collect();
             match rule {
-                1 => quiet.push(name),
-                2 => muted.push(name),
+                1 => quiet.push(name.clone()),
+                2 => muted.push(name.clone()),
                 _ => {}
             }
             config::set(&["notifications"], "muted", config::list(&muted));
             config::set(&["notifications"], "quiet", config::list(&quiet));
+            // A choice here replaces a timed mute from a notification's menu.
+            if rules.quiet_until.contains_key(&name) {
+                config::set(
+                    &["notifications", "quiet_until"],
+                    &name,
+                    toml_edit::Item::None,
+                );
+            }
         }
         Message::NetRead(primary, hot) => {
             let st = &mut app.panels.settings;
