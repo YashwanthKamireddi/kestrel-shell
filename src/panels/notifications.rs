@@ -7,7 +7,7 @@ use crate::services::notifications::{self, Image, Notification, Reason};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
-use iced::widget::{Space, column, container, image, row};
+use iced::widget::{column, container, image, row};
 use iced::{Alignment, Element, Length, Task, font};
 use std::time::SystemTime;
 
@@ -647,24 +647,50 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
     )
 }
 
-/// The control centre's list width (the panel's 392 less its padding).
-const LIST_W: f32 = 392.0 - 2.0 * size::PANEL_PAD;
+/// The notification centre's width (DMS NotificationMetrics.popupWidth 400).
+pub const WIDTH: f32 = 400.0;
+/// Its list's width: the panel less its padding.
+const LIST_W: f32 = WIDTH - 2.0 * size::PANEL_PAD;
 
-/// Notifications inside the control centre: one grouped list, an app's messages folded into
-/// its newest card (DMS); it scrolls in `room` (the tiles above stay still). Nothing at all
-/// when there are none.
-pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
-    if app.notifications.is_empty() {
-        return Space::new().into();
-    }
-    let header = row![
-        label_w("Notifications", text::BODY, s.ink, theme::SEMIBOLD).width(Length::Fill),
-        control(label("Clear all", text::SMALL, s.ink_dim))
-            .pill(s, crate::ui::control::Pill::Quiet)
-            .on_press(msg(Message::ClearAll)),
+/// The notification centre (DMS's: its own panel under the bell): the title, Do not disturb and
+/// Clear all, then one grouped list, an app's messages folded into its newest card; it scrolls
+/// in what is left of the screen. Empty: a faint bell.
+pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    let room = app
+        .panel
+        .as_ref()
+        .and_then(|p| app.output(p.output))
+        .map_or(f32::INFINITY, |o| {
+            o.size.height - size::BAR - 2.0 * tok::XL - 2.0 * tok::L
+        });
+    let dnd = AppMessage::Panel(PanelMessage::Control(super::control::Message::Dnd));
+    let mut header = row![
+        label_w("Notifications", text::TITLE, s.ink, theme::SEMIBOLD).width(Length::Fill),
+        label("Do not disturb", text::SMALL, s.ink_dim),
+        ui::switch(s, app.dnd, dnd),
     ]
+    .spacing(tok::M)
     .align_y(Alignment::Center)
     .padding([tok::NONE, tok::XS]);
+    if !app.notifications.is_empty() {
+        header = header.push(
+            control(label("Clear all", text::SMALL, s.ink_dim))
+                .pill(s, crate::ui::control::Pill::Quiet)
+                .on_press(msg(Message::ClearAll)),
+        );
+    }
+    let body: Element<'_, AppMessage> = if app.notifications.is_empty() {
+        container(ui::empty(s, Icon::Bell))
+            .center_x(Length::Fill)
+            .into()
+    } else {
+        list(app, s, room - tok::H_ROW)
+    };
+    column![header, body].spacing(tok::M).into()
+}
+
+/// The grouped list (DMS).
+fn list(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
     // One group per app, the newest first (DMS, ii).
     let mut groups: Vec<Vec<&Notification>> = Vec::new();
     for n in app.notifications.iter().rev() {
@@ -743,5 +769,5 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             )),
     ))
     .max_height(room);
-    column![header, list].spacing(tok::M).into()
+    list.into()
 }

@@ -56,6 +56,8 @@ pub enum PanelKind {
     Privacy,
     /// Editing the bar in place (a right-click on the bar).
     BarEdit,
+    /// The notification centre (under the bell).
+    Notifications,
 }
 
 impl PanelKind {
@@ -65,8 +67,6 @@ impl PanelKind {
             | "wifi" | "network" => Self::Control,
             "media" => Self::Media,
             "calendar" => Self::Calendar,
-            // Notifications live in the control centre.
-            "notifications" => Self::Control,
             "power" => Self::Power,
             "capture" | "screenshot" => Self::Capture,
             "system" | "monitor" => Self::Monitor,
@@ -84,6 +84,7 @@ impl PanelKind {
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
             "bar-edit" | "edit-bar" => Self::BarEdit,
+            "notifications" | "notification-centre" | "notification-center" => Self::Notifications,
             _ => return None,
         })
     }
@@ -118,6 +119,7 @@ impl PanelKind {
             Self::Tray => 260.0,
             Self::Privacy => privacy::WIDTH,
             Self::BarEdit => bar_edit::WIDTH,
+            Self::Notifications => notifications::WIDTH,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
@@ -231,6 +233,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Settings => return settings::open(app),
         PanelKind::BarEdit => app.panels.bar_edit = bar_edit::State::default(),
         PanelKind::Tray
+        | PanelKind::Notifications
         | PanelKind::Privacy
         | PanelKind::Weather
         | PanelKind::Pods
@@ -475,6 +478,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Privacy => privacy::view(app, s),
         PanelKind::BarEdit => bar_edit::view(app, s),
+        PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),
