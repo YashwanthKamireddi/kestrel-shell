@@ -6,7 +6,7 @@ use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::panels::media;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, text};
+use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -80,7 +80,7 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
 }
 
 /// Diameter of the music bubble: the same height as the pills, so they line up.
-pub const BUBBLE: f32 = crate::theme::bar::PILL;
+pub const BUBBLE: f32 = size::BAR - 6.0;
 
 /// The music bubble: a black pill circle with the cover inside, dimmed while paused. Opens the
 /// media panel. None when there is no player.
@@ -124,12 +124,8 @@ pub fn bar<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Island);
-    let time = label(app.time_text(), crate::theme::bar::TEXT, s.ink);
-    let date = label(
-        app.now.format("%a %-d").to_string(),
-        crate::theme::bar::TEXT,
-        s.ink_dim,
-    );
+    let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
+    let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
     // A pop-up (volume, brightness, a device) takes the island while it lasts.
     if hosts_osd(app)
@@ -295,9 +291,9 @@ fn finish_with<'a>(
     action: Message,
 ) -> Element<'a, Message> {
     let id = o.id;
-    let inner = ui::morph::morph(content, o.island_w.value, crate::theme::bar::PILL)
+    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
-    let h = crate::theme::bar::PILL;
+    let h = size::BAR - 6.0;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)
@@ -316,10 +312,10 @@ fn finish_to<'a>(
     kind: PanelKind,
 ) -> Element<'a, Message> {
     let id = o.id;
-    let inner = ui::morph::morph(content, o.island_w.value, crate::theme::bar::PILL)
+    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
         .on_measure(move |w| Message::IslandMeasured(id, w));
     // As tall as a pill, so in the pill style it is the pill.
-    let h = crate::theme::bar::PILL;
+    let h = size::BAR - 6.0;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)

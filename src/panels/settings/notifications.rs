@@ -156,7 +156,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
         .map(|name| {
             let now = if rules.muted.contains(&name) {
                 2
-            } else if rules.is_quiet(&name) {
+            } else if rules.quiet.contains(&name) {
                 1
             } else {
                 0

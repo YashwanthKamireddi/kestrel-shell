@@ -1,7 +1,6 @@
 //! Panels: what hangs from the bar. Each panel is a view built only from the component kit.
 
 pub mod auth;
-pub mod bar_edit;
 pub mod calendar;
 pub mod capture;
 pub mod clipboard;
@@ -54,10 +53,6 @@ pub enum PanelKind {
     Monitor,
     /// What is using the camera, microphone and screen (under the privacy indicator).
     Privacy,
-    /// Editing the bar in place (a right-click on the bar).
-    BarEdit,
-    /// The notification centre (under the bell).
-    Notifications,
 }
 
 impl PanelKind {
@@ -67,6 +62,8 @@ impl PanelKind {
             | "wifi" | "network" => Self::Control,
             "media" => Self::Media,
             "calendar" => Self::Calendar,
+            // Notifications live in the control centre.
+            "notifications" => Self::Control,
             "power" => Self::Power,
             "capture" | "screenshot" => Self::Capture,
             "system" | "monitor" => Self::Monitor,
@@ -83,8 +80,6 @@ impl PanelKind {
             "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
-            "bar-edit" | "edit-bar" => Self::BarEdit,
-            "notifications" | "notification-centre" | "notification-center" => Self::Notifications,
             _ => return None,
         })
     }
@@ -118,8 +113,6 @@ impl PanelKind {
             Self::Monitor => monitor::WIDTH,
             Self::Tray => 260.0,
             Self::Privacy => privacy::WIDTH,
-            Self::BarEdit => bar_edit::WIDTH,
-            Self::Notifications => notifications::WIDTH,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
@@ -155,7 +148,6 @@ pub struct State {
     pub settings: settings::State,
     pub files: files::State,
     pub auth: auth::State,
-    pub bar_edit: bar_edit::State,
 }
 
 #[derive(Clone, Debug)]
@@ -177,7 +169,6 @@ pub enum Message {
     Settings(settings::Message),
     Files(files::Message),
     Auth(auth::Message),
-    BarEdit(bar_edit::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
     /// Left click on a tray icon.
@@ -231,17 +222,14 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
-        PanelKind::BarEdit => app.panels.bar_edit = bar_edit::State::default(),
-        // A rules menu left open last time is closed.
-        PanelKind::Notifications => app.notif_menu = None,
         PanelKind::Tray
         | PanelKind::Privacy
         | PanelKind::Weather
         | PanelKind::Pods
         | PanelKind::Files
         | PanelKind::Auth
-        | PanelKind::Capture => {}
-        PanelKind::Monitor => return monitor::open(app),
+        | PanelKind::Capture
+        | PanelKind::Monitor => {}
     }
     Task::none()
 }
@@ -268,22 +256,6 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Settings(m) => settings::update(app, m),
         Message::Files(m) => files::update(app, m),
         Message::Auth(m) => auth::update(app, m),
-        Message::BarEdit(m) => bar_edit::update(app, m),
-        // Tab and Shift+Tab move among the panel's controls (DMS), unless the panel uses them
-        // to move through its own list.
-        Message::Key(k @ (Key::Tab | Key::BackTab))
-            if app
-                .panel
-                .as_ref()
-                .filter(|p| p.open)
-                .is_some_and(|p| !owns_tab(app, p.kind)) =>
-        {
-            if k == Key::Tab {
-                crate::ui::focus::next()
-            } else {
-                crate::ui::focus::previous()
-            }
-        }
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
@@ -296,7 +268,6 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             Some(PanelKind::Media) => media::key(app, k),
             Some(PanelKind::Keys) => keys::key(app, k),
-            Some(PanelKind::Monitor) => monitor::key(app, k),
             // The calendar: months back and forth, Home for today.
             Some(PanelKind::Calendar | PanelKind::Island) => {
                 let m = match k {
@@ -315,22 +286,6 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
-    }
-}
-
-/// Panels whose Tab moves through their own list (the launcher's results, the clipboard's
-/// entries, the control centre's tiles...): there Tab keeps that meaning.
-fn owns_tab(app: &App, kind: PanelKind) -> bool {
-    match kind {
-        PanelKind::Launcher
-        | PanelKind::Clipboard
-        | PanelKind::Emoji
-        | PanelKind::Overview
-        | PanelKind::Power
-        | PanelKind::Wallpaper => true,
-        PanelKind::Control => app.panels.control.page == control::Page::Main,
-        PanelKind::Files => app.panels.files.typing_path(),
-        _ => false,
     }
 }
 
@@ -421,7 +376,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     if open.is_some() {
         // Seen even when a text field has the keyboard (it would swallow Delete and Tab).
-        subs.push(iced::event::listen_with(|e, status, _id| {
+        subs.push(iced::event::listen_with(|e, _status, _id| {
             use iced::keyboard::key::Named as N;
             let iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(k),
@@ -444,8 +399,6 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::End => Key::End,
                 N::Delete => Key::Delete,
                 N::Backspace => Key::Backspace,
-                // A focused control took Enter or Space (it pressed itself): not the panel's.
-                N::Enter | N::Space if status == iced::event::Status::Captured => return None,
                 N::Enter if modifiers.shift() => Key::ShiftEnter,
                 N::Enter => Key::Enter,
                 N::Space => Key::Space,
@@ -459,14 +412,11 @@ pub fn subscription(app: &App) -> Subscription<Message> {
 
 pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     // A panel that panics shows nothing (and stays off); the shell carries on.
-    // Its content in the focus scope: Tab moves among its controls only (ui::focus).
-    iced::widget::container(crate::guard::run(
+    crate::guard::run(
         &format!("panel {kind:?}"),
         || view_unguarded(app, kind, s),
         || iced::widget::Space::new().into(),
-    ))
-    .id(crate::ui::focus::SCOPE)
-    .into()
+    )
 }
 
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
@@ -479,8 +429,6 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Privacy => privacy::view(app, s),
-        PanelKind::BarEdit => bar_edit::view(app, s),
-        PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),

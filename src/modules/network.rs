@@ -24,14 +24,10 @@ pub fn view<'a>(
         app.net.connecting,
     );
     vec![
-        crate::ui::control(
-            iced::widget::container(glyph)
-                .center_x(crate::theme::bar::ITEM)
-                .center_y(crate::theme::bar::PILL),
-        )
-        .radius(crate::theme::tok::FULL)
-        .bar(s, active)
-        .on_press_at(move |r| Message::ControlAt(control::Page::Wifi, id, r))
-        .into(),
+        crate::ui::control(iced::widget::container(glyph).center(crate::theme::size::CONTROL))
+            .radius(crate::theme::size::CONTROL / 2.0)
+            .bar(s, active)
+            .on_press_at(move |r| Message::ControlAt(control::Page::Wifi, id, r))
+            .into(),
     ]
 }

@@ -68,27 +68,6 @@ pub struct NotificationRules {
     pub banner: u64,
     /// Urgent notifications (a call, a low battery) show even in Do not disturb.
     pub urgent_in_dnd: bool,
-    /// Apps quiet until a time (Unix seconds): `[notifications.quiet_until] Discord = 1700000000`
-    /// (a notification's right-click menu: "Mute for 1 hour", "until tomorrow").
-    pub quiet_until: std::collections::BTreeMap<String, i64>,
-    /// Apps whose banners show even in Do not disturb (DMS "Allow in Do Not Disturb").
-    pub always: Vec<String>,
-    /// Apps whose notifications show as a banner and are not kept in the list (DMS
-    /// "popup only").
-    pub passing: Vec<String>,
-}
-
-impl NotificationRules {
-    /// No banner for `app` now: quiet always, or until a time not yet reached.
-    pub fn is_quiet(&self, app: &str) -> bool {
-        self.quiet.iter().any(|a| a == app) || self.quiet_until(app).is_some()
-    }
-
-    /// When `app`'s timed quiet ends, if it has not yet.
-    pub fn quiet_until(&self, app: &str) -> Option<i64> {
-        let now = chrono::Local::now().timestamp();
-        self.quiet_until.get(app).copied().filter(|t| *t > now)
-    }
 }
 
 impl Default for NotificationRules {
@@ -100,9 +79,6 @@ impl Default for NotificationRules {
             silent: Vec::new(),
             banner: 5,
             urgent_in_dnd: true,
-            quiet_until: std::collections::BTreeMap::new(),
-            always: Vec::new(),
-            passing: Vec::new(),
         }
     }
 }

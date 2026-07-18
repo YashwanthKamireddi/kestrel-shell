@@ -1423,20 +1423,12 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .cloned()
                 .collect();
             match rule {
-                1 => quiet.push(name.clone()),
-                2 => muted.push(name.clone()),
+                1 => quiet.push(name),
+                2 => muted.push(name),
                 _ => {}
             }
             config::set(&["notifications"], "muted", config::list(&muted));
             config::set(&["notifications"], "quiet", config::list(&quiet));
-            // A choice here replaces a timed mute from a notification's menu.
-            if rules.quiet_until.contains_key(&name) {
-                config::set(
-                    &["notifications", "quiet_until"],
-                    &name,
-                    toml_edit::Item::None,
-                );
-            }
         }
         Message::NetRead(primary, hot) => {
             let st = &mut app.panels.settings;
@@ -2211,9 +2203,37 @@ fn group<'a>(
     })
 }
 
-/// Two or more choices, one of them chosen (the kit's, `ui::segments`).
+/// Two or more choices, one of them chosen.
 fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'a, AppMessage> {
-    crate::ui::segments(s, options)
+    let mut r = row![].spacing(tok::XXS);
+    for (name, on, m) in options {
+        r = r.push(
+            control(label(
+                *name,
+                text::SMALL,
+                if *on { s.on_accent } else { s.ink },
+            ))
+            .padding([tok::S, tok::L])
+            .radius(tok::FULL)
+            .kind(
+                s,
+                if *on {
+                    crate::ui::control::Kind::Primary
+                } else {
+                    crate::ui::control::Kind::Ghost
+                },
+            )
+            .on_press(m.clone()),
+        );
+    }
+    container(r)
+        .padding(tok::XXS)
+        .style(move |_| container::Style {
+            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
+            border: iced::Border::default().rounded(tok::FULL),
+            ..container::Style::default()
+        })
+        .into()
 }
 
 /// Settings > Sound is showing (its live levels run then).

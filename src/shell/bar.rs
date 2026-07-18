@@ -12,11 +12,10 @@ use iced::{Alignment, Element, Length, Point};
 
 /// Workspace slot size and spacing in the bar.
 pub const SLOT: f32 = 28.0;
-/// Where the bar's band ends (windows start just below it).
-pub const PILL_BOTTOM: f32 = size::BAR;
-/// The pills' distance from the screen's sides: the same as from its top.
-pub const PILL_MARGIN: f32 =
-    crate::theme::bar::GAP + (crate::theme::bar::H - crate::theme::bar::PILL) / 2.0;
+/// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
+pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
+/// The floating pills' distance from the screen's sides.
+pub const PILL_MARGIN: f32 = 8.0;
 pub const SLOT_GAP: f32 = 2.0;
 
 /// Left edge and width of the highlight behind the active workspace.
@@ -156,126 +155,46 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             .position(|m| m == "island")
             .or_else(|| center.iter().position(|m| m == "clock"));
         let sides = row![
-            container(section(
-                &app.config.bar.left,
-                Slot {
-                    section: 0,
-                    offset: 0,
-                    end: true
-                },
-                app,
-                o,
-                s,
-                open,
-                pills
-            ))
-            .width(Length::Fill),
-            container(section(
-                &app.config.bar.right,
-                Slot {
-                    section: 2,
-                    offset: 0,
-                    end: true
-                },
-                app,
-                o,
-                s,
-                open,
-                pills
-            ))
-            .width(Length::Fill)
-            .align_x(Alignment::End),
+            container(section(&app.config.bar.left, app, o, s, open, pills)).width(Length::Fill),
+            container(section(&app.config.bar.right, app, o, s, open, pills))
+                .width(Length::Fill)
+                .align_x(Alignment::End),
         ]
         .align_y(Alignment::Center);
         let middle: Element<'a, Message> = match anchor {
             Some(i) => {
-                let before = section(
-                    &center[..i],
-                    Slot {
-                        section: 1,
-                        offset: 0,
-                        end: false,
-                    },
-                    app,
-                    o,
-                    s,
-                    open,
-                    pills,
-                );
+                let before = section(&center[..i], app, o, s, open, pills);
                 row![
                     container(before)
                         .width(Length::Fill)
                         .align_x(Alignment::End),
-                    section(
-                        &center[i..=i],
-                        Slot {
-                            section: 1,
-                            offset: i,
-                            end: false
-                        },
-                        app,
-                        o,
-                        s,
-                        open,
-                        pills
-                    ),
-                    container(section(
-                        &center[i + 1..],
-                        Slot {
-                            section: 1,
-                            offset: i + 1,
-                            end: true
-                        },
-                        app,
-                        o,
-                        s,
-                        open,
-                        pills
-                    ))
-                    .width(Length::Fill)
-                    .align_x(Alignment::Start),
+                    section(&center[i..=i], app, o, s, open, pills),
+                    container(section(&center[i + 1..], app, o, s, open, pills))
+                        .width(Length::Fill)
+                        .align_x(Alignment::Start),
                 ]
-                .spacing(crate::theme::bar::SPACE)
+                .spacing(tok::S)
                 .align_y(Alignment::Center)
                 .into()
             }
-            None => container(section(
-                center,
-                Slot {
-                    section: 1,
-                    offset: 0,
-                    end: true,
-                },
-                app,
-                o,
-                s,
-                open,
-                pills,
-            ))
-            .center_x(Length::Fill)
-            .into(),
+            None => container(section(center, app, o, s, open, pills))
+                .center_x(Length::Fill)
+                .into(),
         };
         // The side margin goes on each layer: the stack does not pass a container's padding on
-        // (the pills ended up touching the screen's edges). The pills float with no bar behind
-        // them (design call 2026-11-16: kestrel's look, DMS's sizes), as far from the screen's
-        // sides as from its top.
-        use crate::theme::bar;
+        // (the pills ended up touching the screen's edges).
         let margin = if pills { PILL_MARGIN } else { t + 6.0 };
-        let top = if pills { bar::GAP } else { 0.0 };
         let layer = |e: Element<'a, Message>| {
-            container(
-                container(e)
-                    .height(size::BAR - top)
-                    .center_y(size::BAR - top),
-            )
-            .padding(iced::Padding::ZERO.left(margin).right(margin).top(top))
+            container(e)
+                .padding([0.0, margin])
+                .width(Length::Fill)
+                .height(size::BAR)
+                .center_y(size::BAR)
+        };
+        stack![layer(sides.into()), layer(middle)]
             .width(Length::Fill)
             .height(size::BAR)
-        };
-        let content = stack![layer(sides.into()), layer(middle)]
-            .width(Length::Fill)
-            .height(size::BAR);
-        content.into()
+            .into()
     });
 
     if let Some(bar) = bar {
@@ -287,24 +206,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 .on_right_press(Message::Close)
                 .into()
         } else {
-            // A right-click on the bar's empty space edits it there (DMS's rightClickAction
-            // "edit-widgets"): the editor opens under the middle of the bar.
-            let id = o.id;
-            let middle = iced::Rectangle::new(
-                Point::new(o.size.width / 2.0, 0.0),
-                iced::Size::new(0.0, size::BAR),
-            );
-            mouse_area(shape)
-                .on_right_press(Message::Toggle(PanelKind::BarEdit, id, middle))
-                .into()
-        };
-        // Editing, the button coming up anywhere on the bar puts the held pill down.
-        let bar: Element<'a, Message> = if crate::panels::bar_edit::editing(app) {
-            mouse_area(bar)
-                .on_release(crate::panels::bar_edit::drop())
-                .into()
-        } else {
-            bar
+            shape.into()
         };
         return stack![shape, bar]
             .width(Length::Fill)
@@ -562,90 +464,14 @@ fn with_actions<'a>(
 /// One bar section: its modules' items in order. In the pill style every module sits on its
 /// own floating pill, except neighbours of one `[bar] groups` entry, which share one (none
 /// when empty).
-/// The bar while it is edited (panels::bar_edit, DMS's editor): every module its own pill, shown
-/// as it is but inert, outlined; a press picks it up, and while held, the pointer coming onto
-/// another pill (or a section's end) moves it there. A module with nothing to show now (no
-/// AirPods connected) stands as its icon, so it can still be moved.
-fn editing<'a>(
-    ids: &'a [String],
-    slot: Slot,
-    app: &'a App,
-    o: &'a Output,
-    s: Scheme,
-    open: Option<PanelKind>,
-) -> Element<'a, Message> {
-    use crate::panels::bar_edit;
-    use crate::theme::bar;
-    let material = app.config.material;
-    let picked = app.panels.bar_edit.selected.as_deref();
-    let mut r = row![].spacing(bar::SPACE).align_y(Alignment::Center);
-    for (k, id) in ids.iter().enumerate() {
-        let items = crate::modules::items(id, app, o, s, open);
-        let content: Element<'a, Message> = if items.is_empty() {
-            let glyph = crate::modules::info(id).map_or(crate::ui::Icon::LayoutGrid, |m| m.icon);
-            container(crate::ui::icon(glyph, bar::ICON, s.ink_dim))
-                .center_x(bar::PILL)
-                .center_y(bar::PILL)
-                .into()
-        } else {
-            row(items).align_y(Alignment::Center).into()
-        };
-        let pill = container(crate::ui::inert::inert(content))
-            .height(bar::PILL)
-            .center_y(bar::PILL)
-            .style(move |_| pill_style(material, s, bar::PILL / 2.0));
-        let ring = if picked == Some(id.as_str()) {
-            s.accent
-        } else {
-            s.ink.scale_alpha(tok::DISABLED * s.opacity)
-        };
-        r = r.push(
-            crate::ui::control(pill)
-                .radius(tok::FULL)
-                .border(ring)
-                .no_press_scale()
-                .on_press(bar_edit::pick(id))
-                .on_enter(bar_edit::over(slot.section, slot.offset + k)),
-        );
-    }
-    if slot.end {
-        // The section's end: a place to drop onto (also an empty section's only place).
-        let len = match slot.section {
-            0 => app.config.bar.left.len(),
-            1 => app.config.bar.center.len(),
-            _ => app.config.bar.right.len(),
-        };
-        r = r.push(
-            crate::ui::control(Space::new().width(bar::PILL).height(bar::PILL))
-                .radius(tok::FULL)
-                .border(s.ink.scale_alpha(tok::FILL * s.opacity))
-                .on_enter(bar_edit::over(slot.section, len)),
-        );
-    }
-    r.into()
-}
-
-/// Where a run of modules sits: its section (0 left, 1 centre, 2 right), the place of its first
-/// module in that section, and whether it is the section's end (the editor's drop place there).
-#[derive(Clone, Copy)]
-struct Slot {
-    section: usize,
-    offset: usize,
-    end: bool,
-}
-
 fn section<'a>(
     ids: &'a [String],
-    slot: Slot,
     app: &'a App,
     o: &'a Output,
     s: Scheme,
     open: Option<PanelKind>,
     pills: bool,
 ) -> Element<'a, Message> {
-    if crate::panels::bar_edit::editing(app) {
-        return editing(ids, slot, app, o, s, open);
-    }
     if !pills {
         let items: Vec<Element<'a, Message>> = ids
             .iter()
@@ -678,25 +504,15 @@ fn section<'a>(
     let pills_row = groups.into_iter().map(|items| {
         // A pill with one item (the island) is that item: it fills the pill edge to edge.
         let single = items.len() == 1;
-        // Icon buttons are ITEM wide (the icon and 4 px either side): 4 more at the ends makes
-        // DMS's 8 px widget padding up to the first icon.
-        let pill = container(row(items).align_y(Alignment::Center))
-            .padding([
-                0.0,
-                if single {
-                    0.0
-                } else {
-                    crate::theme::bar::PAD
-                        - (crate::theme::bar::ITEM - crate::theme::bar::ICON) / 2.0
-                },
-            ])
-            .height(crate::theme::bar::PILL)
-            .center_y(crate::theme::bar::PILL)
-            .style(move |_| pill_style(material, s, crate::theme::bar::PILL / 2.0));
-        frosted(app, o, crate::theme::bar::PILL / 2.0, s.opacity, pill)
+        let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
+            .padding([0, if single { 0 } else { 4 }])
+            .height(size::BAR - 6.0)
+            .center_y(size::BAR - 6.0)
+            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
+        frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
     });
     row(pills_row)
-        .spacing(crate::theme::bar::SPACE)
+        .spacing(tok::S)
         .align_y(Alignment::Center)
         .into()
 }
@@ -706,10 +522,8 @@ fn section<'a>(
 pub fn pill_style(m: crate::config::Material, s: Scheme, radius: f32) -> container::Style {
     use crate::config::Material;
     container::Style {
-        // On the bar's surface, a step lighter (DMS: surfaceContainerHigh pills on a
-        // surfaceContainer bar).
         background: match m {
-            Material::Black => Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
+            Material::Black => Some(s.base.into()),
             Material::Frosted => None,
         },
         border: iced::Border {

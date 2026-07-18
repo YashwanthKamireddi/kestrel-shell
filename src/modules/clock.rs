@@ -2,9 +2,9 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
-use crate::theme::Scheme;
 use crate::theme::tok;
-use crate::ui::label;
+use crate::theme::{self, Scheme, text};
+use crate::ui::{label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
 
@@ -32,11 +32,11 @@ fn clock<'a>(
     let time = app.time_text();
     let date = app.now.format("%a %-d %b").to_string();
     let id = o.id;
-    let mut r = row![label(time, crate::theme::bar::TEXT, s.ink)]
+    let mut r = row![label_w(time, text::BODY, s.ink, theme::SEMIBOLD)]
         .spacing(tok::M)
         .align_y(Alignment::Center);
     if app.config.clock.date {
-        r = r.push(label(date, crate::theme::bar::TEXT, s.ink_dim));
+        r = r.push(label(date, text::SMALL, s.ink));
     }
     if let Some(v) = super::island::visualiser(app, s) {
         r = r.push(v);

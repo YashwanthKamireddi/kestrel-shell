@@ -42,7 +42,7 @@ merge network, sound and battery into one button; kestrel does not: one function
 | bluetooth | on / connected (when on) | control centre › Bluetooth | — |
 | volume | output level | control centre › Sound | scroll: volume; middle: mute |
 | battery | charge (optional %) | control centre › Power | — |
-| notifications | bell: unseen count, Do not disturb | notification centre | — |
+| notifications | bell: unseen count, Do not disturb | control centre | — |
 | power | power button | power menu | — |
 
 `status` (the old combined button) is read as `network, bluetooth, volume, battery`, so an

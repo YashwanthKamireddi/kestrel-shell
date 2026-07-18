@@ -129,9 +129,6 @@ pub mod widget {
         focus, focus_next, focus_previous, is_focused, move_cursor_to_end, scroll_by, scroll_to,
         snap_to, snap_to_end,
     };
-    // kestrel patch: run a custom widget operation as a task (the panel-scoped focus in
-    // src/ui/focus.rs); upstream iced exports this as `advanced::widget::operate`.
-    pub use iced_runtime::task::widget as operate;
     pub use iced_widget::*;
 }
 

@@ -28,8 +28,8 @@ pub use tray::tray_icon_at;
 use crate::app::{App, Message, Output};
 use crate::config::BarConfig;
 use crate::panels::PanelKind;
-use crate::theme::Scheme;
 use crate::theme::tok;
+use crate::theme::{Scheme, size};
 use crate::ui::{self, Icon, icon};
 use iced::Element;
 use iced::widget::container;
@@ -231,9 +231,9 @@ pub fn chip<'a>(
     active: bool,
 ) -> ui::control::Control<'a, Message> {
     ui::control(content)
-        .padding([tok::NONE, crate::theme::bar::PAD])
-        .height(crate::theme::bar::PILL)
-        .radius(tok::FULL)
+        .padding([tok::NONE, tok::L])
+        .height(size::CONTROL)
+        .radius(size::CONTROL / 2.0)
         .bar(s, active)
 }
 
@@ -244,13 +244,9 @@ pub fn icon_chip<'a>(
     color: iced::Color,
     active: bool,
 ) -> ui::control::Control<'a, Message> {
-    ui::control(
-        container(icon(i, crate::theme::bar::ICON, color))
-            .center_x(crate::theme::bar::ITEM)
-            .center_y(crate::theme::bar::PILL),
-    )
-    .radius(tok::FULL)
-    .bar(s, active)
+    ui::control(container(icon(i, size::ICON, color)).center(size::CONTROL))
+        .radius(size::CONTROL / 2.0)
+        .bar(s, active)
 }
 
 /// Whether the control centre is open on `page` (its button shows as open).

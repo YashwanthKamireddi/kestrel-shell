@@ -60,6 +60,3 @@ commit, so a panel never shows one frame of blurred empty area before its conten
 11. `RedrawRequest::At(t)` from a widget is honoured: the loop sleeps until the earliest such time
 and redraws only those surfaces (it was dropped, so a widget pacing itself never drew again).
 Used by `ui::breathe` (2026-11-15).
-12. `iced_runtime::task::widget` re-exported as `widget::operate` (upstream iced has it as
-`advanced::widget::operate`): runs kestrel's own widget operations as tasks, the panel-scoped
-keyboard focus in `src/ui/focus.rs` (2026-11-16).

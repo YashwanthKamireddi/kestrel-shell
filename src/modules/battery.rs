@@ -35,15 +35,11 @@ pub fn view<'a>(
     let press = move |r| Message::ControlAt(control::Page::Power, id, r);
     if !app.config.bar.battery_percent {
         return vec![
-            crate::ui::control(
-                iced::widget::container(glyph(crate::theme::bar::ICON))
-                    .center_x(crate::theme::bar::ITEM)
-                    .center_y(crate::theme::bar::PILL),
-            )
-            .radius(crate::theme::tok::FULL)
-            .bar(s, active)
-            .on_press_at(press)
-            .into(),
+            crate::ui::control(iced::widget::container(glyph(size::ICON)).center(size::CONTROL))
+                .radius(size::CONTROL / 2.0)
+                .bar(s, active)
+                .on_press_at(press)
+                .into(),
         ];
     }
     let content = row![

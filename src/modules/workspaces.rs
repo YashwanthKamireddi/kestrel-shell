@@ -20,12 +20,7 @@ pub fn view<'a>(
     s: Scheme,
     _open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
-    // As far from the pill's ends as from its top and bottom.
-    vec![
-        container(slots(app, o, s))
-            .padding([0.0, (crate::theme::bar::PILL - SLOT) / 2.0])
-            .into(),
-    ]
+    vec![slots(app, o, s)]
 }
 
 fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
