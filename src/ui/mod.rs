@@ -3,6 +3,7 @@
 pub mod breathe;
 pub mod control;
 pub mod focus;
+pub mod graph;
 pub mod icon;
 pub mod inert;
 pub mod morph;
@@ -968,6 +969,43 @@ impl<T: Clone + PartialEq> Memo<T> {
         }
         self.cache.draw(renderer, size, paint)
     }
+}
+
+/// Two or more choices, one of them chosen: a soft track, the chosen one in the accent.
+pub fn segments<'a, M: Clone + 'a>(s: Scheme, options: &[(&'a str, bool, M)]) -> Element<'a, M> {
+    let mut r = row![].spacing(crate::theme::tok::XXS);
+    for (name, on, m) in options {
+        r = r.push(
+            control(label(
+                *name,
+                theme::text::SMALL,
+                if *on { s.on_accent } else { s.ink },
+            ))
+            .padding([crate::theme::tok::S, crate::theme::tok::L])
+            .radius(crate::theme::tok::FULL)
+            .kind(
+                s,
+                if *on {
+                    control::Kind::Primary
+                } else {
+                    control::Kind::Ghost
+                },
+            )
+            .on_press(m.clone()),
+        );
+    }
+    container(r)
+        .padding(crate::theme::tok::XXS)
+        .style(move |_| container::Style {
+            background: Some(
+                s.ink
+                    .scale_alpha(crate::theme::tok::TONAL * s.opacity)
+                    .into(),
+            ),
+            border: iced::Border::default().rounded(crate::theme::tok::FULL),
+            ..container::Style::default()
+        })
+        .into()
 }
 
 #[cfg(test)]

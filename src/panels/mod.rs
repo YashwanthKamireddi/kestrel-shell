@@ -240,8 +240,8 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         | PanelKind::Pods
         | PanelKind::Files
         | PanelKind::Auth
-        | PanelKind::Capture
-        | PanelKind::Monitor => {}
+        | PanelKind::Capture => {}
+        PanelKind::Monitor => return monitor::open(app),
     }
     Task::none()
 }
@@ -296,6 +296,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             Some(PanelKind::Media) => media::key(app, k),
             Some(PanelKind::Keys) => keys::key(app, k),
+            Some(PanelKind::Monitor) => monitor::key(app, k),
             // The calendar: months back and forth, Home for today.
             Some(PanelKind::Calendar | PanelKind::Island) => {
                 let m = match k {

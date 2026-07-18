@@ -2211,37 +2211,9 @@ fn group<'a>(
     })
 }
 
-/// Two or more choices, one of them chosen.
+/// Two or more choices, one of them chosen (the kit's, `ui::segments`).
 fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'a, AppMessage> {
-    let mut r = row![].spacing(tok::XXS);
-    for (name, on, m) in options {
-        r = r.push(
-            control(label(
-                *name,
-                text::SMALL,
-                if *on { s.on_accent } else { s.ink },
-            ))
-            .padding([tok::S, tok::L])
-            .radius(tok::FULL)
-            .kind(
-                s,
-                if *on {
-                    crate::ui::control::Kind::Primary
-                } else {
-                    crate::ui::control::Kind::Ghost
-                },
-            )
-            .on_press(m.clone()),
-        );
-    }
-    container(r)
-        .padding(tok::XXS)
-        .style(move |_| container::Style {
-            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-            border: iced::Border::default().rounded(tok::FULL),
-            ..container::Style::default()
-        })
-        .into()
+    crate::ui::segments(s, options)
 }
 
 /// Settings > Sound is showing (its live levels run then).
