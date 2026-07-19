@@ -200,12 +200,7 @@ pub enum Key {
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
     match kind {
         PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
-        PanelKind::Island => {
-            app.panels.calendar = calendar::State::default();
-            // The rings show their values the moment it opens (a sweep in from empty on every
-            // open read as loading: design call 2026-11-15), and jump to each new reading.
-            app.aim_gauges();
-        }
+        PanelKind::Island => app.panels.calendar = calendar::State::default(),
         PanelKind::Power => app.panels.power = power::State::default(),
         PanelKind::Control => {
             app.panels.control = control::State::default();

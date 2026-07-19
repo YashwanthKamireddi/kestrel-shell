@@ -67,28 +67,6 @@ impl<M> canvas::Program<M> for Ring {
     }
 }
 
-/// A `size` px ring showing `value` (0 to 1).
-pub fn ring<'a, M: 'a>(
-    value: f32,
-    size: f32,
-    width: f32,
-    color: Color,
-    track: Color,
-) -> Element<'a, M> {
-    super::snap::snap(
-        iced::widget::canvas(Ring {
-            value,
-            color,
-            track,
-            width,
-            fill: None,
-        })
-        .width(Length::Fixed(size))
-        .height(Length::Fixed(size)),
-    )
-    .into()
-}
-
 /// `ring` on a disc of `fill` (the colour behind it), repainted whole on every change.
 pub fn ring_on<'a, M: 'a>(
     value: f32,
