@@ -18,7 +18,7 @@ use iced::{Alignment, Element, Length, Task};
 // update, the panel's frame and what every page shares. Public pieces are re-exported, so
 // `control::device_icon` and the like keep their paths.
 mod bt_page;
-pub mod main;
+mod main;
 mod night;
 mod power_page;
 mod quiet;

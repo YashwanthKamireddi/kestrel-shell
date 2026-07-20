@@ -1,6 +1,6 @@
 //! System monitor: each core's load, memory and swap, and the busiest of your processes, each
 //! with a way to end it (asked once: "End?"). Live every 1.5 s while open, nothing when closed.
-//! Opened from the CPU and memory pill or `kestrel toggle system`.
+//! Opened from the dashboard's gauges or `kestrel toggle system`.
 
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};

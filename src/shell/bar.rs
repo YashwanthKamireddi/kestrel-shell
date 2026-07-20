@@ -12,17 +12,6 @@ use iced::{Alignment, Element, Length, Point};
 
 /// Workspace slot size and spacing in the bar.
 pub const SLOT: f32 = 28.0;
-/// The island grown under the pointer (and the music bubble grown on hover): drawn over the pill
-/// from its own top.
-fn grown(app: &App, p: &crate::app::Panel) -> bool {
-    p.kind == PanelKind::Peek
-        || (p.kind == PanelKind::Media && app.peek == Some(crate::panels::peek::Face::Media))
-}
-
-/// The pills' top edge (they are `BAR - 6` tall, centred in the bar): where a grown island
-/// starts.
-const GROWN_TOP: f32 = 3.0;
-
 /// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
 pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
 /// The floating pills' distance from the screen's sides.
@@ -127,21 +116,11 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         // to an empty workspace): the frame and the content share one live width, centred
         // where the panel opened and kept on screen.
         let (x, w) = panel_span(app, p, o.size.width, edge);
-        let mut d = drop(x, w, h);
-        // The grown island (and the music bubble grown on hover) is the pill itself swelling:
-        // from the pill's own top, with its round corners, not a card under the bar.
-        if grown(app, p) {
-            d.top = GROWN_TOP;
-            d.radius = crate::panels::peek::RADIUS;
-        }
-        panel_drop = Some((d, k, h));
+        panel_drop = Some((drop(x, w, h), k, h));
     }
     // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
     // one line in the island they were hard to read); the island keeps the short pop-ups.
-    // With the island in the bar, notifications arrive in it instead (modules::island).
-    let show_toasts = focused
-        && !crate::modules::island::hosts_osd(app)
-        && (app.toast_sheet.visible() || !app.toasts.is_empty());
+    let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
     let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
     if show_toasts {
@@ -311,14 +290,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.2))
                     .on_measure(move |sz| Message::Measured(kind, sz)),
             )
-            .position(Point::new(
-                x,
-                if grown(app, p) {
-                    GROWN_TOP
-                } else {
-                    size::BAR + top_gap
-                },
-            ))
+            .position(Point::new(x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),

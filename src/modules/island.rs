@@ -111,10 +111,7 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
             .width(BUBBLE)
             .height(BUBBLE)
             .radius(BUBBLE / 2.0)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
-            // Resting on it grows it into the player (the island's hover).
-            .on_enter(Message::IslandHover(Some(crate::panels::peek::Face::Media)))
-            .on_exit(Message::IslandHover(None)),
+            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
         )
         .into(),
     )
@@ -130,24 +127,6 @@ pub fn bar<'a>(
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
-    // A notification waiting while something higher takes the island (a level being set, a
-    // flash): its app's icon at the island's front, not hidden (p3dro: a lower activity steps
-    // aside instead of vanishing); it takes the island back when that ends.
-    let waiting = hosts_osd(app)
-        .then(|| {
-            app.toasts
-                .last()
-                .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
-        })
-        .flatten();
-    let busy = app
-        .osd
-        .as_ref()
-        .is_some_and(|o| o.until > std::time::Instant::now())
-        || app.flash.is_some();
-    if busy && let Some(n) = waiting {
-        content = content.push(crate::panels::notifications::icon_sized(s, n, 16.0));
-    }
     // A pop-up (volume, brightness, a device) takes the island while it lasts.
     if hosts_osd(app)
         && let Some(osd) = app
@@ -160,80 +139,11 @@ pub fn bar<'a>(
             s,
             (app.config.sound.max as f32 / 100.0).max(1.0),
         ));
-        // A click acts on what it shows (the level's controls, say); resting the pointer on a
-        // level grows the island into its sliders.
-        let el = match osd.action.clone() {
+        // A click acts on what it shows (the level's controls, say).
+        return match osd.action.clone() {
             Some(a) => finish_with(content, o, s, active, a),
             None => finish(content, o, s, active),
         };
-        if osd.text.is_some() {
-            return el;
-        }
-        // Scrolling on it sets the level right there (up louder or brighter).
-        let what = if osd.icon == crate::ui::Icon::Sun {
-            "brightness"
-        } else {
-            "volume"
-        };
-        let el = iced::widget::mouse_area(el)
-            .on_scroll(move |d| {
-                let y = match d {
-                    iced::mouse::ScrollDelta::Lines { y, .. } => y,
-                    iced::mouse::ScrollDelta::Pixels { y, .. } => y / 40.0,
-                };
-                Message::Ipc(format!("{what} {}", if y > 0.0 { "+5" } else { "-5" }))
-            })
-            .into();
-        return hover(el, crate::panels::peek::Face::Level);
-    }
-    // Notifications arrive in the island (p3dro, the iPhone): the newest, its app's icon,
-    // title and text, and how many more came with it; resting the pointer grows it into
-    // them in full (panels::peek). Banners under the bar are not drawn then.
-    if hosts_osd(app)
-        && let Some(n) = app
-            .toasts
-            .last()
-            .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
-    {
-        let title = if n.summary.trim().is_empty() {
-            n.app.clone()
-        } else {
-            n.summary.trim().to_string()
-        };
-        let body = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
-        let mut r = row![
-            crate::panels::notifications::icon_sized(s, n, 18.0),
-            label_w(
-                ui::fit(&title, text::SMALL, 160.0),
-                text::SMALL,
-                s.ink,
-                theme::SEMIBOLD
-            ),
-        ]
-        .spacing(tok::M)
-        .align_y(Alignment::Center);
-        if !body.is_empty() {
-            r = r.push(label(
-                ui::fit(&body, text::SMALL, 220.0),
-                text::SMALL,
-                s.ink_dim,
-            ));
-        }
-        if app.toasts.len() > 1 {
-            r = r.push(label_w(
-                format!("+{}", app.toasts.len() - 1),
-                text::CAPTION,
-                s.accent,
-                theme::SEMIBOLD,
-            ));
-        }
-        content = content.push(r);
-        let open = crate::panels::notifications::default_action(n)
-            .unwrap_or(Message::Ipc("toggle control".into()));
-        return hover(
-            finish_with(content, o, s, active, open),
-            crate::panels::peek::Face::Notifications,
-        );
     }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
@@ -290,39 +200,6 @@ pub fn bar<'a>(
     // While music plays: the visualiser, inside the time pill.
     if let Some(v) = visualiser(app, s) {
         content = content.push(v);
-    }
-    // A screen recording running: a red dot and its time at the island's end (the iPhone's
-    // trailing part); a click on it stops it.
-    if let Some(since) = app.recording_since.filter(|_| app.hypr.recording.is_some()) {
-        let secs = since.elapsed().as_secs();
-        let live = row![
-            iced::widget::container(iced::widget::Space::new())
-                .width(8)
-                .height(8)
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(s.bad.into()),
-                    border: iced::Border::default().rounded(tok::FULL),
-                    ..iced::widget::container::Style::default()
-                }),
-            label_w(
-                format!("{}:{:02}", secs / 60, secs % 60),
-                text::SMALL,
-                s.bad,
-                theme::SEMIBOLD
-            ),
-        ]
-        .spacing(tok::S)
-        .align_y(Alignment::Center);
-        let mut stop = ui::control(live)
-            .padding([tok::XXS, tok::S])
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Ghost);
-        if let Some(pid) = app.hypr.recording_pid {
-            stop = stop.on_press(Message::Dispatch(
-                crate::services::compositor::Action::Exec(format!("kill -INT {pid}")),
-            ));
-        }
-        content = content.push(stop);
     }
     if !app.config.bar.contains("weather")
         && let Some(w) = &app.weather
@@ -393,14 +270,6 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a,
     .spacing(tok::L)
     .align_y(Alignment::Center)
     .into()
-}
-
-/// The island as a hover target: resting on it grows it as `face` (app.rs `IslandHover`).
-fn hover<'a>(el: Element<'a, Message>, face: crate::panels::peek::Face) -> Element<'a, Message> {
-    iced::widget::mouse_area(el)
-        .on_enter(Message::IslandHover(Some(face)))
-        .on_exit(Message::IslandHover(None))
-        .into()
 }
 
 /// The island's pill around whatever it shows, springing to its width.
