@@ -416,18 +416,8 @@ pub(super) fn tiles(app: &App) -> Vec<Spec> {
 /// these).
 pub fn levels(app: &App, s: Scheme) -> iced::widget::Column<'_, AppMessage> {
     let mut levels = column![].spacing(tok::M);
-    let sink = app.audio.sink();
-    if let Some(d) = sink {
-        let top = boost_top(app);
-        levels = levels.push(level_row_to(
-            s,
-            level_icon(Some(d)),
-            if d.muted { 0.0 } else { d.volume.min(top) },
-            top,
-            Message::SinkVolume,
-            Message::SinkMute,
-            Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
-        ));
+    if let Some(v) = volume_row(app, s) {
+        levels = levels.push(v);
     }
     if let Some(d) = app.audio.source() {
         levels = levels.push(level_row(
@@ -440,44 +430,58 @@ pub fn levels(app: &App, s: Scheme) -> iced::widget::Column<'_, AppMessage> {
             Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
         ));
     }
-    // Brightness: the laptop panel's backlight while that screen is on; otherwise (docked to
-    // a monitor kestrel cannot set) the picture is dimmed instead, with night light's tool.
+    levels.push(brightness_row(app, s))
+}
+
+/// The output's volume slider (None without an output).
+pub fn volume_row(app: &App, s: Scheme) -> Option<Element<'_, AppMessage>> {
+    let d = app.audio.sink()?;
+    let top = boost_top(app);
+    Some(level_row_to(
+        s,
+        level_icon(Some(d)),
+        if d.muted { 0.0 } else { d.volume.min(top) },
+        top,
+        Message::SinkVolume,
+        Message::SinkMute,
+        Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
+    ))
+}
+
+/// The brightness slider: the laptop panel's backlight while that screen is on; otherwise
+/// (docked to a monitor kestrel cannot set) the picture is dimmed instead, with night light's
+/// tool; an external monitor that answers DDC/CI, its real backlight.
+pub fn brightness_row(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     match app
         .brightness
         .filter(|_| app.outputs.iter().any(|o| o.name.starts_with("eDP")))
     {
-        Some(v) => {
-            levels = levels.push(level_row(
-                s,
-                Icon::Sun,
-                v,
-                Message::Brightness,
-                Message::BrightnessDone,
-                Trail::Room,
-            ));
-        }
-        // An external monitor that answers DDC/CI: its real backlight.
+        Some(v) => level_row(
+            s,
+            Icon::Sun,
+            v,
+            Message::Brightness,
+            Message::BrightnessDone,
+            Trail::Room,
+        ),
         None if app.ddc_target().is_some() => {
             let bus = app.ddc_target().unwrap_or_default();
-            levels = levels.push(level_row(
+            level_row(
                 s,
                 Icon::Sun,
                 app.ddc_level.get(&bus).copied().unwrap_or(0.5),
                 Message::DdcBrightness,
                 Message::BrightnessDone,
                 Trail::Room,
-            ));
+            )
         }
-        None => {
-            levels = levels.push(level_row(
-                s,
-                Icon::Sun,
-                app.dim,
-                Message::Dim,
-                Message::BrightnessDone,
-                Trail::Room,
-            ));
-        }
+        None => level_row(
+            s,
+            Icon::Sun,
+            app.dim,
+            Message::Dim,
+            Message::BrightnessDone,
+            Trail::Room,
+        ),
     }
-    levels
 }
