@@ -1,5 +1,5 @@
-//! The dashboard the island opens: today and the weather, what's playing, games, the system,
-//! and the month. Each section appears only when it has something to say.
+//! The dashboard the island opens: today and the weather, what's playing, games and the month
+//! (the system rings went, design call 2026-11-16). Each section appears only when it has something to say.
 
 use super::{calendar, media};
 use crate::app::{App, Message as AppMessage};
@@ -17,7 +17,6 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     {
         col = col.push(playing(s, p));
     }
-    col = col.push(system(app, s));
     col = col.push(card(s, calendar::month(app, s)));
     container(col).padding(tok::L).into()
 }
@@ -155,71 +154,5 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
         ]
         .spacing(tok::L)
         .align_y(Alignment::Center),
-    )
-}
-
-/// CPU, memory and temperature as rings: the value in the middle, the colour moving from the
-/// accent to amber to red as the load rises.
-fn system(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let sys = app.system;
-    let gauge = |name: &'static str, value: f32, shown: String, drawn: f32| {
-        let tone = if value >= 0.85 {
-            s.bad
-        } else if value >= 0.6 {
-            s.warn
-        } else {
-            s.accent
-        };
-        let size = 72.0;
-        column![
-            iced::widget::stack![
-                ui::ring::ring(
-                    drawn,
-                    size,
-                    7.0,
-                    tone,
-                    s.ink.scale_alpha(tok::FILL * s.opacity)
-                ),
-                container(label_w(shown, text::BODY, s.ink, theme::SEMIBOLD)).center(size),
-            ],
-            label(name, text::SMALL, s.ink_dim),
-        ]
-        .spacing(tok::M)
-        .align_x(Alignment::Center)
-        .width(Length::Fill)
-    };
-    let mut r = row![
-        gauge(
-            "CPU",
-            f32::from(sys.cpu) / 100.0,
-            format!("{}%", sys.cpu),
-            app.gauges[0].value
-        ),
-        gauge(
-            "Memory",
-            f32::from(sys.mem) / 100.0,
-            format!("{}%", sys.mem),
-            app.gauges[1].value
-        ),
-    ];
-    if let Some(t) = sys.temp {
-        r = r.push(gauge(
-            "Temp",
-            (f32::from(t) - 30.0) / 70.0,
-            format!("{t}°"),
-            app.gauges[2].value,
-        ));
-    }
-    // A click anywhere on the gauges opens the system monitor (cores, memory, processes).
-    card(
-        s,
-        // Room inside, so the hover lift frames the rings and their names instead of clipping
-        // the names at its edge.
-        ui::control(r.align_y(Alignment::Start))
-            .padding([tok::L, tok::S])
-            .kind(s, crate::ui::control::Kind::Ghost)
-            .radius(theme::size::CARD_RADIUS)
-            .no_press_scale()
-            .on_press(AppMessage::Ipc("toggle system".into())),
     )
 }
