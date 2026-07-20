@@ -130,6 +130,24 @@ pub fn bar<'a>(
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
+    // A notification waiting while something higher takes the island (a level being set, a
+    // flash): its app's icon at the island's front, not hidden (p3dro: a lower activity steps
+    // aside instead of vanishing); it takes the island back when that ends.
+    let waiting = hosts_osd(app)
+        .then(|| {
+            app.toasts
+                .last()
+                .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
+        })
+        .flatten();
+    let busy = app
+        .osd
+        .as_ref()
+        .is_some_and(|o| o.until > std::time::Instant::now())
+        || app.flash.is_some();
+    if busy && let Some(n) = waiting {
+        content = content.push(crate::panels::notifications::icon_sized(s, n, 16.0));
+    }
     // A pop-up (volume, brightness, a device) takes the island while it lasts.
     if hosts_osd(app)
         && let Some(osd) = app
@@ -148,11 +166,25 @@ pub fn bar<'a>(
             Some(a) => finish_with(content, o, s, active, a),
             None => finish(content, o, s, active),
         };
-        return if osd.text.is_none() {
-            hover(el, crate::panels::peek::Face::Level)
+        if osd.text.is_some() {
+            return el;
+        }
+        // Scrolling on it sets the level right there (up louder or brighter).
+        let what = if osd.icon == crate::ui::Icon::Sun {
+            "brightness"
         } else {
-            el
+            "volume"
         };
+        let el = iced::widget::mouse_area(el)
+            .on_scroll(move |d| {
+                let y = match d {
+                    iced::mouse::ScrollDelta::Lines { y, .. } => y,
+                    iced::mouse::ScrollDelta::Pixels { y, .. } => y / 40.0,
+                };
+                Message::Ipc(format!("{what} {}", if y > 0.0 { "+5" } else { "-5" }))
+            })
+            .into();
+        return hover(el, crate::panels::peek::Face::Level);
     }
     // Notifications arrive in the island (p3dro, the iPhone): the newest, its app's icon,
     // title and text, and how many more came with it; resting the pointer grows it into
@@ -258,6 +290,39 @@ pub fn bar<'a>(
     // While music plays: the visualiser, inside the time pill.
     if let Some(v) = visualiser(app, s) {
         content = content.push(v);
+    }
+    // A screen recording running: a red dot and its time at the island's end (the iPhone's
+    // trailing part); a click on it stops it.
+    if let Some(since) = app.recording_since.filter(|_| app.hypr.recording.is_some()) {
+        let secs = since.elapsed().as_secs();
+        let live = row![
+            iced::widget::container(iced::widget::Space::new())
+                .width(8)
+                .height(8)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.bad.into()),
+                    border: iced::Border::default().rounded(tok::FULL),
+                    ..iced::widget::container::Style::default()
+                }),
+            label_w(
+                format!("{}:{:02}", secs / 60, secs % 60),
+                text::SMALL,
+                s.bad,
+                theme::SEMIBOLD
+            ),
+        ]
+        .spacing(tok::S)
+        .align_y(Alignment::Center);
+        let mut stop = ui::control(live)
+            .padding([tok::XXS, tok::S])
+            .radius(tok::FULL)
+            .kind(s, crate::ui::control::Kind::Ghost);
+        if let Some(pid) = app.hypr.recording_pid {
+            stop = stop.on_press(Message::Dispatch(
+                crate::services::compositor::Action::Exec(format!("kill -INT {pid}")),
+            ));
+        }
+        content = content.push(stop);
     }
     if !app.config.bar.contains("weather")
         && let Some(w) = &app.weather
