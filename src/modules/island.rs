@@ -111,7 +111,10 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
             .width(BUBBLE)
             .height(BUBBLE)
             .radius(BUBBLE / 2.0)
-            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
+            .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r))
+            // Resting on it grows it into the player (the island's hover).
+            .on_enter(Message::IslandHover(Some(crate::panels::peek::Face::Media)))
+            .on_exit(Message::IslandHover(None)),
         )
         .into(),
     )
@@ -139,11 +142,66 @@ pub fn bar<'a>(
             s,
             (app.config.sound.max as f32 / 100.0).max(1.0),
         ));
-        // A click acts on what it shows (the level's controls, say).
-        return match osd.action.clone() {
+        // A click acts on what it shows (the level's controls, say); resting the pointer on a
+        // level grows the island into its sliders.
+        let el = match osd.action.clone() {
             Some(a) => finish_with(content, o, s, active, a),
             None => finish(content, o, s, active),
         };
+        return if osd.text.is_none() {
+            hover(el, crate::panels::peek::Face::Level)
+        } else {
+            el
+        };
+    }
+    // Notifications arrive in the island (p3dro, the iPhone): the newest, its app's icon,
+    // title and text, and how many more came with it; resting the pointer grows it into
+    // them in full (panels::peek). Banners under the bar are not drawn then.
+    if hosts_osd(app)
+        && let Some(n) = app
+            .toasts
+            .last()
+            .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
+    {
+        let title = if n.summary.trim().is_empty() {
+            n.app.clone()
+        } else {
+            n.summary.trim().to_string()
+        };
+        let body = n.body.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut r = row![
+            crate::panels::notifications::icon_sized(s, n, 18.0),
+            label_w(
+                ui::fit(&title, text::SMALL, 160.0),
+                text::SMALL,
+                s.ink,
+                theme::SEMIBOLD
+            ),
+        ]
+        .spacing(tok::M)
+        .align_y(Alignment::Center);
+        if !body.is_empty() {
+            r = r.push(label(
+                ui::fit(&body, text::SMALL, 220.0),
+                text::SMALL,
+                s.ink_dim,
+            ));
+        }
+        if app.toasts.len() > 1 {
+            r = r.push(label_w(
+                format!("+{}", app.toasts.len() - 1),
+                text::CAPTION,
+                s.accent,
+                theme::SEMIBOLD,
+            ));
+        }
+        content = content.push(r);
+        let open = crate::panels::notifications::default_action(n)
+            .unwrap_or(Message::Ipc("toggle control".into()));
+        return hover(
+            finish_with(content, o, s, active, open),
+            crate::panels::peek::Face::Notifications,
+        );
     }
     // A flash (something copied) takes the whole island for a moment.
     if let Some(f) = &app.flash {
@@ -270,6 +328,14 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a,
     .spacing(tok::L)
     .align_y(Alignment::Center)
     .into()
+}
+
+/// The island as a hover target: resting on it grows it as `face` (app.rs `IslandHover`).
+fn hover<'a>(el: Element<'a, Message>, face: crate::panels::peek::Face) -> Element<'a, Message> {
+    iced::widget::mouse_area(el)
+        .on_enter(Message::IslandHover(Some(face)))
+        .on_exit(Message::IslandHover(None))
+        .into()
 }
 
 /// The island's pill around whatever it shows, springing to its width.

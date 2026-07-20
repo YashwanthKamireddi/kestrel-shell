@@ -14,6 +14,7 @@ pub mod media;
 pub mod monitor;
 pub mod notifications;
 pub mod overview;
+pub mod peek;
 pub mod pods;
 pub mod power;
 pub mod privacy;
@@ -53,6 +54,8 @@ pub enum PanelKind {
     Monitor,
     /// What is using the camera, microphone and screen (under the privacy indicator).
     Privacy,
+    /// The island grown under the pointer (its sliders, its notifications in full).
+    Peek,
 }
 
 impl PanelKind {
@@ -80,6 +83,7 @@ impl PanelKind {
             "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
+            "peek" => Self::Peek,
             _ => return None,
         })
     }
@@ -113,6 +117,7 @@ impl PanelKind {
             Self::Monitor => monitor::WIDTH,
             Self::Tray => 260.0,
             Self::Privacy => privacy::WIDTH,
+            Self::Peek => peek::WIDTH,
             Self::Launcher => 560.0,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => 860.0,
@@ -218,6 +223,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
         PanelKind::Tray
+        | PanelKind::Peek
         | PanelKind::Privacy
         | PanelKind::Weather
         | PanelKind::Pods
@@ -407,11 +413,19 @@ pub fn subscription(app: &App) -> Subscription<Message> {
 
 pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     // A panel that panics shows nothing (and stays off); the shell carries on.
-    crate::guard::run(
+    let content = crate::guard::run(
         &format!("panel {kind:?}"),
         || view_unguarded(app, kind, s),
         || iced::widget::Space::new().into(),
-    )
+    );
+    // The music panel grown from the bubble by hovering stays while the pointer is on it.
+    if kind == PanelKind::Media && app.peek == Some(peek::Face::Media) {
+        return iced::widget::mouse_area(content)
+            .on_enter(AppMessage::IslandHover(Some(peek::Face::Media)))
+            .on_exit(AppMessage::IslandHover(None))
+            .into();
+    }
+    content
 }
 
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
@@ -424,6 +438,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Privacy => privacy::view(app, s),
+        PanelKind::Peek => peek::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),

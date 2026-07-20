@@ -217,7 +217,13 @@ fn ago(t: SystemTime) -> String {
 /// The app's own icon, large enough to tell at a glance who it is from (its name is tried
 /// when it sent no icon: "vesktop", "kitty").
 fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
-    const D: f32 = AVATAR;
+    icon_sized(s, n, AVATAR)
+}
+
+/// A notification's app icon `d` px across (the island draws it small).
+pub fn icon_sized<'a>(s: Scheme, n: &Notification, d: f32) -> Element<'a, AppMessage> {
+    const SCALE: f32 = 1.0 / AVATAR;
+    let size = d;
     // Kestrel's own entries: its own glyph on a soft round, like its other icons.
     if n.app == "kestrel" {
         // By what it is about: a screenshot, a recording, the battery; anything else (a config
@@ -228,11 +234,11 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
             i if i.starts_with("battery") => Icon::Battery,
             _ => Icon::Info,
         };
-        return container(icon(glyph, 17.0, s.ink))
-            .center(D)
+        return container(icon(glyph, 17.0 * size * SCALE, s.ink))
+            .center(size)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
-                border: iced::Border::default().rounded(D / 2.0),
+                border: iced::Border::default().rounded(size / 2.0),
                 ..container::Style::default()
             })
             .into();
@@ -243,14 +249,14 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         // By its desktop entry, as everywhere else ("Thunar" → org.xfce.thunar).
         .or_else(|| icons::lookup(&crate::services::apps::icon_for_class(&n.app)));
     match found {
-        Some(p) => container(ui::image_file_faded(&p, D, s.opacity))
-            .center(D)
+        Some(p) => container(ui::image_file_faded(&p, size, s.opacity))
+            .center(size)
             .into(),
-        None => container(icon(Icon::Bell, 18.0, s.ink))
-            .center(D)
+        None => container(icon(Icon::Bell, 18.0 * size * SCALE, s.ink))
+            .center(size)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
-                border: iced::Border::default().rounded(D / 2.0),
+                border: iced::Border::default().rounded(size / 2.0),
                 ..container::Style::default()
             })
             .into(),
@@ -359,7 +365,7 @@ fn actions(n: &Notification) -> impl Iterator<Item = &(String, String)> {
 }
 
 /// What a tap on a card does: the app's default action (DMS: "default", else its first).
-fn default_action(n: &Notification) -> Option<AppMessage> {
+pub fn default_action(n: &Notification) -> Option<AppMessage> {
     n.actions
         .iter()
         .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))

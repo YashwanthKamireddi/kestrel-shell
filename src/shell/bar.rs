@@ -120,7 +120,10 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     }
     // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
     // one line in the island they were hard to read); the island keeps the short pop-ups.
-    let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
+    // With the island in the bar, notifications arrive in it instead (modules::island).
+    let show_toasts = focused
+        && !crate::modules::island::hosts_osd(app)
+        && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
     let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
     if show_toasts {
