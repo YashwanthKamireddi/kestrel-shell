@@ -109,7 +109,10 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         ],
     ));
     let l = layout(app);
-    for (sec, title) in ["Left", "Centre", "Right"].into_iter().enumerate() {
+    for (sec, title) in ["Left side", "Centre", "Right side"]
+        .into_iter()
+        .enumerate()
+    {
         let list = &l[sec];
         let mut rows = Vec::new();
         for (at, id) in list.iter().enumerate() {
@@ -119,61 +122,56 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             if !matches(&name) && !matches("bar") {
                 continue;
             }
-            let has_options = info.is_some_and(|m| !m.options.is_empty());
-            let open = st.bar_open.as_deref() == Some(id.as_str());
             let lead: Element<'_, AppMessage> =
-                icon(info.map_or(Icon::Code, |m| m.icon), 16.0, s.ink_dim).into();
-            let title_el: Element<'_, AppMessage> = if has_options {
-                control(
-                    row![
-                        label(name, text::BODY, s.ink),
-                        icon(
-                            if open {
-                                Icon::ChevronUp
-                            } else {
-                                Icon::ChevronDown
-                            },
-                            14.0,
-                            s.ink_dim
-                        )
-                    ]
-                    .spacing(tok::S)
-                    .align_y(Alignment::Center),
-                )
-                .padding([tok::XS, tok::M])
-                .radius(tok::FULL)
-                .kind(s, crate::ui::control::Kind::Ghost)
-                .no_press_scale()
-                .on_press(msg(Message::BarOpen((!open).then(|| id.clone()))))
-                .into()
-            } else {
-                container(label(name, text::BODY, s.ink))
-                    .padding([tok::XS, tok::M])
-                    .into()
-            };
+                icon(info.map_or(Icon::Code, |m| m.icon), 18.0, s.ink).into();
             let idc = id.clone();
             let mv = |d: i32, ok: bool| ok.then(|| msg(Message::BarMove(idc.clone(), d)));
-            let sv = |d: i32, ok: bool| ok.then(|| msg(Message::BarSection(idc.clone(), d)));
+            // Where it sits, said in words (three arrows to the sides read as random).
+            let place = segments(
+                s,
+                &[
+                    (
+                        "Left",
+                        sec == 0,
+                        msg(Message::BarSection(id.clone(), 0 - sec as i32)),
+                    ),
+                    (
+                        "Centre",
+                        sec == 1,
+                        msg(Message::BarSection(id.clone(), 1 - sec as i32)),
+                    ),
+                    (
+                        "Right",
+                        sec == 2,
+                        msg(Message::BarSection(id.clone(), 2 - sec as i32)),
+                    ),
+                ],
+            );
             rows.push(Some(
                 container(
                     row![
                         lead,
-                        container(title_el).width(Length::Fill),
-                        mini(s, Icon::ChevronUp, mv(-1, at > 0)),
-                        mini(s, Icon::ChevronDown, mv(1, at + 1 < list.len())),
-                        mini(s, Icon::ChevronLeft, sv(-1, sec > 0)),
-                        mini(s, Icon::ChevronRight, sv(1, sec < 2)),
+                        iced::widget::column![
+                            label(name, text::BODY, s.ink),
+                            label(describe(id), text::SMALL, s.ink_dim),
+                        ]
+                        .spacing(tok::XXS)
+                        .width(Length::Fill),
+                        place,
+                        // Order within its side: earlier (left) or later (right).
+                        mini(s, Icon::ChevronLeft, mv(-1, at > 0)),
+                        mini(s, Icon::ChevronRight, mv(1, at + 1 < list.len())),
                         mini(s, Icon::X, Some(msg(Message::BarRemove(id.clone())))),
                     ]
-                    .spacing(tok::XS)
+                    .spacing(tok::M)
                     .align_y(Alignment::Center),
                 )
-                .padding([tok::NONE, tok::XL])
-                .height(46)
+                .padding([tok::M, tok::XL])
                 .align_y(Alignment::Center)
                 .into(),
             ));
-            if open && let (Some(m), Some(mi)) = (info, mi) {
+            // Its options, always shown under it (they were behind a hidden arrow).
+            if let (Some(m), Some(mi)) = (info, mi) {
                 rows.extend(module_options(app, s, mi, m));
             }
         }
@@ -188,15 +186,19 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             Some(
                 control(
                     row![
-                        icon(m.icon, 16.0, s.ink_dim),
-                        label(m.name, text::BODY, s.ink).width(Length::Fill),
-                        icon(Icon::Plus, 16.0, s.ink_dim),
+                        icon(m.icon, 18.0, s.ink),
+                        iced::widget::column![
+                            label(m.name, text::BODY, s.ink),
+                            label(describe(m.id), text::SMALL, s.ink_dim),
+                        ]
+                        .spacing(tok::XXS)
+                        .width(Length::Fill),
+                        icon(Icon::Plus, 16.0, s.accent),
                     ]
                     .spacing(tok::L)
                     .align_y(Alignment::Center),
                 )
-                .padding([tok::NONE, tok::XL])
-                .height(44)
+                .padding([tok::M, tok::XL])
                 .width(Length::Fill)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
@@ -228,4 +230,28 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         )],
     ));
     out
+}
+
+/// What a bar item is, in a few words (its name alone said too little: "Time and island").
+fn describe(id: &str) -> &'static str {
+    match id {
+        "workspaces" => "Your workspaces; click one to go there",
+        "app" => "The name of the app you are using",
+        "island" => "The time and date; music, alerts and levels show here too",
+        "clock" => "The time and date",
+        "media" => "The song playing, with its cover",
+        "weather" => "The temperature now; click for the forecast",
+        "airpods" => "AirPods battery while they are connected",
+        "tray" => "Icons of apps running in the background",
+        "system" => "How busy the processor and memory are",
+        "updates" => "How many updates are waiting",
+        "privacy" => "Shows when the microphone, camera or screen is in use",
+        "network" => "Wi-Fi or wired connection",
+        "bluetooth" => "Bluetooth and connected devices",
+        "volume" => "Sound volume and outputs",
+        "battery" => "Battery level and charging",
+        "notifications" => "Unread notifications; right-click for Do not disturb",
+        "power" => "Lock, sleep, restart and shut down",
+        _ => "A widget from a Lua script",
+    }
 }

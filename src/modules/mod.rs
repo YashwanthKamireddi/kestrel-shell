@@ -97,25 +97,25 @@ impl Opt {
 const BATTERY_PERCENT: Opt = Opt {
     table: &["bar"],
     key: "battery_percent",
-    label: "Percentage",
+    label: "Show the percentage",
     kind: OptKind::Switch(true),
 };
 const CLOCK_FORMAT: Opt = Opt {
     table: &["clock"],
     key: "format",
-    label: "Clock",
+    label: "Clock format",
     kind: OptKind::Choice(&[("24h", "24-hour"), ("12h", "12-hour")]),
 };
 const CLOCK_DATE: Opt = Opt {
     table: &["clock"],
     key: "date",
-    label: "Date",
+    label: "Show the date",
     kind: OptKind::Switch(true),
 };
 const CLOCK_SECONDS: Opt = Opt {
     table: &["clock"],
     key: "seconds",
-    label: "Seconds",
+    label: "Show seconds",
     kind: OptKind::Switch(false),
 };
 const VISUALISER: Opt = Opt {
@@ -127,7 +127,7 @@ const VISUALISER: Opt = Opt {
 const UNITS: Opt = Opt {
     table: &[],
     key: "weather_units",
-    label: "Temperature",
+    label: "Temperature in",
     kind: OptKind::Choice(&[("celsius", "°C"), ("fahrenheit", "°F")]),
 };
 
@@ -136,7 +136,7 @@ const UNITS: Opt = Opt {
 pub const MODULES: &[Info] = &[
     Info { id: "workspaces", name: "Workspaces", icon: Icon::LayoutGrid, home: Home::Left, options: &[], view: workspaces::view },
     Info { id: "app", name: "Focused app", icon: Icon::AppWindow, home: Home::Left, options: &[], view: app_name::view },
-    Info { id: "island", name: "Time and island", icon: Icon::CalendarClock, home: Home::Center, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS, VISUALISER], view: island::view },
+    Info { id: "island", name: "Time and date", icon: Icon::CalendarClock, home: Home::Center, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS, VISUALISER], view: island::view },
     Info { id: "clock", name: "Clock", icon: Icon::CalendarClock, home: Home::Center, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS], view: clock::view },
     Info { id: "media", name: "Music", icon: Icon::Music, home: Home::Center, options: &[], view: media::view },
     Info { id: "weather", name: "Weather", icon: Icon::CloudSun, home: Home::Center, options: &[UNITS], view: weather::view },

@@ -274,8 +274,7 @@ pub struct State {
     /// Mouse & touchpad: the pointing devices and the speeds set for them.
     pointers: Vec<String>,
     device_speeds: Vec<crate::hypr_settings::DeviceSpeed>,
-    /// Bar: the module whose options are open; Reset was pressed once.
-    bar_open: Option<String>,
+    /// Bar: Reset was pressed once.
     bar_reset_armed: bool,
     /// Mono audio (None: WirePlumber did not say).
     mono: Option<bool>,
@@ -480,7 +479,6 @@ pub enum Message {
     BarRemove(String),
     BarAdd(String),
     BarReset,
-    BarOpen(Option<String>),
     Plugin(String, bool),
     /// A module's option (module and option index in `modules::MODULES`) to a value.
     Opt(usize, usize, OptValue),
@@ -2046,7 +2044,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             config::set(&["plugins", &id], "enabled", toml_edit::value(on));
             app.panels.settings.plugins = crate::lua::installed();
         }
-        Message::BarOpen(id) => app.panels.settings.bar_open = id,
         Message::BarMove(id, d) => {
             let mut l = layout(app);
             if let Some((sec, at)) = find_in(&l, &id) {
@@ -2077,9 +2074,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             let mut l = layout(app);
             for list in &mut l {
                 list.retain(|m| *m != id);
-            }
-            if app.panels.settings.bar_open.as_deref() == Some(id.as_str()) {
-                app.panels.settings.bar_open = None;
             }
             save_layout(&l);
         }
