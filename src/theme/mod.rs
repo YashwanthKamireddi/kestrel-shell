@@ -229,7 +229,6 @@ pub mod text {
     pub const BODY: f32 = 13.0;
     pub const TITLE: f32 = 14.0;
     pub const HEADING: f32 = 16.0;
-    pub const DISPLAY: f32 = 32.0;
 }
 
 /// Rubik at fixed weights, cut from the variable font (OFL, assets/fonts/LICENSE-rubik).

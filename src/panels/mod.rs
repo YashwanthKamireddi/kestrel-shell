@@ -107,7 +107,7 @@ impl PanelKind {
         match self {
             Self::Control => 392.0,
             Self::Media => media::WIDTH,
-            Self::Calendar => 312.0,
+            Self::Calendar => 400.0,
             Self::Power => 232.0,
             Self::Capture => capture::WIDTH,
             Self::Monitor => monitor::WIDTH,

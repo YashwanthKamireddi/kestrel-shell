@@ -59,30 +59,10 @@ fn first_of_month(today: NaiveDate, offset: i32) -> NaiveDate {
 
 const CELL_H: f32 = 34.0;
 
+/// The clock's panel is the island's dashboard (they were two panels with the same clock and
+/// month).
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let header = column![
-        label_w(
-            app.time_text(),
-            theme::text::DISPLAY,
-            s.ink,
-            theme::SEMIBOLD
-        ),
-        label(
-            app.now.format("%A, %-d %B").to_string(),
-            text::BODY,
-            s.ink_dim
-        ),
-    ]
-    .spacing(tok::XXS);
-
-    column![header, Space::new().height(tok::XL), month(app, s)]
-        .padding(iced::Padding {
-            top: tok::XL,
-            right: tok::XL,
-            bottom: tok::XL,
-            left: tok::XL,
-        })
-        .into()
+    super::island::view(app, s)
 }
 
 /// The month: title with navigation, weekday initials, six weeks.

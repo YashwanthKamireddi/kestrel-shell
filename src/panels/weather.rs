@@ -27,7 +27,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 /// Now: place, temperature, condition and today's range, on the sky.
-fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
     let soft = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC).scale_alpha(0.78));
     let left = column![
