@@ -190,8 +190,10 @@ fn reveal(app: &App) -> Task<AppMessage> {
     };
     let row = (i / COLS) as f32;
     let top = row * ROW_STEP;
-    // Only as far as needed: the row just inside the top or bottom edge.
-    let y = (top - (VIEW_H - (THUMB_H + 6.0))).max(0.0);
+    // Only as far as needed, and always to a whole row (a sliver of the row above was left
+    // showing at the top).
+    let shown = ((VIEW_H + 10.0) / ROW_STEP).floor().max(1.0);
+    let y = ((row + 1.0 - shown).max(0.0)) * ROW_STEP;
     let off = app.panels.wallpaper.offset;
     let to = if top < off {
         top

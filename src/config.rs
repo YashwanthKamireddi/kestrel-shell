@@ -261,7 +261,6 @@ impl Default for BarConfig {
                 "volume",
                 "battery",
                 "notifications",
-                "power",
             ])],
             visualiser: true,
             battery_percent: true,

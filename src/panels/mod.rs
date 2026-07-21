@@ -88,7 +88,7 @@ impl PanelKind {
     pub fn width_for(self, app: &App) -> f32 {
         match self {
             Self::Overview => overview::width(app),
-            // Nothing playing: only as wide as its quiet icon (a wide empty box looked broken).
+            // Nothing playing: only as wide as its one line saying so.
             Self::Media if media::current(app).is_none() => media::EMPTY_WIDTH,
             _ => self.width(),
         }

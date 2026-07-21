@@ -24,7 +24,8 @@ pub fn view<'a>(
         icon(
             crate::ui::weather_icon(w),
             size::ICON,
-            crate::ui::weather_tint(w)
+            // White like every other bar icon (a coloured one stood out).
+            s.ink
         ),
         label_w(app.temp(w.temp), text::BODY, s.ink, theme::SEMIBOLD),
     ]

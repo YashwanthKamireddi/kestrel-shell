@@ -6,7 +6,7 @@ use crate::app::{App, Message as AppMessage};
 use crate::services::mpris::{self, Player};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
-use crate::ui::{self, Icon, control, empty, icon, label, label_w};
+use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row};
 use iced::{Alignment, Color, Element, Length, Task};
 
@@ -329,11 +329,18 @@ fn content_box(img: &::image::RgbaImage) -> (u32, u32, u32, u32) {
 /// Panel width: room for a large cover beside the text.
 pub const WIDTH: f32 = 460.0;
 /// The panel's width with nothing playing.
-pub const EMPTY_WIDTH: f32 = 96.0;
+pub const EMPTY_WIDTH: f32 = 240.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(p) = current(app) else {
-        return container(empty(s, Icon::Music)).padding(tok::L).into();
+        // Says why it is empty in the panel itself (a pop-up saying it read as noise).
+        return container(crate::ui::empty_reason(
+            s,
+            "Nothing is playing".into(),
+            96.0,
+        ))
+        .padding(tok::L)
+        .into();
     };
     let bus = p.bus.clone();
 
