@@ -11,7 +11,7 @@ use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Task};
 
-pub const WIDTH: f32 = 440.0;
+pub const WIDTH: f32 = crate::theme::size::PANEL_M;
 
 #[derive(Default)]
 pub struct State {

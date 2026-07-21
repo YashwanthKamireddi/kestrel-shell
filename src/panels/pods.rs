@@ -10,7 +10,7 @@ use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row, stack};
 use iced::{Alignment, Color, Element, Length};
 
-pub const WIDTH: f32 = 330.0;
+pub const WIDTH: f32 = crate::theme::size::PANEL_S;
 
 /// The connected AirPods, if any.
 pub fn device(app: &App) -> Option<&bluetooth::Device> {

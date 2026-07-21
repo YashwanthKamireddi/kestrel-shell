@@ -9,7 +9,7 @@ use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Color, Element, Length};
 
-pub const WIDTH: f32 = 420.0;
+pub const WIDTH: f32 = crate::theme::size::PANEL_M;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(w) = &app.weather else {

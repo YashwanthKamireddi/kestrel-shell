@@ -8,7 +8,7 @@ use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 
-pub const WIDTH: f32 = 280.0;
+pub const WIDTH: f32 = crate::theme::size::PANEL_S;
 
 /// An app's row: its icon (from its desktop entry) and its name.
 fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {

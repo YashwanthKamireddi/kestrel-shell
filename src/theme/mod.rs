@@ -312,6 +312,13 @@ pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 
 /// Spacing and shape.
 pub mod size {
+    /// The only panel widths (Apple-style: a few fixed sizes, not one per panel): a small menu
+    /// (power, tray, privacy, AirPods), a panel (control centre, dashboard, weather, music,
+    /// capture, system), the launcher, and the wide ones (clipboard, shortcuts, files).
+    pub const PANEL_S: f32 = 320.0;
+    pub const PANEL_M: f32 = 400.0;
+    pub const PANEL_L: f32 = 560.0;
+    pub const PANEL_XL: f32 = 860.0;
     pub const BAR: f32 = 40.0;
     pub const CONTROL: f32 = 30.0;
     pub const PANEL_RADIUS: f32 = 24.0;

@@ -14,7 +14,7 @@ use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Task};
 
-pub const WIDTH: f32 = 360.0;
+pub const WIDTH: f32 = crate::theme::size::PANEL_M;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum What {

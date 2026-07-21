@@ -635,8 +635,8 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
     )
 }
 
-/// The control centre's list width (the panel's 392 less its padding).
-const LIST_W: f32 = 392.0 - 2.0 * size::PANEL_PAD;
+/// The control centre's list width (the panel less its padding).
+const LIST_W: f32 = size::PANEL_M - 2.0 * size::PANEL_PAD;
 
 /// Notifications inside the control centre: one grouped list, an app's messages folded into
 /// its newest card (DMS); it scrolls in `room` (the tiles above stay still). Nothing at all

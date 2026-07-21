@@ -327,7 +327,7 @@ fn content_box(img: &::image::RgbaImage) -> (u32, u32, u32, u32) {
 }
 
 /// Panel width: room for a large cover beside the text.
-pub const WIDTH: f32 = 460.0;
+pub const WIDTH: f32 = crate::theme::size::PANEL_M;
 /// The panel's width with nothing playing.
 pub const EMPTY_WIDTH: f32 = 240.0;
 
