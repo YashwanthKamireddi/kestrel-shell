@@ -53,6 +53,8 @@ pub enum PanelKind {
     Monitor,
     /// What is using the camera, microphone and screen (under the privacy indicator).
     Privacy,
+    /// The notifications, at the island (the bell opens it).
+    Notifications,
 }
 
 impl PanelKind {
@@ -62,8 +64,7 @@ impl PanelKind {
             | "wifi" | "network" => Self::Control,
             "media" => Self::Media,
             "calendar" => Self::Calendar,
-            // Notifications live in the control centre.
-            "notifications" => Self::Control,
+            "notifications" => Self::Notifications,
             "power" => Self::Power,
             "capture" | "screenshot" => Self::Capture,
             "system" | "monitor" => Self::Monitor,
@@ -113,6 +114,7 @@ impl PanelKind {
             Self::Monitor => monitor::WIDTH,
             Self::Tray => crate::theme::size::PANEL_S,
             Self::Privacy => privacy::WIDTH,
+            Self::Notifications => crate::theme::size::PANEL_M,
             Self::Launcher => crate::theme::size::PANEL_L,
             Self::Wallpaper => wallpaper::WIDTH,
             Self::Keys => crate::theme::size::PANEL_XL,
@@ -218,6 +220,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
         PanelKind::Tray
+        | PanelKind::Notifications
         | PanelKind::Privacy
         | PanelKind::Weather
         | PanelKind::Pods
@@ -424,6 +427,7 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
         PanelKind::Privacy => privacy::view(app, s),
+        PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(app, s),

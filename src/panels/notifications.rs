@@ -635,7 +635,22 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
     )
 }
 
-/// The control centre's list width (the panel less its padding).
+/// The notifications panel at the island: the list, or a quiet bell when there is none.
+pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+    if app.notifications.is_empty() {
+        return container(ui::empty(s, Icon::Bell)).padding(tok::L).into();
+    }
+    let room = app
+        .panel
+        .as_ref()
+        .and_then(|p| app.output(p.output))
+        .map_or(f32::INFINITY, |o| o.size.height - size::BAR - 2.0 * tok::XL);
+    container(section(app, s, room))
+        .padding(size::PANEL_PAD)
+        .into()
+}
+
+/// The list's width (the panel less its padding).
 const LIST_W: f32 = size::PANEL_M - 2.0 * size::PANEL_PAD;
 
 /// Notifications inside the control centre: one grouped list, an app's messages folded into

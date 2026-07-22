@@ -224,22 +224,8 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .spacing(tok::M),
         );
     }
-    // The tiles and sliders stay; only the notifications scroll, in what is left of the
-    // screen under them (ii, Noctalia: the list is the part that moves).
-    let room = app
-        .panel
-        .as_ref()
-        .and_then(|p| app.output(p.output))
-        .map_or(f32::INFINITY, |o| {
-            o.size.height - crate::theme::size::BAR - 2.0 * tok::XL - 2.0 * tok::L
-        });
-    let list_room = (room - app.control_tiles_h - tok::L).max(160.0);
-    column![
-        crate::ui::measured::measured(page, AppMessage::ControlTiles),
-        crate::panels::notifications::section(app, s, list_room),
-    ]
-    .spacing(tok::L)
-    .into()
+    // Notifications live at the island now (their own panel under it, design call 2026-11-16).
+    page.into()
 }
 
 /// How far the output's volume may go (1.5 = 150 %): `[sound] max`, at least 100 %.

@@ -1,5 +1,5 @@
 //! Notifications: a bell, with the count of unseen ones (in the accent) or crossed out in Do
-//! not disturb; opens the control centre (the list is there). Right click: Do not disturb on
+//! not disturb; opens the notifications at the island. Right click: Do not disturb on
 //! or off.
 
 use crate::app::{App, Message, Output};
@@ -17,8 +17,19 @@ pub fn view<'a>(
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
     let id = o.id;
-    let active = super::control_on(app, open, control::Page::Main);
-    let press = move |r| Message::ControlAt(control::Page::Main, id, r);
+    let active = open == Some(PanelKind::Notifications);
+    // Opens at the island, the centre of the bar, wherever the bell sits.
+    let w = o.size.width;
+    let press = move |_r: iced::Rectangle| {
+        Message::Toggle(
+            PanelKind::Notifications,
+            id,
+            iced::Rectangle::new(
+                iced::Point::new(w / 2.0, 0.0),
+                iced::Size::new(0.0, size::BAR),
+            ),
+        )
+    };
     let dnd = Message::Panel(PanelMessage::Control(control::Message::Dnd));
     if app.dnd {
         return vec![

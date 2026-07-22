@@ -3,7 +3,6 @@
 pub mod breathe;
 pub mod control;
 pub mod icon;
-pub mod measured;
 pub mod morph;
 pub mod reveal;
 pub mod ring;

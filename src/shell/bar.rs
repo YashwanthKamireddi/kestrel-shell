@@ -12,6 +12,9 @@ use iced::{Alignment, Element, Length, Point};
 
 /// Workspace slot size and spacing in the bar.
 pub const SLOT: f32 = 28.0;
+/// The pills' top edge: where what grows out of the island (banners, the notifications) starts.
+const GROWN_TOP: f32 = 3.0;
+
 /// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
 pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
 /// The floating pills' distance from the screen's sides.
@@ -97,7 +100,9 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     } else {
         0.0
     };
-    let toast_x = o.size.width - edge - TOAST_WIDTH;
+    // Banners grow out of the island, at the bar's centre (design call 2026-11-16).
+    let toast_x = ((o.size.width - TOAST_WIDTH) / 2.0).round();
+    let _ = edge;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
     let mut drops = Vec::new();
     // The panel opens by fading in at its full size (and closes the same way, faster); it does
@@ -116,7 +121,12 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         // to an empty workspace): the frame and the content share one live width, centred
         // where the panel opened and kept on screen.
         let (x, w) = panel_span(app, p, o.size.width, edge);
-        panel_drop = Some((drop(x, w, h), k, h));
+        let mut d = drop(x, w, h);
+        // The notifications grow out of the island, over it, as the banners do.
+        if p.kind == PanelKind::Notifications {
+            d.top = GROWN_TOP;
+        }
+        panel_drop = Some((d, k, h));
     }
     // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
     // one line in the island they were hard to read); the island keeps the short pop-ups.
@@ -124,7 +134,9 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
     let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
     if show_toasts {
-        drops.push(drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value));
+        let mut d = drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value);
+        d.top = GROWN_TOP;
+        drops.push(d);
     }
     if show_osd {
         drops.push(drop(osd_x, OSD_WIDTH, app.osd_sheet.h.value));
@@ -305,7 +317,14 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.2))
                     .on_measure(move |sz| Message::Measured(kind, sz)),
             )
-            .position(Point::new(x, size::BAR + top_gap))
+            .position(Point::new(
+                x,
+                if p.kind == PanelKind::Notifications {
+                    GROWN_TOP
+                } else {
+                    size::BAR + top_gap
+                },
+            ))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
@@ -337,7 +356,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
                 .offset((1.0 - a) * 6.0)
                 .on_measure(Message::MeasuredToasts))
-            .position(Point::new(toast_x, size::BAR + top_gap))
+            .position(Point::new(toast_x, GROWN_TOP))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
