@@ -208,6 +208,21 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         } else {
             shape.into()
         };
+        // Frosted, the full bar's band has no fill of its own: the frost goes under it, as under
+        // the pills (without it the band vanished and the bar was bare icons on the wallpaper).
+        if !pills && app.config.material == crate::config::Material::Frosted {
+            let band = frosted(
+                app,
+                o,
+                0.0,
+                s.opacity,
+                Space::new().width(Length::Fill).height(size::BAR),
+            );
+            return stack![band, shape, bar]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+        }
         return stack![shape, bar]
             .width(Length::Fill)
             .height(Length::Fill)

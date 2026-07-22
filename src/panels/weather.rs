@@ -11,6 +11,10 @@ use iced::{Alignment, Color, Element, Length};
 
 pub const WIDTH: f32 = crate::theme::size::PANEL_M;
 
+/// Where every section's content starts and ends inside the panel: the sky card's text, the
+/// headings, the hours and the days all line up on it (they sat at four different insets).
+const INSET: f32 = tok::L;
+
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let Some(w) = &app.weather else {
         // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
@@ -54,8 +58,9 @@ pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
     .align_x(Alignment::End);
     let (top, bottom) = ui::weather_sky(w);
     let (top, bottom) = (s.fade(top), s.fade(bottom));
+    // Its text on the panel's one left and right edge (INSET), like every row under it.
     container(row![left, right].align_y(Alignment::Center))
-        .padding([tok::XL, tok::XXL])
+        .padding([tok::XL, INSET])
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: Some(
@@ -108,7 +113,7 @@ fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
         ),
         cell(sun_icon, rgb(0xFF, 0xB0, 0x6B), sun_time, sun_name),
     ]
-    .padding([tok::XXS, tok::XS])
+    .padding([tok::NONE, INSET - tok::M])
     .into()
 }
 
@@ -125,7 +130,7 @@ fn sun_next(w: &Weather) -> (Icon, String, &'static str) {
 }
 
 fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
-    crate::ui::section(s, title, tok::S)
+    crate::ui::section(s, title, INSET)
 }
 
 /// The next hours: time, condition, temperature.
@@ -162,7 +167,7 @@ fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
         });
     column![
         heading(s, "Next hours"),
-        row(cells).padding([tok::NONE, tok::XXS])
+        row(cells).padding([tok::NONE, INSET - tok::M])
     ]
     .spacing(tok::M)
     .into()
@@ -226,12 +231,14 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                         .width(34)
                         .align_x(Alignment::End),
                     track,
-                    label_w(app.temp(*max), text::BODY, s.ink, theme::MEDIUM).width(34),
+                    label_w(app.temp(*max), text::BODY, s.ink, theme::MEDIUM)
+                        .width(34)
+                        .align_x(Alignment::End),
                 ]
                 .spacing(tok::L)
                 .align_y(Alignment::Center),
             )
-            .padding([tok::S, tok::S]),
+            .padding([tok::S, INSET]),
         );
     }
     list.into()

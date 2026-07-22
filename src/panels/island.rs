@@ -10,19 +10,10 @@ use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    // No clock: the time is in the bar already (shown again, big, it said nothing new; the user's
-    // call 2026-11-16). The day's name heads it, then what has no pill of its own (the weather
-    // as the weather panel draws it, what's playing), then the month.
-    let mut col = column![
-        container(label_w(
-            app.now.format("%A, %-d %B").to_string(),
-            text::TITLE,
-            s.ink,
-            theme::SEMIBOLD,
-        ))
-        .padding([tok::NONE, tok::XS])
-    ]
-    .spacing(tok::L);
+    // No clock and no date heading: the bar shows both (repeated here they said nothing new;
+    // design call 2026-11-16). What has no pill of its own (the weather as the weather panel draws
+    // it, what's playing), then the month, today marked.
+    let mut col = column![].spacing(tok::L);
     if !app.config.bar.contains("weather")
         && let Some(w) = &app.weather
     {

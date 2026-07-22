@@ -79,6 +79,9 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
     )
 }
 
+/// What a round bubble's content leaves of its circle (the cover, the AirPods ring).
+pub const BUBBLE_INSET: f32 = 6.0;
+
 /// Diameter of the music bubble: the same height as the pills, so they line up.
 pub const BUBBLE: f32 = size::BAR - 6.0;
 
@@ -89,7 +92,8 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
     // something with no picture (a hover preview) gets none.
     let p = app.media.main().filter(|p| !media::is_bare_browser(p))?;
     let id = o.id;
-    let art = BUBBLE - 8.0;
+    // The same inset as the AirPods circle's ring: the two bubbles are one design.
+    let art = BUBBLE - BUBBLE_INSET;
     // Snapped as one piece: the circle and the cover land on the same pixels, so the cover
     // sits exactly in the middle.
     Some(
@@ -101,16 +105,13 @@ pub fn bubble<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Option<Element<'a, 
                     art,
                     art / 2.0,
                 ))
-                .center(BUBBLE)
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(crate::theme::surface(s).into()),
-                    border: iced::Border::default().rounded(BUBBLE / 2.0),
-                    ..iced::widget::container::Style::default()
-                }),
+                .center(BUBBLE),
             )
             .width(BUBBLE)
             .height(BUBBLE)
             .radius(BUBBLE / 2.0)
+            // The pills' own surface and states (it had a darker fill of its own).
+            .bar(s, false)
             .on_press_at(move |r| Message::Toggle(PanelKind::Media, id, r)),
         )
         .into(),

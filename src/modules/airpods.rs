@@ -48,7 +48,7 @@ fn pods<'a>(
             // track read as a heavy outline: design call 2026-11-15).
             container(ui::ring::ring_on(
                 value,
-                d - 6.0,
+                d - crate::modules::island::BUBBLE_INSET,
                 2.0,
                 tint,
                 s.ink.scale_alpha(tok::TONAL * s.opacity),
