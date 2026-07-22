@@ -398,7 +398,7 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
     // A volume that may go past 100 %: the track runs to the maximum and the part
     // past 100 % is red (as the control centre's slider).
     let top = if is_volume(osd.icon) { top_volume } else { 1.0 };
-    let track = ui::level_bar(s, osd.value, top, track_w, 6.0);
+    let track = ui::level_bar(s, osd.value, top, track_w, 22.0);
     row![
         ui::icon(osd.icon, 18.0, s.ink),
         container(track).center_y(18),

@@ -7,8 +7,8 @@ use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
-use crate::ui::{self, Icon, control, icon, label, label_w};
-use iced::widget::{column, container, mouse_area, row, text_input};
+use crate::ui::{self, control, label, label_w};
+use iced::widget::{column, container, mouse_area, row};
 use iced::{Alignment, Element, Length, Task};
 
 const COLUMNS: usize = 10;
@@ -261,23 +261,14 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let st = &app.panels.emoji;
     let list = shown(st);
-    let input = text_input("Search emoji", &st.query)
-        .id(INPUT_ID.clone())
-        .on_input(|q| msg(Message::Query(q)))
-        .on_submit(msg(Message::Pick(st.selected)))
-        .padding([tok::L, tok::L])
-        .size(text::TITLE)
-        .font(theme::FONT)
-        .style(crate::ui::input_style(s));
-    let field = container(
-        row![icon(Icon::Search, 18.0, s.ink_dim), input]
-            .spacing(tok::XS)
-            .align_y(Alignment::Center),
-    )
-    .padding([tok::NONE, tok::L])
-    .height(44)
-    .center_y(44)
-    .style(move |_| ui::field_style(s));
+    let field = ui::search_field(
+        s,
+        "Search emoji",
+        &st.query,
+        INPUT_ID.clone(),
+        |q| msg(Message::Query(q)),
+        Some(msg(Message::Pick(st.selected))),
+    );
 
     let grid_h = ROWS as f32 * (CELL + 4.0);
     let mut grid = column![].spacing(tok::XS);

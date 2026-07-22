@@ -257,7 +257,7 @@ fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a,
             15.0,
             if level > 0.0 { s.accent } else { s.ink_dim }
         ),
-        ui::level_bar(s, level, top, TRACK, 5.0),
+        ui::level_bar(s, level, top, TRACK, 16.0),
         label_w(
             format!("{:.0}", level * 100.0),
             text::SMALL,

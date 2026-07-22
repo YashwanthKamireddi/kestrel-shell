@@ -140,6 +140,37 @@ pub fn input_style(
 }
 
 /// fill that sits as well on the black look as on the frost.
+/// The one search field (launcher, clipboard, emoji): a search icon and the text, 44 px.
+pub fn search_field<'a, M: Clone + 'a>(
+    s: Scheme,
+    hint: &'a str,
+    value: &'a str,
+    id: iced::widget::Id,
+    on_input: impl Fn(String) -> M + 'a,
+    on_submit: Option<M>,
+) -> Element<'a, M> {
+    let mut input = iced::widget::text_input(hint, value)
+        .id(id)
+        .on_input(on_input)
+        .padding([crate::theme::tok::L, crate::theme::tok::L])
+        .size(theme::text::TITLE)
+        .font(theme::FONT)
+        .style(input_style(s));
+    if let Some(m) = on_submit {
+        input = input.on_submit(m);
+    }
+    container(
+        row![icon(Icon::Search, 18.0, s.ink_dim), input]
+            .spacing(crate::theme::tok::XS)
+            .align_y(Alignment::Center),
+    )
+    .padding([crate::theme::tok::NONE, crate::theme::tok::L])
+    .height(44)
+    .center_y(44)
+    .style(move |_| field_style(s))
+    .into()
+}
+
 pub fn field_style(s: Scheme) -> iced::widget::container::Style {
     iced::widget::container::Style {
         background: Some(s.ink.scale_alpha(0.07 * s.opacity).into()),
@@ -409,6 +440,10 @@ pub fn subpage_header<'a, M: Clone + 'static>(
 /// A thin level bar (the OSD's): `value` 0–`top` (1 normally; 1.5 when a volume may reach
 /// 150 %), `width` × `height`. Past 100 % the bar runs to `top` and the
 /// boost is in the danger colour, as on the control centre's slider; at 0 the fill is a faint dot.
+fn tok_fill() -> f32 {
+    crate::theme::tok::FILL
+}
+
 pub fn level_bar<'a, M: 'a>(
     s: Scheme,
     value: f32,
@@ -443,7 +478,12 @@ pub fn level_bar<'a, M: 'a>(
     };
     let on = (value / top).clamp(0.0, 1.0);
     let mark = width / top;
-    let mut bar = stack![piece(width, s.ink.scale_alpha(0.16 * s.opacity), round)];
+    // The control centre's track colour: one slider look everywhere.
+    let mut bar = stack![piece(
+        width,
+        s.ink.scale_alpha(tok_fill() * s.opacity),
+        round
+    )];
     let fill = if value > 0.0 { s.accent } else { s.ink_faint };
     if value > 1.0 && top > 1.0 {
         bar = bar.push(piece((width * on).max(height), s.bad, round));
