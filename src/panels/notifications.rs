@@ -8,7 +8,7 @@ use crate::theme::tok;
 use crate::theme::{self, Scheme, size, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row};
-use iced::{Alignment, Element, Length, Task, font};
+use iced::{Alignment, Element, Length, Task};
 use std::time::SystemTime;
 
 #[derive(Clone, Debug)]
@@ -310,9 +310,7 @@ fn lines_of(text: &str, size: f32, width: f32, lines: usize) -> String {
 // - Pop-ups: the same card; ✕ and the arrow show on hover, and the time stops meanwhile.
 
 /// The app icon (DMS avatarSize) and the space after it (DMS iconSpacing).
-const AVATAR: f32 = 36.0;
-/// The header line's height (DMS controlSize, buttonHeightXS).
-const HEAD: f32 = 32.0;
+const AVATAR: f32 = 32.0;
 /// A picture at the card's right (DMS thumbnailSize, buttonHeightM).
 const THUMB: f32 = 56.0;
 /// Lines of text a folded card shows (DMS collapsedLines).
@@ -322,7 +320,7 @@ const LIMIT: usize = 10;
 
 /// The text column's width on a card `width` wide.
 fn text_width(width: f32) -> f32 {
-    width - 2.0 * tok::L - AVATAR - tok::L
+    width - 2.0 * (tok::M + tok::XXS) - AVATAR - tok::M
 }
 
 fn flat(t: &str) -> String {
@@ -367,66 +365,10 @@ fn default_action(n: &Notification) -> Option<AppMessage> {
         .map(|(k, _)| msg(Message::Action(n.id, k.clone())))
 }
 
-/// A plain text button (DMS "text" variant): accent text, a soft fill only under the pointer.
-fn text_button<'a>(s: Scheme, l: &str, room: f32, m: AppMessage) -> Element<'a, AppMessage> {
-    control(label_w(
-        ui::fit(l, text::SMALL, room),
-        text::SMALL,
-        s.accent,
-        theme::MEDIUM,
-    ))
-    .padding([tok::M + tok::XXS, tok::M])
-    .radius(tok::FULL)
-    .kind(s, crate::ui::control::Kind::Ghost)
-    .on_press(m)
-    .into()
-}
-
-/// A round icon button in the header (DMS DActionButton, controlSize).
-fn icon_button<'a>(s: Scheme, i: Icon, m: AppMessage) -> Element<'a, AppMessage> {
-    control(icon(i, 16.0, s.ink_dim))
-        .width(HEAD)
-        .height(HEAD)
-        .center_x()
-        .radius(tok::FULL)
-        .kind(s, crate::ui::control::Kind::Ghost)
-        .on_press(m)
-        .into()
-}
-
-/// The count chip that opens and folds a group (DMS: the count and an arrow on a chip).
-fn count_chip<'a>(s: Scheme, count: usize, open: bool, app: &str) -> Element<'a, AppMessage> {
-    control(
-        row![
-            label(count.to_string(), text::SMALL, s.ink_dim),
-            icon(
-                if open {
-                    Icon::ChevronUp
-                } else {
-                    Icon::ChevronDown
-                },
-                14.0,
-                s.ink_dim
-            ),
-        ]
-        .spacing(tok::XXS)
-        .align_y(Alignment::Center),
-    )
-    .height(HEAD)
-    .padding([tok::NONE, tok::M])
-    .radius(tok::FULL)
-    .kind(s, crate::ui::control::Kind::Tonal)
-    .on_press(msg(Message::Open(app.to_string(), !open)))
-    .into()
-}
-
 /// How a card sits in its list and what it offers.
 #[derive(Clone, Copy)]
 struct Place {
     width: f32,
-    /// Its top and bottom corners (round at a list's ends, tight between cards).
-    top: f32,
-    bottom: f32,
     /// A folded group's count (1 for a lone message) and whether it is open.
     count: usize,
     /// A pop-up: ✕ and the arrow only under the pointer; "Clear" instead of "Dismiss".
@@ -435,7 +377,10 @@ struct Place {
     more: bool,
 }
 
-/// One notification's card (DMS NotificationCard).
+/// One notification's card, as macOS draws it: the app's icon, the title with the time at its
+/// right, the text under it (two lines; all of it when opened), a picture at the right; under
+/// the pointer a ✕ in place of the time and the app's own buttons under the text. A tap does
+/// what the app asks (a folded stack: opens it); swiped sideways it goes.
 fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage> {
     let tw = text_width(p.width);
     let pic = thumb(n);
@@ -446,144 +391,86 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
     };
     let body = flat(&n.body);
     let title = title_of(n).to_string();
-    // Cut when folded: the title to a line, the text to LINES lines (DMS canExpand).
-    let cut_title = ui::fit(&title, text::TITLE, body_w);
+    let cut_title = ui::fit(&title, text::BODY, body_w - 56.0);
     let cut_body = lines_of(&body, text::SMALL, body_w, LINES);
     let can_expand = p.count <= 1 && (cut_title != title || cut_body != body);
-    let reveal = !p.popup || p.hovered;
 
-    // The header: "App · time", then the controls at the right.
-    let mut controls = row![].spacing(tok::XXS).align_y(Alignment::Center);
-    if p.count > 1 {
-        controls = controls.push(count_chip(s, p.count, false, &n.app));
-    }
-    if reveal && can_expand {
-        controls = controls.push(icon_button(
-            s,
-            if p.more {
-                Icon::ChevronUp
-            } else {
-                Icon::ChevronDown
-            },
-            msg(Message::More(n.id, !p.more)),
-        ));
-    }
-    if p.popup && p.hovered {
-        controls = controls.push(icon_button(s, Icon::X, msg(Message::Hide(n.id))));
-    }
-    let head = row![
-        label(
-            ui::fit(
-                &format!("{} · {}", app_name(n), ago(n.time)),
-                text::SMALL,
-                tw - 2.0 * HEAD,
-            ),
-            text::SMALL,
-            s.ink_dim,
-        )
-        .width(Length::Fill),
-        controls,
-    ]
-    .height(HEAD)
-    .align_y(Alignment::Center);
-
-    let wrap = |t: String, size: f32, color, weight| {
-        iced::widget::text(t)
-            .size(size)
-            .color(color)
-            .font(theme::font(weight))
-            .line_height(iced::widget::text::LineHeight::Relative(1.2))
-            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-            .width(Length::Fill)
-    };
-    let mut words = column![].spacing(tok::XS);
-    if !title.is_empty() {
-        words = words.push(wrap(
-            if p.more { title } else { cut_title },
-            text::TITLE,
-            s.ink,
-            theme::MEDIUM,
-        ));
-    }
-    if !body.is_empty() {
-        words = words.push(wrap(
-            if p.more { body } else { cut_body },
-            text::SMALL,
-            s.ink_dim,
-            font::Weight::Normal,
-        ));
-    }
-    let message: Element<'a, AppMessage> = match pic {
-        Some(pic) => row![words.width(Length::Fill), pic]
-            .spacing(tok::L)
-            .align_y(Alignment::Start)
-            .into(),
-        None => words.into(),
-    };
-
-    // The app's buttons as plain text, then Dismiss (Clear on a pop-up), from the left edge.
-    let acts: Vec<_> = actions(n).take(3).collect();
-    let dismiss = if p.popup { "Clear" } else { "Dismiss" };
-    // Each label at its own width; only when the row cannot hold them all are the longest
-    // cut, to a shared cap (equal shares cut "Show in folder" while room was left over).
-    let wide = |l: &str| l.chars().count() as f32 * text::SMALL * 0.56;
-    let mut widths: Vec<f32> = acts.iter().map(|(_, l)| wide(l)).collect();
-    widths.push(wide(dismiss));
-    let free =
-        tw + tok::M - tok::XS * (widths.len() - 1) as f32 - 2.0 * tok::M * widths.len() as f32;
-    let mut cap = f32::INFINITY;
-    if widths.iter().sum::<f32>() > free {
-        let mut sorted = widths.clone();
-        sorted.sort_by(f32::total_cmp);
-        let mut left = free;
-        for (i, w) in sorted.iter().enumerate() {
-            let share = left / (sorted.len() - i) as f32;
-            if *w > share {
-                cap = share;
-                break;
-            }
-            left -= w;
-        }
-    }
-    let room = cap.max(40.0);
-    let mut buttons = row![].spacing(tok::XS).align_y(Alignment::Center);
-    for (k, l) in acts {
-        buttons = buttons.push(text_button(
-            s,
-            l,
-            room,
-            msg(Message::Action(n.id, k.clone())),
-        ));
-    }
-    buttons = buttons.push(text_button(
-        s,
-        dismiss,
-        room,
-        msg(if p.count > 1 {
+    // Title, then the time; under the pointer the time gives way to ✕.
+    let trail: Element<'a, AppMessage> = if p.hovered {
+        let close = if p.count > 1 {
             Message::DismissGroup(n.app.clone())
+        } else if p.popup {
+            Message::Hide(n.id)
         } else {
             Message::Dismiss(n.id)
-        }),
-    ));
-
-    let content = column![
-        head,
-        message,
-        container(buttons).padding(iced::Padding::ZERO.left(-tok::M))
+        };
+        control(icon(Icon::X, 12.0, s.ink_dim))
+            .padding(tok::XS)
+            .radius(tok::FULL)
+            .kind(s, crate::ui::control::Kind::Tonal)
+            .on_press(msg(close))
+            .into()
+    } else {
+        label(ago(n.time), text::CAPTION, s.ink_faint).into()
+    };
+    let head = row![
+        label_w(
+            if p.more { title.clone() } else { cut_title },
+            text::BODY,
+            s.ink,
+            theme::SEMIBOLD
+        )
+        .width(Length::Fill),
+        trail,
     ]
-    .spacing(tok::XS)
-    .width(tw);
-    let inner = row![
-        container(app_icon(s, n)).padding(iced::Padding::ZERO.top(tok::XXS)),
-        content
-    ]
-    .spacing(tok::L)
-    .align_y(Alignment::Start);
+    .spacing(tok::S)
+    .align_y(Alignment::Center);
+    let mut words = column![head].spacing(tok::XXS);
+    if !body.is_empty() {
+        words = words.push(
+            iced::widget::text(if p.more { body } else { cut_body })
+                .size(text::SMALL)
+                .color(s.ink_dim)
+                .font(theme::FONT)
+                .line_height(iced::widget::text::LineHeight::Relative(1.25))
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .width(Length::Fill),
+        );
+    }
+    // The app's own buttons, under the pointer only (macOS), as quiet pills.
+    if p.hovered && p.count <= 1 {
+        let acts: Vec<_> = actions(n).take(3).collect();
+        if !acts.is_empty() {
+            let room = (tw / acts.len() as f32 - 2.0 * tok::M).max(48.0);
+            let mut r = row![].spacing(tok::XS);
+            for (k, l) in acts {
+                r = r.push(
+                    control(label_w(
+                        ui::fit(l, text::SMALL, room),
+                        text::SMALL,
+                        s.ink,
+                        theme::MEDIUM,
+                    ))
+                    .padding([tok::XS, tok::M])
+                    .radius(tok::FULL)
+                    .kind(s, crate::ui::control::Kind::Tonal)
+                    .on_press(msg(Message::Action(n.id, k.clone()))),
+                );
+            }
+            words = words.push(container(r).padding(iced::Padding::ZERO.top(tok::XS)));
+        }
+    }
+    let mut inner = row![app_icon(s, n), words.width(Length::Fill)]
+        .spacing(tok::M)
+        .align_y(Alignment::Start);
+    if let Some(pic) = pic {
+        inner = inner.push(pic);
+    }
     let surface = control(inner)
         .identity(u64::from(n.id))
-        .padding(tok::L)
+        .padding(tok::M + tok::XXS)
         .width(Length::Fill)
-        .corners(p.top, p.bottom)
+        .radius(tok::R_CARD)
         .kind(
             s,
             if p.popup {
@@ -592,22 +479,15 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
                 crate::ui::control::Kind::Tonal
             },
         )
-        .no_press_scale();
-    let surface: Element<'a, AppMessage> = if p.popup {
-        surface
-            .on_enter(msg(Message::Hover(n.id, true)))
-            .on_exit(msg(Message::Hover(n.id, false)))
-            .into()
-    } else {
-        surface.into()
-    };
-    // A folded group's tap opens it; a lone message's does what its app asks.
+        .no_press_scale()
+        .on_enter(msg(Message::Hover(n.id, true)))
+        .on_exit(msg(Message::Hover(n.id, false)));
     let tap = if p.count > 1 {
         Some(msg(Message::Open(n.app.clone(), true)))
     } else {
         default_action(n).or_else(|| can_expand.then(|| msg(Message::More(n.id, !p.more))))
     };
-    ui::swipe(surface)
+    let card: Element<'a, AppMessage> = ui::swipe(surface)
         .identity(u64::from(n.id))
         .on_tap_maybe(tap)
         .on_dismiss(msg(if p.count > 1 {
@@ -615,7 +495,40 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
         } else {
             Message::Dismiss(n.id)
         }))
+        .into();
+    if p.count <= 1 {
+        return card;
+    }
+    // A folded stack (macOS): the newest card, and the next ones peeking under it as thinner,
+    // fainter edges (one for two, two for three or more).
+    let layer = |inset: f32, alpha: f32| -> Element<'a, AppMessage> {
+        container(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(tok::S)
+                .style(move |_| container::Style {
+                    background: Some(s.ink.scale_alpha(tok::TONAL * alpha * s.opacity).into()),
+                    border: iced::Border {
+                        radius: iced::border::Radius {
+                            top_left: tok::NONE,
+                            top_right: tok::NONE,
+                            bottom_right: tok::R_CARD,
+                            bottom_left: tok::R_CARD,
+                        },
+                        ..iced::Border::default()
+                    },
+                    ..container::Style::default()
+                }),
+        )
+        .padding([0.0, inset])
         .into()
+    };
+    let mut stack = column![card];
+    stack = stack.push(layer(tok::M, 0.8));
+    if p.count > 2 {
+        stack = stack.push(layer(2.0 * tok::M, 0.5));
+    }
+    stack.into()
 }
 
 /// A pop-up (the same card, ✕ and the arrow on hover).
@@ -625,8 +538,6 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
         n,
         Place {
             width,
-            top: tok::R_CARD,
-            bottom: tok::R_CARD,
             count: 1,
             popup: true,
             hovered: app.toast_hover == Some(n.id),
@@ -676,10 +587,9 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             None => groups.push(vec![n]),
         }
     }
-    let last = groups.len() - 1;
-    let end = |round: bool| if round { tok::R_CARD } else { tok::R_JOIN };
-    let mut list = column![].spacing(tok::XXS);
-    for (i, g) in groups.iter().enumerate() {
+    let hover = app.toast_hover;
+    let mut list = column![].spacing(tok::S);
+    for g in &groups {
         let n = g[0];
         let open = g.len() > 1 && app.notif_open.contains(&n.app);
         if !open {
@@ -688,53 +598,50 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                 n,
                 Place {
                     width: LIST_W,
-                    top: end(i == 0),
-                    bottom: end(i == last),
                     count: g.len(),
                     popup: false,
-                    hovered: false,
+                    hovered: hover == Some(n.id),
                     more: app.notif_more.contains(&n.id),
                 },
             ));
             continue;
         }
-        // Open: the app's name, Dismiss (all of them) and the chip, over each message's card.
+        // Open (macOS): the app's name, Show less, ✕ for all of them, then each card.
         let head = row![
             label_w(
                 ui::fit(app_name(n), text::TITLE, LIST_W / 2.0),
                 text::TITLE,
-                s.accent,
-                theme::MEDIUM
+                s.ink,
+                theme::SEMIBOLD
             )
             .width(Length::Fill),
-            text_button(
-                s,
-                "Dismiss",
-                LIST_W / 3.0,
-                msg(Message::DismissGroup(n.app.clone()))
-            ),
-            count_chip(s, g.len(), true, &n.app),
+            control(label("Show less", text::SMALL, s.ink_dim))
+                .pill(s, crate::ui::control::Pill::Quiet)
+                .on_press(msg(Message::Open(n.app.clone(), false))),
+            control(icon(Icon::X, 12.0, s.ink_dim))
+                .padding(tok::XS + tok::XXS)
+                .radius(tok::FULL)
+                .kind(s, crate::ui::control::Kind::Tonal)
+                .on_press(msg(Message::DismissGroup(n.app.clone()))),
         ]
         .spacing(tok::XS)
         .align_y(Alignment::Center)
-        .padding([tok::L, tok::L]);
-        list = list.push(head);
-        let shown = g.len().min(LIMIT);
-        for (j, m) in g.iter().take(LIMIT).enumerate() {
-            list = list.push(card_of(
+        .padding([tok::NONE, tok::XS]);
+        let mut group = column![head].spacing(tok::S);
+        for m in g.iter().take(LIMIT) {
+            group = group.push(card_of(
                 s,
                 m,
                 Place {
                     width: LIST_W,
-                    top: end(j == 0),
-                    bottom: end(j + 1 == shown),
                     count: 1,
                     popup: false,
-                    hovered: false,
+                    hovered: hover == Some(m.id),
                     more: app.notif_more.contains(&m.id),
                 },
             ));
         }
+        list = list.push(group);
     }
     let list = container(crate::ui::smooth(
         iced::widget::scrollable(list)
