@@ -6,7 +6,7 @@ use crate::app::{App, Message as AppMessage};
 use crate::services::hyprland;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
-use crate::ui::{Icon, empty, label, label_w};
+use crate::ui::{label, label_w};
 use iced::widget::{column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Task};
 
@@ -66,11 +66,18 @@ const MAX_LIST_H: f32 = 900.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
-    // Not read yet, or no bindings found: the title and a quiet icon, not 520 px of nothing.
+    // Not read yet, or no bindings found: says which (a box with a lone icon said nothing).
     let Some(groups) = app.panels.keys.groups.as_ref().filter(|g| !g.is_empty()) else {
-        return container(column![header, empty(s, Icon::Keyboard)].spacing(tok::L))
-            .padding(tok::L)
-            .into();
+        let why = if app.panels.keys.groups.is_none() {
+            "Reading your shortcuts…"
+        } else {
+            "No shortcuts found in the Hyprland configuration."
+        };
+        return container(
+            column![header, crate::ui::empty_reason(s, why.into(), 80.0)].spacing(tok::L),
+        )
+        .padding(tok::L)
+        .into();
     };
     // Two columns, filled group by group, balancing by row count.
     let mut cols: [Vec<Element<'_, AppMessage>>; 2] = [Vec::new(), Vec::new()];

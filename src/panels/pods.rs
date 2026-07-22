@@ -71,7 +71,15 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
     let p = app.pods.clone().unwrap_or_default();
     let mut list = column![].spacing(tok::L);
-    if let Some(h) = p.headset {
+    let nothing = p.headset.is_none() && p.left.is_none() && p.right.is_none() && p.case.is_none();
+    if nothing {
+        // No battery heard yet: say so, instead of empty bars.
+        list = list.push(label(
+            "Battery not reported yet. Take a bud out or open the case near the laptop.",
+            text::SMALL,
+            s.ink_dim,
+        ));
+    } else if let Some(h) = p.headset {
         list = list.push(part(s, Icon::Headphones, "Headphones", Some(h)));
     } else {
         // Left and right always; the case only while it reports (a bud inside).

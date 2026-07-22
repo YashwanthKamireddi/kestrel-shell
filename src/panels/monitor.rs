@@ -171,7 +171,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 | "xdg-desktop-portal-hyprland"
         );
         let end: Element<'_, AppMessage> = if vital {
-            Space::new().into()
+            // Not ended from here (it would end the desktop): a lock says why the ✕ is missing.
+            container(icon(Icon::Lock, 12.0, s.ink_faint))
+                .center_x(26)
+                .into()
         } else if armed {
             control(label_w("End?", text::CAPTION, s.base, theme::SEMIBOLD))
                 .padding([tok::XS, tok::M])

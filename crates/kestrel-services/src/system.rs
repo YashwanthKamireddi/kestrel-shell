@@ -160,9 +160,26 @@ fn processes() -> std::collections::HashMap<u32, (String, u64, u64)> {
         let ticks = f.get(11).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0)
             + f.get(12).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
         let rss = f.get(21).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) * page;
-        out.insert(pid, (name, ticks, rss));
+        out.insert(pid, (readable(pid, name), ticks, rss));
     }
     out
+}
+
+/// A name people know: the kernel cuts names at 15 characters ("xdg-desktop-por") and some
+/// apps name their main thread ("MainThread"); then the program's file from its command line.
+fn readable(pid: u32, comm: String) -> String {
+    if comm.len() < 15 && comm != "MainThread" {
+        return comm;
+    }
+    std::fs::read(format!("/proc/{pid}/cmdline"))
+        .ok()
+        .and_then(|b| {
+            let first = b.split(|c| *c == 0).next()?.to_vec();
+            let path = String::from_utf8_lossy(&first).into_owned();
+            let base = path.rsplit('/').next()?.to_string();
+            (!base.is_empty()).then_some(base)
+        })
+        .unwrap_or(comm)
 }
 
 fn meminfo() -> ((u64, u64), (u64, u64)) {
