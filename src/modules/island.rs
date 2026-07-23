@@ -202,6 +202,14 @@ pub fn bar<'a>(
     if let Some(v) = visualiser(app, s) {
         content = content.push(v);
     }
+    // Notifications live in the island: their count at its end (accent while unseen, a quiet
+    // bell once seen, crossed out in Do not disturb); a click opens them under the island, a
+    // right click turns Do not disturb on or off. Nothing when there are none.
+    if !app.config.bar.contains("notifications")
+        && let Some(n) = notifications_mark(app, o, s, open)
+    {
+        content = content.push(n);
+    }
     if !app.config.bar.contains("weather")
         && let Some(w) = &app.weather
     {
@@ -220,6 +228,74 @@ pub fn bar<'a>(
         );
     }
     finish(content, o, s, active)
+}
+
+/// The island's notifications mark (see `bar`).
+fn notifications_mark<'a>(
+    app: &'a App,
+    o: &'a Output,
+    s: Scheme,
+    open: Option<PanelKind>,
+) -> Option<Element<'a, Message>> {
+    if app.notifications.is_empty() && !app.dnd {
+        return None;
+    }
+    let id = o.id;
+    let w = o.size.width;
+    let content: Element<'a, Message> = if app.dnd {
+        icon(crate::ui::Icon::BellOff, 13.0, s.ink_dim).into()
+    } else if app.unseen > 0 {
+        row![
+            iced::widget::container(iced::widget::Space::new())
+                .width(6)
+                .height(6)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(s.accent.into()),
+                    border: iced::Border::default().rounded(tok::FULL),
+                    ..iced::widget::container::Style::default()
+                }),
+            label_w(
+                if app.unseen > 9 {
+                    "9+".to_string()
+                } else {
+                    app.unseen.to_string()
+                },
+                text::SMALL,
+                s.accent,
+                theme::SEMIBOLD
+            ),
+        ]
+        .spacing(tok::XS)
+        .align_y(Alignment::Center)
+        .into()
+    } else {
+        icon(crate::ui::Icon::Bell, 13.0, s.ink_dim).into()
+    };
+    Some(
+        ui::control(content)
+            .padding([tok::XXS, tok::S])
+            .radius(tok::FULL)
+            .kind(
+                s,
+                if open == Some(PanelKind::Notifications) {
+                    crate::ui::control::Kind::Chosen
+                } else {
+                    crate::ui::control::Kind::Ghost
+                },
+            )
+            .on_press(Message::Toggle(
+                PanelKind::Notifications,
+                id,
+                iced::Rectangle::new(
+                    iced::Point::new(w / 2.0, 0.0),
+                    iced::Size::new(0.0, size::BAR),
+                ),
+            ))
+            .on_right_press(Message::Panel(crate::panels::Message::Control(
+                crate::panels::control::Message::Dnd,
+            )))
+            .into(),
+    )
 }
 
 /// A level (icon, bar, value) or an event (icon, title, line under it), sized for the island.

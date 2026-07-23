@@ -373,7 +373,6 @@ struct Place {
     count: usize,
     /// A pop-up: ✕ and the arrow only under the pointer; "Clear" instead of "Dismiss".
     popup: bool,
-    hovered: bool,
     more: bool,
 }
 
@@ -384,35 +383,34 @@ struct Place {
 fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage> {
     let tw = text_width(p.width);
     let pic = thumb(n);
-    let body_w = if pic.is_some() {
-        tw - THUMB - tok::L
-    } else {
-        tw
-    };
+    // The text always the full width: a picture goes under it, so the time and ✕ stay in the
+    // same place on every card (they moved left on cards with a picture).
+    let body_w = tw;
     let body = flat(&n.body);
     let title = title_of(n).to_string();
-    let cut_title = ui::fit(&title, text::BODY, body_w - 56.0);
+    let cut_title = ui::fit(&title, text::BODY, body_w - 80.0);
     let cut_body = lines_of(&body, text::SMALL, body_w, LINES);
     let can_expand = p.count <= 1 && (cut_title != title || cut_body != body);
 
-    // Title, then the time; under the pointer the time gives way to ✕.
-    let trail: Element<'a, AppMessage> = if p.hovered {
-        let close = if p.count > 1 {
-            Message::DismissGroup(n.app.clone())
-        } else if p.popup {
-            Message::Hide(n.id)
-        } else {
-            Message::Dismiss(n.id)
-        };
-        control(icon(Icon::X, 12.0, s.ink_dim))
+    // Title, the time, and ✕ always in the same top-right spot (nothing appears or moves under
+    // the pointer: the card never changes shape).
+    let close = if p.count > 1 {
+        Message::DismissGroup(n.app.clone())
+    } else if p.popup {
+        Message::Hide(n.id)
+    } else {
+        Message::Dismiss(n.id)
+    };
+    let trail = row![
+        label(ago(n.time), text::CAPTION, s.ink_faint),
+        control(icon(Icon::X, 11.0, s.ink_dim))
             .padding(tok::XS)
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Tonal)
-            .on_press(msg(close))
-            .into()
-    } else {
-        label(ago(n.time), text::CAPTION, s.ink_faint).into()
-    };
+            .on_press(msg(close)),
+    ]
+    .spacing(tok::S)
+    .align_y(Alignment::Center);
     let head = row![
         label_w(
             if p.more { title.clone() } else { cut_title },
@@ -437,8 +435,12 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
                 .width(Length::Fill),
         );
     }
-    // The app's own buttons, under the pointer only (macOS), as quiet pills.
-    if p.hovered && p.count <= 1 {
+    // A picture: a small square under the text.
+    if let Some(pic) = pic {
+        words = words.push(container(pic).padding(iced::Padding::ZERO.top(tok::XS)));
+    }
+    // The app's own buttons, always there (appearing under the pointer made the card jump).
+    if p.count <= 1 {
         let acts: Vec<_> = actions(n).take(3).collect();
         if !acts.is_empty() {
             let room = (tw / acts.len() as f32 - 2.0 * tok::M).max(48.0);
@@ -460,12 +462,9 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
             words = words.push(container(r).padding(iced::Padding::ZERO.top(tok::XS)));
         }
     }
-    let mut inner = row![app_icon(s, n), words.width(Length::Fill)]
+    let inner = row![app_icon(s, n), words.width(Length::Fill)]
         .spacing(tok::M)
         .align_y(Alignment::Start);
-    if let Some(pic) = pic {
-        inner = inner.push(pic);
-    }
     let surface = control(inner)
         .identity(u64::from(n.id))
         .padding(tok::M + tok::XXS)
@@ -540,7 +539,6 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
             width,
             count: 1,
             popup: true,
-            hovered: app.toast_hover == Some(n.id),
             more: app.notif_more.contains(&n.id),
         },
     )
@@ -555,11 +553,16 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .panel
         .as_ref()
         .and_then(|p| app.output(p.output))
-        .map_or(f32::INFINITY, |o| o.size.height - size::BAR - 2.0 * tok::XL);
+        .map_or(f32::INFINITY, |o| o.size.height - size::BAR - 2.0 * tok::XL)
+        // A compact panel: about five cards, then it scrolls (it ran down the whole screen).
+        .min(LIST_MAX);
     container(section(app, s, room))
         .padding(size::PANEL_PAD)
         .into()
 }
+
+/// The notifications list's most height before it scrolls (about five cards).
+const LIST_MAX: f32 = 380.0;
 
 /// The list's width (the panel less its padding).
 const LIST_W: f32 = size::PANEL_M - 2.0 * size::PANEL_PAD;
@@ -587,7 +590,6 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             None => groups.push(vec![n]),
         }
     }
-    let hover = app.toast_hover;
     let mut list = column![].spacing(tok::S);
     for g in &groups {
         let n = g[0];
@@ -600,7 +602,6 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                     width: LIST_W,
                     count: g.len(),
                     popup: false,
-                    hovered: hover == Some(n.id),
                     more: app.notif_more.contains(&n.id),
                 },
             ));
@@ -636,7 +637,6 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                     width: LIST_W,
                     count: 1,
                     popup: false,
-                    hovered: hover == Some(m.id),
                     more: app.notif_more.contains(&m.id),
                 },
             ));

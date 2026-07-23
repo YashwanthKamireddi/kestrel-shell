@@ -121,11 +121,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         // to an empty workspace): the frame and the content share one live width, centred
         // where the panel opened and kept on screen.
         let (x, w) = panel_span(app, p, o.size.width, edge);
-        let mut d = drop(x, w, h);
-        // The notifications grow out of the island, over it, as the banners do.
-        if p.kind == PanelKind::Notifications {
-            d.top = GROWN_TOP;
-        }
+        let d = drop(x, w, h);
         panel_drop = Some((d, k, h));
     }
     // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
@@ -133,9 +129,19 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
     let show_osd = focused && app.osd.is_some() && !crate::modules::island::hosts_osd(app);
+    // The island grown by a notification: its own shape, centred on it, from the pill's size to
+    // the banner's (app.toast_w and the sheet's height spring together).
+    let grown_w = app.toast_w.value.clamp(1.0, TOAST_WIDTH);
+    let grown_x = ((o.size.width - grown_w) / 2.0).round();
+    let grown_h = app
+        .toast_sheet
+        .h
+        .value
+        .max(if show_toasts { size::BAR - 6.0 } else { 0.0 });
     if show_toasts {
-        let mut d = drop(toast_x, TOAST_WIDTH, app.toast_sheet.h.value);
+        let mut d = drop(grown_x, grown_w, grown_h);
         d.top = GROWN_TOP;
+        d.radius = ((size::BAR - 6.0) / 2.0).max(tok::R_PANEL.min(grown_h / 2.0));
         drops.push(d);
     }
     if show_osd {
@@ -317,34 +323,26 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.2))
                     .on_measure(move |sz| Message::Measured(kind, sz)),
             )
-            .position(Point::new(
-                x,
-                if p.kind == PanelKind::Notifications {
-                    GROWN_TOP
-                } else {
-                    size::BAR + top_gap
-                },
-            ))
+            .position(Point::new(x, size::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
         );
     }
     if show_toasts {
-        let a = app.toast_sheet.alpha();
+        // Its content comes in as the island reaches its full width (cut while narrower).
+        let w0 = size::BAR;
+        let a = ((grown_w - w0) / (TOAST_WIDTH - w0))
+            .clamp(0.0, 1.0)
+            .powi(2);
         let fs = s.faded(a);
-        // Each pop-up apart from the next by a hairline (two ran together as one card).
-        let mut cards = iced::widget::column![].spacing(tok::XXS).padding(tok::XS);
-        let shown = app
+        // The newest only, as the island shows one thing at a time (the rest wait in the list).
+        let mut cards = iced::widget::column![].padding(tok::XS);
+        if let Some(n) = app
             .toasts
-            .iter()
-            .rev()
-            .filter_map(|t| app.notifications.iter().find(|n| n.id == t.id));
-        for (i, n) in shown.enumerate() {
-            if i > 0 {
-                cards = cards
-                    .push(iced::widget::container(ui::divider(fs)).padding([tok::NONE, tok::L]));
-            }
+            .last()
+            .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
+        {
             cards = cards.push(panels::notifications::popup(
                 app,
                 fs,
@@ -353,13 +351,11 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             ));
         }
         layers.push(
-            pin(ui::reveal(cards, TOAST_WIDTH, app.toast_sheet.h.value)
-                .offset((1.0 - a) * 6.0)
-                .on_measure(Message::MeasuredToasts))
-            .position(Point::new(toast_x, GROWN_TOP))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into(),
+            pin(ui::reveal(cards, TOAST_WIDTH, grown_h).on_measure(Message::MeasuredToasts))
+                .position(Point::new(toast_x, GROWN_TOP))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
         );
     }
     if show_osd && let Some(osd) = &app.osd {
