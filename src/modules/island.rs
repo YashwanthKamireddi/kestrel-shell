@@ -205,9 +205,7 @@ pub fn bar<'a>(
     // Notifications live in the island: their count at its end (accent while unseen, a quiet
     // bell once seen, crossed out in Do not disturb); a click opens them under the island, a
     // right click turns Do not disturb on or off. Nothing when there are none.
-    if !app.config.bar.contains("notifications")
-        && let Some(n) = notifications_mark(app, o, s, open)
-    {
+    if let Some(n) = notifications_mark(app, o, s, open) {
         content = content.push(n);
     }
     if !app.config.bar.contains("weather")

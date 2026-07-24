@@ -16,6 +16,11 @@ pub fn view<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
+    // With the island in the bar, notifications are part of it (inside its pill): no bell of
+    // its own beside it.
+    if app.config.bar.contains("island") {
+        return Vec::new();
+    }
     let id = o.id;
     let active = open == Some(PanelKind::Notifications);
     // Opens at the island, the centre of the bar, wherever the bell sits.

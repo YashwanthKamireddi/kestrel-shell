@@ -250,7 +250,7 @@ fn describe(id: &str) -> &'static str {
         "bluetooth" => "Bluetooth and connected devices",
         "volume" => "Sound volume and outputs",
         "battery" => "Battery level and charging",
-        "notifications" => "Unread notifications; right-click for Do not disturb",
+        "notifications" => "Unread notifications (inside the island when it is in the bar)",
         "power" => "Lock, sleep, restart and shut down",
         _ => "A widget from a Lua script",
     }
