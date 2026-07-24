@@ -235,7 +235,7 @@ fn notifications_mark<'a>(
     app: &'a App,
     o: &'a Output,
     s: Scheme,
-    open: Option<PanelKind>,
+    _open: Option<PanelKind>,
 ) -> Option<Element<'a, Message>> {
     if app.notifications.is_empty() && !app.dnd {
         return None;
@@ -245,44 +245,32 @@ fn notifications_mark<'a>(
     let content: Element<'a, Message> = if app.dnd {
         icon(crate::ui::Icon::BellOff, 13.0, s.ink_dim).into()
     } else if app.unseen > 0 {
-        row![
-            iced::widget::container(iced::widget::Space::new())
-                .width(6)
-                .height(6)
-                .style(move |_| iced::widget::container::Style {
-                    background: Some(s.accent.into()),
-                    border: iced::Border::default().rounded(tok::FULL),
-                    ..iced::widget::container::Style::default()
-                }),
-            label_w(
-                if app.unseen > 9 {
-                    "9+".to_string()
-                } else {
-                    app.unseen.to_string()
-                },
-                text::SMALL,
-                s.accent,
-                theme::SEMIBOLD
-            ),
-        ]
-        .spacing(tok::XS)
+        // Unread: the island grows with their apps' icons (up to three, newest first), as it
+        // grows with the visualiser; no count chip of its own.
+        let mut apps: Vec<&crate::services::notifications::Notification> = Vec::new();
+        for n in app.notifications.iter().rev().take(app.unseen) {
+            if !apps.iter().any(|a| a.app == n.app) {
+                apps.push(n);
+            }
+            if apps.len() == 3 {
+                break;
+            }
+        }
+        iced::widget::row(
+            apps.into_iter()
+                .map(|n| crate::panels::notifications::icon_sized(s, n, 18.0)),
+        )
+        .spacing(tok::XXS)
         .align_y(Alignment::Center)
         .into()
     } else {
-        icon(crate::ui::Icon::Bell, 13.0, s.ink_dim).into()
+        icon(crate::ui::Icon::Bell, 13.0, s.ink_faint).into()
     };
     Some(
+        // Part of the island, not a pill on it: no fill or hover of its own.
         ui::control(content)
-            .padding([tok::XXS, tok::S])
-            .radius(tok::FULL)
-            .kind(
-                s,
-                if open == Some(PanelKind::Notifications) {
-                    crate::ui::control::Kind::Chosen
-                } else {
-                    crate::ui::control::Kind::Ghost
-                },
-            )
+            .kind(s, crate::ui::control::Kind::Bare)
+            .no_press_scale()
             .on_press(Message::Toggle(
                 PanelKind::Notifications,
                 id,

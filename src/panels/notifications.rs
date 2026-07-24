@@ -217,7 +217,12 @@ fn ago(t: SystemTime) -> String {
 /// The app's own icon, large enough to tell at a glance who it is from (its name is tried
 /// when it sent no icon: "vesktop", "kitty").
 fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
-    const D: f32 = AVATAR;
+    icon_sized(s, n, AVATAR)
+}
+
+/// A notification's app icon `size` px across (the island shows them small).
+pub fn icon_sized<'a>(s: Scheme, n: &Notification, size: f32) -> Element<'a, AppMessage> {
+    let k = size / AVATAR;
     // Kestrel's own entries: its own glyph on a soft round, like its other icons.
     if n.app == "kestrel" {
         // By what it is about: a screenshot, a recording, the battery; anything else (a config
@@ -228,11 +233,11 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
             i if i.starts_with("battery") => Icon::Battery,
             _ => Icon::Info,
         };
-        return container(icon(glyph, 17.0, s.ink))
-            .center(D)
+        return container(icon(glyph, 17.0 * k, s.ink))
+            .center(size)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
-                border: iced::Border::default().rounded(D / 2.0),
+                border: iced::Border::default().rounded(size / 2.0),
                 ..container::Style::default()
             })
             .into();
@@ -243,14 +248,14 @@ fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
         // By its desktop entry, as everywhere else ("Thunar" → org.xfce.thunar).
         .or_else(|| icons::lookup(&crate::services::apps::icon_for_class(&n.app)));
     match found {
-        Some(p) => container(ui::image_file_faded(&p, D, s.opacity))
-            .center(D)
+        Some(p) => container(ui::image_file_faded(&p, size, s.opacity))
+            .center(size)
             .into(),
-        None => container(icon(Icon::Bell, 18.0, s.ink))
-            .center(D)
+        None => container(icon(Icon::Bell, 18.0 * k, s.ink))
+            .center(size)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
-                border: iced::Border::default().rounded(D / 2.0),
+                border: iced::Border::default().rounded(size / 2.0),
                 ..container::Style::default()
             })
             .into(),
@@ -561,6 +566,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .into()
 }
 
+/// How tall the fade at a long list's bottom is.
+const FADE: f32 = 36.0;
+
 /// The notifications list's most height before it scrolls (about five cards).
 const LIST_MAX: f32 = 380.0;
 
@@ -653,5 +661,45 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             )),
     ))
     .max_height(room);
+    // More than fits: the list's bottom fades into the panel, so a card cut by the edge reads
+    // as "more below", not as broken.
+    let cards: usize = groups
+        .iter()
+        .map(|g| {
+            if app.notif_open.contains(&g[0].app) {
+                g.len().min(LIMIT)
+            } else {
+                1
+            }
+        })
+        .sum();
+    let list: Element<'_, AppMessage> = if cards > 4 && room <= LIST_MAX {
+        let tint = if app.config.material == crate::config::Material::Frosted {
+            s.base.scale_alpha(0.42 * s.opacity)
+        } else {
+            s.base
+        };
+        let fade = container(Space::new())
+            .width(Length::Fill)
+            .height(FADE)
+            .style(move |_| container::Style {
+                background: Some(
+                    iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
+                        .add_stop(0.0, iced::Color { a: 0.0, ..tint })
+                        .add_stop(1.0, tint)
+                        .into(),
+                ),
+                ..container::Style::default()
+            });
+        iced::widget::stack![
+            list,
+            container(fade)
+                .height(Length::Fill)
+                .align_y(iced::alignment::Vertical::Bottom)
+        ]
+        .into()
+    } else {
+        list.into()
+    };
     column![header, list].spacing(tok::M).into()
 }
