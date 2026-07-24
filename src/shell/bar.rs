@@ -338,11 +338,9 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         let fs = s.faded(a);
         // The newest only, as the island shows one thing at a time (the rest wait in the list).
         let mut cards = iced::widget::column![].padding(tok::XS);
-        if let Some(n) = app
-            .toasts
-            .last()
-            .and_then(|t| app.notifications.iter().find(|n| n.id == t.id))
-        {
+        // While shrinking back (its banner gone) the last one stays drawn, fading with the width.
+        let id = app.toasts.last().map(|t| t.id).or(app.toast_last);
+        if let Some(n) = id.and_then(|id| app.notifications.iter().find(|n| n.id == id)) {
             cards = cards.push(panels::notifications::popup(
                 app,
                 fs,

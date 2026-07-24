@@ -240,29 +240,38 @@ fn notifications_mark<'a>(
     }
     let id = o.id;
     let w = o.size.width;
+    // One mark, always the same size (it changed shape as they were read, and the island
+    // jumped under the click): the number in a small round badge, the accent while unread,
+    // quiet once seen; a crossed bell in Do not disturb.
     let content: Element<'a, Message> = if app.dnd {
         icon(crate::ui::Icon::BellOff, 13.0, s.ink_dim).into()
-    } else if app.unseen > 0 {
-        // Unread: the island grows with their apps' icons (up to three, newest first), as it
-        // grows with the visualiser; no count chip of its own.
-        let mut apps: Vec<&crate::services::notifications::Notification> = Vec::new();
-        for n in app.notifications.iter().rev().take(app.unseen) {
-            if !apps.iter().any(|a| a.app == n.app) {
-                apps.push(n);
-            }
-            if apps.len() == 3 {
-                break;
-            }
-        }
-        iced::widget::row(
-            apps.into_iter()
-                .map(|n| crate::panels::notifications::icon_sized(s, n, 18.0)),
-        )
-        .spacing(tok::XXS)
-        .align_y(Alignment::Center)
-        .into()
     } else {
-        icon(crate::ui::Icon::Bell, 13.0, s.ink_faint).into()
+        let n = app.notifications.len();
+        let unread = app.unseen > 0;
+        let (bg, fg) = if unread {
+            (s.accent, s.on_accent)
+        } else {
+            (s.ink.scale_alpha(tok::FILL_STRONG * s.opacity), s.ink_dim)
+        };
+        const BADGE: f32 = 18.0;
+        iced::widget::container(label_w(
+            if n > 9 {
+                "9+".to_string()
+            } else {
+                n.to_string()
+            },
+            text::CAPTION,
+            fg,
+            theme::SEMIBOLD,
+        ))
+        .center_y(BADGE)
+        .padding([tok::NONE, tok::S])
+        .style(move |_| iced::widget::container::Style {
+            background: Some(bg.into()),
+            border: iced::Border::default().rounded(tok::FULL),
+            ..iced::widget::container::Style::default()
+        })
+        .into()
     };
     Some(
         // Part of the island, not a pill on it: no fill or hover of its own.

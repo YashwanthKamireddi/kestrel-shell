@@ -552,7 +552,18 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
 /// The notifications panel at the island: the list, or a quiet bell when there is none.
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     if app.notifications.is_empty() {
-        return container(ui::empty(s, Icon::Bell)).padding(tok::L).into();
+        // Compact: one quiet line (a big box with a lone bell looked like a glitch).
+        return container(
+            row![
+                icon(Icon::Bell, 14.0, s.ink_faint),
+                label("No notifications", text::SMALL, s.ink_dim)
+            ]
+            .spacing(tok::S)
+            .align_y(Alignment::Center),
+        )
+        .center_x(Length::Fill)
+        .padding(tok::L)
+        .into();
     }
     let room = app
         .panel
