@@ -43,6 +43,9 @@ pub enum Kind {
     /// No fill of its own: something else shows the selection (the launcher's highlight that
     /// moves under the rows, a picture that is its own button). Press still answers.
     Bare,
+    /// No fill ever, not even pressed (a mark inside another control: the island's count);
+    /// pair with `press_scale` for a tactile press.
+    Still,
     /// A clear button on an accent fill (the icon at the start of a filled slider).
     OnAccent,
 }
@@ -237,6 +240,7 @@ impl<'a, M> Control<'a, M> {
             Kind::Primary => (s.accent, over(s.accent, HOVER), over(s.accent, PRESS)),
             Kind::Danger => (s.bad, over(s.bad, HOVER), over(s.bad, PRESS)),
             Kind::Bare => (Color::TRANSPARENT, Color::TRANSPARENT, ink(PRESS)),
+            Kind::Still => (Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
             Kind::OnAccent => (
                 Color::TRANSPARENT,
                 s.on_accent.scale_alpha(1.5 * HOVER),
@@ -257,6 +261,12 @@ impl<'a, M> Control<'a, M> {
         self
     }
     /// Large surfaces (rows in a list) should not shrink on press.
+    /// Shrinks a little while pressed (a tactile press with no fill flashing).
+    pub fn press_scale(mut self) -> Self {
+        self.press_scale = true;
+        self
+    }
+
     pub fn no_press_scale(mut self) -> Self {
         self.press_scale = false;
         self

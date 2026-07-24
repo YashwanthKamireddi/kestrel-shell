@@ -702,11 +702,12 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                 ),
                 ..container::Style::default()
             });
+        // Placed by its own top padding, not a Fill height: inside a panel that measures its
+        // content, Fill made the list infinitely tall and the panel never showed (the user's clicks
+        // on the count did nothing).
         iced::widget::stack![
             list,
-            container(fade)
-                .height(Length::Fill)
-                .align_y(iced::alignment::Vertical::Bottom)
+            container(fade).padding(iced::Padding::ZERO.top((room - FADE).max(0.0)))
         ]
         .into()
     } else {

@@ -275,9 +275,12 @@ fn notifications_mark<'a>(
     };
     Some(
         // Part of the island, not a pill on it: no fill or hover of its own.
+        // A soft press: it dips under the click (no fill flashing behind it, which read as a
+        // glitch; nothing at all felt dead).
         ui::control(content)
-            .kind(s, crate::ui::control::Kind::Bare)
-            .no_press_scale()
+            .radius(tok::FULL)
+            .kind(s, crate::ui::control::Kind::Still)
+            .press_scale()
             .on_press(Message::Toggle(
                 PanelKind::Notifications,
                 id,
