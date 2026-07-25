@@ -128,7 +128,8 @@ pub fn bar<'a>(
     // While the island glides to a new width its content fades in, so nothing shows half cut
     // at its edges (the content changes at once; the width follows).
     let gap = (o.island_w.target - o.island_w.value).abs();
-    let s = s.faded(1.0 - (gap / 40.0).clamp(0.0, 1.0));
+    // Small changes (a digit) need no fade: only a real change of what it shows.
+    let s = s.faded(1.0 - ((gap - 12.0) / 40.0).clamp(0.0, 1.0));
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
@@ -257,7 +258,7 @@ fn notifications_mark<'a>(
         } else {
             (s.ink.scale_alpha(tok::FILL_STRONG * s.opacity), s.ink_dim)
         };
-        const BADGE: f32 = 18.0;
+        const BADGE: f32 = 20.0;
         iced::widget::container(label_w(
             if n > 9 {
                 "9+".to_string()
@@ -268,8 +269,9 @@ fn notifications_mark<'a>(
             fg,
             theme::SEMIBOLD,
         ))
-        .center_y(BADGE)
-        .padding([tok::NONE, tok::S])
+        // A fixed circle: a new number never changes its size, so the island does not move
+        // when one arrives (it jiggled as 3 became 4, 9 became 9+).
+        .center(BADGE)
         .style(move |_| iced::widget::container::Style {
             background: Some(bg.into()),
             border: iced::Border::default().rounded(tok::FULL),
