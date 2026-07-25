@@ -33,6 +33,21 @@ fn msg(m: Message) -> AppMessage {
 }
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+    let task = update_inner(app, m);
+    // The last one gone while the list is open: the list closes at once (an empty list says
+    // nothing).
+    if app.notifications.is_empty()
+        && app
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.open && p.kind == super::PanelKind::Notifications)
+    {
+        return Task::batch([task, Task::done(AppMessage::Close)]);
+    }
+    task
+}
+
+fn update_inner(app: &mut App, m: Message) -> Task<AppMessage> {
     match m {
         Message::Dismiss(id) => {
             app.notifications.retain(|n| n.id != id);
