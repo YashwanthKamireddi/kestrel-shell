@@ -43,9 +43,6 @@ impl Spring {
     /// A panel appearing: critically damped, there in ~70 ms, no overshoot (fast enough to
     /// read as instant, soft enough not to pop).
     pub const SHOW: (f32, f32) = (60.0, 1.0);
-    /// A panel appearing or going (design call 2026-11-16: fluid, never laggy): critically damped,
-    /// settled in ~130 ms, so it reads as smooth without waiting on it.
-    pub const PANEL: (f32, f32) = (36.0, 1.0);
     /// Small UI elements (workspace pill): snappy, barely any overshoot.
     pub const SNAP: (f32, f32) = (24.0, 0.86);
 
