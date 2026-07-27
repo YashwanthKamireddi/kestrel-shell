@@ -321,6 +321,8 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         layers.push(
             pin(
                 ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.2))
+                    // Rises the last few pixels as it fades in (and sinks as it fades out).
+                    .offset((1.0 - p.t.value.clamp(0.0, 1.0)) * 6.0)
                     .on_measure(move |sz| Message::Measured(kind, sz)),
             )
             .position(Point::new(x, size::BAR + top_gap))
