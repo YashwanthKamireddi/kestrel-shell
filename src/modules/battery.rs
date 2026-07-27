@@ -31,8 +31,8 @@ pub fn view<'a>(
             icon(control::battery_icon(p), px, color).into()
         }
     };
-    let active = super::control_on(app, open, control::Page::Power);
-    let press = move |r| Message::ControlAt(control::Page::Power, id, r);
+    let active = super::control_on(app, open, control::Page::Main);
+    let press = move |r| Message::ControlAt(control::Page::Main, id, r);
     if !app.config.bar.battery_percent {
         return vec![
             crate::ui::control(iced::widget::container(glyph(size::ICON)).center(size::CONTROL))

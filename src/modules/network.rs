@@ -16,7 +16,7 @@ pub fn view<'a>(
         return Vec::new();
     }
     let id = o.id;
-    let active = super::control_on(app, open, control::Page::Wifi);
+    let active = super::control_on(app, open, control::Page::Main);
     let glyph = crate::ui::breathe::icon_or(
         control::wifi_icon(&app.net),
         crate::theme::size::ICON,
@@ -27,7 +27,7 @@ pub fn view<'a>(
         crate::ui::control(iced::widget::container(glyph).center(crate::theme::size::CONTROL))
             .radius(crate::theme::size::CONTROL / 2.0)
             .bar(s, active)
-            .on_press_at(move |r| Message::ControlAt(control::Page::Wifi, id, r))
+            .on_press_at(move |r| Message::ControlAt(control::Page::Main, id, r))
             .into(),
     ]
 }

@@ -13,10 +13,10 @@ pub fn view<'a>(
     open: Option<PanelKind>,
 ) -> Vec<Element<'a, Message>> {
     let id = o.id;
-    let active = super::control_on(app, open, control::Page::Output);
+    let active = super::control_on(app, open, control::Page::Main);
     vec![
         super::icon_chip(s, control::level_icon(app.audio.sink()), s.ink, active)
-            .on_press_at(move |r| Message::ControlAt(control::Page::Output, id, r))
+            .on_press_at(move |r| Message::ControlAt(control::Page::Main, id, r))
             .on_right_press(Message::Panel(PanelMessage::Control(
                 control::Message::SinkMute,
             )))

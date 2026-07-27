@@ -24,10 +24,10 @@ pub fn view<'a>(
     } else {
         (Icon::Bluetooth, s.ink)
     };
-    let active = super::control_on(app, open, control::Page::Bluetooth);
+    let active = super::control_on(app, open, control::Page::Main);
     vec![
         super::icon_chip(s, i, color, active)
-            .on_press_at(move |r| Message::ControlAt(control::Page::Bluetooth, id, r))
+            .on_press_at(move |r| Message::ControlAt(control::Page::Main, id, r))
             .into(),
     ]
 }
