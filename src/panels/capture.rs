@@ -298,7 +298,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         body = body.push(r);
     }
     container(body.push(go).spacing(tok::L))
-        .padding(tok::XL)
+        .padding(size::PANEL_PAD)
         .width(Length::Fill)
         .into()
 }

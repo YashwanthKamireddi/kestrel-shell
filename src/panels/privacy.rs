@@ -19,7 +19,7 @@ fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {
     ]
     .spacing(tok::L)
     .align_y(Alignment::Center)
-    .height(tok::H_CONTROL)
+    .height(tok::H_ROW)
     .padding([tok::NONE, tok::M])
     .into()
 }

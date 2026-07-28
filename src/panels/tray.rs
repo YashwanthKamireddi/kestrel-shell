@@ -186,7 +186,7 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
         .align_y(Alignment::Center),
     )
     .padding([tok::NONE, tok::L])
-    .height(34)
+    .height(tok::H_ROW)
     .width(Length::Fill)
     .radius(size::ROW_RADIUS)
     .kind(s, crate::ui::control::Kind::Ghost)
@@ -312,7 +312,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             text::SMALL,
             s.ink_dim,
         ))
-        .padding(tok::XL);
+        .padding(crate::theme::size::PANEL_PAD);
         return if st.from_list {
             container(column![back_row(s, title), note].spacing(tok::XXS))
                 .padding(tok::M)
@@ -388,7 +388,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         col = col.push(
             control(r)
                 .padding([tok::NONE, tok::L])
-                .height(34)
+                .height(tok::H_ROW)
                 .width(Length::Fill)
                 .radius(size::ROW_RADIUS)
                 .kind(s, crate::ui::control::Kind::Ghost)

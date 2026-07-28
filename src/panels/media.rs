@@ -511,7 +511,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         s.fade(s.base)
     };
     container(top)
-        .padding(tok::XL)
+        .padding(crate::theme::size::PANEL_PAD)
         .style(move |_| container::Style {
             background: tint.map(|deep| {
                 iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2 * 3.0))

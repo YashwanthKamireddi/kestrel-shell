@@ -90,7 +90,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         return container(
             column![title, crate::ui::waiting(s, Icon::Activity, "Reading…")].spacing(tok::L),
         )
-        .padding(tok::XL)
+        .padding(crate::theme::size::PANEL_PAD)
         .into();
     };
     // Cores: one bar each, in two columns.
@@ -210,7 +210,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .align_y(Alignment::Center),
             )
             .padding([tok::NONE, tok::L])
-            .height(32)
+            .height(tok::H_ROW)
             .align_y(Alignment::Center),
         );
     }
@@ -223,7 +223,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ]
         .spacing(tok::L),
     )
-    .padding(tok::XL)
+    .padding(crate::theme::size::PANEL_PAD)
     .width(Length::Fill)
     .into()
 }

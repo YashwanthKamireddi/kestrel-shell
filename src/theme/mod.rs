@@ -289,6 +289,8 @@ pub mod tok {
     pub const H_SMALL: f32 = 28.0;
     pub const H_CONTROL: f32 = 32.0;
     pub const H_ROW: f32 = 40.0;
+    /// A row with a second line under its name (the launcher's results).
+    pub const H_ROW2: f32 = 48.0;
 
     // The state layer: ink laid over a container.
     pub const HOVER: f32 = 0.08;

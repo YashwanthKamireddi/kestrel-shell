@@ -91,7 +91,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
     }
     container(column![header, list].spacing(tok::XL).width(Length::Fill))
-        .padding([tok::XL, tok::XL])
+        .padding(crate::theme::size::PANEL_PAD)
         .into()
 }
 
