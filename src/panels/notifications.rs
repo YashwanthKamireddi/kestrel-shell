@@ -699,7 +699,8 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             }
         })
         .sum();
-    let list: Element<'_, AppMessage> = if cards > 4 && room <= LIST_MAX {
+    // Five fit in LIST_MAX; only a sixth runs past its edge.
+    let list: Element<'_, AppMessage> = if cards > 5 && room <= LIST_MAX {
         let tint = if app.config.material == crate::config::Material::Frosted {
             s.base.scale_alpha(0.42 * s.opacity)
         } else {
