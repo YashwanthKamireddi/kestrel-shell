@@ -42,7 +42,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             .as_ref()
             .is_some_and(|p| p.open && p.kind == super::PanelKind::Notifications)
     {
-        return Task::batch([task, Task::done(AppMessage::Close)]);
+        // Closed in this same update (closing a frame later drew it empty first: a flicker).
+        return Task::batch([task, app.close()]);
     }
     task
 }

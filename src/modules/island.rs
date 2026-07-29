@@ -125,11 +125,6 @@ pub fn bar<'a>(
     open: Option<PanelKind>,
 ) -> Element<'a, Message> {
     let active = open == Some(PanelKind::Island);
-    // While the island glides to a new width its content fades in, so nothing shows half cut
-    // at its edges (the content changes at once; the width follows).
-    let gap = (o.island_w.target - o.island_w.value).abs();
-    // Small changes (a digit) need no fade: only a real change of what it shows.
-    let s = s.faded(1.0 - ((gap - 12.0) / 40.0).clamp(0.0, 1.0));
     let time = label_w(app.time_text(), text::BODY, s.ink, theme::SEMIBOLD);
     let date = label(app.now.format("%a %-d").to_string(), text::SMALL, s.ink);
     let mut content = row![].spacing(tok::L).align_y(Alignment::Center);
