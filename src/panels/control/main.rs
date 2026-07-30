@@ -269,10 +269,15 @@ pub(super) fn level_row_to<'a>(
     let on_track = (value / top).clamp(0.0, 1.0);
     // Once the fill reaches the value text, the text switches to the on-accent colour.
     let covered = on_track > 0.86;
+    let boosted = value > 1.0 + 1e-4;
     let pct = label(
         format!("{:.0}%", value * 100.0),
         text::SMALL,
-        if covered { s.on_accent } else { s.ink_dim },
+        match (covered, boosted) {
+            (true, _) => s.on_accent,
+            (false, true) => s.bad,
+            (false, false) => s.ink_dim,
+        },
     );
     let inner = row![
         ui::control(container(icon(i, size::ICON, s.on_accent)).center(32))

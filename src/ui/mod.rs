@@ -469,27 +469,22 @@ pub fn level_bar<'a, M: 'a>(
             })
     };
     let round = iced::border::Radius::from(r);
-    let left = iced::border::Radius {
-        top_left: r,
-        bottom_left: r,
-        top_right: 0.0,
-        bottom_right: 0.0,
-    };
     let on = (value / top).clamp(0.0, 1.0);
-    let mark = width / top;
     // The control centre's track colour: one slider look everywhere.
     let mut bar = stack![piece(
         width,
         s.ink.scale_alpha(tok_fill() * s.opacity),
         round
     )];
-    let fill = if value > 0.0 { s.accent } else { s.ink_faint };
-    if value > 1.0 && top > 1.0 {
-        bar = bar.push(piece((width * on).max(height), s.bad, round));
-        bar = bar.push(piece(mark, fill, left));
+    // Past 100 % the whole fill is red, one piece (as the control centre's slider).
+    let fill = if value > 1.0 && top > 1.0 {
+        s.bad
+    } else if value > 0.0 {
+        s.accent
     } else {
-        bar = bar.push(piece((width * on).max(height), fill, round));
-    }
+        s.ink_faint
+    };
+    bar = bar.push(piece((width * on).max(height), fill, round));
     bar.width(width).height(height).into()
 }
 

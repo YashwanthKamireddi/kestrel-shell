@@ -201,47 +201,20 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
         );
         let at = |v: f32| b.height + (b.width - b.height) * v;
         let fill_w = at(state.shown);
-        match self.boost {
-            Some((mark, over)) if state.shown > mark => {
-                // Past 100 %: the boost first (its own rounded end), the normal fill over it up
-                // to 100 %, square there so the two meet edge to edge.
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: Rectangle { width: fill_w, ..b },
-                        border: Border::default().rounded(r),
-                        ..renderer::Quad::default()
-                    },
-                    over,
-                );
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: Rectangle {
-                            width: at(mark),
-                            ..b
-                        },
-                        border: Border {
-                            radius: iced::border::Radius {
-                                top_left: r,
-                                bottom_left: r,
-                                top_right: 0.0,
-                                bottom_right: 0.0,
-                            },
-                            ..Border::default()
-                        },
-                        ..renderer::Quad::default()
-                    },
-                    self.fill,
-                );
-            }
-            _ => renderer.fill_quad(
-                renderer::Quad {
-                    bounds: Rectangle { width: fill_w, ..b },
-                    border: Border::default().rounded(r),
-                    ..renderer::Quad::default()
-                },
-                self.fill,
-            ),
-        }
+        // Past 100 % the whole fill is the danger colour, one piece (a red end stuck onto the
+        // blue read as misaligned, design call 2026-11-16).
+        let colour = match self.boost {
+            Some((mark, over)) if state.shown > mark + 1e-4 => over,
+            _ => self.fill,
+        };
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: Rectangle { width: fill_w, ..b },
+                border: Border::default().rounded(r),
+                ..renderer::Quad::default()
+            },
+            colour,
+        );
         renderer.with_layer(b, |renderer| {
             self.content.as_widget().draw(
                 &tree.children[0],
