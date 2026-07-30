@@ -36,7 +36,7 @@ impl Default for Spring {
 
 impl Spring {
     /// Panel opening: settles in ~280 ms with 0.6 % overshoot (Material 3 expressive stiffness,
-    /// damped further; docs/muse-ux report, 2026-11-12). Visible growth, no bounce.
+    /// damped further). Visible growth, no bounce.
     pub const OPEN: (f32, f32) = (19.5, 0.85);
     /// Closing and quick moves: ~160 ms, no visible overshoot. Exits run faster than entries.
     pub const CLOSE: (f32, f32) = (30.0, 0.95);
