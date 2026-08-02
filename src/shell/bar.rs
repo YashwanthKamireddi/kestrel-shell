@@ -108,7 +108,10 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // The panel opens by fading in at its full size (and closes the same way, faster); it does
     // not unroll or move.
     let mut panel_drop = None;
-    if let Some(p) = panel {
+    // On its own surface (floating style) the panel is drawn there, not here: the overlay only
+    // catches the click outside it.
+    let own = app.own_panel_surfaces();
+    if let Some(p) = panel.filter(|_| !own) {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let k = p.progress(natural);
         // Known before drawing (the overview): that, so frame and content change together.
@@ -312,7 +315,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             );
         }
     }
-    if let Some(p) = panel {
+    if let Some(p) = panel.filter(|_| !own) {
         let natural = app.natural.get(&p.kind).map_or(0.0, |s| s.height);
         let alpha = p.alpha(natural);
         let (x, width) = panel_span(app, p, o.size.width, edge);
@@ -381,7 +384,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
 
 /// Where an open panel stands and how wide it is now: its content's current width, centred on
 /// where it opened, never past the screen's edges.
-fn panel_span(app: &App, p: &crate::app::Panel, screen_w: f32, edge: f32) -> (f32, f32) {
+pub(crate) fn panel_span(app: &App, p: &crate::app::Panel, screen_w: f32, edge: f32) -> (f32, f32) {
     let w = p.kind.width_for(app).min(screen_w - 2.0 * edge);
     let centre = p.x.value + p.w.value / 2.0;
     let x = (centre - w / 2.0).clamp(edge, (screen_w - edge - w).max(edge));
@@ -597,4 +600,32 @@ pub fn panel_alpha(app: &App) -> f32 {
         crate::config::Material::Frosted => 0.0,
         _ => 1.0,
     }
+}
+
+/// An open panel on its own surface (floating style): its card, frosted or black, with the
+/// panel's corners, exactly the surface's size. It reports its natural size, which sizes the
+/// surface (app.rs `sync_panel_surface`).
+pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
+    let Some(p) = app.panel.as_ref().filter(|p| p.output == o.id) else {
+        return Space::new().into();
+    };
+    let s = app.scheme;
+    let (_, width) = panel_span(app, p, o.size.width, app.panel_edge());
+    let kind = p.kind;
+    let content = panels::view(app, kind, s);
+    let material = app.config.material;
+    let card = container(content)
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: match material {
+                crate::config::Material::Black => Some(s.base.into()),
+                crate::config::Material::Frosted => None,
+            },
+            border: iced::Border::default().rounded(size::PANEL_RADIUS),
+            ..container::Style::default()
+        });
+    let card = frosted(app, o, size::PANEL_RADIUS, s.opacity, card);
+    ui::reveal(card, width, p.h.value.max(1.0))
+        .on_measure(move |sz| Message::Measured(kind, sz))
+        .into()
 }

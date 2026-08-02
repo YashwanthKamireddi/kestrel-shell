@@ -77,7 +77,7 @@ fn msg(m: Message) -> AppMessage {
     AppMessage::Panel(PanelMessage::Auth(m))
 }
 
-static INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+pub(super) static INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("auth-password"));
 
 /// A request (or a retry) arrived: show it with an empty field focused.

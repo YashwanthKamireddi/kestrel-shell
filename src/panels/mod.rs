@@ -198,6 +198,23 @@ pub enum Key {
     Space,
 }
 
+/// The open panel's text field takes the focus again: its own surface has just been made
+/// (the focus asked for on open ran before the surface existed and went nowhere).
+pub fn refocus(app: &App, kind: PanelKind) -> Task<AppMessage> {
+    let id = match kind {
+        PanelKind::Launcher => launcher::INPUT_ID.clone(),
+        PanelKind::Clipboard => clipboard::INPUT_ID.clone(),
+        PanelKind::Emoji => emoji::INPUT_ID.clone(),
+        PanelKind::Auth => auth::INPUT_ID.clone(),
+        PanelKind::Files if app.panels.files.req.as_ref().is_some_and(|r| r.save) => {
+            files::NAME_ID.clone()
+        }
+        PanelKind::Files => files::SEARCH_ID.clone(),
+        _ => return Task::none(),
+    };
+    Task::Iced(iced::widget::focus(id))
+}
+
 /// A panel was just opened: reset its transient state and load what it needs.
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
     match kind {
