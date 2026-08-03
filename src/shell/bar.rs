@@ -15,6 +15,19 @@ pub const SLOT: f32 = 28.0;
 /// The pills' top edge: where what grows out of the island (banners, the notifications) starts.
 const GROWN_TOP: f32 = 3.0;
 
+/// Where the island's notification card is on an output `screen_w` wide, as (x, y, width,
+/// height): its one source, used to draw it and for its click area (app.rs `sync_surfaces`),
+/// so the two can never be in different places again (they were: clicks fell through).
+/// `natural` is the card's measured height (app.toast_sheet.natural).
+pub fn card_rect(natural: f32, screen_w: f32) -> (f32, f32, f32, f32) {
+    (
+        ((screen_w - TOAST_WIDTH) / 2.0).round(),
+        GROWN_TOP,
+        TOAST_WIDTH,
+        natural.max(size::BAR),
+    )
+}
+
 /// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
 pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
 /// The floating pills' distance from the screen's sides.
@@ -101,7 +114,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         0.0
     };
     // Banners grow out of the island, at the bar's centre (design call 2026-11-16).
-    let toast_x = ((o.size.width - TOAST_WIDTH) / 2.0).round();
+    let toast_x = card_rect(app.toast_sheet.natural, o.size.width).0;
     let _ = edge;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
     let mut drops = Vec::new();
@@ -353,7 +366,10 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         }
         layers.push(
             pin(ui::reveal(cards, TOAST_WIDTH, grown_h).on_measure(Message::MeasuredToasts))
-                .position(Point::new(toast_x, GROWN_TOP))
+                .position(Point::new(
+                    toast_x,
+                    card_rect(app.toast_sheet.natural, o.size.width).1,
+                ))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into(),
