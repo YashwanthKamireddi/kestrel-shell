@@ -1,6 +1,9 @@
 //! Service streams as iced subscriptions. Each subscription exists only while the app asks for
-//! it, so a module that is switched off never starts its service.
+//! it, so a module that is switched off never starts its service. Every long-lived one runs
+//! under `forever`: if its stream ever ends it is made again, so nothing freezes on its last
+//! answer (docs/ROADMAP-v2.md, rule 1).
 
+use crate::services::stream::forever;
 use crate::services::{
     audio, bluetooth, clock, hyprland, mpris, network, notifications, power, system, tray, updates,
     vpn, web,
@@ -8,7 +11,7 @@ use crate::services::{
 use iced::Subscription;
 
 pub fn hyprland() -> Subscription<hyprland::State> {
-    Subscription::run(hyprland::stream)
+    Subscription::run(|| forever(hyprland::stream))
 }
 pub fn clock() -> Subscription<()> {
     Subscription::run(clock::stream)
@@ -17,16 +20,16 @@ pub fn seconds() -> Subscription<()> {
     Subscription::run(clock::seconds)
 }
 pub fn camera() -> Subscription<Vec<String>> {
-    Subscription::run(crate::services::camera::stream)
+    Subscription::run(|| forever(crate::services::camera::stream))
 }
 pub fn audio() -> Subscription<audio::State> {
-    Subscription::run(audio::stream)
+    Subscription::run(|| forever(audio::stream))
 }
 pub fn network() -> Subscription<network::State> {
-    Subscription::run(network::stream)
+    Subscription::run(|| forever(network::stream))
 }
 pub fn bluetooth() -> Subscription<bluetooth::State> {
-    Subscription::run(bluetooth::stream)
+    Subscription::run(|| forever(bluetooth::stream))
 }
 /// The AirPods at BlueZ object `path` (…/dev_B4_59_…): charge and fit.
 pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods>> {
@@ -39,10 +42,10 @@ pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods
     Subscription::run_with(address, crate::services::airpods::stream)
 }
 pub fn bt_agent() -> Subscription<crate::services::bluetooth::Ask> {
-    Subscription::run(crate::services::bluetooth::agent)
+    Subscription::run(|| forever(crate::services::bluetooth::agent))
 }
 pub fn wifi_agent() -> Subscription<crate::services::network::Ask> {
-    Subscription::run(crate::services::network::agent)
+    Subscription::run(|| forever(crate::services::network::agent))
 }
 pub fn bt_visible() -> Subscription<()> {
     Subscription::run(crate::services::bluetooth::visible)
@@ -52,34 +55,34 @@ pub fn bt_search() -> Subscription<()> {
     Subscription::run(crate::services::bluetooth::search)
 }
 pub fn polkit() -> Subscription<crate::services::polkit::Event> {
-    Subscription::run(crate::services::polkit::stream)
+    Subscription::run(|| forever(crate::services::polkit::stream))
 }
 pub fn filechooser() -> Subscription<crate::services::filechooser::Request> {
-    Subscription::run(crate::services::filechooser::stream)
+    Subscription::run(|| forever(crate::services::filechooser::stream))
 }
 pub fn power() -> Subscription<power::State> {
-    Subscription::run(power::stream)
+    Subscription::run(|| forever(power::stream))
 }
 pub fn mpris() -> Subscription<mpris::State> {
-    Subscription::run(mpris::stream)
+    Subscription::run(|| forever(mpris::stream))
 }
 pub fn copied() -> Subscription<crate::services::clipboard::Copied> {
-    Subscription::run(crate::services::clipboard::stream)
+    Subscription::run(|| forever(crate::services::clipboard::stream))
 }
 pub fn tray() -> Subscription<tray::State> {
-    Subscription::run(tray::stream)
+    Subscription::run(|| forever(tray::stream))
 }
 pub fn notifications() -> Subscription<notifications::Event> {
-    Subscription::run(notifications::stream)
+    Subscription::run(|| forever(notifications::stream))
 }
 pub fn vpn() -> Subscription<vpn::State> {
-    Subscription::run(vpn::stream)
+    Subscription::run(|| forever(vpn::stream))
 }
 pub fn system() -> Subscription<system::State> {
-    Subscription::run(system::stream)
+    Subscription::run(|| forever(system::stream))
 }
 pub fn updates() -> Subscription<updates::State> {
-    Subscription::run(updates::stream)
+    Subscription::run(|| forever(updates::stream))
 }
 
 /// Weather for a city, or exact coordinates with the city as the label.

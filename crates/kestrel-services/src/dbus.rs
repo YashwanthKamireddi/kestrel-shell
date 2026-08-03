@@ -80,10 +80,29 @@ pub async fn changes(
         .sender(sender.to_string())?
         .build();
     let stream = MessageStream::for_match_rule(rule, c, Some(64)).await?;
-    Ok(Box::pin(debounce(
+    // Also "look again" after the machine wakes (changes during sleep can be missed) and when
+    // the service itself restarts (its old signals are gone, its state is new): the state is
+    // always read whole again, never patched from events (docs/ROADMAP-v2.md, rule 1).
+    let resume = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.login1")?
+        .interface("org.freedesktop.login1.Manager")?
+        .member("PrepareForSleep")?
+        .build();
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")?
+        .interface("org.freedesktop.DBus")?
+        .member("NameOwnerChanged")?
+        .arg(0, sender.to_string())?
+        .build();
+    let resume = MessageStream::for_match_rule(resume, c, Some(4)).await?;
+    let owner = MessageStream::for_match_rule(owner, c, Some(4)).await?;
+    let all = futures::stream::select(
         stream.map(|_| ()),
-        Duration::from_millis(80),
-    )))
+        futures::stream::select(resume.map(|_| ()), owner.map(|_| ())),
+    );
+    Ok(Box::pin(debounce(all, Duration::from_millis(80))))
 }
 
 /// Emits once after a burst of items has been quiet for `quiet`.
