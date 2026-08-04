@@ -173,3 +173,23 @@ Nothing is installed that fails it. GUI changes are tested in the rig (`tools/ri
   on screen 12 ms idle / 22 ms at 92 % CPU); no GPUI or bare-metal rewrite. A GPU renderer stays
   possible later as a backend change (panels are written against iced, not tiny-skia).
 - 2026-11-15: one design kit, enforced by a lint ratchet (docs/DESIGN.md).
+
+## The core after Phase 2 (2026-11-16, docs/ROADMAP-v2.md)
+
+`src/app/` holds the shell's state and its flow, one concern per file:
+
+| File | Owns |
+|---|---|
+| `mod.rs` | the types (`App`, `Message`, `Output`, `Panel`…), boot, `view`, `redraw_key` |
+| `surfaces.rs` | each output's surfaces, input regions and keyboard, the panel's own surface |
+| `panel_flow.rs` | opening, switching and closing panels and Settings |
+| `alerts.rs` | notifications, kestrel's own entries, the island card, OSD, flashes, expiry |
+| `wallpaper.rs` | reading, caching and handing back the wallpaper |
+| `frames.rs` | which springs move, stepping them, the visualiser |
+| `commands.rs` | IPC commands and game mode |
+| `system.rs` | readings turned into what is shown: colours, schedules, privacy, audio, DDC |
+| `reload.rs` | applying a changed config.toml or init.lua |
+| `listen.rs` | the subscriptions (every service under `stream::forever`) |
+| `dispatch.rs` + `dispatch/` | every message routed to its domain: services, agents, outputs, panels, config (the router's match has no wildcard, so the compiler catches an unrouted message) |
+
+Geometry that is both drawn and clicked has one source (e.g. `shell::bar::card_rect`).
