@@ -21,6 +21,7 @@ mod shell;
 mod state;
 mod theme;
 mod ui;
+mod watchdog;
 
 use iced::{KeyboardInteractivity, Layer, LayerShellSettings};
 

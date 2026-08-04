@@ -376,6 +376,8 @@ pub enum Message {
     IslandMeasured(OutputId, f32),
     /// Several messages in order (e.g. focus a window, then close the panel).
     Batch(Vec<Message>),
+    /// systemd's watchdog: the update loop is alive (watchdog.rs).
+    Alive,
     Vpn(vpn::State),
     /// Caps Lock / Num Lock state after the key: (caps, num), and which key it was.
     Locks(bool, bool, bool),

@@ -64,6 +64,10 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::Ipc { .. }
         | Message::Dispatch { .. }
         | Message::Batch { .. }) => panels::handle(app, m),
+        Message::Alive => {
+            crate::watchdog::notify("WATCHDOG=1");
+            Task::none()
+        }
         m @ (Message::ConfigFile { .. } | Message::Lua { .. } | Message::LuaClick { .. }) => {
             config::handle(app, m)
         }

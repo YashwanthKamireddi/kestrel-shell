@@ -7,6 +7,12 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
         iced::output_events().map(Message::Output),
         crate::subs::hyprland().map(Message::Hypr),
         crate::subs::clock().map(|()| Message::Minute),
+        // The update loop pings systemd's watchdog: a freeze stops the pings and systemd
+        // restarts the shell.
+        match crate::watchdog::interval() {
+            Some(every) => iced::time::every(every).map(|_| Message::Alive),
+            None => Subscription::none(),
+        },
         if app.config.clock.seconds {
             crate::subs::seconds().map(|()| Message::Second)
         } else {
