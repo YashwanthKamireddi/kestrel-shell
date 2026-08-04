@@ -385,10 +385,17 @@ impl App {
             Some((id, k, _))
                 if Some(k) == kind && self.roles.get(&id).map(|r| r.0) == Some(output) =>
             {
+                // Told only when its place or size really changes (this runs after every
+                // update).
+                if self.panel_geom == Some((size, margin)) {
+                    return Task::none();
+                }
+                self.panel_geom = Some((size, margin));
                 Task::batch([set_size(id, size), set_margin(id, margin)])
             }
             _ => {
                 let gone = self.drop_panel_surface();
+                self.panel_geom = Some((size, margin));
                 // The keyboard it needs from the start (set after creation it raced the
                 // surface being made, and typing went nowhere).
                 let k = self.panel_keyboard_mode();
@@ -437,6 +444,7 @@ impl App {
 
     /// The panel's own surface goes (Hyprland plays its closing animation).
     pub(crate) fn drop_panel_surface(&mut self) -> Task<Message> {
+        self.panel_geom = None;
         match self.panel_surface.take() {
             Some((id, _, _)) => {
                 self.roles.remove(&id);

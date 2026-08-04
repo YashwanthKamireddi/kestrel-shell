@@ -53,6 +53,9 @@ use system::*;
 #[allow(unused_imports)]
 use wallpaper::*;
 
+/// A panel surface's size and margins (top, right, bottom, left).
+pub type PanelGeom = ((u32, u32), (i32, i32, i32, i32));
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     Wallpaper,
@@ -239,6 +242,8 @@ pub struct App {
     /// The open panel's own surface (floating style), its kind, and the keyboard mode last
     /// given to it.
     pub panel_surface: Option<(SurfaceId, PanelKind, u8)>,
+    /// The size and margins last given to it.
+    pub panel_geom: Option<PanelGeom>,
     pub natural: HashMap<PanelKind, Size>,
     pub panels: panels::State,
     pub clock: Clock,
@@ -437,6 +442,7 @@ pub fn boot() -> (App, Task<Message>) {
         wallpaper: None,
         panel: None,
         panel_surface: None,
+        panel_geom: None,
         natural: HashMap::new(),
         panels: panels::State::default(),
         clock: Clock::new(),
@@ -595,8 +601,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<Message> {
     if app.toasts.len() != before || app.toasts.is_empty() {
         app.settle_toasts();
     }
+    // The open panel's own surface follows the state after every update, whatever path opened,
+    // moved or ended the panel (paths that set `panel = None` left their surface behind).
+    let panel_surface = app.sync_panel_surface();
     let surfaces = app.sync_surfaces();
-    Task::batch([task, surfaces])
+    Task::batch([task, panel_surface, surfaces])
 }
 
 pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {
