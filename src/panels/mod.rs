@@ -270,7 +270,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Emoji(m) => emoji::update(app, m),
         Message::Settings(m) => settings::update(app, m),
         Message::Files(m) => files::update(app, m),
-        Message::Auth(m) => auth::update(app, m),
+        Message::Auth(m) => match app.panels.auth.update(m) {
+            auth::Outcome::Close => Task::done(AppMessage::Close),
+            auth::Outcome::Stay => Task::none(),
+        },
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
@@ -456,6 +459,6 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Weather => weather::view(app, s),
         PanelKind::Pods => pods::view(app, s),
         PanelKind::Files => files::view(app, s),
-        PanelKind::Auth => auth::view(app, s),
+        PanelKind::Auth => auth::view(&app.panels.auth, s, |m| AppMessage::Panel(Message::Auth(m))),
     }
 }

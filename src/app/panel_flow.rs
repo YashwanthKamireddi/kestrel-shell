@@ -145,7 +145,7 @@ impl App {
             .as_ref()
             .is_some_and(|p| p.open && p.kind == PanelKind::Auth)
         {
-            panels::auth::closed(self);
+            self.panels.auth.closed();
         }
         // Gone on the click (design call 2026-11-13: any delay closing felt slow); its own surface
         // goes with it, and Hyprland animates that out.

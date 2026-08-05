@@ -134,50 +134,19 @@ impl App {
             ))),
             #[cfg(feature = "devtools")]
             (Some("preview"), Some(which)) => {
-                use services::{bluetooth::Ask as Bt, network::Ask as Net, polkit};
-                let req = |retry| polkit::Request {
-                    cookie: "kestrel-preview".into(),
-                    message: "Authentication is required to install packages".into(),
-                    action: "org.archlinux.pkexec.pacman".into(),
-                    user: "yash".into(),
-                    retry,
-                };
-                let id = 0xfeed;
-                let m = match which {
-                    "password" => Message::Polkit(polkit::Event::Ask(req(false))),
-                    "password-wrong" => Message::Polkit(polkit::Event::Ask(req(true))),
-                    "wifi" => Message::WifiAsk(Net::Password {
-                        id,
-                        ssid: "Home Wi-Fi".into(),
-                        wrong: false,
-                    }),
-                    "wifi-wrong" => Message::WifiAsk(Net::Password {
-                        id,
-                        ssid: "Home Wi-Fi".into(),
-                        wrong: true,
-                    }),
-                    "pair-confirm" => Message::BtAsk(Bt::Confirm {
-                        id,
-                        device: "AirPods".into(),
-                        code: Some("482913".into()),
-                    }),
-                    "pair-pin" => Message::BtAsk(Bt::Pin {
-                        id,
-                        device: "Keychron K2".into(),
-                    }),
-                    "volume-boost" | "volume" => {
-                        let v = if which == "volume" { 0.6 } else { 1.3 };
-                        self.show_osd(Icon::Volume2, v);
-                        return Task::none();
+                use panels::auth::Preview;
+                if matches!(which, "volume" | "volume-boost") {
+                    self.show_osd(Icon::Volume2, if which == "volume" { 0.6 } else { 1.3 });
+                    return Task::none();
+                }
+                match panels::auth::preview(which) {
+                    Some(Preview::Polkit(r)) => {
+                        Task::done(Message::Polkit(services::polkit::Event::Ask(r)))
                     }
-                    "pair-show" => Message::BtAsk(Bt::Show {
-                        id,
-                        device: "Keychron K2".into(),
-                        code: "771204".into(),
-                    }),
-                    _ => return Task::none(),
-                };
-                Task::done(m)
+                    Some(Preview::Wifi(a)) => Task::done(Message::WifiAsk(a)),
+                    Some(Preview::Bt(a)) => Task::done(Message::BtAsk(a)),
+                    None => Task::none(),
+                }
             }
             #[cfg(feature = "memtrace")]
             (Some("memdump"), _) => {

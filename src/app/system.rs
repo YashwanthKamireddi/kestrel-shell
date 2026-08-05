@@ -104,6 +104,15 @@ impl App {
             None => self.seed,
         };
         self.scheme = Scheme::dark(seed);
+        // Kept for the prompt process, so its window has the shell's colours.
+        crate::state::update(|s| {
+            s.look = crate::state::Look {
+                hue: seed.hue,
+                chroma: seed.chroma,
+                coverage: seed.coverage,
+                source: seed.source,
+            };
+        });
         if !self.config.theme_apps {
             return Task::none();
         }

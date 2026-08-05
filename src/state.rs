@@ -20,6 +20,19 @@ pub struct State {
     pub clipboard: Clipboard,
     /// Apps that have sent notifications (for Settings > Notifications).
     pub notifiers: BTreeSet<String>,
+    /// The colours in use, as the seed they were made from: the prompt process (prompt.rs)
+    /// draws with the same colours as the shell.
+    pub look: Look,
+}
+
+/// A colour seed (theme::Seed) as it is kept.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct Look {
+    pub hue: f32,
+    pub chroma: f32,
+    pub coverage: f32,
+    pub source: Option<u32>,
 }
 
 /// Clipboard entries kept at the top (cliphist ids), surviving "Clear all".
@@ -148,6 +161,15 @@ fn save(s: &State) {
     {
         log::warn!("state.toml: {e}");
     }
+}
+
+/// The state as it is on disk now, for another kestrel process (the prompts) that only reads
+/// it: it never writes, so it can never overwrite what the shell keeps.
+pub fn read_fresh() -> State {
+    std::fs::read_to_string(path())
+        .ok()
+        .and_then(|s| toml::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 /// Reads the remembered state.

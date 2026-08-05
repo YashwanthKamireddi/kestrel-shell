@@ -6,7 +6,8 @@ use super::super::*;
 pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
     match msg {
         Message::Polkit(services::polkit::Event::Ask(r)) => {
-            let ask = panels::auth::ask(app, r);
+            app.panels.auth.ask(r);
+            let ask = panels::auth::focus();
             if app
                 .panel
                 .as_ref()
@@ -28,28 +29,21 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::WifiAsk(services::network::Ask::Done(id)) => {
             // Answered, or NetworkManager stopped waiting: the prompt goes.
-            if panels::auth::wifi_id(&app.panels.auth) == Some(id) {
-                app.panels.auth.wifi = None;
-                if app.panels.auth.request.is_none()
-                    && app.panels.auth.bt.is_none()
-                    && app
-                        .panel
-                        .as_ref()
-                        .is_some_and(|p| p.kind == PanelKind::Auth)
-                {
-                    app.panel = None;
-                }
+            if app.panels.auth.ended_wifi(id) == panels::auth::Outcome::Close
+                && app
+                    .panel
+                    .as_ref()
+                    .is_some_and(|p| p.kind == PanelKind::Auth)
+            {
+                app.panel = None;
             }
             Task::none()
         }
         Message::WifiAsk(a) => {
-            // An administrator password or a pairing in progress keeps the panel: the network
-            // then fails with "Password needed" and can be joined again.
-            if app.panels.auth.request.is_some() || app.panels.auth.bt.is_some() {
-                services::network::answer(a.id(), None);
+            if !app.panels.auth.ask_wifi(a) {
                 return Task::none();
             }
-            let ask = panels::auth::ask_wifi(app, a);
+            let ask = panels::auth::focus();
             if app
                 .panel
                 .as_ref()
@@ -71,26 +65,26 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::BtAsk(services::bluetooth::Ask::Done(id)) => {
             // The question is over (answered, or the device gave up): its prompt goes.
-            if panels::auth::bt_id(&app.panels.auth) == Some(id) {
-                app.panels.auth.bt = None;
-                if app.panels.auth.request.is_none()
-                    && app
-                        .panel
-                        .as_ref()
-                        .is_some_and(|p| p.kind == PanelKind::Auth)
-                {
-                    app.panel = None;
-                }
+            if app.panels.auth.ended_bt(id) == panels::auth::Outcome::Close
+                && app
+                    .panel
+                    .as_ref()
+                    .is_some_and(|p| p.kind == PanelKind::Auth)
+            {
+                app.panel = None;
             }
             Task::none()
         }
         Message::BtAsk(a) => {
-            // A password prompt in progress keeps the panel; pairing waits behind it.
-            if app.panels.auth.request.is_some() {
-                services::bluetooth::answer(a.id(), false);
+            let pin = matches!(a, services::bluetooth::Ask::Pin { .. });
+            if !app.panels.auth.ask_bt(a) {
                 return Task::none();
             }
-            let ask = panels::auth::ask_bt(app, a);
+            let ask = if pin {
+                panels::auth::focus()
+            } else {
+                Task::none()
+            };
             if app
                 .panel
                 .as_ref()
@@ -120,21 +114,13 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             Task::none()
         }
         Message::Polkit(services::polkit::Event::Done(cookie)) => {
-            if app
-                .panels
-                .auth
-                .request
-                .as_ref()
-                .is_some_and(|r| r.cookie == cookie)
-            {
-                app.panels.auth.request = None;
-                if app
+            if app.panels.auth.ended_polkit(&cookie) == panels::auth::Outcome::Close
+                && app
                     .panel
                     .as_ref()
                     .is_some_and(|p| p.kind == PanelKind::Auth)
-                {
-                    app.panel = None;
-                }
+            {
+                app.panel = None;
             }
             Task::none()
         }

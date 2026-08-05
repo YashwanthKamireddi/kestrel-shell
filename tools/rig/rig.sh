@@ -11,6 +11,8 @@
 #   tools/rig/rig.sh pointer move|click|scroll X Y [right|LINES]   virtual pointer
 #   tools/rig/rig.sh type TEXT|-k KEY   type into the focused surface (wtype)
 #   tools/rig/rig.sh msg ARGS       send an IPC command to the rig's kestrel
+#   tools/rig/rig.sh prompt WHICH   the prompt process (`kestrel prompt`, devtools build) asking a
+#                                   made-up question: password|password-wrong|wifi|wifi-wrong|pair-*
 #   tools/rig/rig.sh bus CMD...     run CMD on the rig's private session bus
 #   tools/rig/rig.sh stop
 set -euo pipefail
@@ -75,6 +77,14 @@ run)
         setsid dbus-run-session -- "$BIN" >"$WORK/kestrel.log" 2>&1 </dev/null &
     sleep "${WAIT:-2}"
     tail -5 "$WORK/kestrel.log"
+    ;;
+prompt) # the prompt process with a made-up question, no real agents (devtools builds)
+    env -i HOME="$WORK/home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+        WAYLAND_DISPLAY="$(display)" LANG=en_US.UTF-8 RUST_LOG="${RUST_LOG:-kestrel=info}" \
+        KESTREL_PREVIEW="${2:?which question}" \
+        setsid "$BIN" prompt >"$WORK/prompt.log" 2>&1 </dev/null &
+    sleep "${WAIT:-1}"
+    tail -5 "$WORK/prompt.log"
     ;;
 shot)
     out=${2:-$WORK/shot.png}

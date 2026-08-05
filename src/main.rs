@@ -14,6 +14,7 @@ mod memtrace;
 mod modules;
 mod motion;
 mod panels;
+mod prompt;
 mod subs;
 // The system-integration crate, under its short name.
 pub(crate) use kestrel_services as services;
@@ -36,6 +37,14 @@ fn main() -> anyhow::Result<()> {
     {
         services::browser_host::run();
         return Ok(());
+    }
+    if args.first().is_some_and(|a| a == "prompt") {
+        if std::env::var_os("RUST_LOG").is_none() {
+            // Safety: single-threaded at this point.
+            unsafe { std::env::set_var("RUST_LOG", "kestrel=info,warn") };
+        }
+        env_logger();
+        return prompt::run();
     }
     if !args.is_empty() {
         if args[0] == "--help" || args[0] == "-h" {

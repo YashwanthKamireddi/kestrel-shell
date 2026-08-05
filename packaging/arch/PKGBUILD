@@ -31,6 +31,7 @@ package() {
     [ -x "$_repo/target/release/kestrel" ] || { echo "Build first: make install" >&2; return 1; }
     install -Dm755 "$_repo/target/release/kestrel" "$pkgdir/usr/bin/kestrel"
     install -Dm644 "$startdir/kestrel.service" "$pkgdir/usr/lib/systemd/user/kestrel.service"
+    install -Dm644 "$startdir/kestrel-prompt.service" "$pkgdir/usr/lib/systemd/user/kestrel-prompt.service"
     install -Dm644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     # kestrel's file picker, as the desktop portal's FileChooser backend.
     install -Dm644 "$_repo/packaging/portal/kestrel.portal" \

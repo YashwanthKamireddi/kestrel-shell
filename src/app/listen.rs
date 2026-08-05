@@ -4,6 +4,17 @@ use super::*;
 
 pub(crate) fn subscription(app: &App) -> Subscription<Message> {
     let mut subs = vec![
+        // The system agents (polkit passwords, Wi-Fi secrets, Bluetooth pairing): in the shell
+        // only when no prompt process owns them (`kestrel prompt`, src/prompt.rs).
+        if separate_prompts() {
+            Subscription::none()
+        } else {
+            Subscription::batch([
+                crate::subs::polkit().map(Message::Polkit),
+                crate::subs::bt_agent().map(Message::BtAsk),
+                crate::subs::wifi_agent().map(Message::WifiAsk),
+            ])
+        },
         iced::output_events().map(Message::Output),
         crate::subs::hyprland().map(Message::Hypr),
         crate::subs::clock().map(|()| Message::Minute),
@@ -28,7 +39,6 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
         crate::subs::copied().map(Message::Copied),
         // Apps asking for a file get kestrel's picker.
         crate::subs::filechooser().map(Message::FileRequest),
-        crate::subs::polkit().map(Message::Polkit),
         // A window the user closed (Settings).
         iced::event::listen_with(|e, _, w| match e {
             iced::event::Event::Window(iced::window::Event::CloseRequested) => {
@@ -36,8 +46,6 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
             }
             _ => None,
         }),
-        crate::subs::bt_agent().map(Message::BtAsk),
-        crate::subs::wifi_agent().map(Message::WifiAsk),
         // Bluetooth too: devices connecting and leaving show an OSD.
         crate::subs::bluetooth().map(Message::Bt),
         // The user layer: live config and init.lua.
@@ -173,4 +181,9 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
         }));
     }
     Subscription::batch(subs)
+}
+
+/// The system prompts run as their own process (`kestrel prompt`), set by kestrel.service.
+pub(crate) fn separate_prompts() -> bool {
+    std::env::var_os("KESTREL_SEPARATE_PROMPTS").is_some_and(|v| v == "1")
 }
