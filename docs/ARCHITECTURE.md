@@ -93,7 +93,13 @@ not enabled, and its subscription is never created.
   a notification; the rest of the shell continues.
 - No `unwrap()`/`expect()` on anything that can fail at runtime. Errors are values; services log
   and retry with backoff.
-- The process runs under systemd (`Restart=on-failure`).
+- The process runs under systemd (`Restart=on-failure`) with a watchdog: the update loop pings
+  every 10 s (`src/watchdog.rs`); a freeze of 20 s ends it and systemd starts it again.
+- What must never die lives apart (Phase 3): the system prompts (polkit passwords, Wi-Fi
+  secrets, Bluetooth pairing) are `kestrel prompt` (`src/prompt.rs`, kestrel-prompt.service),
+  showing the same `panels::auth` component in a window of its own; the shell registers those
+  agents only when `KESTREL_SEPARATE_PROMPTS` is unset (the rig). The lock screen is hyprlock,
+  started by hypridle on session lock.
 
 ### Performance rules
 
