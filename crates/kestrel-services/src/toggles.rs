@@ -50,13 +50,27 @@ fn hyprsunset_running() -> bool {
     hyprsunset_pid().is_some()
 }
 
-fn hyprctl(args: &[&str]) {
-    let _ = Command::new("hyprctl")
-        .arg("hyprsunset")
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+/// Tells the running hyprsunset something (`temperature 4000`, `identity`, `gamma 80`) on its
+/// own socket, as `hyprctl hyprsunset` does (Hyprland's hyprctl/src/main.cpp, requestIPC).
+fn tell(cmd: &str) {
+    use std::io::{Read, Write};
+    let Some(dir) = crate::hyprland::socket_dir() else {
+        return;
+    };
+    let sent =
+        std::os::unix::net::UnixStream::connect(dir.join(".hyprsunset.sock")).and_then(|mut s| {
+            s.set_read_timeout(Some(std::time::Duration::from_secs(1)))?;
+            s.write_all(cmd.as_bytes())?;
+            // The reply ("ok" or the error) ends the exchange.
+            let mut reply = [0u8; 256];
+            let n = s.read(&mut reply)?;
+            Ok(String::from_utf8_lossy(&reply[..n]).trim().to_string())
+        });
+    match sent {
+        Ok(r) if r.is_empty() || r == "ok" => {}
+        Ok(r) => log::warn!("hyprsunset {cmd}: {r}"),
+        Err(e) => log::warn!("hyprsunset {cmd}: {e}"),
+    }
 }
 
 /// Makes hyprsunset match the tint: started, told, or stopped.
@@ -82,7 +96,10 @@ fn apply(t: &Tint) {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         // Only this session's (pkill -x stopped every hyprsunset on the machine).
         if let Some(pid) = hyprsunset_pid() {
-            let _ = Command::new("kill").arg(pid.to_string()).status();
+            // Safety: SIGTERM to this session's hyprsunset (checked by hyprsunset_pid).
+            unsafe {
+                libc::kill(pid as libc::pid_t, libc::SIGTERM);
+            }
         }
         return;
     }
@@ -99,10 +116,10 @@ fn apply(t: &Tint) {
             }
         }
         match t.night {
-            Some(k) => hyprctl(&["temperature", &k.to_string()]),
-            None => hyprctl(&["identity"]),
+            Some(k) => tell(&format!("temperature {k}")),
+            None => tell("identity"),
         }
-        hyprctl(&["gamma", &t.gamma.to_string()]);
+        tell(&format!("gamma {}", t.gamma));
         return;
     }
     let mut cmd = Command::new("hyprsunset");

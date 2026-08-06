@@ -1599,10 +1599,9 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     let _ = std::fs::write(&path, "");
                 }
             }
-            return Task::future(async move {
-                let _ = tokio::process::Command::new("xdg-open").arg(&path).spawn();
-            })
-            .discard();
+            return Task::done(AppMessage::Dispatch(
+                crate::services::compositor::Action::Open(path.to_string_lossy().into()),
+            ));
         }
         Message::Restart => {
             let st = &mut app.panels.settings;

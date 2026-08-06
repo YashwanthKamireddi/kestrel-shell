@@ -44,15 +44,11 @@ fn roots() -> &'static Vec<PathBuf> {
     static R: OnceLock<Vec<PathBuf>> = OnceLock::new();
     R.get_or_init(|| {
         let mut bases = Vec::new();
-        if let Ok(h) = std::env::var("HOME") {
-            bases.push(Path::new(&h).join(".local/share/icons"));
+        // The icon theme spec's order: ~/.icons, then each data directory's icons.
+        if let Some(h) = std::env::var_os("HOME") {
             bases.push(Path::new(&h).join(".icons"));
         }
-        let data_dirs =
-            std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
-        for d in data_dirs.split(':').filter(|d| !d.is_empty()) {
-            bases.push(Path::new(d).join("icons"));
-        }
+        bases.extend(crate::xdg::data_all().into_iter().map(|d| d.join("icons")));
         let mut themes = vec![theme()];
         for t in ["hicolor", "Adwaita", "breeze"] {
             if !themes.iter().any(|x| x == t) {

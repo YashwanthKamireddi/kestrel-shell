@@ -20,19 +20,10 @@ pub struct App {
 }
 
 fn dirs() -> Vec<PathBuf> {
-    let mut v = Vec::new();
-    let data_home = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")));
-    if let Some(d) = data_home {
-        v.push(d.join("applications"));
-    }
-    let data_dirs =
-        std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
-    for d in data_dirs.split(':').filter(|d| !d.is_empty()) {
-        v.push(Path::new(d).join("applications"));
-    }
-    v
+    crate::xdg::data_all()
+        .into_iter()
+        .map(|d| d.join("applications"))
+        .collect()
 }
 
 fn parse(path: &Path, id: String) -> Option<App> {

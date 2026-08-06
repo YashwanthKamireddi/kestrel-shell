@@ -270,7 +270,7 @@ pub async fn tailscale_login() -> Option<String> {
     while let Ok(Some(l)) = lines.next_line().await {
         if let Some(u) = l.split_whitespace().find(|w| w.starts_with("https://")) {
             let u = u.to_string();
-            let _ = tokio::process::Command::new("xdg-open").arg(&u).spawn();
+            crate::compositor::run(crate::compositor::Action::Open(u.clone())).await;
             return Some(u);
         }
     }

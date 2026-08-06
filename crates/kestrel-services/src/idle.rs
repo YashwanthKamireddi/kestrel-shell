@@ -165,10 +165,10 @@ async fn restart_hypridle() {
                 .split(|b| *b == 0)
                 .any(|kv| kv == format!("HYPRLAND_INSTANCE_SIGNATURE={ours}").as_bytes());
             if same {
-                let _ = tokio::process::Command::new("kill")
-                    .arg(pid.to_string())
-                    .status()
-                    .await;
+                // Safety: SIGTERM to this session's hypridle (matched above).
+                unsafe {
+                    libc::kill(pid as libc::pid_t, libc::SIGTERM);
+                }
             }
         }
     }

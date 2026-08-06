@@ -356,6 +356,8 @@ pub enum Message {
     Close,
     Measured(PanelKind, Size),
     Dispatch(crate::services::compositor::Action),
+    /// Ends the screen recording shown (the recorder in Hyprland's state when pressed).
+    StopRecording,
     Panel(panels::Message),
     Ipc(String),
     Audio(audio::State),

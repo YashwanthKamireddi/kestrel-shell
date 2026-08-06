@@ -233,10 +233,7 @@ impl App {
 
 /// Opens a file with its default app.
 pub(crate) fn open_file(path: &str) -> Message {
-    Message::Dispatch(crate::services::compositor::Action::Exec(format!(
-        "xdg-open '{}'",
-        path.replace('\'', "'\\''")
-    )))
+    Message::Dispatch(crate::services::compositor::Action::Open(path.into()))
 }
 
 pub(crate) fn game_mode_flag() -> std::path::PathBuf {

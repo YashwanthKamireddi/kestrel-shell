@@ -6,7 +6,7 @@
 //! `$XDG_DATA_HOME/sounds` and each `$XDG_DATA_DIRS/sounds`. A `pw-play` process plays one sound
 //! and exits; nothing stays running.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -23,21 +23,6 @@ pub enum Sound {
 
 /// The default sound for a message.
 pub const MESSAGE: &str = "message-new-instant";
-
-fn data_dirs() -> Vec<PathBuf> {
-    let mut v = Vec::new();
-    if let Some(h) = std::env::var_os("XDG_DATA_HOME") {
-        v.push(PathBuf::from(h));
-    } else if let Some(h) = std::env::var_os("HOME") {
-        v.push(Path::new(&h).join(".local/share"));
-    }
-    let sys = std::env::var("XDG_DATA_DIRS")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "/usr/local/share:/usr/share".into());
-    v.extend(sys.split(':').map(PathBuf::from));
-    v
-}
 
 /// The theme chosen in GNOME's settings (what GTK apps and canberra use too).
 fn theme_name() -> String {
@@ -71,7 +56,7 @@ fn inherits(theme: &str, dirs: &[PathBuf]) -> Vec<String> {
 
 /// The file for sound `name`, or None if no theme has it.
 pub fn lookup(name: &str) -> Option<PathBuf> {
-    let dirs = data_dirs();
+    let dirs = crate::xdg::data_all();
     let mut themes = vec![theme_name()];
     let mut i = 0;
     while i < themes.len() && themes.len() < 8 {

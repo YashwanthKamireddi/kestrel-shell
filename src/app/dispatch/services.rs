@@ -32,11 +32,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     thumb: None,
                     until: Instant::now() + Duration::from_millis(FLASH_MS),
                     // A click stops it.
-                    action: s.recording_pid.map(|pid| {
-                        Message::Dispatch(crate::services::compositor::Action::Exec(format!(
-                            "kill -INT {pid}"
-                        )))
-                    }),
+                    action: s.recording_pid.map(|_| Message::StopRecording),
                 });
                 app.clock.reset();
             } else if let Some(file) = &ended {

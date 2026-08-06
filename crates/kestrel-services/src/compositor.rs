@@ -11,6 +11,8 @@ pub enum Action {
     FocusWindow(String),
     /// A command line, run by the user's shell.
     Exec(String),
+    /// A file, folder or link, opened with its default app (crate::open).
+    Open(String),
     /// A key with modifiers ("CTRL SHIFT", "V") sent straight to the focused window by the
     /// compositor (no virtual keyboard: wtype's own keymap put "v" on the keycode that is
     /// Escape in the real layout, so Ctrl+Shift+V reached Hyprland as Ctrl+Shift+Escape).
@@ -34,6 +36,20 @@ pub fn detect() -> Kind {
 
 /// Carries out `a`.
 pub async fn run(a: Action) {
+    // What opens it is worked out now (the file may not have existed when the action was made).
+    let a = match a {
+        Action::Open(target) => {
+            match tokio::task::spawn_blocking(move || super::open::command(&target)).await {
+                Ok(Ok(cmd)) => Action::Exec(cmd),
+                Ok(Err(why)) => {
+                    log::warn!("open: {why}");
+                    return;
+                }
+                Err(_) => return,
+            }
+        }
+        a => a,
+    };
     match detect() {
         Kind::Hyprland => super::hyprland::dispatch(hyprland_lua(&a)).await,
         Kind::Other => {
@@ -57,6 +73,8 @@ fn hyprland_lua(a: &Action) -> String {
             format!("hl.dsp.focus({{ window = \"address:{}\" }})", quote(addr))
         }
         Action::Exec(cmd) => format!("hl.dsp.exec_cmd(\"{}\")", quote(cmd)),
+        // Resolved to an Exec in run().
+        Action::Open(_) => unreachable!("Open is resolved to an Exec in run()"),
         Action::Shortcut(mods, key) => format!(
             "hl.dsp.send_shortcut({{ mods = \"{}\", key = \"{}\" }})",
             quote(mods),

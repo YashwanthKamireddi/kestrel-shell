@@ -1,9 +1,8 @@
 //! Default apps: which app opens links, mail, folders, text, pictures, video, music and PDFs.
-//! Read and set with xdg-mime (the freedesktop standard; it writes ~/.config/mimeapps.list),
+//! Read and set in mimeapps.list by the freedesktop rules xdg-mime itself follows (crate::xdg),
 //! so every app and toolkit agrees with what Settings shows.
 
 use crate::apps::App;
-use std::process::Command;
 
 /// A kind of thing to open, and the types that make it up (the first decides what is shown).
 pub struct Kind {
@@ -63,12 +62,7 @@ pub const KINDS: &[Kind] = &[
 
 /// The app (desktop file id) that opens `mime` now, if any.
 pub fn current(mime: &str) -> Option<String> {
-    let out = Command::new("xdg-mime")
-        .args(["query", "default", mime])
-        .output()
-        .ok()?;
-    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!id.is_empty()).then_some(id)
+    crate::xdg::default_app(mime)
 }
 
 /// The apps that can open the kind's first type, by name.
@@ -87,25 +81,20 @@ pub fn candidates<'a>(apps: &'a [App], kind: &Kind) -> Vec<&'a App> {
 
 /// Makes `app` (a desktop file id) the default for every type of the kind.
 pub fn set(kind: &Kind, app: &str) -> Result<(), String> {
-    let ok = Command::new("xdg-mime")
-        .arg("default")
-        .arg(app)
-        .args(kind.types)
-        .status()
-        .is_ok_and(|s| s.success());
-    if ok {
-        Ok(())
-    } else {
-        Err(format!("Could not set the default for {}", kind.name))
-    }
+    crate::xdg::set_default(kind.types, app)
+        .map_err(|e| format!("Could not set the default for {}: {e}", kind.name))
 }
 
 /// The command line that opens `arg` (a path or link; empty: just start the app) with the
 /// default app for `mime`, following its desktop file: field codes filled in, and a terminal
 /// app (Yazi, ranger) run in the default terminal. None when no default is set.
 pub fn command_for(mime: &str, arg: &str) -> Option<String> {
-    let id = current(mime)?;
-    let path = crate::apps::desktop_file(&id)?;
+    command_of(&current(mime)?, arg)
+}
+
+/// The command line that opens `arg` with app `id` (a desktop file id).
+pub fn command_of(id: &str, arg: &str) -> Option<String> {
+    let path = crate::apps::desktop_file(id)?;
     let text = std::fs::read_to_string(path).ok()?;
     let mut on = false;
     let (mut exec, mut terminal) = (None, false);

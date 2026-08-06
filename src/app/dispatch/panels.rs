@@ -67,6 +67,17 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             crate::services::compositor::run(a).await;
         })
         .discard(),
+        Message::StopRecording => {
+            // SIGINT, so wf-recorder finishes the file; only this session's recorder (the one
+            // Hyprland's state names), never every wf-recorder on the machine.
+            if let Some(pid) = app.hypr.recording_pid {
+                // Safety: kill(2) on a pid read from this session's Hyprland clients.
+                unsafe {
+                    libc::kill(pid as libc::pid_t, libc::SIGINT);
+                }
+            }
+            Task::none()
+        }
         Message::Panel(m) => panels::update(app, m),
         Message::Ipc(cmd) => app.ipc(&cmd),
         Message::TrayExpand => {

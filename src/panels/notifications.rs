@@ -59,11 +59,8 @@ fn update_inner(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::Action(id, key) if key.starts_with("kestrel-") => {
             app.toasts.retain(|t| t.id != id);
             if let Some(path) = key.strip_prefix("kestrel-open:") {
-                let _ = std::process::Command::new("xdg-open")
-                    .arg(path)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn();
+                let open = crate::services::compositor::Action::Open(path.into());
+                return Task::done(AppMessage::Dispatch(open));
             } else if let Some(path) = key.strip_prefix("kestrel-copy:") {
                 copy_file(path);
             } else if let Some(path) = key.strip_prefix("kestrel-save:")
@@ -201,13 +198,7 @@ fn copy_file(path: &str) {
 
 /// Copies a kept picture into Pictures/Screenshots under a dated name.
 fn save_picture(from: &str) -> Option<std::path::PathBuf> {
-    let pictures = std::process::Command::new("xdg-user-dir")
-        .arg("PICTURES")
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|p| !p.is_empty())?;
-    let dir = std::path::Path::new(&pictures).join("Screenshots");
+    let dir = crate::services::xdg::user_dir("PICTURES").join("Screenshots");
     std::fs::create_dir_all(&dir).ok()?;
     let ext = std::path::Path::new(from)
         .extension()

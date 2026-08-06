@@ -55,11 +55,7 @@ pub fn view<'a>(
                 true,
             )
             // Only the recorder shown (pkill -x stopped every wf-recorder on the machine).
-            .on_press_maybe(app.hypr.recording_pid.map(|pid| {
-                Message::Dispatch(crate::services::compositor::Action::Exec(format!(
-                    "kill -INT {pid}"
-                )))
-            }))
+            .on_press_maybe(app.hypr.recording_pid.map(|_| Message::StopRecording))
             .into(),
         );
     }
