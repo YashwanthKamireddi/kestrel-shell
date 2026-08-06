@@ -44,7 +44,10 @@ start)
     hyprctl eval 'hl.window_rule({name="kestrel-rig", match={class="^aquamarine$"}, workspace="special:rig silent", float=true, size="1920 1080"})' >/dev/null
     before=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort)
     : >"$WORK/sig"
-    setsid Hyprland -c "$HERE/hyprland.lua" >"$WORK/hypr.log" 2>&1 </dev/null &
+    # The rig's HOME, so what it starts (an app kestrel opens, a screenshot, a recording) uses
+    # the rig's profile and folders: with the real HOME, a file opened in the rig became a tab
+    # in the user's running Chromium (2026-11-16) and captures landed in the user's Pictures.
+    HOME="$WORK/home" setsid Hyprland -c "$HERE/hyprland.lua" >"$WORK/hypr.log" 2>&1 </dev/null &
     pid=$!
     # Its instance is the one whose lock file names its process (not simply the newest).
     for _ in $(seq 40); do
