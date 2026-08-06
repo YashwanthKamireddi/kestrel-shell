@@ -93,10 +93,11 @@ pub fn fonts() -> (Vec<String>, Vec<String>) {
 }
 
 async fn gsettings(key: &str, value: &str) {
-    let _ = tokio::process::Command::new("gsettings")
-        .args(["set", "org.gnome.desktop.interface", key, value])
-        .status()
-        .await;
+    if let Err(e) =
+        crate::services::gsettings::set_string("org.gnome.desktop.interface", key, value).await
+    {
+        log::warn!("{e}");
+    }
 }
 
 /// Sets `key=value` in a GTK settings.ini `[Settings]` (made if missing), keeping the rest.
@@ -198,10 +199,7 @@ pub async fn apply_cursor(theme: String, size: u32) {
         default.join("index.theme"),
         format!("[Icon Theme]\nInherits={theme}\n"),
     );
-    let _ = tokio::process::Command::new("hyprctl")
-        .args(["setcursor", &theme, &size.to_string()])
-        .status()
-        .await;
+    crate::services::hyprland::set_cursor(&theme, size).await;
 }
 
 #[cfg(test)]

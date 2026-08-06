@@ -790,17 +790,14 @@ fn load(p: Page) -> Task<AppMessage> {
         Page::Privacy => Task::perform(
             async {
                 tokio::task::spawn_blocking(|| {
-                    let get = |k: &str| {
-                        std::process::Command::new("gsettings")
-                            .args(["get", "org.gnome.desktop.privacy", k])
-                            .output()
-                            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                            .unwrap_or_default()
-                    };
+                    use crate::services::gsettings as g;
+                    const P: &str = "org.gnome.desktop.privacy";
                     (
                         crate::services::idle::lock_on_sleep(),
-                        get("remember-recent-files") != "false",
-                        get("recent-files-max-age").parse::<i32>().unwrap_or(-1),
+                        g::get_bool(P, "remember-recent-files").unwrap_or(true),
+                        g::get_i64(P, "recent-files-max-age")
+                            .and_then(|v| i32::try_from(v).ok())
+                            .unwrap_or(-1),
                     )
                 })
                 .await
@@ -813,15 +810,7 @@ fn load(p: Page) -> Task<AppMessage> {
                 tokio::task::spawn_blocking(|| {
                     let (fonts, monos) = crate::look::fonts();
                     let get = |k: &str| {
-                        std::process::Command::new("gsettings")
-                            .args(["get", "org.gnome.desktop.interface", k])
-                            .output()
-                            .map(|o| {
-                                String::from_utf8_lossy(&o.stdout)
-                                    .trim()
-                                    .trim_matches('\'')
-                                    .to_string()
-                            })
+                        crate::services::gsettings::get_string("org.gnome.desktop.interface", k)
                             .unwrap_or_default()
                     };
                     LookLists {
@@ -1682,15 +1671,21 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             if let Some(p) = &mut app.panels.settings.privacy {
                 p.1 = on;
             }
-            return Task::future(gsettings_privacy("remember-recent-files", on.to_string()))
-                .discard();
+            return Task::future(gsettings_privacy(
+                "remember-recent-files",
+                crate::services::gsettings::Set::Bool(on),
+            ))
+            .discard();
         }
         Message::RecentDays(d) => {
             if let Some(p) = &mut app.panels.settings.privacy {
                 p.2 = d;
             }
-            return Task::future(gsettings_privacy("recent-files-max-age", d.to_string()))
-                .discard();
+            return Task::future(gsettings_privacy(
+                "recent-files-max-age",
+                crate::services::gsettings::Set::Int(i64::from(d)),
+            ))
+            .discard();
         }
         Message::Clear(which) => {
             let st = &mut app.panels.settings;

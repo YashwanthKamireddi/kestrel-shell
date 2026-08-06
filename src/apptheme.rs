@@ -544,9 +544,15 @@ pub fn apply(s: Scheme, wallpaper: Option<String>) {
 /// the settings portal passes to every app). Also makes "kestrel" the GTK theme.
 fn reload_gtk() {
     let set = |t: &str| {
-        let _ = std::process::Command::new("gsettings")
-            .args(["set", "org.gnome.desktop.interface", "gtk-theme", t])
-            .status();
+        // apply() runs on a blocking worker of the runtime (app::system), so this may wait.
+        let r = tokio::runtime::Handle::current().block_on(crate::services::gsettings::set_string(
+            "org.gnome.desktop.interface",
+            "gtk-theme",
+            t,
+        ));
+        if let Err(e) = r {
+            log::warn!("{e}");
+        }
     };
     set("adw-gtk3-dark");
     std::thread::sleep(std::time::Duration::from_millis(80));

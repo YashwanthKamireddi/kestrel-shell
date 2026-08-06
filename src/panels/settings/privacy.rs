@@ -2,11 +2,10 @@
 
 use super::*;
 
-pub(super) async fn gsettings_privacy(key: &'static str, value: String) {
-    let _ = tokio::process::Command::new("gsettings")
-        .args(["set", "org.gnome.desktop.privacy", key, &value])
-        .status()
-        .await;
+pub(super) async fn gsettings_privacy(key: &'static str, value: crate::services::gsettings::Set) {
+    if let Err(e) = crate::services::gsettings::set("org.gnome.desktop.privacy", key, value).await {
+        log::warn!("{e}");
+    }
 }
 
 pub(super) fn privacy_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {

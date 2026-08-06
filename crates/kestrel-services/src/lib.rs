@@ -21,6 +21,7 @@ pub mod defaults;
 pub mod disks;
 pub mod displays;
 pub mod filechooser;
+pub mod gsettings;
 pub mod hyprland;
 pub mod icons;
 pub mod idle;

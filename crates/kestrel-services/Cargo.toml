@@ -15,6 +15,15 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 log = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 libpulse-binding = { version = "2.30", features = ["pa_v15"] }
+# Event sounds (the freedesktop theme is Ogg Vorbis), decoded once into the sound server's
+# sample cache: the pure-Rust decoder rodio uses.
+lewton = "0.10"
+# GSettings without GLib: dconf's database and the compiled schemas are GVDB files (GNOME's own
+# pure-Rust reader); writes go to the dconf service over D-Bus, as GSettings does.
+gvdb = { version = "0.10", default-features = false }
+# The changeset dconf takes, in GVariant form (zvariant's own GVariant support is deprecated in
+# favour of this crate).
+zgvariant = "2"
 inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
 anyhow = "1"
