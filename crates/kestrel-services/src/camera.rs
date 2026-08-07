@@ -3,8 +3,7 @@
 //! Two ways an app reaches a camera, both watched, nothing polled:
 //! - Through PipeWire (Snapshot, browsers, calls via the portal): PipeWire itself keeps the
 //!   device open even while nothing streams, so the device being open says nothing. What counts
-//!   is a video input stream, read from `pw-dump --monitor` (PipeWire's own tool; it reports each
-//!   change as it happens and only runs while the indicator is in the bar).
+//!   is a running video input stream, from PipeWire's own picture (crate::pipewire).
 //! - Directly (ffmpeg, some apps): every `/dev/video*` is watched with inotify for opens and
 //!   closes, and the processes holding one are named. PipeWire and WirePlumber are not counted
 //!   (their side is the first case), and neither is a program feeding a virtual camera (opened
@@ -13,8 +12,7 @@
 //! A direct use counts once it has lasted `HOLD`: listing devices opens them for a moment.
 
 use futures::{SinkExt, Stream, StreamExt};
-use std::collections::{BTreeSet, HashMap};
-use std::io::BufReader;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -84,114 +82,10 @@ pub fn direct_users() -> Vec<String> {
     out.into_iter().collect()
 }
 
-/// PipeWire's current video input streams, kept whole: each `pw-dump` update replaces the
-/// objects it names (or drops them), and who is using a camera is worked out again from this
-/// picture every time, never from a chain of start/stop events (a missed one left the
-/// indicator on, 2026-11-16).
-#[derive(Default)]
-struct Streams(HashMap<u64, serde_json::Value>);
-
-impl Streams {
-    fn apply(&mut self, batch: &[serde_json::Value]) {
-        for o in batch {
-            let Some(id) = o.get("id").and_then(serde_json::Value::as_u64) else {
-                continue;
-            };
-            match o.get("info") {
-                Some(info)
-                    if !info.is_null()
-                        && info["props"]["media.class"].as_str() == Some("Stream/Input/Video") =>
-                {
-                    self.0.insert(id, info.clone());
-                }
-                _ => {
-                    self.0.remove(&id);
-                }
-            }
-        }
-    }
-
-    /// The apps whose camera stream is running now (an idle or paused stream is not a camera
-    /// in use; PipeWire's own device nodes are not apps).
-    fn apps(&self) -> Vec<String> {
-        let mut out: Vec<String> = self
-            .0
-            .values()
-            .filter(|info| info["state"].as_str() == Some("running"))
-            .filter_map(|info| {
-                let props = &info["props"];
-                ["application.name", "application.process.binary"]
-                    .iter()
-                    .find_map(|k| props[*k].as_str().filter(|s| !s.is_empty()))
-                    .filter(|n| !matches!(*n, "pipewire" | "wireplumber"))
-                    .map(crate::apps::name_for_class)
-            })
-            .collect();
-        out.sort();
-        out.dedup();
-        out
-    }
-}
-
-/// Reads `pw-dump --monitor` for as long as kestrel runs, sending the camera apps after every
-/// update. If pw-dump ends or sends something unreadable it is started again: its first output
-/// is the whole current picture, so nothing stale survives a hiccup.
-fn watch_pipewire(tx: &futures::channel::mpsc::UnboundedSender<Vec<String>>) {
-    use std::os::unix::process::CommandExt;
-    loop {
-        let mut cmd = std::process::Command::new("pw-dump");
-        cmd.args(["--monitor", "--no-colors"]);
-        // Safety: prctl only asks the kernel to end pw-dump when kestrel ends.
-        unsafe {
-            cmd.pre_exec(|| {
-                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
-                Ok(())
-            });
-        }
-        let Ok(mut child) = cmd
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-        else {
-            return;
-        };
-        let Some(stdout) = child.stdout.take() else {
-            return;
-        };
-        let mut streams = Streams::default();
-        let mut last: Option<Vec<String>> = None;
-        for batch in serde_json::Deserializer::from_reader(BufReader::new(stdout))
-            .into_iter::<Vec<serde_json::Value>>()
-        {
-            let Ok(batch) = batch else { break };
-            streams.apply(&batch);
-            let apps = streams.apps();
-            if last.as_ref() != Some(&apps) {
-                last = Some(apps.clone());
-                if tx.unbounded_send(apps).is_err() {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return;
-                }
-            }
-        }
-        let _ = child.kill();
-        let _ = child.wait();
-        // Nothing is known while it restarts: say so rather than keep the old answer.
-        if tx.unbounded_send(Vec::new()).is_err() {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
-}
-
 pub fn stream() -> impl Stream<Item = Vec<String>> {
     crate::stream::channel(4, async |mut out| {
-        // PipeWire: pw-dump's updates, read on a blocking thread.
-        let (ptx, mut prx) = futures::channel::mpsc::unbounded::<Vec<String>>();
-        let _ = std::thread::Builder::new()
-            .name("kestrel-camera".into())
-            .spawn(move || watch_pipewire(&ptx));
+        // PipeWire: its picture of the camera streams (crate::pipewire).
+        let mut pw = crate::pipewire::watch();
 
         // Direct users: inotify on the devices.
         let Ok(ino) = inotify::Inotify::init() else {
@@ -240,8 +134,11 @@ pub fn stream() -> impl Stream<Item = Vec<String>> {
             tokio::select! {
                 // Any PipeWire change is also a reason to look at the devices again (a close the
                 // inotify watch missed must not keep an app shown).
-                p = prx.next() => {
-                    piped = p.unwrap_or_default();
+                changed = pw.changed() => {
+                    if changed.is_err() {
+                        return;
+                    }
+                    piped = pw.borrow_and_update().camera.clone();
                     direct = look().await;
                 }
                 e = events.next() => {
@@ -272,35 +169,4 @@ pub fn stream() -> impl Stream<Item = Vec<String>> {
             }
         }
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Streams;
-    use serde_json::json;
-
-    fn stream(id: u64, app: &str, state: &str) -> serde_json::Value {
-        json!({ "id": id, "info": { "state": state, "props": {
-            "media.class": "Stream/Input/Video", "application.name": app } } })
-    }
-
-    #[test]
-    fn only_running_app_streams_count_and_removals_are_kept() {
-        let mut s = Streams::default();
-        s.apply(&[
-            stream(1, "Chromium", "running"),
-            stream(2, "Snapshot", "idle"),
-        ]);
-        assert_eq!(s.apps(), vec!["Chromium".to_string()]);
-        // Paused: no longer a camera in use.
-        s.apply(&[stream(1, "Chromium", "suspended")]);
-        assert!(s.apps().is_empty());
-        s.apply(&[stream(1, "Chromium", "running")]);
-        s.apply(&[json!({ "id": 1, "info": null })]);
-        assert!(s.apps().is_empty());
-        // PipeWire's own device nodes are not apps.
-        s.apply(&[json!({ "id": 9, "info": { "state": "running", "props": {
-            "media.class": "Video/Source", "node.name": "Pipewire_devices-x" } } })]);
-        assert!(s.apps().is_empty());
-    }
 }

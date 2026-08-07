@@ -32,6 +32,7 @@ pub mod mpris;
 pub mod network;
 pub mod notifications;
 pub mod open;
+pub mod pipewire;
 pub mod polkit;
 pub mod power;
 pub mod previews;

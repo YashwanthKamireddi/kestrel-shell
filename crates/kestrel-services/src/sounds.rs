@@ -119,6 +119,8 @@ pub struct Pcm {
     pub rate: u32,
     pub channels: u8,
     pub samples: Vec<i16>,
+    /// Kept in the server's cache for the session (a theme sound); a recording is not.
+    pub keep: bool,
 }
 
 impl Pcm {
@@ -182,6 +184,7 @@ fn decode(file: &Path) -> Result<Pcm, String> {
         rate,
         channels,
         samples,
+        keep: true,
     })
 }
 
@@ -286,49 +289,23 @@ pub async fn speaker_test() {
     play_now("audio-channel-front-right", 1.0).await;
 }
 
-/// Where the microphone test is kept between recording and playing it back.
-fn mic_test_file() -> std::path::PathBuf {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join("kestrel-mic-test.wav")
+/// Records `secs` seconds from the default microphone, in memory (the audio service's
+/// connection records it; nothing is written to disk).
+pub async fn mic_record(secs: u32) -> Result<Arc<Pcm>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    crate::audio::command(crate::audio::Command::Record(
+        secs,
+        crate::audio::Reply::new(tx),
+    ));
+    rx.await
+        .unwrap_or_else(|_| Err("The sound service is not running".into()))
 }
 
-/// Records `secs` seconds from the default microphone (stopped with SIGINT, so the file is
-/// finished properly).
-pub async fn mic_record(secs: u32) -> Result<(), String> {
-    let ok = tokio::process::Command::new("timeout")
-        .args([
-            "-s",
-            "INT",
-            &secs.to_string(),
-            "pw-record",
-            "--channels",
-            "1",
-        ])
-        .arg(mic_test_file())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await
-        .is_ok();
-    if ok && mic_test_file().is_file() {
-        Ok(())
-    } else {
-        Err("The microphone could not be recorded".into())
-    }
-}
-
-/// Plays the recording back, then deletes it.
-pub async fn mic_playback() {
-    let f = mic_test_file();
-    let _ = tokio::process::Command::new("pw-play")
-        .arg(&f)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .await;
-    let _ = std::fs::remove_file(f);
+/// Plays a recording back and waits until it has played.
+pub async fn mic_playback(pcm: Arc<Pcm>) {
+    let length = pcm.duration();
+    crate::audio::command(crate::audio::Command::Play(pcm, 1.0));
+    tokio::time::sleep(length).await;
 }
 
 #[cfg(test)]
@@ -367,5 +344,20 @@ mod live {
         s.next().await;
         super::play_now(super::MESSAGE, 0.0).await;
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
+#[cfg(test)]
+mod live_mic {
+    /// Records one second (by hand: `--ignored`); not played.
+    #[tokio::test]
+    #[ignore]
+    async fn records_from_the_microphone() {
+        use futures::StreamExt;
+        let mut s = Box::pin(crate::audio::stream());
+        s.next().await;
+        let p = super::mic_record(1).await.unwrap();
+        println!("recorded {:?} ({} samples)", p.duration(), p.samples.len());
+        assert!(p.duration() > std::time::Duration::from_millis(500));
     }
 }

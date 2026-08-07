@@ -612,7 +612,7 @@ pub enum Message {
     SpeakerTest,
     SpeakerDone,
     MicTest,
-    MicRecorded(Result<(), String>),
+    MicRecorded(Result<std::sync::Arc<crate::services::sounds::Pcm>, String>),
     MicDone,
     AlertPlay,
     /// Weather: temperatures in "celsius" or "fahrenheit".
@@ -1557,13 +1557,16 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::MicRecorded(r) => {
             let st = &mut app.panels.settings;
-            if let Err(e) = r {
-                st.mic_test = 0;
-                st.error = Some(e);
-                return Task::none();
-            }
+            let pcm = match r {
+                Ok(p) => p,
+                Err(e) => {
+                    st.mic_test = 0;
+                    st.error = Some(e);
+                    return Task::none();
+                }
+            };
             st.mic_test = 2;
-            return Task::perform(crate::services::sounds::mic_playback(), |()| {
+            return Task::perform(crate::services::sounds::mic_playback(pcm), |()| {
                 msg(Message::MicDone)
             });
         }
