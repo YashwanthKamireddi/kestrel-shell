@@ -102,12 +102,11 @@ fn drawable() -> &'static [(&'static str, &'static str)] {
     static LIST: std::sync::LazyLock<Vec<(&'static str, &'static str)>> =
         std::sync::LazyLock::new(|| {
             let all = EMOJI.lines().filter_map(|l| l.split_once(' '));
-            let file = std::process::Command::new("fc-match")
-                .args(["-f", "%{file}", "Twemoji"])
-                .output()
-                .ok()
-                .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-                .filter(|f| f.to_lowercase().contains("twemoji"));
+            // fontconfig's match (another font comes back when Twemoji is not installed).
+            let file = fontconfig::Fontconfig::new()
+                .and_then(|fc| fc.find("Twemoji", None).ok())
+                .map(|f| f.path)
+                .filter(|f| f.to_string_lossy().to_lowercase().contains("twemoji"));
             let Some(data) = file.and_then(|f| std::fs::read(f).ok()) else {
                 return all.collect();
             };

@@ -35,6 +35,9 @@ libpulse-binding = { version = "2.30", features = ["pa_v15"] }
 inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
 ttf-parser = "0.25"
+# Installed fonts from fontconfig itself (its library, loaded when first needed): no fc-list or
+# fc-match. fontdb disagreed with it on bitmap and Nerd monospace fonts.
+fontconfig = { version = "0.11", features = ["dlopen"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
 # SVG icons drawn once at their size (the renderer kept every parsed SVG for good).
 resvg = { version = "0.45", default-features = false }

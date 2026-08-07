@@ -70,26 +70,43 @@ pub fn cursor_themes() -> Vec<String> {
     out
 }
 
-/// Installed font families: all, and the monospace ones (fontconfig's own list).
+/// Installed font families: all, and the monospace ones (fontconfig's own list, as
+/// `fc-list : family` and `fc-list :spacing=100 family` give it).
 pub fn fonts() -> (Vec<String>, Vec<String>) {
-    let list = |args: &[&str]| -> Vec<String> {
-        let out = std::process::Command::new("fc-list")
-            .args(args)
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-            .unwrap_or_default();
-        let mut v: Vec<String> = out
-            .lines()
-            // "JetBrainsMono Nerd Font,JetBrainsMono NF": the first name is the family's own.
-            .filter_map(|l| l.split(',').next())
-            .map(|f| f.trim().replace('\\', ""))
+    let Some(fc) = fontconfig::Fontconfig::new() else {
+        return (Vec::new(), Vec::new());
+    };
+    let list = |mono: bool| -> Vec<String> {
+        let (Ok(mut pattern), Ok(mut objects)) = (
+            fontconfig::Pattern::new(&fc),
+            fontconfig::ObjectSet::new(&fc),
+        ) else {
+            return Vec::new();
+        };
+        if mono && pattern.add_integer(c"spacing", 100).is_err() {
+            return Vec::new();
+        }
+        if objects.add(c"family").is_err() {
+            return Vec::new();
+        }
+        let Ok(set) = fontconfig::list_fonts(&pattern, Some(&objects)) else {
+            return Vec::new();
+        };
+        // A family's first name is its own ("JetBrainsMono Nerd Font", not "JetBrainsMono NF").
+        let mut v: Vec<String> = set
+            .iter()
+            .filter_map(|p| {
+                p.get_string(c"family")
+                    .ok()
+                    .map(|f| f.trim().replace('\\', ""))
+            })
             .filter(|f| !f.is_empty())
             .collect();
         v.sort_by_key(|n| n.to_lowercase());
         v.dedup();
         v
     };
-    (list(&[":", "family"]), list(&[":spacing=100", "family"]))
+    (list(false), list(true))
 }
 
 async fn gsettings(key: &str, value: &str) {
@@ -233,5 +250,39 @@ mod tests {
         assert!(t.contains("[Icons]\nTheme=new\n"));
         assert!(!t.contains("Theme=old"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod live_fonts {
+    /// The same lists as fc-list (by hand: `--ignored`).
+    #[test]
+    #[ignore]
+    fn same_lists_as_fc_list() {
+        let fc = |args: &[&str]| -> Vec<String> {
+            let out = std::process::Command::new("fc-list")
+                .args(args)
+                .output()
+                .unwrap();
+            let mut v: Vec<String> = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter_map(|l| l.split(',').next())
+                .map(|f| f.trim().replace('\\', ""))
+                .filter(|f| !f.is_empty())
+                .collect();
+            v.sort_by_key(|n| n.to_lowercase());
+            v.dedup();
+            v
+        };
+        let t = std::time::Instant::now();
+        let (all, mono) = super::fonts();
+        println!(
+            "{} families, {} monospace, in {:?}",
+            all.len(),
+            mono.len(),
+            t.elapsed()
+        );
+        assert_eq!(all, fc(&[":", "family"]));
+        assert_eq!(mono, fc(&[":spacing=100", "family"]));
     }
 }

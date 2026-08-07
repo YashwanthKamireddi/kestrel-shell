@@ -37,6 +37,7 @@ pub mod polkit;
 pub mod power;
 pub mod previews;
 pub mod region;
+pub mod search;
 pub mod sounds;
 pub mod stream;
 pub mod system;

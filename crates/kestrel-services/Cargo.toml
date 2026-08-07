@@ -26,6 +26,8 @@ gvdb = { version = "0.10", default-features = false }
 zgvariant = "2"
 # PipeWire's own API (the camera streams, WirePlumber's settings): no pw-dump or wpctl.
 pipewire = "0.10"
+# File search: the walker fd and ripgrep are built on (ignore files, parallel, early stop).
+ignore = "0.4"
 inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
 anyhow = "1"
