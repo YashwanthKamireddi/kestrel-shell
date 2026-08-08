@@ -218,14 +218,14 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.recent.truncate(RECENT_MAX);
             let recent = st.recent.clone();
             crate::state::update(|s| s.emoji.recent = recent);
-            // Copy it, and type it into the window that gets the keyboard back.
-            let typed = format!("sleep 0.2; wtype {e}");
+            // Copied, and pasted into the window that had focus.
+            let (address, class) = (
+                app.hypr.window_address.clone(),
+                app.hypr.window_class.clone(),
+            );
             return Task::batch([
-                Task::Iced(iced::clipboard::write(e)),
+                Task::future(super::clipboard::type_into(e, address, class)).discard(),
                 Task::done(AppMessage::Close),
-                Task::done(AppMessage::Dispatch(
-                    crate::services::compositor::Action::Exec(String::from(&typed)),
-                )),
             ]);
         }
     }

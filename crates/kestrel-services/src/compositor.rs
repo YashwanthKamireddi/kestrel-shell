@@ -16,7 +16,8 @@ pub enum Action {
     /// A key with modifiers ("CTRL SHIFT", "V") sent straight to the focused window by the
     /// compositor (no virtual keyboard: wtype's own keymap put "v" on the keycode that is
     /// Escape in the real layout, so Ctrl+Shift+V reached Hyprland as Ctrl+Shift+Escape).
-    Shortcut(String, String),
+    /// The window it goes to (by address); None: the focused one.
+    Shortcut(String, String, Option<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,11 +76,19 @@ fn hyprland_lua(a: &Action) -> String {
         Action::Exec(cmd) => format!("hl.dsp.exec_cmd(\"{}\")", quote(cmd)),
         // Resolved to an Exec in run().
         Action::Open(_) => unreachable!("Open is resolved to an Exec in run()"),
-        Action::Shortcut(mods, key) => format!(
-            "hl.dsp.send_shortcut({{ mods = \"{}\", key = \"{}\" }})",
-            quote(mods),
-            quote(key)
-        ),
+        Action::Shortcut(mods, key, window) => {
+            // Sent to that window by Hyprland, which gives it the keyboard for the shortcut
+            // (whatever has it now, a panel included) and gives it back.
+            let to = window
+                .as_ref()
+                .map(|w| format!(", window = \"address:{}\"", quote(w)))
+                .unwrap_or_default();
+            format!(
+                "hl.dsp.send_shortcut({{ mods = \"{}\", key = \"{}\"{to} }})",
+                quote(mods),
+                quote(key)
+            )
+        }
     }
 }
 

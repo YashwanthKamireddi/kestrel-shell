@@ -333,7 +333,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             return Task::future(crate::services::vpn::tailscale_login()).discard();
         }
         Message::CopyIp(ip) => {
-            return Task::Iced(iced::clipboard::write(ip));
+            return Task::future(crate::panels::clipboard::copy_text(ip)).discard();
         }
         Message::Wifi(on) => {
             app.net.wifi_enabled = on;

@@ -28,7 +28,12 @@ use wayland_protocols_wlr::data_control::v1::client::{
 struct Put {
     mimes: Vec<String>,
     data: Arc<Vec<u8>>,
+    /// Told once the compositor has it (an app pasting after this gets the new content).
+    done: tokio::sync::oneshot::Sender<()>,
 }
+
+/// A `wl_display.sync` answered: everything asked before it is done.
+type Ack = Mutex<Option<tokio::sync::oneshot::Sender<()>>>;
 
 /// The watcher's inbox for `Put`s, and the socket that wakes its loop.
 static PUT: Mutex<Option<(std::sync::mpsc::Sender<Put>, std::os::unix::net::UnixStream)>> =
@@ -44,22 +49,26 @@ pub const TEXT_TYPES: &[&str] = &[
 ];
 
 /// Puts `data` on the clipboard, offered as `mimes`. kestrel serves it while it is the
-/// clipboard (and wl-clip-persist keeps it after).
-pub fn copy(mimes: &[&str], data: Vec<u8>) {
+/// clipboard (and wl-clip-persist keeps it after). The answer comes once the compositor has it
+/// (dropped unanswered if the clipboard is not connected).
+pub fn copy(mimes: &[&str], data: Vec<u8>) -> tokio::sync::oneshot::Receiver<()> {
+    let (done, rx) = tokio::sync::oneshot::channel();
     let g = PUT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some((tx, wake)) = g.as_ref() else {
         log::warn!("clipboard: not connected");
-        return;
+        return rx;
     };
     let put = Put {
         mimes: mimes.iter().map(|m| (*m).to_string()).collect(),
         data: Arc::new(data),
+        done,
     };
     if tx.send(put).is_ok() {
         let _ = std::io::Write::write(&mut &*wake, &[1]);
     }
+    rx
 }
 
 /// Largest copy that is read to describe it (bigger images are still reported, unread).
@@ -159,6 +168,26 @@ impl Dispatch<ZwlrDataControlOfferV1, ()> for State {
     ) {
         if let zwlr_data_control_offer_v1::Event::Offer { mime_type } = event {
             st.offers.entry(offer.id()).or_default().push(mime_type);
+        }
+    }
+}
+
+impl Dispatch<wayland_client::protocol::wl_callback::WlCallback, Ack> for State {
+    fn event(
+        _: &mut Self,
+        _: &wayland_client::protocol::wl_callback::WlCallback,
+        event: wayland_client::protocol::wl_callback::Event,
+        ack: &Ack,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let wayland_client::protocol::wl_callback::Event::Done { .. } = event
+            && let Some(tx) = ack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take()
+        {
+            let _ = tx.send(());
         }
     }
 }
@@ -473,6 +502,8 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
                     if let Some(old) = st.source.replace(source) {
                         old.destroy();
                     }
+                    // Answered once the compositor has done all of the above.
+                    conn.display().sync(&qh, Mutex::new(Some(put.done)));
                 }
             }
         }
