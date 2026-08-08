@@ -1711,18 +1711,10 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                             Err(e) => Err(e.to_string()),
                         }
                     } else {
-                        tokio::process::Command::new("cliphist")
-                            .arg("wipe")
-                            .status()
+                        // Pinned entries stay, as with the clipboard panel's "Clear all".
+                        tokio::task::spawn_blocking(crate::services::clips::clear)
                             .await
-                            .map_err(|e| e.to_string())
-                            .and_then(|s| {
-                                if s.success() {
-                                    Ok(())
-                                } else {
-                                    Err("The clipboard history was not cleared".into())
-                                }
-                            })
+                            .map_err(|_| "The clipboard history was not cleared".to_string())
                     }
                 },
                 move |r| {

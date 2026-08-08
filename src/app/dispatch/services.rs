@@ -408,19 +408,13 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::Copied(c) => {
             app.copied(c);
-            // The history is read again in the background (once cliphist has stored it), so
-            // Super+V opens on a list that is already there, never "Loading…".
-            Task::perform(
-                async {
-                    tokio::time::sleep(Duration::from_millis(400)).await;
-                    panels::clipboard::clip_list().await
-                },
-                |c| {
-                    Message::Panel(panels::Message::Clipboard(
-                        panels::clipboard::Message::Loaded(c),
-                    ))
-                },
-            )
+            // The history recorded the copy before "Copied" arrived: read again in the
+            // background, so Super+V opens on a list that is already there, never "Loading…".
+            Task::perform(panels::clipboard::clip_list(), |c| {
+                Message::Panel(panels::Message::Clipboard(
+                    panels::clipboard::Message::Loaded(c),
+                ))
+            })
         }
         Message::Updates(s) => {
             app.updates = s;

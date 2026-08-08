@@ -1,6 +1,8 @@
-//! The clipboard, watched: what was just copied, as it happens. Uses the wlr data-control
-//! protocol on its own Wayland connection (no helper process, no focus needed), so the shell
-//! can say "Copied" the moment anything copies, a screenshot included.
+//! The clipboard, watched and set: what was just copied, as it happens, and kestrel's own
+//! copies (a history entry, a file). Uses the wlr data-control protocol on its own Wayland
+//! connection (no `wl-paste` or `wl-copy` processes, no focus needed), so the shell can say
+//! "Copied" the moment anything copies, a screenshot included, and every copy goes into the
+//! clipboard history (crate::clips) as it is read.
 //!
 //! The same content offered again (wl-clip-persist re-offers it when the source app quits) is
 //! not reported twice. Password managers mark secrets with `x-kde-passwordManagerHint`; those
@@ -10,7 +12,8 @@ use futures::Stream;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
-use std::os::fd::{AsFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
+use std::sync::{Arc, Mutex};
 use wayland_client::backend::ObjectId;
 use wayland_client::protocol::{wl_registry, wl_seat};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, event_created_child};
@@ -18,7 +21,46 @@ use wayland_protocols_wlr::data_control::v1::client::{
     zwlr_data_control_device_v1::{self, ZwlrDataControlDeviceV1},
     zwlr_data_control_manager_v1::ZwlrDataControlManagerV1,
     zwlr_data_control_offer_v1::{self, ZwlrDataControlOfferV1},
+    zwlr_data_control_source_v1::{self, ZwlrDataControlSourceV1},
 };
+
+/// Something for kestrel to put on the clipboard: the types it is offered as, and its content.
+struct Put {
+    mimes: Vec<String>,
+    data: Arc<Vec<u8>>,
+}
+
+/// The watcher's inbox for `Put`s, and the socket that wakes its loop.
+static PUT: Mutex<Option<(std::sync::mpsc::Sender<Put>, std::os::unix::net::UnixStream)>> =
+    Mutex::new(None);
+
+/// The types text is offered as (what apps ask for, newest names first).
+pub const TEXT_TYPES: &[&str] = &[
+    "text/plain;charset=utf-8",
+    "text/plain",
+    "UTF8_STRING",
+    "STRING",
+    "TEXT",
+];
+
+/// Puts `data` on the clipboard, offered as `mimes`. kestrel serves it while it is the
+/// clipboard (and wl-clip-persist keeps it after).
+pub fn copy(mimes: &[&str], data: Vec<u8>) {
+    let g = PUT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((tx, wake)) = g.as_ref() else {
+        log::warn!("clipboard: not connected");
+        return;
+    };
+    let put = Put {
+        mimes: mimes.iter().map(|m| (*m).to_string()).collect(),
+        data: Arc::new(data),
+    };
+    if tx.send(put).is_ok() {
+        let _ = std::io::Write::write(&mut &*wake, &[1]);
+    }
+}
 
 /// Largest copy that is read to describe it (bigger images are still reported, unread).
 const READ_LIMIT: usize = 64 << 20;
@@ -46,6 +88,9 @@ struct State {
     /// MIME types announced per offer.
     offers: HashMap<ObjectId, Vec<String>>,
     current: Option<ZwlrDataControlOfferV1>,
+    device: Option<ZwlrDataControlDeviceV1>,
+    /// kestrel's own copy while it is the clipboard.
+    source: Option<ZwlrDataControlSourceV1>,
     /// The selection already present at start is not news.
     seen_first: bool,
     out: futures::channel::mpsc::UnboundedSender<Copied>,
@@ -114,6 +159,35 @@ impl Dispatch<ZwlrDataControlOfferV1, ()> for State {
     ) {
         if let zwlr_data_control_offer_v1::Event::Offer { mime_type } = event {
             st.offers.entry(offer.id()).or_default().push(mime_type);
+        }
+    }
+}
+
+impl Dispatch<ZwlrDataControlSourceV1, Arc<Vec<u8>>> for State {
+    fn event(
+        st: &mut Self,
+        source: &ZwlrDataControlSourceV1,
+        event: zwlr_data_control_source_v1::Event,
+        data: &Arc<Vec<u8>>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            // An app pastes: the content is written at the app's pace, off the event loop.
+            zwlr_data_control_source_v1::Event::Send { fd, .. } => {
+                let data = data.clone();
+                std::thread::spawn(move || {
+                    let _ = std::io::Write::write_all(&mut std::fs::File::from(fd), &data);
+                });
+            }
+            // Something else is the clipboard now.
+            zwlr_data_control_source_v1::Event::Cancelled => {
+                source.destroy();
+                if st.source.as_ref() == Some(source) {
+                    st.source = None;
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -202,7 +276,18 @@ fn read_offer(
         let _ = std::fs::File::from(read)
             .take(READ_LIMIT as u64)
             .read_to_end(&mut data);
-        let _ = out.unbounded_send(describe(&data, is_image, &mime));
+        let copied = describe(&data, is_image, &mime);
+        // Into the history first, so the list is current when "Copied" arrives.
+        match &copied {
+            Copied::Image { width, height, .. } => {
+                crate::clips::add(&mime, &data, Some((*width, *height)));
+            }
+            Copied::Text(_) => {
+                crate::clips::add(&mime, &data, None);
+            }
+            Copied::Other => {}
+        }
+        let _ = out.unbounded_send(copied);
     });
 }
 
@@ -318,6 +403,8 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
         manager: None,
         offers: HashMap::new(),
         current: None,
+        device: None,
+        source: None,
         seen_first: false,
         out,
     };
@@ -325,13 +412,74 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
     let (Some(manager), Some(seat)) = (st.manager.clone(), st.seat.clone()) else {
         anyhow::bail!("the compositor has no wlr data-control");
     };
-    manager.get_data_device(&seat, &qh, ());
+    st.device = Some(manager.get_data_device(&seat, &qh, ()));
     // If nothing is on the clipboard at start, the first copy is news.
     queue.roundtrip(&mut st)?;
     st.seen_first = true;
-    loop {
-        queue.blocking_dispatch(&mut st)?;
-    }
+    let (puts, inbox) = std::sync::mpsc::channel::<Put>();
+    let (wake_rx, wake_tx) = std::os::unix::net::UnixStream::pair()?;
+    wake_rx.set_nonblocking(true)?;
+    *PUT.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((puts, wake_tx));
+    // Waits on both: the compositor's events and kestrel's own copies.
+    let result = (|| -> anyhow::Result<()> {
+        loop {
+            queue.dispatch_pending(&mut st)?;
+            conn.flush()?;
+            let Some(guard) = queue.prepare_read() else {
+                continue;
+            };
+            let mut fds = [
+                libc::pollfd {
+                    fd: guard.connection_fd().as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                },
+                libc::pollfd {
+                    fd: wake_rx.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                },
+            ];
+            // Safety: poll on two descriptors that live through the call.
+            if unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) } < 0 {
+                let e = std::io::Error::last_os_error();
+                if e.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(e.into());
+            }
+            if fds[0].revents != 0 {
+                match guard.read() {
+                    Ok(_) => {}
+                    Err(wayland_client::backend::WaylandError::Io(e))
+                        if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(e) => return Err(e.into()),
+                }
+            } else {
+                drop(guard);
+            }
+            if fds[1].revents != 0 {
+                let mut buf = [0u8; 64];
+                while (&wake_rx).read(&mut buf).is_ok_and(|n| n > 0) {}
+                while let Ok(put) = inbox.try_recv() {
+                    let source = manager.create_data_source(&qh, put.data);
+                    for m in &put.mimes {
+                        source.offer(m.clone());
+                    }
+                    if let Some(device) = &st.device {
+                        device.set_selection(Some(&source));
+                    }
+                    if let Some(old) = st.source.replace(source) {
+                        old.destroy();
+                    }
+                }
+            }
+        }
+    })();
+    *PUT.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    result
 }
 
 #[cfg(test)]

@@ -35,7 +35,8 @@ pub struct Look {
     pub source: Option<u32>,
 }
 
-/// Clipboard entries kept at the top (cliphist ids), surviving "Clear all".
+/// Clipboard entries pinned by their cliphist ids, before the history was kestrel's own: brought
+/// into services::clips once (which keeps pins since), then emptied.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct Clipboard {

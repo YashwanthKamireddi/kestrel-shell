@@ -13,6 +13,7 @@ pub mod bluetooth;
 pub mod browser_host;
 pub mod camera;
 pub mod clipboard;
+pub mod clips;
 pub mod clock;
 pub mod compositor;
 pub mod dbus;

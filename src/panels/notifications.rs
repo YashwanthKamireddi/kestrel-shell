@@ -149,7 +149,6 @@ fn update_inner(app: &mut App, m: Message) -> Task<AppMessage> {
 /// Puts a file on the clipboard: a picture as the picture itself (pastes into any chat or
 /// editor), anything else (a recording) as the file (pastes into a chat, a folder, an upload).
 fn copy_file(path: &str) {
-    use std::io::Write;
     let p = std::path::Path::new(path);
     let picture = matches!(
         p.extension()
@@ -179,21 +178,7 @@ fn copy_file(path: &str) {
             format!("{}\r\n", crate::services::filechooser::uri(p)).into_bytes(),
         )
     };
-    if let Ok(mut child) = std::process::Command::new("wl-copy")
-        .args(["--type", mime])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    {
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(&data);
-        }
-        // Reaped in the background (wl-copy stays to serve the clipboard).
-        std::thread::spawn(move || {
-            let _ = child.wait();
-        });
-    }
+    crate::services::clipboard::copy(&[mime], data);
 }
 
 /// Copies a kept picture into Pictures/Screenshots under a dated name.
