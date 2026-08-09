@@ -130,15 +130,18 @@ impl App {
     }
 
     /// The night light schedule: on from sunset to sunrise (today's times from the weather).
-    pub fn night_schedule(&mut self) {
+    /// Night light by the sun (if scheduled): the change to make, if any.
+    pub fn night_schedule(&mut self) -> Task<Message> {
         if !self.config.night_light_schedule {
             self.night_auto = None;
-            return;
+            return Task::none();
         }
-        let Some(w) = &self.weather else { return };
+        let Some(w) = &self.weather else {
+            return Task::none();
+        };
         let parse = |t: &str| chrono::NaiveTime::parse_from_str(t, "%H:%M").ok();
         let (Some(rise), Some(set)) = (parse(&w.sunrise), parse(&w.sunset)) else {
-            return;
+            return Task::none();
         };
         let now = self.now.time();
         let want = now >= set || now < rise;
@@ -147,9 +150,11 @@ impl App {
             if self.night_light != want {
                 self.night_light = want;
                 crate::state::update(|s| s.toggles.night_light = want);
-                services::toggles::set_night_light(want, self.config.night_light_temperature);
+                let k = self.config.night_light_temperature;
+                return Task::future(services::toggles::set_night_light(want, k)).discard();
             }
         }
+        Task::none()
     }
 
     /// Quiet hours: do not disturb from `quiet_from` to `quiet_to` (across midnight too).

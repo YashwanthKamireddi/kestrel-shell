@@ -274,7 +274,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             app.config.night_light_schedule = on;
             crate::config::set(&[], "night_light_schedule", toml_edit::value(on));
             app.night_auto = None;
-            app.night_schedule();
+            return app.night_schedule();
         }
         Message::WarmthDone => {
             if let Some(k) = st.kelvin.take() {
@@ -404,7 +404,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             app.night_light = !app.night_light;
             let on = app.night_light;
             crate::state::update(|s| s.toggles.night_light = on);
-            toggles::set_night_light(on, app.config.night_light_temperature);
+            let k = app.config.night_light_temperature;
+            return Task::future(toggles::set_night_light(on, k)).discard();
         }
         Message::Caffeine => {
             let on = !app.caffeine;

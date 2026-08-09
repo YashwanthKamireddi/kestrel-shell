@@ -99,7 +99,17 @@ not enabled, and its subscription is never created.
   secrets, Bluetooth pairing) are `kestrel prompt` (`src/prompt.rs`, kestrel-prompt.service),
   showing the same `panels::auth` component in a window of its own; the shell registers those
   agents only when `KESTREL_SEPARATE_PROMPTS` is unset (the rig). The lock screen is hyprlock,
-  started by hypridle on session lock.
+  started by hypridle on session lock. Night light (hyprsunset) runs as a transient user
+  service of its own (`services::systemd::run_service`), never as kestrel's child.
+- Talk, don't spawn (Phase 4): services are reached through their own APIs. Hyprland's
+  sockets (and hyprsunset's), D-Bus (systemd, dconf, fwupd, logind, UDisks…), PipeWire
+  (`services::pipewire`), the PulseAudio protocol (sounds through the sample cache, the
+  microphone test), Wayland data-control (clipboard watch, set and history:
+  `services::clipboard`, `services::clips`), libalpm (`services::pacman`), fontconfig,
+  i2c (DDC/CI), files by their freedesktop rules (`services::xdg`, `services::open`,
+  `services::gsettings`). Programs are still started where starting one is the point: the
+  user's own scripts and template hooks, pkexec for an admin change the user makes, the VPN
+  tools that have no other interface, apps.
 
 ### Performance rules
 

@@ -37,7 +37,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::Minute => {
             app.now = chrono::Local::now();
-            app.night_schedule();
+            let night = app.night_schedule();
             app.quiet_schedule();
             // Do not disturb for a while: ends by itself at its time.
             if app.dnd
@@ -52,7 +52,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     s.toggles.dnd_until = None;
                 });
             }
-            Task::none()
+            night
         }
         Message::Frame(now) => app.tick(now),
         Message::WallpaperLoaded(Some((seed, wall))) => {

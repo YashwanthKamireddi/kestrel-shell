@@ -519,11 +519,14 @@ pub fn boot() -> (App, Task<Message>) {
     // Monitors whose brightness can really be set (DDC/CI), found once.
     let ddc = Task::perform(services::ddc::displays(), Message::Ddc);
     let emoji = panels::emoji::warm();
-    // Put back what was on before the restart: the inhibitor and the warm tint belonged to
-    // the old process.
-    if app.night_light {
-        toggles::set_night_light(true, app.config.night_light_temperature);
-    }
+    // Put back what was on before the restart: the inhibitor belonged to the old process; the
+    // tint runs as its own service and is only told again (or started, if it was not).
+    let night = if app.night_light {
+        let k = app.config.night_light_temperature;
+        Task::future(toggles::set_night_light(true, k)).discard()
+    } else {
+        Task::none()
+    };
     let caffeine = if app.caffeine {
         Task::future(toggles::set_caffeine(true)).discard()
     } else {
@@ -550,7 +553,7 @@ pub fn boot() -> (App, Task<Message>) {
     ]);
     (
         app,
-        Task::batch([load, ddc, caffeine, clips, cursor, warm, emoji]),
+        Task::batch([load, ddc, caffeine, night, clips, cursor, warm, emoji]),
     )
 }
 
