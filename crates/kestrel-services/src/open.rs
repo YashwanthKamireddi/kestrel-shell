@@ -112,6 +112,14 @@ fn glob_match(pattern: &[char], name: &[char]) -> bool {
     }
 }
 
+/// `name` matches the shell-style `pattern` (`*`, `?`, `[…]`).
+pub fn glob_matches(pattern: &str, name: &str) -> bool {
+    glob_match(
+        &pattern.chars().collect::<Vec<_>>(),
+        &name.chars().collect::<Vec<_>>(),
+    )
+}
+
 /// The type a file name says it is: of the patterns that match, the highest weight, then the
 /// longest pattern (shared-mime-info, "Recommended checking order").
 pub fn type_by_name(name: &str) -> Option<String> {

@@ -160,37 +160,115 @@ pub async fn eject(path: String, drive: String) -> Result<(), String> {
 }
 
 /// What fills a folder: its biggest folders and files (one level down), largest first, with
-/// the folder's total. Measured with `du` (on this filesystem only); slow on a cold cache, so
-/// run it in the background.
+/// the folder's total. Counted as `du -b -x` counts (apparent sizes of what is in it, folders'
+/// own entries not counted, this filesystem only, a file with several hard links once), walked directly on a
+/// thread at idle disk priority (as `ionice -c3`): it reads every file's metadata and must not
+/// slow what the user is doing. Slow on a cold cache, so run it in the background.
 pub async fn usage(dir: std::path::PathBuf) -> (u64, Vec<(std::path::PathBuf, u64)>) {
-    // Idle I/O class: the walk reads every file's metadata in home, and must not slow what the
-    // user is doing.
-    let out = tokio::process::Command::new("ionice")
-        .args(["-c3", "du", "-b", "-x", "--max-depth=1"])
-        .arg(&dir)
-        .stderr(std::process::Stdio::null())
-        .output()
-        .await;
-    let Ok(out) = out else {
+    tokio::task::spawn_blocking(move || {
+        idle_io();
+        du(&dir)
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// This thread's disk requests at idle priority (ioprio_set, IOPRIO_CLASS_IDLE).
+fn idle_io() {
+    const IOPRIO_WHO_PROCESS: libc::c_int = 1;
+    const IDLE: libc::c_int = 3 << 13;
+    // Safety: ioprio_set on the calling thread (who 0) with a valid class.
+    unsafe {
+        libc::syscall(libc::SYS_ioprio_set, IOPRIO_WHO_PROCESS, 0, IDLE);
+    }
+}
+
+fn du(dir: &std::path::Path) -> (u64, Vec<(std::path::PathBuf, u64)>) {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(top) = std::fs::symlink_metadata(dir) else {
         return (0, Vec::new());
     };
-    let mut total = 0;
-    let mut items: Vec<(std::path::PathBuf, u64)> = String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter_map(|l| {
-            let (n, p) = l.split_once('\t')?;
-            Some((std::path::PathBuf::from(p), n.parse().ok()?))
-        })
-        .filter(|(p, n)| {
-            if *p == dir {
-                total = *n;
-                false
-            } else {
-                true
+    let dev = top.dev();
+    let mut seen = std::collections::HashSet::new();
+    // A file or folder's size, everything below it included (links not followed).
+    let mut size_of = |p: &std::path::Path| -> u64 {
+        let mut total = 0;
+        let mut stack = vec![p.to_path_buf()];
+        while let Some(p) = stack.pop() {
+            let Ok(m) = std::fs::symlink_metadata(&p) else {
+                continue;
+            };
+            if m.dev() != dev {
+                continue;
             }
+            if m.nlink() > 1 && !m.is_dir() && !seen.insert((m.dev(), m.ino())) {
+                continue;
+            }
+            if !m.is_dir() {
+                total += m.len();
+            }
+            if m.is_dir()
+                && let Ok(rd) = std::fs::read_dir(&p)
+            {
+                stack.extend(rd.flatten().map(|e| e.path()));
+            }
+        }
+        total
+    };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return (0, Vec::new());
+    };
+    let mut items: Vec<(std::path::PathBuf, u64)> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| std::fs::symlink_metadata(p).is_ok_and(|m| m.dev() == dev))
+        .map(|p| {
+            let n = size_of(&p);
+            (p, n)
         })
         .collect();
+    let total = items.iter().map(|x| x.1).sum::<u64>();
     items.sort_by_key(|x| std::cmp::Reverse(x.1));
     items.truncate(10);
     (total, items)
+}
+
+#[cfg(test)]
+mod live_du {
+    /// The same totals as du (by hand: `--ignored`).
+    #[test]
+    #[ignore]
+    fn same_as_du() {
+        let dir = std::path::PathBuf::from(
+            std::env::var("KESTREL_DU").unwrap_or_else(|_| "/usr/share/icons".into()),
+        );
+        let t = std::time::Instant::now();
+        let (total, items) = super::du(&dir);
+        let took = t.elapsed();
+        let out = std::process::Command::new("du")
+            .args(["-b", "-x", "--max-depth=1"])
+            .arg(&dir)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        let theirs: Vec<(String, u64)> = text
+            .lines()
+            .filter_map(|l| {
+                let (n, p) = l.split_once('\t')?;
+                Some((p.to_string(), n.parse().ok()?))
+            })
+            .collect();
+        let du_total = theirs
+            .iter()
+            .find(|(p, _)| *p == dir.to_string_lossy())
+            .map(|x| x.1);
+        println!("ours {total} in {took:?}, du {du_total:?}");
+        for (p, n) in items.iter().take(4) {
+            let d = theirs
+                .iter()
+                .find(|(q, _)| *q == p.to_string_lossy())
+                .map(|x| x.1);
+            println!("{}: ours {n} du {d:?}", p.display());
+        }
+    }
 }

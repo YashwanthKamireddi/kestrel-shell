@@ -7,7 +7,9 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-fn client() -> &'static reqwest::Client {
+/// kestrel's one HTTP client (it names itself: the AUR's bot shield answers a nameless
+/// request with a challenge page).
+pub(crate) fn client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| {
         reqwest::Client::builder()

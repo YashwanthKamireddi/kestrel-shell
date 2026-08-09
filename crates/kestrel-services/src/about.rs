@@ -2,8 +2,6 @@
 //! files and a few standard tools (for Settings' About page). Blocking: read it off the UI
 //! thread.
 
-use std::process::Command;
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct About {
     /// "Dell Inc. Latitude 3440".
@@ -30,14 +28,56 @@ fn read(path: &str) -> String {
         .unwrap_or_default()
 }
 
-fn run(cmd: &str, args: &[&str]) -> String {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default()
+/// The display controllers (PCI class 0x03), named as lspci names them: from sysfs's ids and
+/// the PCI id database (`hwdata/pci.ids`), "Vendor Device".
+fn graphics() -> Vec<String> {
+    let ids = std::fs::read_to_string("/usr/share/hwdata/pci.ids").unwrap_or_default();
+    let Ok(rd) = std::fs::read_dir("/sys/bus/pci/devices") else {
+        return Vec::new();
+    };
+    let mut devs: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+    devs.sort();
+    devs.iter()
+        .filter(|d| read(&d.join("class").to_string_lossy()).starts_with("0x03"))
+        .filter_map(|d| {
+            let hex = |f: &str| {
+                read(&d.join(f).to_string_lossy())
+                    .trim_start_matches("0x")
+                    .to_lowercase()
+            };
+            pci_name(&ids, &hex("vendor"), &hex("device"))
+        })
+        .map(|n| gpu_name(&n))
+        .collect()
+}
+
+/// "Intel Corporation Alder Lake-UP3 GT2 [Iris Xe Graphics]" for 8086:46a8, from pci.ids
+/// (vendors at the line start, their devices indented by one tab).
+fn pci_name(ids: &str, vendor: &str, device: &str) -> Option<String> {
+    let mut vname = None;
+    for l in ids.lines() {
+        if l.starts_with('#') || l.is_empty() {
+            continue;
+        }
+        if !l.starts_with('\t') {
+            if vname.is_some() {
+                break;
+            }
+            if let Some(rest) = l.strip_prefix(vendor).filter(|r| r.starts_with("  ")) {
+                vname = Some(rest.trim().to_string());
+            }
+            continue;
+        }
+        if let (Some(v), Some(rest)) = (&vname, l.strip_prefix('\t')) {
+            if rest.starts_with('\t') {
+                continue;
+            }
+            if let Some(name) = rest.strip_prefix(device).filter(|r| r.starts_with("  ")) {
+                return Some(format!("{v} {}", name.trim()));
+            }
+        }
+    }
+    vname
 }
 
 /// Sizes the way people say them: 16 GB, 349 GB, 1.8 TB.
@@ -100,11 +140,7 @@ pub fn read_all() -> About {
         .unwrap_or(0);
     // In decimal gigabytes, like the disk (and the box it came in): 16044268 kB is 16 GB.
     let mem_gb = (mem_kb as f64 * 1024.0 / 1e9).round();
-    let graphics = run("lspci", &[])
-        .lines()
-        .filter(|l| l.contains("VGA") || l.contains("3D controller") || l.contains("Display"))
-        .filter_map(|l| l.split_once(": ").map(|(_, v)| gpu_name(v)))
-        .collect();
+    let graphics = graphics();
     let disk = {
         let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
         // Safety: a valid NUL-terminated path and a zeroed struct the call fills.
@@ -116,10 +152,10 @@ pub fn read_all() -> About {
             String::new()
         }
     };
-    let compositor = run("hyprctl", &["version", "-j"])
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("\"version\": "))
-        .map(|v| format!("Hyprland {}", v.trim_matches(|c| c == '"' || c == ',')))
+    let compositor = crate::hyprland::request_blocking("j/version")
+        .ok()
+        .and_then(|j| serde_json::from_str::<serde_json::Value>(&j).ok())
+        .and_then(|v| Some(format!("Hyprland {}", v.get("version")?.as_str()?)))
         .unwrap_or_default();
     let up: f64 = read("/proc/uptime")
         .split_whitespace()
@@ -271,5 +307,16 @@ mod tests {
     fn sizes_read_naturally() {
         assert_eq!(super::size(349_000_000_000), "349 GB");
         assert_eq!(super::size(1_800_000_000_000), "1.8 TB");
+    }
+}
+
+#[cfg(test)]
+mod live {
+    /// Graphics and compositor as read here (by hand: `--ignored`).
+    #[test]
+    #[ignore]
+    fn reads_graphics_and_compositor() {
+        let a = super::read_all();
+        println!("{:?} | {}", a.graphics, a.compositor);
     }
 }

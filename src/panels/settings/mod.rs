@@ -1603,9 +1603,10 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             }
             st.restart_armed = false;
             return Task::future(async {
-                let _ = tokio::process::Command::new("systemctl")
-                    .args(["--user", "restart", "kestrel"])
-                    .spawn();
+                if let Err(e) = crate::services::systemd::restart_user_unit("kestrel.service").await
+                {
+                    log::warn!("restart: {e}");
+                }
             })
             .discard();
         }
