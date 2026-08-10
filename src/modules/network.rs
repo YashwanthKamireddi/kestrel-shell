@@ -19,13 +19,13 @@ pub fn view<'a>(
     let active = super::control_on(app, open, control::Page::Main);
     let glyph = crate::ui::breathe::icon_or(
         control::wifi_icon(&app.net),
-        crate::theme::size::ICON,
+        crate::theme::tok::ICON,
         s.ink,
         app.net.connecting,
     );
     vec![
-        crate::ui::control(iced::widget::container(glyph).center(crate::theme::size::CONTROL))
-            .radius(crate::theme::size::CONTROL / 2.0)
+        crate::ui::control(iced::widget::container(glyph).center(crate::theme::tok::BAR_ITEM))
+            .radius(crate::theme::tok::BAR_ITEM / 2.0)
             .bar(s, active)
             .on_press_at(move |r| Message::ControlAt(control::Page::Main, id, r))
             .into(),

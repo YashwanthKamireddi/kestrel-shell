@@ -40,14 +40,14 @@ pub(super) fn quiet_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s,
             icon(
                 Icon::BellOff,
-                size::ICON,
+                tok::ICON,
                 if on { s.accent } else { s.ink_dim },
             )
             .into(),
             name,
             None,
             if on {
-                icon(Icon::Check, size::ICON, s.accent).into()
+                icon(Icon::Check, tok::ICON, s.accent).into()
             } else {
                 Space::new().into()
             },

@@ -7,7 +7,7 @@ use crate::theme::tok;
 pub(super) fn app_chip<'a>(s: Scheme, a: &crate::services::apps::App) -> Element<'a, AppMessage> {
     let ic: Element<'a, AppMessage> = match crate::services::icons::lookup(&a.icon) {
         Some(p) => ui::image_file_faded(&p, 18.0, s.opacity),
-        None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
+        None => icon(Icon::AppWindow, tok::ICON, s.ink_dim).into(),
     };
     row![ic, label(a.name.clone(), text::SMALL, s.ink)]
         .spacing(tok::M)
@@ -38,7 +38,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             kind.name,
             None,
             control(
-                row![shown, icon(Icon::ChevronDown, 14.0, s.ink_dim)]
+                row![shown, icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)]
                     .spacing(tok::S)
                     .align_y(Alignment::Center),
             )
@@ -58,7 +58,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                             app_chip(s, a),
                             iced::widget::Space::new().width(Length::Fill),
                             if on {
-                                Element::from(icon(Icon::Check, 16.0, s.accent))
+                                Element::from(icon(Icon::Check, tok::ICON, s.accent))
                             } else {
                                 iced::widget::Space::new().into()
                             }

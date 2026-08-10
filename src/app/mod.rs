@@ -7,7 +7,7 @@ use crate::services::{
     self, audio, bluetooth, hyprland, mpris, network, notifications, power, toggles, tray, vpn,
 };
 use crate::shell;
-use crate::theme::{Scheme, Seed, size};
+use crate::theme::{Scheme, Seed, tok};
 use crate::ui::Icon;
 use crate::ui::shape::Edge;
 use iced::task::{
@@ -560,7 +560,7 @@ pub fn boot() -> (App, Task<Message>) {
 impl App {}
 
 /// The bar surface's height: the bar and room for the frame's corners under it.
-const BAR_SURFACE: f32 = size::BAR + 32.0;
+const BAR_SURFACE: f32 = tok::BAR + 32.0;
 
 pub fn update(app: &mut App, msg: Message) -> Task<Message> {
     // A part that failed while drawing is reported once.

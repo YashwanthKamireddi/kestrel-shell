@@ -10,7 +10,7 @@
 
 use crate::panels::auth;
 use crate::services::{bluetooth, network, polkit};
-use crate::theme::{Scheme, Seed, size};
+use crate::theme::{Scheme, Seed, tok};
 use iced::task::{destroy_layer_surface, new_layer_surface, set_size};
 use iced::{
     Anchor, Element, KeyboardInteractivity, Layer, LayerShellSettings, Size, Subscription,
@@ -112,8 +112,8 @@ impl App {
             layer: Layer::Overlay,
             keyboard_interactivity: KeyboardInteractivity::Exclusive,
             exclusive_zone: -1,
-            size: Some((size::PANEL_M as u32, 1)),
-            margin: ((size::BAR + crate::ui::shape::FLOAT_GAP) as i32, 0, 0, 0),
+            size: Some((tok::PANEL_M as u32, 1)),
+            margin: ((tok::BAR + crate::ui::shape::FLOAT_GAP) as i32, 0, 0, 0),
             namespace: "kestrel-panel".into(),
             output: None,
         });
@@ -181,7 +181,7 @@ pub fn update(app: &mut App, m: Message) -> Task<Message> {
             let want = sz.height.ceil().max(1.0) as u32;
             if want != h {
                 app.window = Some((id, want));
-                tasks.push(set_size(id, (size::PANEL_M as u32, want)));
+                tasks.push(set_size(id, (tok::PANEL_M as u32, want)));
             }
             if std::mem::take(&mut app.focus_pending) {
                 tasks.push(auth::focus());
@@ -210,20 +210,20 @@ pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {
             } else {
                 s.base.into()
             }),
-            border: iced::Border::default().rounded(size::PANEL_RADIUS),
+            border: iced::Border::default().rounded(tok::R_PANEL),
             ..container::Style::default()
         });
     let card: Element<'_, Message> = if frosted {
         iced::blur_container(card)
             .style(move |_| container::Style {
-                border: iced::Border::default().rounded(size::PANEL_RADIUS),
+                border: iced::Border::default().rounded(tok::R_PANEL),
                 ..container::Style::default()
             })
             .into()
     } else {
         card.into()
     };
-    crate::ui::reveal(card, size::PANEL_M, app.window.map_or(1, |w| w.1) as f32)
+    crate::ui::reveal(card, tok::PANEL_M, app.window.map_or(1, |w| w.1) as f32)
         .on_measure(Message::Measured)
         .into()
 }

@@ -51,16 +51,21 @@ Rubik (the typeface the user liked in ii; chosen 2026-11-12). Sizes 11 (caption)
 
 ### Space and shape
 
-| Token | Value |
+One token set, `theme::tok` (`theme::size` was merged into it on 2026-11-16); panels use the
+names, never numbers. `tools/lint/tokens.sh` counts literal radii, paddings, gaps, edges, alphas,
+colours and icon sizes outside `src/ui` and `src/theme`; the count is zero and must stay zero.
+
+| Tokens | Values |
 |---|---|
-| Spacing | 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 |
-| Bar | 36 px tall; controls 28 px |
-| Frame | 4 px; screen corners 20 px (both configurable) |
-| Panel | radius 24, padding 12, joins the bar with 16 px concave curves |
-| Card / tile | radius 12 (= 24 − 12), padding 12 |
-| Row | radius 10, height 40 (lists) or 32 (menus) |
-| Control | radius 8, or fully round (pill) |
-| Icons | Material Symbols Rounded, filled, weight 500 (as in ii and Caelestia), drawn as glyphs from an embedded subset font (assets/fonts/kestrel-icons.ttf, built by tools/icons): crisp and even. Status icons show real levels and are coloured by situation |
+| Spacing `XXS…XXXL` | 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 (`INDENT` 28, `HAIR` 1) |
+| Radii | `R_PANEL` 24, `R_CARD` 12 (= 24 − `PANEL_PAD`), `R_ROW` 10, `R_CONTROL` 8, `R_JOIN` 4, `FULL` (a pill) |
+| Heights | `H_SMALL` 28, `H_CONTROL` 32, `H_ROW` 40, `H_ROW2` 48; bar `BAR` 40, its round items `BAR_ITEM` 30 |
+| Panels | widths `PANEL_S` 320, `PANEL_M` 400, `PANEL_L` 560, `PANEL_XL` 860; padding `PANEL_PAD` 12; `JOIN` 16 (the concave curve to the bar) |
+| Icons | `ICON_XS` 12, `ICON_S` 14, `ICON` 16, `ICON_M` 18, `ICON_L` 20, `ICON_XL` 22, `ICON_XXL` 28, `ICON_HERO` 40, `ICON_DISPLAY` 52 (the weather panel's condition). Material Symbols Rounded, filled, weight 500, from an embedded subset font (assets/fonts/kestrel-icons.ttf, built by tools/icons) |
+| State layer (ink alpha) | `HOVER` .08, `PRESS` .14, `SELECTED` .14, `TONAL` .06, `FILL` .08, `FILL_STRONG` .10, `RING` .55 (a selection ring), `DISABLED` .38 |
+
+Measures that only make sense in one place (a table's columns, a fixed button width) are named
+constants in that file, shared by everything that must line up with them (header and rows).
 
 ### Motion
 

@@ -77,7 +77,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
     };
     let check = |on: bool| -> Element<'_, AppMessage> {
         if on {
-            icon(Icon::Check, size::ICON, s.accent).into()
+            icon(Icon::Check, tok::ICON, s.accent).into()
         } else {
             Space::new().into()
         }
@@ -121,7 +121,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
         };
         list = list.push(list_row(
             s,
-            icon(i, size::ICON, if active { s.accent } else { s.ink }).into(),
+            icon(i, tok::ICON, if active { s.accent } else { s.ink }).into(),
             ui::fit(&name.replace(" (Stereo)", ""), text::BODY, 250.0),
             None,
             check(active),
@@ -146,7 +146,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                 s,
                 icon(
                     Icon::AudioLines,
-                    size::ICON,
+                    tok::ICON,
                     if active { s.accent } else { s.ink },
                 )
                 .into(),
@@ -221,7 +221,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                 let active = d.name == app.audio.default_source;
                 mics = mics.push(list_row(
                     s,
-                    icon(Icon::Mic, size::ICON, if active { s.accent } else { s.ink }).into(),
+                    icon(Icon::Mic, tok::ICON, if active { s.accent } else { s.ink }).into(),
                     ui::fit(&name, text::BODY, 250.0),
                     None,
                     check(active),
@@ -408,14 +408,14 @@ pub(super) fn app_row<'a>(
                 s,
                 icon(
                     if recording { Icon::Mic } else { Icon::Speaker },
-                    size::ICON,
+                    tok::ICON,
                     if active { s.accent } else { s.ink },
                 )
                 .into(),
                 ui::fit(name, text::BODY, 220.0),
                 None,
                 if active {
-                    icon(Icon::Check, size::ICON, s.accent).into()
+                    icon(Icon::Check, tok::ICON, s.accent).into()
                 } else {
                     Space::new().into()
                 },

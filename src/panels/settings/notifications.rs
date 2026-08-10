@@ -49,7 +49,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                 control(
                     row![
                         label(now.clone(), text::SMALL, s.ink),
-                        icon(Icon::ChevronDown, 14.0, s.ink_dim)
+                        icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
                     ]
                     .spacing(tok::S)
                     .align_y(Alignment::Center),
@@ -200,12 +200,15 @@ pub(super) fn sound_toggle<'a>(
     rules: &config::NotificationRules,
 ) -> Element<'a, AppMessage> {
     if rule != 0 || !rules.sound {
-        return iced::widget::Space::new().width(30).into();
+        // As wide as the button it stands in for, so rows line up.
+        return iced::widget::Space::new()
+            .width(tok::ICON + 2.0 * tok::S)
+            .into();
     }
     let on = !rules.silent.iter().any(|a| a == name);
     control(icon(
         if on { Icon::Volume2 } else { Icon::VolumeX },
-        16.0,
+        tok::ICON,
         if on { s.ink } else { s.ink_dim },
     ))
     .padding(tok::S)

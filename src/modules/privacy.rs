@@ -112,7 +112,7 @@ fn capsule<'a>(
     let full = width.max(0.0);
     let icons = row(glyphs
         .iter()
-        .map(|g| icon(*g, 14.0, s.on_accent.scale_alpha(k)).into()))
+        .map(|g| icon(*g, tok::ICON_S, s.on_accent.scale_alpha(k)).into()))
     .spacing(tok::S)
     .align_y(Alignment::Center);
     crate::ui::control(

@@ -7,7 +7,7 @@ use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::config;
 use crate::theme::tok;
-use crate::theme::{Scheme, size, text};
+use crate::theme::{Scheme, text};
 use crate::ui::{self, Icon, control, empty, label_w};
 use iced::widget::{column, container, image, row, scrollable};
 use iced::{Alignment, Element, Length, Task};
@@ -166,8 +166,7 @@ async fn thumbs(files: Vec<PathBuf>) -> Vec<(PathBuf, image::Handle)> {
                     .ok()?
                     .decode()
                     .ok()?;
-                let r =
-                    ui::rounded_cover(&img.into_rgba8(), THUMB_W, THUMB_H, size::ROW_RADIUS - 3.0);
+                let r = ui::rounded_cover(&img.into_rgba8(), THUMB_W, THUMB_H, tok::R_ROW - 3.0);
                 Some((
                     f,
                     image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
@@ -386,7 +385,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         label_w("Wallpaper", text::HEADING, s.ink, crate::theme::SEMIBOLD).width(Length::Fill),
         control(
             row![
-                ui::icon(Icon::Folder, 14.0, s.ink_dim),
+                ui::icon(Icon::Folder, tok::ICON_S, s.ink_dim),
                 ui::label(name, text::SMALL, s.ink)
             ]
             .spacing(tok::S)
@@ -397,7 +396,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .spacing(tok::M)
     .align_y(Alignment::Center)
-    .height(size::CONTROL + 4.0);
+    .height(tok::BAR_ITEM + 4.0);
     // Shuffle only with something to shuffle to.
     let header = if app
         .panels
@@ -409,7 +408,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         header.push(
             control(
                 row![
-                    ui::icon(Icon::Shuffle, 14.0, s.ink_dim),
+                    ui::icon(Icon::Shuffle, tok::ICON_S, s.ink_dim),
                     ui::label("Shuffle", text::SMALL, s.ink)
                 ]
                 .spacing(tok::S)
@@ -460,7 +459,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     if on {
                         tile = tile.push(
                             container(
-                                container(ui::icon(Icon::Check, 13.0, s.base))
+                                container(ui::icon(Icon::Check, tok::ICON_S, s.base))
                                     .center(20)
                                     .style(move |_| container::Style {
                                         background: Some(s.ink.into()),
@@ -487,7 +486,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                                     border: iced::Border {
                                         color: s.ink.scale_alpha(ring * s.opacity),
                                         width: 2.0,
-                                        radius: (size::ROW_RADIUS - 3.0).into(),
+                                        radius: (tok::R_ROW - 3.0).into(),
                                     },
                                     ..container::Style::default()
                                 }),
@@ -496,7 +495,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     r = r.push(
                         control(tile)
                             .padding(tok::XS)
-                            .radius(size::ROW_RADIUS)
+                            .radius(tok::R_ROW)
                             .kind(s, crate::ui::control::Kind::Bare)
                             .no_press_scale()
                             .on_enter(msg(Message::Hover(i)))

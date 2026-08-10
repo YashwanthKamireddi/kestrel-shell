@@ -4,7 +4,7 @@
 use crate::app::{App, Message, Output};
 use crate::panels::{PanelKind, control};
 use crate::theme::tok;
-use crate::theme::{Scheme, size, text};
+use crate::theme::{Scheme, text};
 use crate::ui::{icon, label};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -35,15 +35,15 @@ pub fn view<'a>(
     let press = move |r| Message::ControlAt(control::Page::Main, id, r);
     if !app.config.bar.battery_percent {
         return vec![
-            crate::ui::control(iced::widget::container(glyph(size::ICON)).center(size::CONTROL))
-                .radius(size::CONTROL / 2.0)
+            crate::ui::control(iced::widget::container(glyph(tok::ICON)).center(tok::BAR_ITEM))
+                .radius(tok::BAR_ITEM / 2.0)
                 .bar(s, active)
                 .on_press_at(press)
                 .into(),
         ];
     }
     let content = row![
-        glyph(size::ICON),
+        glyph(tok::ICON),
         label(
             format!("{:.0}%", p.percent),
             text::SMALL,

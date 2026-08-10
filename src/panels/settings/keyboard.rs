@@ -82,7 +82,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
     rows.push(Some(
         control(
             row![
-                icon(Icon::Plus, 16.0, s.ink_dim),
+                icon(Icon::Plus, tok::ICON, s.ink_dim),
                 label("Add a layout", text::BODY, s.ink_dim)
             ]
             .spacing(tok::L)
@@ -91,7 +91,7 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         .padding([tok::NONE, tok::XL])
         .height(42)
         .width(Length::Fill)
-        .radius(size::ROW_RADIUS)
+        .radius(tok::R_ROW)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(msg(Message::LayoutsOpen(!st.layouts_open)))

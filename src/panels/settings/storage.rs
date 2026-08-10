@@ -65,7 +65,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         }
         if v.removable {
             actions = actions.push(
-                control(icon(Icon::Eject, 16.0, s.ink))
+                control(icon(Icon::Eject, tok::ICON, s.ink))
                     .padding(tok::S)
                     .radius(tok::FULL)
                     .kind(s, crate::ui::control::Kind::Ghost)
@@ -137,7 +137,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         control(
                             column![
                                 row![
-                                    icon(Icon::Folder, 16.0, s.ink_dim),
+                                    icon(Icon::Folder, tok::ICON, s.ink_dim),
                                     label(name, text::BODY, s.ink).width(Length::Fill),
                                     label(bytes_text(*n), text::SMALL, s.ink_dim),
                                 ]
@@ -151,7 +151,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                                         .height(3)
                                         .style(move |_| container::Style {
                                             background: Some(s.accent.into()),
-                                            border: iced::Border::default().rounded(2),
+                                            border: iced::Border::default().rounded(tok::FULL),
                                             ..container::Style::default()
                                         }),
                                     iced::widget::Space::new()

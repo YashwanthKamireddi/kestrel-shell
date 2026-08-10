@@ -36,7 +36,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .map(|e| {
             let ic: Element<'_, AppMessage> = match crate::services::icons::lookup(&e.icon) {
                 Some(p) => ui::image_file_faded(&p, 18.0, s.opacity),
-                None => icon(Icon::AppWindow, 16.0, s.ink_dim).into(),
+                None => icon(Icon::AppWindow, tok::ICON, s.ink_dim).into(),
             };
             let remove: Element<'_, AppMessage> = if e.user_only {
                 crate::ui::remove_button(s, msg(Message::StartupRemove(e.id.clone())))
@@ -68,7 +68,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
     rows.push(Some(
         control(
             row![
-                icon(Icon::Plus, 16.0, s.ink_dim),
+                icon(Icon::Plus, tok::ICON, s.ink_dim),
                 label("Add an app", text::BODY, s.ink_dim)
             ]
             .spacing(tok::L)
@@ -77,7 +77,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .padding([tok::NONE, tok::XL])
         .height(42)
         .width(Length::Fill)
-        .radius(size::ROW_RADIUS)
+        .radius(tok::R_ROW)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(msg(Message::StartupAddOpen(!st.startup_add)))
@@ -105,7 +105,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     .padding([tok::NONE, tok::L])
                     .height(36)
                     .width(Length::Fill)
-                    .radius(size::ROW_RADIUS)
+                    .radius(tok::R_ROW)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(msg(Message::StartupAdd(a.id.clone()))),

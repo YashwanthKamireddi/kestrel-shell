@@ -8,7 +8,7 @@ use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 
-pub const WIDTH: f32 = crate::theme::size::PANEL_S;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_S;
 
 /// An app's row: its icon (from its desktop entry) and its name.
 fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {
@@ -28,7 +28,7 @@ fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {
 fn group<'a>(s: Scheme, i: Icon, what: &'a str, apps: &[String]) -> Element<'a, AppMessage> {
     let mut c = column![
         row![
-            container(icon(i, 13.0, s.on_accent))
+            container(icon(i, tok::ICON_S, s.on_accent))
                 .center(20)
                 .style(move |_| container::Style {
                     background: Some(s.accent.into()),

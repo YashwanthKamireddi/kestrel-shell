@@ -9,12 +9,12 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Task};
 
-pub const WIDTH: f32 = crate::theme::size::PANEL_M;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum What {
@@ -153,7 +153,7 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
     control(
         container(
             column![
-                icon(i, 22.0, if on { s.on_accent } else { s.ink }),
+                icon(i, tok::ICON_XL, if on { s.on_accent } else { s.ink }),
                 label(name, text::SMALL, if on { s.on_accent } else { s.ink }),
             ]
             .spacing(tok::S)
@@ -163,7 +163,7 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
     )
     .padding([tok::L, tok::NONE])
     .width(Length::Fill)
-    .radius(size::CARD_RADIUS)
+    .radius(tok::R_CARD)
     .kind(
         s,
         if on {
@@ -243,7 +243,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .spacing(tok::M);
     let mut delays = row![
-        icon(Icon::Timer, 16.0, s.ink_dim),
+        icon(Icon::Timer, tok::ICON, s.ink_dim),
         Space::new().width(tok::XS)
     ]
     .spacing(tok::XXS)
@@ -263,7 +263,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // Recording: where its sound comes from.
     let sound = st.record.then(|| {
         let mut r = row![
-            icon(Icon::Volume2, 16.0, s.ink_dim),
+            icon(Icon::Volume2, tok::ICON, s.ink_dim),
             Space::new().width(tok::XS)
         ]
         .spacing(tok::XXS)
@@ -298,7 +298,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         body = body.push(r);
     }
     container(body.push(go).spacing(tok::L))
-        .padding(size::PANEL_PAD)
+        .padding(tok::PANEL_PAD)
         .width(Length::Fill)
         .into()
 }

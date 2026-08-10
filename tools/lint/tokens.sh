@@ -1,6 +1,6 @@
 #!/bin/sh
-# Design-kit check (docs/DESIGN.md): counts literal radii, paddings, gaps and colour triples
-# outside src/ui and src/theme. A count above the baseline fails; lower is progress (update the
+# Design-kit check (docs/DESIGN.md): counts literal radii, paddings, gaps, colour triples and
+# icon sizes outside src/ui and src/theme. A count above the baseline fails; lower is progress (update the
 # baseline with `tools/lint/tokens.sh --update` once panels have moved onto the kit).
 set -e
 cd "$(dirname "$0")/../.."
@@ -13,13 +13,15 @@ gaps=$(count 'Space::new\(\)\.(height|width)\([0-9][0-9.]*\)')
 alphas=$(count 'ink\.scale_alpha\(0\.[0-9]+')
 edges=$(count '(top|right|bottom|left): [0-9][0-9.]*,')
 colors=$(count '\.colors\(')
+icons=$(count '\b(icon|tray_icon_at)\([^;]*, [0-9]+\.[0-9]+[,)]')
 now="radius $radius
 padding $padding
 spacing $spacing
 edges $edges
 alphas $alphas
 gaps $gaps
-colors $colors"
+colors $colors
+icons $icons"
 base=tools/lint/tokens.baseline
 if [ "$1" = "--update" ]; then
     echo "$now" >"$base"

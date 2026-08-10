@@ -27,7 +27,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         row![
             icon(
                 battery_icon(p),
-                size::ICON,
+                tok::ICON,
                 if p.percent < 15.0 && !p.charging && !p.held {
                     s.bad
                 } else {
@@ -48,13 +48,13 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     } else {
         label_w("Quick settings", text::TITLE, s.ink, theme::MEDIUM).into()
     };
-    // Lined up with the tiles under it: the battery with their icon circles (10 px in), the
-    // lock glyph's right edge 10 px in from their right edge (its button pads it by 7).
+    // Lined up with the tiles under it: the battery with their icon circles, the lock glyph's
+    // right edge as far in from their right edge (its round button pads the glyph).
     let header = row![
         container(summary)
             .width(Length::Fill)
             .padding(iced::Padding {
-                left: 10.0,
+                left: ui::TILE_INSET,
                 ..iced::Padding::ZERO
             }),
         icon_button(
@@ -81,7 +81,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ]
     .spacing(tok::XXS)
     .padding(iced::Padding {
-        right: 3.0,
+        right: ui::TILE_INSET - (tok::BAR_ITEM - tok::ICON) / 2.0,
         ..iced::Padding::ZERO
     })
     .align_y(Alignment::Center);
@@ -188,9 +188,10 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         for item in &app.tray.items {
             let menu = item.clone();
             let mut c = ui::control(
-                container(crate::modules::tray_icon_at(s, item, 20.0)).center(size::CONTROL + 4.0),
+                container(crate::modules::tray_icon_at(s, item, tok::ICON_L))
+                    .center(tok::BAR_ITEM + 4.0),
             )
-            .radius((size::CONTROL + 4.0) / 2.0)
+            .radius((tok::BAR_ITEM + 4.0) / 2.0)
             .kind(s, crate::ui::control::Kind::Ghost);
             if let Some(o) = out {
                 c = c.on_right_press(AppMessage::TrayMenu(Some(menu), o, None));
@@ -200,7 +201,7 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         // A section like Notifications under it: its heading, then the icons on the tiles'
         // surface (bare, a lone icon floated in the panel and read as something stray).
-        let h = size::CONTROL + 12.0;
+        let h = tok::BAR_ITEM + 12.0;
         page = page.push(
             column![
                 container(label_w(
@@ -280,7 +281,7 @@ pub(super) fn level_row_to<'a>(
         },
     );
     let inner = row![
-        ui::control(container(icon(i, size::ICON, s.on_accent)).center(32))
+        ui::control(container(icon(i, tok::ICON, s.on_accent)).center(32))
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::OnAccent)
             .on_press(msg(on_icon)),
@@ -301,7 +302,7 @@ pub(super) fn level_row_to<'a>(
     // Every row keeps the details button's room, so the tracks all end at one line.
     match details {
         Trail::Bare => {}
-        Trail::Room => r = r.push(Space::new().width(size::CONTROL)),
+        Trail::Room => r = r.push(Space::new().width(tok::BAR_ITEM)),
         Trail::Open(d) => r = r.push(icon_button(s, Icon::ChevronRight, *d, false)),
     }
     r.into()

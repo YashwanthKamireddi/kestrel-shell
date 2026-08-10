@@ -185,7 +185,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
     };
     let mut out = row![ringed(
         now.is_none(),
-        container(icon(Icon::Image, 12.0, s.ink))
+        container(icon(Icon::Image, tok::ICON_XS, s.ink))
             .center(18)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::SELECTED * s.opacity).into()),

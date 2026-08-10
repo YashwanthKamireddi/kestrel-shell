@@ -118,7 +118,7 @@ pub(super) fn choice_row<'a>(
             row![
                 label(name, text::BODY, if on { s.accent } else { s.ink }).width(Length::Fill),
                 if on {
-                    Element::from(icon(Icon::Check, 16.0, s.accent))
+                    Element::from(icon(Icon::Check, tok::ICON, s.accent))
                 } else {
                     iced::widget::Space::new().into()
                 }
@@ -376,7 +376,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         for a in list {
             let ic: Element<'_, AppMessage> = match a.icon_path() {
                 Some(p) => ui::image_file_faded(&p, 20.0, s.opacity),
-                None => icon(Icon::AppWindow, 18.0, s.ink_dim).into(),
+                None => icon(Icon::AppWindow, tok::ICON_M, s.ink_dim).into(),
             };
             let key = format!("{}{}", if recording { "rec:" } else { "app:" }, a.name);
             let open = pick == Some(key.as_str());

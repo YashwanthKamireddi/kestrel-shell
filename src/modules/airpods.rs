@@ -2,8 +2,8 @@
 
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
+use crate::theme::Scheme;
 use crate::theme::tok;
-use crate::theme::{Scheme, size};
 use crate::ui::{self, Icon, icon};
 use iced::Element;
 use iced::widget::{container, stack};
@@ -27,7 +27,7 @@ fn pods<'a>(
 ) -> Option<Element<'a, Message>> {
     crate::panels::pods::device(app)?;
     let id = o.id;
-    let d = size::BAR - 6.0;
+    let d = tok::BAR - 6.0;
     let active = open == Some(PanelKind::Pods);
     let charge = app.pods.as_ref().and_then(|p| {
         Some(crate::services::airpods::Charge {
@@ -55,7 +55,7 @@ fn pods<'a>(
                 crate::theme::surface(s),
             ))
             .center(d),
-            container(icon(Icon::Headphones, 14.0, s.ink)).center(d),
+            container(icon(Icon::Headphones, tok::ICON_S, s.ink)).center(d),
         ])
         .width(d)
         .height(d)

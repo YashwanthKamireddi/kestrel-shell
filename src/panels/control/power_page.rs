@@ -30,11 +30,11 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let active = current == Some(p);
         list = list.push(list_row(
             s,
-            icon(i, size::ICON, if active { s.accent } else { s.ink }).into(),
+            icon(i, tok::ICON, if active { s.accent } else { s.ink }).into(),
             p.label().to_string(),
             Some(note.to_string()),
             if active {
-                icon(Icon::Check, size::ICON, s.accent).into()
+                icon(Icon::Check, tok::ICON, s.accent).into()
             } else {
                 Space::new().into()
             },

@@ -4,7 +4,7 @@ use crate::app::{App, Message, OSD_WIDTH, Output, TOAST_WIDTH};
 use crate::panels::{self, PanelKind};
 use crate::services::hyprland;
 use crate::theme::tok;
-use crate::theme::{Scheme, size, text};
+use crate::theme::{Scheme, text};
 use crate::ui::shape::{BarShape, Drop};
 use crate::ui::{self, label, label_w};
 use iced::widget::{Space, canvas, container, mouse_area, pin, row, stack};
@@ -24,12 +24,12 @@ pub fn card_rect(natural: f32, screen_w: f32) -> (f32, f32, f32, f32) {
         ((screen_w - TOAST_WIDTH) / 2.0).round(),
         GROWN_TOP,
         TOAST_WIDTH,
-        natural.max(size::BAR),
+        natural.max(tok::BAR),
     )
 }
 
 /// Where the floating pills end (they are `BAR - 6` tall, centred in the bar).
-pub const PILL_BOTTOM: f32 = size::BAR - 3.0;
+pub const PILL_BOTTOM: f32 = tok::BAR - 3.0;
 /// The floating pills' distance from the screen's sides.
 pub const PILL_MARGIN: f32 = 8.0;
 pub const SLOT_GAP: f32 = 2.0;
@@ -99,12 +99,12 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         x,
         width: w,
         height: h,
-        radius: size::PANEL_RADIUS,
-        join: size::JOIN,
+        radius: tok::R_PANEL,
+        join: tok::JOIN,
         flush_left: !pills && x <= t + 0.5,
         flush_right: !pills && x + w >= o.size.width - t - 0.5,
         floating: pills,
-        top: size::BAR + crate::ui::shape::FLOAT_GAP,
+        top: tok::BAR + crate::ui::shape::FLOAT_GAP,
     };
     // Pills float with a margin; the full bar runs to the frame.
     let edge = if pills { PILL_MARGIN } else { t };
@@ -153,11 +153,11 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         .toast_sheet
         .h
         .value
-        .max(if show_toasts { size::BAR - 6.0 } else { 0.0 });
+        .max(if show_toasts { tok::BAR - 6.0 } else { 0.0 });
     if show_toasts {
         let mut d = drop(grown_x, grown_w, grown_h);
         d.top = GROWN_TOP;
-        d.radius = ((size::BAR - 6.0) / 2.0).max(tok::R_PANEL.min(grown_h / 2.0));
+        d.radius = ((tok::BAR - 6.0) / 2.0).max(tok::R_PANEL.min(grown_h / 2.0));
         drops.push(d);
     }
     if show_osd {
@@ -168,7 +168,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     // toasts' and pop-ups' boxes, joined to the band where it is.
     let shape = canvas(BarShape {
         color: s.base.scale_alpha(panel_alpha(app)),
-        bar: size::BAR,
+        bar: tok::BAR,
         frame: t,
         corner: if overlay { 0.0 } else { app.frame().radius },
         band: !pills && !overlay,
@@ -222,12 +222,12 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             container(e)
                 .padding([0.0, margin])
                 .width(Length::Fill)
-                .height(size::BAR)
-                .center_y(size::BAR)
+                .height(tok::BAR)
+                .center_y(tok::BAR)
         };
         stack![layer(sides.into()), layer(middle)]
             .width(Length::Fill)
-            .height(size::BAR)
+            .height(tok::BAR)
             .into()
     });
 
@@ -250,7 +250,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 o,
                 0.0,
                 s.opacity,
-                Space::new().width(Length::Fill).height(size::BAR),
+                Space::new().width(Length::Fill).height(tok::BAR),
             );
             return stack![band, shape, bar]
                 .width(Length::Fill)
@@ -273,7 +273,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                     crate::motion::range(k, 0.4, 1.0)
                 },
             ),
-            bar: size::BAR,
+            bar: tok::BAR,
             frame: t,
             corner: 0.0,
             band: false,
@@ -339,7 +339,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 ui::reveal(content, width, panel_drop.map_or(p.h.value, |d| d.2))
                     .on_measure(move |sz| Message::Measured(kind, sz)),
             )
-            .position(Point::new(x, size::BAR + top_gap))
+            .position(Point::new(x, tok::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
@@ -347,7 +347,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     }
     if show_toasts {
         // Its content comes in as the island reaches its full width (cut while narrower).
-        let w0 = size::BAR;
+        let w0 = tok::BAR;
         let a = ((grown_w - w0) / (TOAST_WIDTH - w0))
             .clamp(0.0, 1.0)
             .powi(2);
@@ -386,7 +386,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             )
             .offset((1.0 - a) * 4.0)
             .on_measure(Message::MeasuredOsd))
-            .position(Point::new(osd_x, size::BAR + top_gap))
+            .position(Point::new(osd_x, tok::BAR + top_gap))
             .width(Length::Fill)
             .height(Length::Fill)
             .into(),
@@ -431,7 +431,7 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
             words = words.push(label(sub.clone(), text::SMALL, s.ink_dim));
         }
         return container(
-            row![ui::icon(osd.icon, 18.0, s.ink), words]
+            row![ui::icon(osd.icon, tok::ICON_M, s.ink), words]
                 .spacing(tok::L)
                 .align_y(Alignment::Center),
         )
@@ -447,7 +447,7 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
     let top = if is_volume(osd.icon) { top_volume } else { 1.0 };
     let track = ui::level_bar(s, osd.value, top, track_w, 22.0);
     row![
-        ui::icon(osd.icon, 18.0, s.ink),
+        ui::icon(osd.icon, tok::ICON_M, s.ink),
         container(track).center_y(18),
         container(label(
             format!("{:.0}", osd.value * 100.0),
@@ -553,10 +553,10 @@ fn section<'a>(
         let single = items.len() == 1;
         let pill = container(row(items).spacing(tok::XS).align_y(Alignment::Center))
             .padding([0, if single { 0 } else { 4 }])
-            .height(size::BAR - 6.0)
-            .center_y(size::BAR - 6.0)
-            .style(move |_| pill_style(material, s, (size::BAR - 6.0) / 2.0));
-        frosted(app, o, (size::BAR - 6.0) / 2.0, s.opacity, pill)
+            .height(tok::BAR - 6.0)
+            .center_y(tok::BAR - 6.0)
+            .style(move |_| pill_style(material, s, (tok::BAR - 6.0) / 2.0));
+        frosted(app, o, (tok::BAR - 6.0) / 2.0, s.opacity, pill)
     });
     row(pills_row)
         .spacing(tok::S)
@@ -637,10 +637,10 @@ pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
                 crate::config::Material::Black => Some(s.base.into()),
                 crate::config::Material::Frosted => None,
             },
-            border: iced::Border::default().rounded(size::PANEL_RADIUS),
+            border: iced::Border::default().rounded(tok::R_PANEL),
             ..container::Style::default()
         });
-    let card = frosted(app, o, size::PANEL_RADIUS, s.opacity, card);
+    let card = frosted(app, o, tok::R_PANEL, s.opacity, card);
     ui::reveal(card, width, p.h.value.max(1.0))
         .on_measure(move |sz| Message::Measured(kind, sz))
         .into()

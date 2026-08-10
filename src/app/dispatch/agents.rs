@@ -23,7 +23,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             let show = app.show(
                 PanelKind::Auth,
                 id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, size::BAR)),
+                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
             );
             Task::batch([show, ask])
         }
@@ -59,7 +59,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             let show = app.show(
                 PanelKind::Auth,
                 id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, size::BAR)),
+                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
             );
             Task::batch([show, ask])
         }
@@ -100,7 +100,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             let show = app.show(
                 PanelKind::Auth,
                 id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, size::BAR)),
+                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
             );
             Task::batch([show, ask])
         }
@@ -134,7 +134,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             let show = app.show(
                 PanelKind::Files,
                 id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, size::BAR)),
+                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
             );
             Task::batch([begin, show])
         }

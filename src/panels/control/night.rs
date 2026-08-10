@@ -21,7 +21,7 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let v = ((k as f32 - WARMEST) / (COOLEST - WARMEST)).clamp(0.0, 1.0);
     // The track runs from candle to daylight, so the slider shows what it does.
     let inner = row![
-        container(icon(Icon::Sunset, size::ICON, s.on_accent)).center(32),
+        container(icon(Icon::Sunset, tok::ICON, s.on_accent)).center(32),
         Space::new().width(Length::Fill),
         label(
             format!("{k} K"),
@@ -52,7 +52,7 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             let auto = app.config.night_light_schedule;
             list_row(
                 s,
-                icon(Icon::Sunset, size::ICON, s.ink_dim).into(),
+                icon(Icon::Sunset, tok::ICON, s.ink_dim).into(),
                 "Sunset to sunrise",
                 Some(format!("{} – {}", w.sunset, w.sunrise)),
                 switch(s, auto, msg(Message::Schedule(!auto))),

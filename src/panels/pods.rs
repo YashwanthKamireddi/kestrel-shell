@@ -10,7 +10,7 @@ use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row, stack};
 use iced::{Alignment, Color, Element, Length};
 
-pub const WIDTH: f32 = crate::theme::size::PANEL_S;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_S;
 
 /// The connected AirPods, if any.
 pub fn device(app: &App) -> Option<&bluetooth::Device> {
@@ -91,7 +91,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
     }
     container(column![header, list].spacing(tok::XL).width(Length::Fill))
-        .padding(crate::theme::size::PANEL_PAD)
+        .padding(crate::theme::tok::PANEL_PAD)
         .into()
 }
 
@@ -132,7 +132,7 @@ fn part<'a>(
             .spacing(tok::XXS)
             .align_y(Alignment::Center);
             if c.charging {
-                r = r.push(icon(Icon::Zap, 12.0, s.good));
+                r = r.push(icon(Icon::Zap, tok::ICON_XS, s.good));
             }
             r.into()
         }
@@ -140,7 +140,12 @@ fn part<'a>(
     };
     let on = charge.is_some();
     row![
-        container(icon(glyph, 20.0, if on { s.ink } else { s.ink_faint })).center(26),
+        container(icon(
+            glyph,
+            tok::ICON_L,
+            if on { s.ink } else { s.ink_faint }
+        ))
+        .center(26),
         label_w(
             name,
             text::BODY,

@@ -7,7 +7,7 @@ use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::config::{self, BarStyle};
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
 use iced::{Alignment, Color, Element, Length, Task};
@@ -2176,7 +2176,7 @@ fn group<'a>(
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-            border: iced::Border::default().rounded(size::CARD_RADIUS),
+            border: iced::Border::default().rounded(tok::R_CARD),
             ..container::Style::default()
         });
     Some(match title {
@@ -2258,7 +2258,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // Sidebar: the pages, the open one on a soft neutral fill.
     let search = container(
         row![
-            icon(Icon::Search, 15.0, s.ink_dim),
+            icon(Icon::Search, tok::ICON, s.ink_dim),
             text_input("Search", &app.panels.settings.query)
                 .id(SEARCH_ID.clone())
                 .on_input(|q| msg(Message::Query(q)))
@@ -2313,7 +2313,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         side = side.push(
             control(
                 row![
-                    icon(p.icon(), 16.0, fg),
+                    icon(p.icon(), tok::ICON, fg),
                     label_w(
                         p.name(),
                         text::BODY,
@@ -2327,7 +2327,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .padding([tok::NONE, tok::L])
             .height(36)
             .width(Length::Fill)
-            .radius(size::ROW_RADIUS)
+            .radius(tok::R_ROW)
             .kind(
                 s,
                 if on {
@@ -2398,9 +2398,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 c = c.push(
                     control(
                         row![
-                            icon(p.icon(), 16.0, s.ink_dim),
+                            icon(p.icon(), tok::ICON, s.ink_dim),
                             label_w(p.name(), text::BODY, s.ink, theme::MEDIUM).width(Length::Fill),
-                            icon(Icon::ChevronRight, 14.0, s.ink_faint),
+                            icon(Icon::ChevronRight, tok::ICON_S, s.ink_faint),
                         ]
                         .spacing(tok::L)
                         .align_y(Alignment::Center),
@@ -2466,7 +2466,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
 fn stepper<'a>(s: Scheme, n: i64) -> Element<'a, AppMessage> {
     let arrow = |i: Icon, m: Message| {
-        control(container(icon(i, 16.0, s.ink)).center(28))
+        control(container(icon(i, tok::ICON, s.ink)).center(28))
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(msg(m))
@@ -2604,7 +2604,7 @@ fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Ap
         .padding([tok::NONE, tok::L])
         .height(34)
         .width(Length::Fill)
-        .radius(size::ROW_RADIUS)
+        .radius(tok::R_ROW)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(msg(m))

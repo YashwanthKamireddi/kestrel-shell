@@ -327,7 +327,7 @@ fn content_box(img: &::image::RgbaImage) -> (u32, u32, u32, u32) {
 }
 
 /// Panel width: room for a large cover beside the text.
-pub const WIDTH: f32 = crate::theme::size::PANEL_M;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 /// The panel's width with nothing playing.
 pub const EMPTY_WIDTH: f32 = 240.0;
 
@@ -457,10 +457,17 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
 
     let side = |i: Icon, m: Option<AppMessage>| {
-        control(container(icon(i, 17.0, if m.is_some() { s.ink } else { s.ink_faint })).center(36))
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press_maybe(m)
+        control(
+            container(icon(
+                i,
+                tok::ICON_M,
+                if m.is_some() { s.ink } else { s.ink_faint },
+            ))
+            .center(36),
+        )
+        .radius(tok::FULL)
+        .kind(s, crate::ui::control::Kind::Ghost)
+        .on_press_maybe(m)
     };
     let play = control(
         container(icon(
@@ -511,7 +518,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         s.fade(s.base)
     };
     container(top)
-        .padding(crate::theme::size::PANEL_PAD)
+        .padding(crate::theme::tok::PANEL_PAD)
         .style(move |_| container::Style {
             background: tint.map(|deep| {
                 iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2 * 3.0))
@@ -519,7 +526,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     .add_stop(1.0, base)
                     .into()
             }),
-            border: iced::Border::default().rounded(crate::theme::size::PANEL_RADIUS),
+            border: iced::Border::default().rounded(crate::theme::tok::R_PANEL),
             ..container::Style::default()
         })
         .into()

@@ -5,7 +5,7 @@ use crate::app::{App, Message as AppMessage};
 use crate::services::icons;
 use crate::services::notifications::{self, Image, Notification, Reason};
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row};
 use iced::{Alignment, Element, Length, Task};
@@ -400,7 +400,7 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
     };
     let trail = row![
         label(ago(n.time), text::CAPTION, s.ink_faint),
-        control(icon(Icon::X, 11.0, s.ink_dim))
+        control(icon(Icon::X, tok::ICON_XS, s.ink_dim))
             .padding(tok::XS)
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Tonal)
@@ -547,7 +547,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         // Compact: one quiet line (a big box with a lone bell looked like a glitch).
         return container(
             row![
-                icon(Icon::Bell, 14.0, s.ink_faint),
+                icon(Icon::Bell, tok::ICON_S, s.ink_faint),
                 label("No notifications", text::SMALL, s.ink_dim)
             ]
             .spacing(tok::S)
@@ -561,11 +561,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .panel
         .as_ref()
         .and_then(|p| app.output(p.output))
-        .map_or(f32::INFINITY, |o| o.size.height - size::BAR - 2.0 * tok::XL)
+        .map_or(f32::INFINITY, |o| o.size.height - tok::BAR - 2.0 * tok::XL)
         // A compact panel: about five cards, then it scrolls (it ran down the whole screen).
         .min(LIST_MAX);
     container(section(app, s, room))
-        .padding(size::PANEL_PAD)
+        .padding(tok::PANEL_PAD)
         .into()
 }
 
@@ -576,7 +576,7 @@ const FADE: f32 = 36.0;
 const LIST_MAX: f32 = 380.0;
 
 /// The list's width (the panel less its padding).
-const LIST_W: f32 = size::PANEL_M - 2.0 * size::PANEL_PAD;
+const LIST_W: f32 = tok::PANEL_M - 2.0 * tok::PANEL_PAD;
 
 /// Notifications inside the control centre: one grouped list, an app's messages folded into
 /// its newest card (DMS); it scrolls in `room` (the tiles above stay still). Nothing at all
@@ -630,7 +630,7 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             control(label("Show less", text::SMALL, s.ink_dim))
                 .pill(s, crate::ui::control::Pill::Quiet)
                 .on_press(msg(Message::Open(n.app.clone(), false))),
-            control(icon(Icon::X, 12.0, s.ink_dim))
+            control(icon(Icon::X, tok::ICON_XS, s.ink_dim))
                 .padding(tok::XS + tok::XXS)
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Tonal)

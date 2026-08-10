@@ -132,7 +132,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             control(
                 row![
                     label(idle_time(*secs), text::SMALL, s.ink),
-                    icon(Icon::ChevronDown, 14.0, s.ink_dim)
+                    icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
                 ]
                 .spacing(tok::S)
                 .align_y(Alignment::Center),
@@ -157,7 +157,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                             label(idle_time(t), text::BODY, if on { s.accent } else { s.ink })
                                 .width(Length::Fill),
                             if on {
-                                Element::from(icon(Icon::Check, 16.0, s.accent))
+                                Element::from(icon(Icon::Check, tok::ICON, s.accent))
                             } else {
                                 iced::widget::Space::new().into()
                             }

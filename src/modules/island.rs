@@ -6,7 +6,7 @@ use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::panels::media;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{self, icon, label, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -83,7 +83,7 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
 pub const BUBBLE_INSET: f32 = 6.0;
 
 /// Diameter of the music bubble: the same height as the pills, so they line up.
-pub const BUBBLE: f32 = size::BAR - 6.0;
+pub const BUBBLE: f32 = tok::BAR - 6.0;
 
 /// The music bubble: a black pill circle with the cover inside, dimmed while paused. Opens the
 /// media panel. None when there is no player.
@@ -150,7 +150,7 @@ pub fn bar<'a>(
     if let Some(f) = &app.flash {
         let lead: Element<'a, Message> = match &f.thumb {
             Some(h) => ui::cover(h.clone(), 34.0, 20.0, 4.0),
-            None => icon(f.icon, 14.0, s.accent).into(),
+            None => icon(f.icon, tok::ICON_S, s.accent).into(),
         };
         let mut words = row![label_w(
             f.title.clone(),
@@ -213,7 +213,7 @@ pub fn bar<'a>(
     {
         content = content.push(
             row![
-                icon(ui::weather_icon(w), 15.0, ui::weather_tint(w)),
+                icon(ui::weather_icon(w), tok::ICON, ui::weather_tint(w)),
                 label_w(
                     app.temp(w.temp),
                     text::SMALL,
@@ -244,7 +244,7 @@ fn notifications_mark<'a>(
     // jumped under the click): the number in a small round badge, the accent while unread,
     // quiet once seen; a crossed bell in Do not disturb.
     let content: Element<'a, Message> = if app.dnd {
-        icon(crate::ui::Icon::BellOff, 13.0, s.ink_dim).into()
+        icon(crate::ui::Icon::BellOff, tok::ICON_S, s.ink_dim).into()
     } else {
         let n = app.notifications.len();
         let unread = app.unseen > 0;
@@ -287,7 +287,7 @@ fn notifications_mark<'a>(
                 id,
                 iced::Rectangle::new(
                     iced::Point::new(w / 2.0, 0.0),
-                    iced::Size::new(0.0, size::BAR),
+                    iced::Size::new(0.0, tok::BAR),
                 ),
             ))
             .on_right_press(Message::Panel(crate::panels::Message::Control(
@@ -301,7 +301,7 @@ fn notifications_mark<'a>(
 fn osd_row<'a>(osd: &crate::app::Osd, s: Scheme, top_volume: f32) -> Element<'a, Message> {
     if let Some(title) = &osd.text {
         let mut r = row![
-            icon(osd.icon, 15.0, s.accent),
+            icon(osd.icon, tok::ICON, s.accent),
             label_w(
                 ui::fit(title, text::SMALL, 200.0),
                 text::SMALL,
@@ -367,9 +367,9 @@ fn finish_with<'a>(
     action: Message,
 ) -> Element<'a, Message> {
     let id = o.id;
-    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
+    let inner = ui::morph::morph(content, o.island_w.value, tok::BAR_ITEM)
         .on_measure(move |w| Message::IslandMeasured(id, w));
-    let h = size::BAR - 6.0;
+    let h = tok::BAR - 6.0;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)
@@ -388,10 +388,10 @@ fn finish_to<'a>(
     kind: PanelKind,
 ) -> Element<'a, Message> {
     let id = o.id;
-    let inner = ui::morph::morph(content, o.island_w.value, size::CONTROL)
+    let inner = ui::morph::morph(content, o.island_w.value, tok::BAR_ITEM)
         .on_measure(move |w| Message::IslandMeasured(id, w));
     // As tall as a pill, so in the pill style it is the pill.
-    let h = size::BAR - 6.0;
+    let h = tok::BAR - 6.0;
     ui::control(inner)
         .padding([tok::NONE, tok::L])
         .height(h)

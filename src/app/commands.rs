@@ -99,13 +99,13 @@ impl App {
                     return panels::overview::prepare(
                         self,
                         id,
-                        Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, size::BAR)),
+                        Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
                     );
                 }
                 let shown = self.toggle(
                     kind,
                     id,
-                    Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, size::BAR)),
+                    Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
                 );
                 // "sound" (or "mixer") is the control centre opened on its Sound page.
                 if matches!(name, "sound" | "mixer") {

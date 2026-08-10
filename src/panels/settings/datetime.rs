@@ -87,7 +87,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .padding([tok::NONE, tok::L])
                 .height(34)
                 .width(Length::Fill)
-                .radius(size::ROW_RADIUS)
+                .radius(tok::R_ROW)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(msg(Message::Zone(z.clone()))),

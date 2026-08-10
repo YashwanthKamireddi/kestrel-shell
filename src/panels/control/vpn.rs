@@ -51,20 +51,24 @@ pub(super) fn summary<'a>(
     sub: String,
 ) -> Element<'a, AppMessage> {
     row![
-        container(icon(i, 22.0, if on { s.on_accent } else { s.ink_dim }))
-            .center(44)
-            .style(move |_| container::Style {
-                background: Some(
-                    if on {
-                        s.accent
-                    } else {
-                        s.ink.scale_alpha(tok::FILL * s.opacity)
-                    }
-                    .into()
-                ),
-                border: iced::Border::default().rounded(tok::FULL),
-                ..container::Style::default()
-            }),
+        container(icon(
+            i,
+            tok::ICON_XL,
+            if on { s.on_accent } else { s.ink_dim }
+        ))
+        .center(44)
+        .style(move |_| container::Style {
+            background: Some(
+                if on {
+                    s.accent
+                } else {
+                    s.ink.scale_alpha(tok::FILL * s.opacity)
+                }
+                .into()
+            ),
+            border: iced::Border::default().rounded(tok::FULL),
+            ..container::Style::default()
+        }),
         column![
             label_w(title, text::BODY, s.ink, theme::SEMIBOLD),
             label(sub, text::CAPTION, s.ink_dim),
@@ -140,14 +144,14 @@ pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s,
             icon(
                 if active { Icon::CircleDot } else { Icon::Globe },
-                size::ICON,
+                tok::ICON,
                 if active { s.accent } else { s.ink_dim },
             )
             .into(),
             name.to_string(),
             Some(note.to_string()),
             if active {
-                icon(Icon::Check, size::ICON, s.accent).into()
+                icon(Icon::Check, tok::ICON, s.accent).into()
             } else {
                 Space::new().into()
             },
@@ -287,16 +291,11 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let none = !exits.iter().any(|p| p.exit_node);
         let mut list = column![list_row(
             s,
-            icon(
-                Icon::Laptop,
-                size::ICON,
-                if none { s.accent } else { s.ink }
-            )
-            .into(),
+            icon(Icon::Laptop, tok::ICON, if none { s.accent } else { s.ink }).into(),
             "None".to_string(),
             Some("Internet goes out from here".into()),
             if none {
-                icon(Icon::Check, size::ICON, s.accent).into()
+                icon(Icon::Check, tok::ICON, s.accent).into()
             } else {
                 Space::new().into()
             },
@@ -309,14 +308,14 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 s,
                 icon(
                     Icon::Server,
-                    size::ICON,
+                    tok::ICON,
                     if p.exit_node { s.accent } else { s.ink },
                 )
                 .into(),
                 p.name.clone(),
                 Some(if p.online { "Online" } else { "Offline" }.to_string()),
                 if p.exit_node {
-                    icon(Icon::Check, size::ICON, s.accent).into()
+                    icon(Icon::Check, tok::ICON, s.accent).into()
                 } else {
                     Space::new().into()
                 },
@@ -354,7 +353,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         };
         list = list.push(list_row(
             s,
-            icon(i, size::ICON, if p.online { s.ink } else { s.ink_faint }).into(),
+            icon(i, tok::ICON, if p.online { s.ink } else { s.ink_faint }).into(),
             p.name.clone(),
             Some(sub),
             trailing,

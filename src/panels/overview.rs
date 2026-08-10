@@ -507,7 +507,7 @@ fn card<'a>(
                 .center_y(bh)
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(tok::FILL * alpha * s.opacity).into()),
-                    border: iced::Border::default().rounded(7),
+                    border: iced::Border::default().rounded(tok::R_CONTROL),
                     ..container::Style::default()
                 })
                 .into(),
@@ -521,9 +521,9 @@ fn card<'a>(
                     .height(bh)
                     .style(move |_| container::Style {
                         border: iced::Border {
-                            color: s.ink.scale_alpha(0.55 * s.opacity),
+                            color: s.ink.scale_alpha(tok::RING * s.opacity),
                             width: 1.5,
-                            radius: 7.0.into(),
+                            radius: tok::R_CONTROL.into(),
                         },
                         ..container::Style::default()
                     }),
@@ -532,7 +532,7 @@ fn card<'a>(
         let tile = control(tile)
             .width(bw)
             .height(bh)
-            .radius(7.0)
+            .radius(tok::R_CONTROL)
             .no_press_scale()
             .on_enter(msg(Message::Hover(w.address.clone())))
             .on_exit(msg(Message::Unhover(w.address.clone())))

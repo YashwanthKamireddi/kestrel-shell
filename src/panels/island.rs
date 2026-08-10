@@ -40,7 +40,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
         } else {
             s.ink_faint
         };
-        control(container(icon(i, 16.0, fg)).center(32))
+        control(container(icon(i, tok::ICON, fg)).center(32))
             .radius(tok::FULL)
             .kind(
                 s,

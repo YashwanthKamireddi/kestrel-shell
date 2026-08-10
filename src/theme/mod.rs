@@ -303,17 +303,14 @@ pub mod tok {
     pub const FILL: f32 = 0.08;
     /// A fill that must read against a tonal one (an icon's circle on a card).
     pub const FILL_STRONG: f32 = 0.10;
+    /// A selection ring's ink (the overview's chosen window: neutral, never a colour).
+    pub const RING: f32 = 0.55;
 
     // Motion, in seconds.
     pub const HOVER_IN: f32 = 0.07;
     pub const HOVER_OUT: f32 = 0.12;
-}
 
-pub const MEDIUM: font::Weight = font::Weight::Medium;
-pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
-
-/// Spacing and shape.
-pub mod size {
+    // Surfaces.
     /// The only panel widths (Apple-style: a few fixed sizes, not one per panel): a small menu
     /// (power, tray, privacy, AirPods), a panel (control centre, dashboard, weather, music,
     /// capture, system), the launcher, and the wide ones (clipboard, shortcuts, files).
@@ -321,18 +318,30 @@ pub mod size {
     pub const PANEL_M: f32 = 400.0;
     pub const PANEL_L: f32 = 560.0;
     pub const PANEL_XL: f32 = 860.0;
-    pub const BAR: f32 = 40.0;
-    pub const CONTROL: f32 = 30.0;
-    pub const PANEL_RADIUS: f32 = 24.0;
+    /// A panel's inner padding (a card inside it is R_PANEL − PANEL_PAD = R_CARD round).
     pub const PANEL_PAD: f32 = 12.0;
+    pub const BAR: f32 = 40.0;
+    /// A round item in the bar (a status icon, the tray).
+    pub const BAR_ITEM: f32 = 30.0;
     /// Concave curve where a panel leaves the bar.
     pub const JOIN: f32 = 16.0;
-    pub const CARD_RADIUS: f32 = PANEL_RADIUS - PANEL_PAD;
-    pub const ROW_RADIUS: f32 = 10.0;
-    pub const CONTROL_RADIUS: f32 = 8.0;
+
+    // Icons: one scale.
+    pub const ICON_XS: f32 = 12.0;
+    pub const ICON_S: f32 = 14.0;
     pub const ICON: f32 = 16.0;
-    pub const ICON_TILE: f32 = 18.0;
+    pub const ICON_M: f32 = 18.0;
+    pub const ICON_L: f32 = 20.0;
+    pub const ICON_XL: f32 = 22.0;
+    pub const ICON_XXL: f32 = 28.0;
+    /// The one big glyph of an empty or waiting panel's centre.
+    pub const ICON_HERO: f32 = 40.0;
+    /// The weather panel's condition, beside the temperature it goes with.
+    pub const ICON_DISPLAY: f32 = 52.0;
 }
+
+pub const MEDIUM: font::Weight = font::Weight::Medium;
+pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 
 #[cfg(test)]
 mod tests {

@@ -71,7 +71,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s,
             ui::breathe::icon_or(
                 device_icon(&d.icon),
-                size::ICON,
+                tok::ICON,
                 if busy.is_some() || d.connected {
                     s.accent
                 } else {
@@ -127,7 +127,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s,
             ui::breathe::icon_or(
                 device_icon(&d.icon),
-                size::ICON,
+                tok::ICON,
                 if pairing { s.accent } else { s.ink_dim },
                 pairing,
             ),

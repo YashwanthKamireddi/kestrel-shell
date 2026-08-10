@@ -12,7 +12,7 @@ pub mod smooth;
 pub mod snap;
 pub mod swipe;
 
-use crate::theme::{self, Scheme, size};
+use crate::theme::{self, Scheme, tok};
 use iced::widget::{Space, Text, container, row, text};
 use iced::{Alignment, Color, Element, Length, font};
 
@@ -159,9 +159,12 @@ pub fn search_field<'a, M: Clone + 'a>(
         input = input.on_submit(m);
     }
     container(
-        row![icon(Icon::Search, 18.0, s.ink_dim), input]
-            .spacing(crate::theme::tok::XS)
-            .align_y(Alignment::Center),
+        row![
+            icon(Icon::Search, crate::theme::tok::ICON_M, s.ink_dim),
+            input
+        ]
+        .spacing(crate::theme::tok::XS)
+        .align_y(Alignment::Center),
     )
     .padding([crate::theme::tok::NONE, crate::theme::tok::L])
     .height(44)
@@ -208,8 +211,8 @@ pub fn icon_button_in<'a, M: Clone + 'static>(
     } else {
         Color::TRANSPARENT
     };
-    control(container(icon(i, size::ICON, tint)).center(Length::Fixed(size::CONTROL)))
-        .radius(size::CONTROL / 2.0)
+    control(container(icon(i, tok::ICON, tint)).center(Length::Fixed(tok::BAR_ITEM)))
+        .radius(tok::BAR_ITEM / 2.0)
         .colors(rest, if active { rest } else { s.hover() }, s.raised_press)
         .on_press(on_press)
 }
@@ -219,7 +222,7 @@ pub fn icon_button_in<'a, M: Clone + 'static>(
 /// space alone (design call, 2026-11-12).
 pub fn card<'a, M: 'a>(_s: Scheme, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
     container(content)
-        .padding(size::PANEL_PAD)
+        .padding(tok::PANEL_PAD)
         .width(Length::Fill)
         .into()
 }
@@ -260,6 +263,9 @@ pub const TILE_H: f32 = 60.0;
 /// A tile: a calm rounded card, an icon in a circle that fills with the accent when the thing
 /// is on, its name and state. No chevron to aim for: the circle switches it, the rest of the
 /// card opens its page.
+/// Where a tile's icon circle starts, from the tile's left edge (what lines up with it).
+pub const TILE_INSET: f32 = 11.0;
+
 pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
     let Tile {
         icon: i,
@@ -277,7 +283,7 @@ pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
     } else {
         (s.ink.scale_alpha(0.1 * s.opacity), s.ink)
     };
-    let circle = control(container(icon(i, size::ICON_TILE, dot_fg)).center(DOT))
+    let circle = control(container(icon(i, tok::ICON_M, dot_fg)).center(DOT))
         .radius(DOT / 2.0)
         .colors(
             dot_bg,
@@ -314,7 +320,7 @@ pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
             top: 0.0,
             right: 12.0,
             bottom: 0.0,
-            left: 11.0,
+            left: TILE_INSET,
         })
         .height(TILE_H)
         .width(Length::Fill)
@@ -409,7 +415,7 @@ pub fn list_row<'a, M: Clone + 'static>(
     .padding([0, 12])
     .height(44)
     .width(Length::Fill)
-    .radius(size::ROW_RADIUS)
+    .radius(tok::R_ROW)
     // No box behind a row: the selected one (the network in use) is told by its name in the
     // accent; the pointer only lifts a row faintly.
     .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
@@ -432,7 +438,7 @@ pub fn subpage_header<'a, M: Clone + 'static>(
     ]
     .spacing(8)
     .align_y(Alignment::Center)
-    .height(size::CONTROL + 4.0)
+    .height(tok::BAR_ITEM + 4.0)
     .into()
 }
 
@@ -491,7 +497,7 @@ pub fn level_bar<'a, M: 'a>(
 /// The × at the end of a row that removes it (a startup app, a layout, a shortcut, a device, a
 /// clipboard item): one size and look everywhere, a 28 px ghost circle.
 pub fn remove_button<'a, M: Clone + 'a>(s: crate::theme::Scheme, on: M) -> Element<'a, M> {
-    control(icon(Icon::X, crate::theme::size::ICON, s.ink_dim))
+    control(icon(Icon::X, crate::theme::tok::ICON, s.ink_dim))
         .padding(crate::theme::tok::S)
         .radius(crate::theme::tok::FULL)
         .kind(s, control::Kind::Ghost)
@@ -546,7 +552,7 @@ pub fn empty_reason<'a, M: 'a>(s: Scheme, why: String, height: f32) -> Element<'
 /// Where a list or picture would be and there is nothing (yet): only a faint icon of what
 /// belongs there. No words: "Nothing here" labels were the user's first rule (2026-11-13).
 pub fn empty<'a, M: 'static>(s: Scheme, i: Icon) -> Element<'a, M> {
-    container(icon(i, 22.0, s.ink_faint))
+    container(icon(i, crate::theme::tok::ICON_XL, s.ink_faint))
         .center_x(Length::Fill)
         .padding([24, 0])
         .into()
@@ -557,7 +563,7 @@ pub fn empty<'a, M: 'static>(s: Scheme, i: Icon) -> Element<'a, M> {
 pub fn waiting<'a, M: 'a>(s: Scheme, i: Icon, msg: impl text::IntoFragment<'a>) -> Element<'a, M> {
     container(
         iced::widget::column![
-            icon(i, 22.0, s.ink_faint),
+            icon(i, crate::theme::tok::ICON_XL, s.ink_faint),
             label(msg, theme::text::SMALL, s.ink_dim)
         ]
         .spacing(8)

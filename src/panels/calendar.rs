@@ -3,7 +3,7 @@
 use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon_button, label, label_w};
 use chrono::{Datelike, Duration, NaiveDate};
 use iced::widget::{Space, column, container, row};
@@ -76,7 +76,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         theme::MEDIUM,
     ))
     .padding([tok::XS, tok::M])
-    .radius(size::CONTROL_RADIUS)
+    .radius(tok::R_CONTROL)
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(msg(Message::Today));
 

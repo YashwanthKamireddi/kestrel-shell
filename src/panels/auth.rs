@@ -15,7 +15,7 @@ use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{column, container, row, text_input};
 use iced::{Alignment, Element, Length};
 
-pub const WIDTH: f32 = crate::theme::size::PANEL_M;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 
 #[derive(Default)]
 pub struct State {
@@ -238,7 +238,7 @@ pub fn view<M: Clone + 'static>(st: &State, s: Scheme, msg: fn(Message) -> M) ->
         };
     };
     let head = row![
-        container(icon(Icon::Lock, 20.0, s.ink))
+        container(icon(Icon::Lock, tok::ICON_L, s.ink))
             .center(40)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
@@ -332,7 +332,7 @@ fn bt_view<'a, M: Clone + 'static>(
         bluetooth::Ask::Done(_) => return iced::widget::Space::new().into(),
     };
     let head = row![
-        container(icon(Icon::Bluetooth, 20.0, s.ink))
+        container(icon(Icon::Bluetooth, tok::ICON_L, s.ink))
             .center(40)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),
@@ -412,7 +412,7 @@ fn wifi_view<'a, M: Clone + 'static>(
     msg: fn(Message) -> M,
 ) -> Element<'a, M> {
     let head = row![
-        container(icon(Icon::Wifi, 20.0, s.ink))
+        container(icon(Icon::Wifi, tok::ICON_L, s.ink))
             .center(40)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL_STRONG * s.opacity).into()),

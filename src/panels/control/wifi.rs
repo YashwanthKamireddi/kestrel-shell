@@ -52,7 +52,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let trailing: Element<'_, AppMessage> = if net.active || net.known {
             info_button(s, msg(Message::NetworkInfo(net.ssid.clone())))
         } else if net.secure {
-            icon(Icon::Lock, 14.0, s.ink_faint).into()
+            icon(Icon::Lock, tok::ICON_S, s.ink_faint).into()
         } else {
             Space::new().into()
         };
@@ -60,7 +60,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             s,
             ui::breathe::icon_or(
                 strength_icon(net.strength),
-                size::ICON,
+                tok::ICON,
                 if busy.is_some() || net.active {
                     s.accent
                 } else {
@@ -109,7 +109,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             for k in away {
                 list = list.push(list_row(
                     s,
-                    icon(Icon::Wifi, size::ICON, s.ink_faint).into(),
+                    icon(Icon::Wifi, tok::ICON, s.ink_faint).into(),
                     k.ssid.clone(),
                     None,
                     info_button(s, msg(Message::NetworkInfo(k.ssid.clone()))),
@@ -120,7 +120,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         list = list.push(list_row(
             s,
-            icon(Icon::Plus, size::ICON, s.ink_dim).into(),
+            icon(Icon::Plus, tok::ICON, s.ink_dim).into(),
             "Other network…",
             None,
             Space::new().into(),
@@ -145,7 +145,7 @@ pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, AppMessage> {
 
 /// The round "i" at the end of a row: opens its details.
 pub(super) fn info_button<'a>(s: Scheme, m: AppMessage) -> Element<'a, AppMessage> {
-    crate::ui::control(icon(Icon::Info, 18.0, s.ink_dim))
+    crate::ui::control(icon(Icon::Info, tok::ICON_M, s.ink_dim))
         .padding(tok::S)
         .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
@@ -165,7 +165,7 @@ pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element
     .padding([tok::NONE, tok::L])
     .height(32)
     .width(Length::Fill)
-    .radius(size::ROW_RADIUS)
+    .radius(tok::R_ROW)
     .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
     .on_press(msg(Message::CopyIp(value)))

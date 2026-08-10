@@ -191,7 +191,7 @@ impl App {
                 .and_then(|o| self.output(o))
                 .map_or(120.0, |o| o.island_w.value + 2.0 * crate::theme::tok::L);
             self.toast_w.snap(pill_w);
-            self.toast_sheet.h.snap(size::BAR - 6.0);
+            self.toast_sheet.h.snap(tok::BAR - 6.0);
         }
         self.toast_w.to(TOAST_WIDTH, Spring::OPEN);
         if self.toast_sheet.natural > 0.0 {
@@ -212,7 +212,7 @@ impl App {
                 .and_then(|o| self.output(o))
                 .map_or(120.0, |o| o.island_w.value + 2.0 * crate::theme::tok::L);
             self.toast_w.to(pill_w, Spring::CLOSE);
-            self.toast_sheet.h.to(size::BAR - 6.0, Spring::CLOSE);
+            self.toast_sheet.h.to(tok::BAR - 6.0, Spring::CLOSE);
             self.clock.reset();
         }
     }

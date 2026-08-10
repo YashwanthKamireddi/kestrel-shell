@@ -4,7 +4,7 @@
 use crate::app::Message;
 use crate::services::icons;
 use crate::theme::tok;
-use crate::theme::{Scheme, size, text};
+use crate::theme::{Scheme, text};
 use crate::ui::{self, Icon, icon, label};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -14,9 +14,9 @@ pub fn chip<'a>(name: &str, c: &'a crate::lua::Chip, s: Scheme) -> Element<'a, M
     // A name from kestrel's icon set, else an icon theme name or a path.
     if let Some(name) = c.icon.as_deref() {
         if let Some(i) = Icon::named(name) {
-            r = r.push(icon(i, size::ICON, s.ink));
+            r = r.push(icon(i, tok::ICON, s.ink));
         } else if let Some(p) = icons::lookup(name) {
-            r = r.push(ui::image_file(&p, size::ICON));
+            r = r.push(ui::image_file(&p, tok::ICON));
         }
     }
     if !c.text.is_empty() {

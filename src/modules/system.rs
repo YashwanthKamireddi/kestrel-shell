@@ -18,16 +18,16 @@ pub fn view<'a>(
     let sys = app.system;
     let warn = |hot: bool| if hot { s.warn } else { s.ink_dim };
     let mut r = row![
-        icon(Icon::Cpu, 14.0, warn(sys.cpu >= 85)),
+        icon(Icon::Cpu, tok::ICON_S, warn(sys.cpu >= 85)),
         label(format!("{}%", sys.cpu), text::SMALL, warn(sys.cpu >= 85)),
-        icon(Icon::MemoryStick, 14.0, warn(sys.mem >= 85)),
+        icon(Icon::MemoryStick, tok::ICON_S, warn(sys.mem >= 85)),
         label(format!("{}%", sys.mem), text::SMALL, warn(sys.mem >= 85)),
     ]
     .spacing(tok::S)
     .align_y(Alignment::Center);
     if let Some(t) = sys.temp {
         r = r
-            .push(icon(Icon::Thermometer, 14.0, warn(t >= 85)))
+            .push(icon(Icon::Thermometer, tok::ICON_S, warn(t >= 85)))
             .push(label(format!("{t}°"), text::SMALL, warn(t >= 85)));
     }
     let active = open == Some(PanelKind::Monitor);

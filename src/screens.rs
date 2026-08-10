@@ -71,7 +71,7 @@ mod tests {
     fn check_all(app: &App, state: &str) {
         let mut bad = Vec::new();
         for kind in ALL {
-            let width = crate::theme::size::PANEL_XL;
+            let width = crate::theme::tok::PANEL_XL;
             let size = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 lay_out_and_draw(panels::view(app, kind, app.scheme), width)
             }));

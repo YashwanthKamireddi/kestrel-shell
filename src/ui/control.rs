@@ -94,7 +94,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         padding: Padding::ZERO,
         width: Length::Shrink,
         height: Length::Shrink,
-        radius: crate::theme::size::CONTROL_RADIUS,
+        radius: crate::theme::tok::R_CONTROL,
         corners: None,
         rest: Color::TRANSPARENT,
         hover: Color::TRANSPARENT,

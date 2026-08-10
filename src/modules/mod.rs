@@ -28,8 +28,8 @@ pub use tray::tray_icon_at;
 use crate::app::{App, Message, Output};
 use crate::config::BarConfig;
 use crate::panels::PanelKind;
+use crate::theme::Scheme;
 use crate::theme::tok;
-use crate::theme::{Scheme, size};
 use crate::ui::{self, Icon, icon};
 use iced::Element;
 use iced::widget::container;
@@ -232,8 +232,8 @@ pub fn chip<'a>(
 ) -> ui::control::Control<'a, Message> {
     ui::control(content)
         .padding([tok::NONE, tok::L])
-        .height(size::CONTROL)
-        .radius(size::CONTROL / 2.0)
+        .height(tok::BAR_ITEM)
+        .radius(tok::BAR_ITEM / 2.0)
         .bar(s, active)
 }
 
@@ -244,8 +244,8 @@ pub fn icon_chip<'a>(
     color: iced::Color,
     active: bool,
 ) -> ui::control::Control<'a, Message> {
-    ui::control(container(icon(i, size::ICON, color)).center(size::CONTROL))
-        .radius(size::CONTROL / 2.0)
+    ui::control(container(icon(i, tok::ICON, color)).center(tok::BAR_ITEM))
+        .radius(tok::BAR_ITEM / 2.0)
         .bar(s, active)
 }
 

@@ -5,7 +5,7 @@ use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{audio, bluetooth, network, power, toggles};
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::slider::slider;
 use crate::ui::{
     self, Icon, card, empty, icon, icon_button, label, label_w, list_row, subpage_header, switch,
@@ -838,7 +838,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .as_ref()
         .and_then(|p| app.output(p.output))
         .map_or(f32::INFINITY, |o| {
-            o.size.height - crate::theme::size::BAR - 2.0 * tok::XL
+            o.size.height - crate::theme::tok::BAR - 2.0 * tok::XL
         });
     // The main page keeps its tiles still and scrolls only its notifications (`main_page`);
     // other pages scroll whole when taller than the screen.

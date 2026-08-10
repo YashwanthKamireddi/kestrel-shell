@@ -4,13 +4,13 @@
 use crate::app::{App, Message, Output};
 use crate::panels::{Message as PanelMessage, PanelKind};
 use crate::services::{icons, tray as tray_service};
-use crate::theme::{Scheme, size};
+use crate::theme::{Scheme, tok};
 use crate::ui::{self, Icon, icon};
 use iced::Element;
 use iced::widget::image;
 
 pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Message> {
-    tray_icon_at(s, item, 16.0)
+    tray_icon_at(s, item, tok::ICON)
 }
 
 /// A tray app's icon at `px`. Apps that send a picture instead of an icon name (Electron
@@ -71,8 +71,8 @@ pub fn view<'a>(
         let active = tray_open && crate::panels::tray::showing(app, Some(item));
         let menu = item.clone();
         let mut ctl =
-            ui::control(iced::widget::container(tray_icon(s, item)).center(size::CONTROL))
-                .radius(size::CONTROL / 2.0)
+            ui::control(iced::widget::container(tray_icon(s, item)).center(tok::BAR_ITEM))
+                .radius(tok::BAR_ITEM / 2.0)
                 .bar(s, active)
                 .on_right_press(Message::TrayMenu(Some(menu), id, None));
         ctl = if item.item_is_menu {
@@ -95,12 +95,12 @@ pub fn view<'a>(
                     } else {
                         Icon::ChevronLeft
                     },
-                    size::ICON,
+                    tok::ICON,
                     s.ink,
                 ))
-                .center(size::CONTROL),
+                .center(tok::BAR_ITEM),
             )
-            .radius(size::CONTROL / 2.0)
+            .radius(tok::BAR_ITEM / 2.0)
             .bar(s, false)
             .on_press(Message::TrayExpand)
             .into(),

@@ -4,7 +4,7 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{icon, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -23,7 +23,7 @@ pub fn view<'a>(
     let content = row![
         icon(
             crate::ui::weather_icon(w),
-            size::ICON,
+            tok::ICON,
             // White like every other bar icon (a coloured one stood out).
             s.ink
         ),

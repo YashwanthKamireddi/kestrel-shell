@@ -3,7 +3,7 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::theme::tok;
-use crate::theme::{Scheme, size, text};
+use crate::theme::{Scheme, text};
 use crate::ui::{Icon, icon, label};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -19,7 +19,7 @@ pub fn view<'a>(
         return Vec::new();
     }
     let content = row![
-        icon(Icon::Cube, size::ICON, s.ink),
+        icon(Icon::Cube, tok::ICON, s.ink),
         label(n.to_string(), text::SMALL, s.ink),
     ]
     .spacing(tok::S)

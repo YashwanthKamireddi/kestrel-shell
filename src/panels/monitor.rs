@@ -11,7 +11,12 @@ use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Task};
 
-pub const WIDTH: f32 = crate::theme::size::PANEL_M;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
+/// The process table's columns (header and rows share them, so the names sit over their
+/// numbers): CPU, memory, and the end button.
+const COL_CPU: f32 = 54.0;
+const COL_MEM: f32 = 70.0;
+const COL_END: f32 = 46.0;
 
 #[derive(Default)]
 pub struct State {
@@ -90,7 +95,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         return container(
             column![title, crate::ui::waiting(s, Icon::Activity, "Reading…")].spacing(tok::L),
         )
-        .padding(crate::theme::size::PANEL_PAD)
+        .padding(crate::theme::tok::PANEL_PAD)
         .into();
     };
     // Cores: one bar each, in two columns.
@@ -142,12 +147,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         row![
             label("Process", text::CAPTION, s.ink_faint).width(Length::Fill),
             container(label("CPU", text::CAPTION, s.ink_faint))
-                .width(54)
-                .align_right(54),
+                .width(COL_CPU)
+                .align_right(COL_CPU),
             container(label("Memory", text::CAPTION, s.ink_faint))
-                .width(70)
-                .align_right(70),
-            Space::new().width(30),
+                .width(COL_MEM)
+                .align_right(COL_MEM),
+            Space::new().width(COL_END),
         ]
         .padding([tok::NONE, tok::L])
     ]
@@ -172,7 +177,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         );
         let end: Element<'_, AppMessage> = if vital {
             // Not ended from here (it would end the desktop): a lock says why the ✕ is missing.
-            container(icon(Icon::Lock, 12.0, s.ink_faint))
+            container(icon(Icon::Lock, tok::ICON_XS, s.ink_faint))
                 .center_x(26)
                 .into()
         } else if armed {
@@ -183,7 +188,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .on_press(msg(Message::End(*pid)))
                 .into()
         } else {
-            control(icon(Icon::X, 14.0, s.ink_dim))
+            control(icon(Icon::X, tok::ICON_S, s.ink_dim))
                 .padding(tok::XS)
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
@@ -204,7 +209,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     ))
                     .width(70)
                     .align_right(70),
-                    container(end).width(46).align_right(46),
+                    container(end).width(COL_END).align_right(COL_END),
                 ]
                 .spacing(tok::NONE)
                 .align_y(Alignment::Center),
@@ -223,7 +228,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ]
         .spacing(tok::L),
     )
-    .padding(crate::theme::size::PANEL_PAD)
+    .padding(crate::theme::tok::PANEL_PAD)
     .width(Length::Fill)
     .into()
 }

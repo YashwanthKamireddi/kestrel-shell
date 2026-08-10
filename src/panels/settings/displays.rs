@@ -143,7 +143,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             .padding([tok::L, tok::XL])
             .style(move |_| container::Style {
                 background: Some(s.accent.scale_alpha(0.14 * s.opacity).into()),
-                border: iced::Border::default().rounded(size::CARD_RADIUS),
+                border: iced::Border::default().rounded(tok::R_CARD),
                 ..container::Style::default()
             })
             .into(),
@@ -175,7 +175,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 control(
                     row![
                         label(format!("{} × {}", d.width, d.height), text::SMALL, s.ink),
-                        icon(Icon::ChevronDown, 14.0, s.ink_dim)
+                        icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
                     ]
                     .spacing(tok::S)
                     .align_y(Alignment::Center),
@@ -207,7 +207,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                                 )
                                 .width(Length::Fill),
                                 if on {
-                                    Element::from(icon(Icon::Check, 16.0, s.accent))
+                                    Element::from(icon(Icon::Check, tok::ICON, s.accent))
                                 } else {
                                     iced::widget::Space::new().into()
                                 }

@@ -4,12 +4,12 @@
 use crate::app::{App, Message as AppMessage};
 use crate::services::web::Weather;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Color, Element, Length};
 
-pub const WIDTH: f32 = crate::theme::size::PANEL_M;
+pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 
 /// Where every section's content starts and ends inside the panel: the sky card's text, the
 /// headings, the hours and the days all line up on it (they sat at four different insets).
@@ -51,7 +51,11 @@ pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
     .spacing(tok::NONE)
     .width(Length::Fill);
     let right = column![
-        icon(ui::weather_icon(w), 52.0, s.fade(ui::weather_tint(w))),
+        icon(
+            ui::weather_icon(w),
+            tok::ICON_DISPLAY,
+            s.fade(ui::weather_tint(w))
+        ),
         label_w(w.describe(), text::BODY, white, theme::MEDIUM),
     ]
     .spacing(tok::S)
@@ -69,7 +73,7 @@ pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
                     .add_stop(1.0, bottom)
                     .into(),
             ),
-            border: iced::Border::default().rounded(size::CARD_RADIUS),
+            border: iced::Border::default().rounded(tok::R_CARD),
             ..container::Style::default()
         })
         .into()
@@ -79,7 +83,7 @@ pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
 fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cell = |i: Icon, tint: Color, value: String, name: &'static str| {
         column![
-            icon(i, 18.0, s.fade(tint)),
+            icon(i, tok::ICON_M, s.fade(tint)),
             label_w(value, text::BODY, s.ink, theme::SEMIBOLD),
             label(name, text::CAPTION, s.ink_dim),
         ]
@@ -204,7 +208,7 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                             .add_stop(1.0, s.fade(c2))
                             .into()
                     ),
-                    border: iced::Border::default().rounded(3),
+                    border: iced::Border::default().rounded(tok::FULL),
                     ..container::Style::default()
                 }),
         ];
@@ -213,7 +217,7 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
             .height(5)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
-                border: iced::Border::default().rounded(3),
+                border: iced::Border::default().rounded(tok::FULL),
                 ..container::Style::default()
             });
         list = list.push(

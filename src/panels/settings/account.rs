@@ -43,7 +43,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     .and_then(|p| ui::rounded_file(&p, 56.0, 56.0, 28.0))
                 {
                     Some(h) => Element::from(iced::widget::image(h).width(56).height(56)),
-                    None => container(icon(Icon::User, 40.0, s.ink_dim))
+                    None => container(icon(Icon::User, tok::ICON_HERO, s.ink_dim))
                         .center(56)
                         .into(),
                 },

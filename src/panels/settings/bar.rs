@@ -25,7 +25,7 @@ pub(super) fn save_layout(l: &[Vec<String>; 3]) {
 /// A small round icon button in a layout row.
 pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<AppMessage>) -> Element<'a, AppMessage> {
     let on = m.is_some();
-    let mut c = control(icon(i, 14.0, if on { s.ink } else { s.ink_faint }))
+    let mut c = control(icon(i, tok::ICON_S, if on { s.ink } else { s.ink_faint }))
         .padding(tok::S)
         .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost);
@@ -123,7 +123,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 continue;
             }
             let lead: Element<'_, AppMessage> =
-                icon(info.map_or(Icon::Code, |m| m.icon), 18.0, s.ink).into();
+                icon(info.map_or(Icon::Code, |m| m.icon), tok::ICON_M, s.ink).into();
             let idc = id.clone();
             let mv = |d: i32, ok: bool| ok.then(|| msg(Message::BarMove(idc.clone(), d)));
             // Where it sits, said in words (three arrows to the sides read as random).
@@ -186,14 +186,14 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             Some(
                 control(
                     row![
-                        icon(m.icon, 18.0, s.ink),
+                        icon(m.icon, tok::ICON_M, s.ink),
                         iced::widget::column![
                             label(m.name, text::BODY, s.ink),
                             label(describe(m.id), text::SMALL, s.ink_dim),
                         ]
                         .spacing(tok::XXS)
                         .width(Length::Fill),
-                        icon(Icon::Plus, 16.0, s.accent),
+                        icon(Icon::Plus, tok::ICON, s.accent),
                     ]
                     .spacing(tok::L)
                     .align_y(Alignment::Center),

@@ -179,7 +179,7 @@ impl App {
             // Pills float a few pixels down; windows start just below them.
             shell::bar::PILL_BOTTOM.ceil() as i32
         } else {
-            size::BAR as i32
+            tok::BAR as i32
         };
         [top, t, t, t]
     }
@@ -279,9 +279,9 @@ impl App {
                 Plan {
                     region: Some(vec![(
                         0,
-                        size::BAR as i32,
+                        tok::BAR as i32,
                         o.size.width as i32,
-                        (o.size.height - size::BAR) as i32,
+                        (o.size.height - tok::BAR) as i32,
                     )]),
                     // A panel on its own surface takes the keyboard there (its text fields
                     // live there); the overlay behind it only catches clicks.
@@ -366,7 +366,7 @@ impl App {
             .or_else(|| self.natural.get(&p.kind).map(|s| s.height))
             .unwrap_or(p.h.value)
             .max(1.0);
-        Some((p.output, x, size::BAR + crate::ui::shape::FLOAT_GAP, w, h))
+        Some((p.output, x, tok::BAR + crate::ui::shape::FLOAT_GAP, w, h))
     }
 
     /// The open panel on a surface of its own, made (or moved and sized) to fit it: created
@@ -490,7 +490,7 @@ pub(crate) fn bar_rect(width: f32) -> InputRegionRect {
         x: 0,
         y: 0,
         width: width as i32,
-        height: size::BAR as i32,
+        height: tok::BAR as i32,
     }
 }
 
@@ -500,7 +500,7 @@ pub(crate) fn bar_rect(width: f32) -> InputRegionRect {
 /// against the edge (`edge` px in: the frame, or the floating pills' margin) when it would
 /// come close to the screen's side.
 pub(crate) fn place(center: f32, w: f32, screen_w: f32, edge: f32) -> f32 {
-    let margin = edge + size::JOIN + 24.0;
+    let margin = edge + tok::JOIN + 24.0;
     let x = center - w / 2.0;
     if x < margin {
         edge

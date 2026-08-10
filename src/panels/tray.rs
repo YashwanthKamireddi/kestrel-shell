@@ -7,7 +7,7 @@ use super::Message as PanelMessage;
 use crate::app::{App, Message as AppMessage};
 use crate::services::{icons, tray};
 use crate::theme::tok;
-use crate::theme::{Scheme, size, text};
+use crate::theme::{Scheme, text};
 use crate::ui::{self, Icon, control, divider, icon, label};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Task};
@@ -179,7 +179,7 @@ fn find(m: &tray::MenuItem, id: i32) -> Option<&tray::MenuItem> {
 fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
     control(
         row![
-            icon(Icon::ChevronLeft, size::ICON, s.ink_dim),
+            icon(Icon::ChevronLeft, tok::ICON, s.ink_dim),
             label(ui::ellipsize(&text_, 28), text::BODY, s.ink_dim),
         ]
         .spacing(tok::M)
@@ -188,7 +188,7 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
     .padding([tok::NONE, tok::L])
     .height(tok::H_ROW)
     .width(Length::Fill)
-    .radius(size::ROW_RADIUS)
+    .radius(tok::R_ROW)
     .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
     .on_press(msg(Message::Back))
@@ -218,7 +218,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 item.title.clone()
             };
             let mut glyph = iced::widget::stack![
-                container(crate::modules::tray_icon_at(s, item, 22.0)).center(30)
+                container(crate::modules::tray_icon_at(s, item, tok::ICON_XL)).center(30)
             ];
             if pinned {
                 glyph = glyph.push(
@@ -274,7 +274,11 @@ fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, AppMessage> {
     let key = pin_key(item);
     let pinned = st.pins.contains(&key);
     row![
-        icon(Icon::Pin, 14.0, if pinned { s.accent } else { s.ink_dim }),
+        icon(
+            Icon::Pin,
+            tok::ICON_S,
+            if pinned { s.accent } else { s.ink_dim }
+        ),
         label("Keep in the bar", text::BODY, s.ink).width(Length::Fill),
         ui::switch(s, pinned, msg(Message::Pin(key))),
     ]
@@ -313,7 +317,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             text::SMALL,
             s.ink_dim,
         ))
-        .padding(crate::theme::size::PANEL_PAD);
+        .padding(crate::theme::tok::PANEL_PAD);
         return if st.from_list {
             container(column![back_row(s, title), note].spacing(tok::XXS))
                 .padding(tok::M)
@@ -363,12 +367,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 s.accent,
             )
             .into(),
-            (Some(false), _) => Space::new().width(14).into(),
+            (Some(false), _) => Space::new().width(tok::ICON_S).into(),
             (None, Some(name)) => match icons::lookup(name) {
-                Some(p) => ui::image_file_faded(&p, 14.0, s.opacity),
-                None => Space::new().width(14).into(),
+                Some(p) => ui::image_file_faded(&p, tok::ICON_S, s.opacity),
+                None => Space::new().width(tok::ICON_S).into(),
             },
-            (None, None) => Space::new().width(14).into(),
+            (None, None) => Space::new().width(tok::ICON_S).into(),
         };
         let has_sub = !c.children.is_empty();
         let mut r = row![].spacing(tok::L).align_y(Alignment::Center);
@@ -377,7 +381,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         r = r.push(label(ui::ellipsize(&c.label, 40), text::BODY, fg).width(Length::Fill));
         if has_sub {
-            r = r.push(icon(Icon::ChevronRight, 14.0, s.ink_dim));
+            r = r.push(icon(Icon::ChevronRight, tok::ICON_S, s.ink_dim));
         }
         let on = c.enabled.then(|| {
             if has_sub {
@@ -391,7 +395,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .padding([tok::NONE, tok::L])
                 .height(tok::H_ROW)
                 .width(Length::Fill)
-                .radius(size::ROW_RADIUS)
+                .radius(tok::R_ROW)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press_maybe(on),

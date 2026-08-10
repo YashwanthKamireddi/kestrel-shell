@@ -94,7 +94,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             let task = panels::tray::open(app, item);
             let x = rect.unwrap_or_else(|| {
                 let w = app.output(output).map_or(1920.0, |o| o.size.width);
-                Rectangle::new(iced::Point::new(w - 160.0, 0.0), Size::new(0.0, size::BAR))
+                Rectangle::new(iced::Point::new(w - 160.0, 0.0), Size::new(0.0, tok::BAR))
             });
             app.panels.tray.pending = None;
             // Re-opening the same menu closes it; another one switches in place: at once when

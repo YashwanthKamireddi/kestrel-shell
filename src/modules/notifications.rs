@@ -5,7 +5,7 @@
 use crate::app::{App, Message, Output};
 use crate::panels::{Message as PanelMessage, PanelKind, control};
 use crate::theme::tok;
-use crate::theme::{self, Scheme, size, text};
+use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, icon, label_w};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -31,7 +31,7 @@ pub fn view<'a>(
             id,
             iced::Rectangle::new(
                 iced::Point::new(w / 2.0, 0.0),
-                iced::Size::new(0.0, size::BAR),
+                iced::Size::new(0.0, tok::BAR),
             ),
         )
     };
@@ -58,7 +58,7 @@ pub fn view<'a>(
         app.unseen.to_string()
     };
     let content = row![
-        icon(Icon::BellDot, size::ICON, s.accent),
+        icon(Icon::BellDot, tok::ICON, s.accent),
         label_w(count, text::SMALL, s.accent, theme::SEMIBOLD),
     ]
     .spacing(tok::XS)

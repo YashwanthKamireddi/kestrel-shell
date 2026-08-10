@@ -70,7 +70,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     .on_press(snd(C::Disconnect))
                     .into()
             } else if net.secure && !net.known {
-                icon(Icon::Lock, 14.0, s.ink_faint).into()
+                icon(Icon::Lock, tok::ICON_S, s.ink_faint).into()
             } else {
                 iced::widget::Space::new().into()
             };
@@ -208,7 +208,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 row![
                     iced::widget::Space::new().width(Length::Fill),
                     label("Join automatically", text::CAPTION, s.ink_dim),
-                    iced::widget::Space::new().width(74),
+                    iced::widget::Space::new().width(FORGET_W + tok::L),
                 ]
                 .align_y(Alignment::Center),
             )
@@ -241,6 +241,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                                 if asking { s.bad } else { s.ink },
                             ))
                             .pill(s, crate::ui::control::Pill::Plain)
+                            .width(FORGET_W)
+                            .center_x()
                             .on_press(msg(Message::ForgetNet(k.ssid.clone()))),
                         ]
                         .spacing(tok::L)
@@ -512,3 +514,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
     }
     out
 }
+
+/// "Forget" and "Forget?" the same width (a button that grows when asked jumped under the
+/// pointer), and the switches' caption spaced from it.
+const FORGET_W: f32 = 72.0;
