@@ -15,6 +15,7 @@ mod modules;
 mod motion;
 mod panels;
 mod prompt;
+mod screens;
 mod subs;
 // The system-integration crate, under its short name.
 pub(crate) use kestrel_services as services;

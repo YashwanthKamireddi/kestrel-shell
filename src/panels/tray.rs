@@ -203,8 +203,9 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     const COLS: usize = 4;
     let st = &app.panels.tray;
     let items: Vec<&tray::Item> = app.tray.items.iter().collect();
+    // Every app in the tray quit while it was open: a faint mark, not a blank card.
     if items.is_empty() {
-        return Space::new().into();
+        return crate::ui::empty(s, Icon::LayoutGrid);
     }
     let mut grid = column![].spacing(tok::XS);
     for chunk in items.chunks(COLS) {

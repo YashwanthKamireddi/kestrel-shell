@@ -6,8 +6,11 @@ SCOPE =
 check:
 	cargo fmt --all -- --check
 	tools/lint/tokens.sh
-	$(SCOPE) cargo clippy --release --workspace --all-targets -- -D warnings
-	$(SCOPE) cargo test --release --workspace
+	# kestrel's own crates, by name: --workspace also took in the vendored iced_layershell (a
+	# path dependency is a member automatically) with its default features, and so checked
+	# kestrel with the GPU renderer compiled in, a different program from the one installed.
+	$(SCOPE) cargo clippy --release -p kestrel -p kestrel-services --all-targets -- -D warnings
+	$(SCOPE) cargo test --release -p kestrel -p kestrel-services
 
 build:
 	$(SCOPE) cargo build --release
