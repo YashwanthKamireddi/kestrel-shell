@@ -1,7 +1,8 @@
 //! Calendar: today at a glance, then the month.
 
 use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon_button, label, label_w};
@@ -61,14 +62,19 @@ const CELL_H: f32 = 34.0;
 
 /// The clock's panel is the island's dashboard (they were two panels with the same clock and
 /// month).
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    super::island::view(app, s)
+pub fn view<'a>(
+    st: &'a State,
+    media: &'a super::media::State,
+    cx: &Cx<'a>,
+) -> Element<'a, AppMessage> {
+    super::island::view(st, media, cx)
 }
 
 /// The month: title with navigation, weekday initials, six weeks.
-pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let today = app.now.date_naive();
-    let first = first_of_month(today, app.panels.calendar.offset);
+pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
+    let today = cx.now.date_naive();
+    let first = first_of_month(today, st.offset);
     let month_title = control(label_w(
         first.format("%B %Y").to_string(),
         text::TITLE,
@@ -90,7 +96,7 @@ pub fn month(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .align_y(Alignment::Center);
 
     // The week starts on Monday, or on Sunday (Settings > Date & time).
-    let sunday = app.config.clock.week_starts_sunday;
+    let sunday = cx.config.clock.week_starts_sunday;
     let names = if sunday {
         ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
     } else {

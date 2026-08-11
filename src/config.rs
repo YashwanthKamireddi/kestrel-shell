@@ -197,6 +197,16 @@ pub enum Units {
     Fahrenheit,
 }
 
+impl Units {
+    /// A temperature in these units ("21°").
+    pub fn show(self, celsius: f32) -> String {
+        match self {
+            Units::Celsius => format!("{celsius:.0}°"),
+            Units::Fahrenheit => format!("{:.0}°", celsius * 9.0 / 5.0 + 32.0),
+        }
+    }
+}
+
 /// Mouse actions added to a module: a command to run, or `kestrel:<command>` for kestrel's own
 /// (`kestrel:toggle control`, `kestrel:volume +5%`). They fill buttons the module itself does
 /// not use; its own click stays.

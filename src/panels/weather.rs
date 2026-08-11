@@ -1,7 +1,8 @@
 //! Weather, opened from the weather circle: now on a sky that matches it, the details (feels
 //! like, humidity, wind, sun), the next hours and the coming days. Only the weather.
 
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::services::web::Weather;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -15,23 +16,24 @@ pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 /// headings, the hours and the days all line up on it (they sat at four different insets).
 const INSET: f32 = tok::L;
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let Some(w) = &app.weather else {
+pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
+    let Some(w) = &cx.weather else {
         // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
         return crate::ui::empty(s, Icon::Cloud);
     };
-    let mut col = column![now(app, w, s), details(app, w, s)].spacing(tok::L);
+    let mut col = column![now(cx, w, s), details(cx, w, s)].spacing(tok::L);
     if w.hours.len() > 1 {
-        col = col.push(hours(app, w, s));
+        col = col.push(hours(cx, w, s));
     }
     if w.days.len() > 1 {
-        col = col.push(days(app, w, s));
+        col = col.push(days(cx, w, s));
     }
     container(col).padding(tok::L).into()
 }
 
 /// Now: place, temperature, condition and today's range, on the sky.
-pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+pub fn now<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
     let soft = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC).scale_alpha(0.78));
     let left = column![
@@ -41,9 +43,9 @@ pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
             white,
             theme::SEMIBOLD
         ),
-        label_w(app.temp(w.temp), 48.0, white, theme::MEDIUM),
+        label_w(cx.temp(w.temp), 48.0, white, theme::MEDIUM),
         label(
-            format!("H {}  L {}", app.temp(w.high), app.temp(w.low)),
+            format!("H {}  L {}", cx.temp(w.high), cx.temp(w.low)),
             text::SMALL,
             soft
         ),
@@ -80,7 +82,7 @@ pub fn now<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
 }
 
 /// Feels like, humidity, wind, and the sun: four even columns.
-fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn details<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cell = |i: Icon, tint: Color, value: String, name: &'static str| {
         column![
             icon(i, tok::ICON_M, s.fade(tint)),
@@ -97,7 +99,7 @@ fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
         cell(
             Icon::Thermometer,
             ui::temperature_tint(w.feels),
-            app.temp(w.feels),
+            cx.temp(w.feels),
             "Feels like"
         ),
         cell(
@@ -109,7 +111,7 @@ fn details<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
         cell(
             Icon::Air,
             rgb(0xB8, 0xE0, 0xD2),
-            match app.config.weather_units {
+            match cx.config.weather_units {
                 crate::config::Units::Celsius => format!("{:.0} km/h", w.wind),
                 crate::config::Units::Fahrenheit => format!("{:.0} mph", w.wind * 0.621_371),
             },
@@ -138,7 +140,7 @@ fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
 }
 
 /// The next hours: time, condition, temperature.
-fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn hours<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let cells = w
         .hours
         .iter()
@@ -148,7 +150,7 @@ fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
             let when = if i == 0 {
                 "Now".to_string()
             } else {
-                match app.config.clock.format {
+                match cx.config.clock.format {
                     crate::config::ClockFormat::H24 => format!("{h:02}"),
                     crate::config::ClockFormat::H12 => {
                         format!("{} {}", (h + 11) % 12 + 1, if h < 12 { "AM" } else { "PM" })
@@ -162,7 +164,7 @@ fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                     18.0,
                     s.fade(ui::weather_tint_for(c, day))
                 ),
-                label_w(app.temp(t), text::SMALL, s.ink, theme::MEDIUM),
+                label_w(cx.temp(t), text::SMALL, s.ink, theme::MEDIUM),
             ]
             .spacing(tok::S)
             .align_x(Alignment::Center)
@@ -178,7 +180,7 @@ fn hours<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
 }
 
 /// The coming days: name, condition, and the range as a bar on the week's scale.
-fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn days<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
     let lo = w.days.iter().map(|d| d.3).fold(f32::INFINITY, f32::min);
     let hi = w.days.iter().map(|d| d.2).fold(f32::NEG_INFINITY, f32::max);
     let span = (hi - lo).max(1.0);
@@ -231,11 +233,11 @@ fn days<'a>(app: &App, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
                     ))
                     .center_x(28),
                     Space::new().width(Length::Fill),
-                    label(app.temp(*min), text::BODY, s.ink_dim)
+                    label(cx.temp(*min), text::BODY, s.ink_dim)
                         .width(34)
                         .align_x(Alignment::End),
                     track,
-                    label_w(app.temp(*max), text::BODY, s.ink, theme::MEDIUM)
+                    label_w(cx.temp(*max), text::BODY, s.ink, theme::MEDIUM)
                         .width(34)
                         .align_x(Alignment::End),
                 ]

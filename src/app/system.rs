@@ -33,10 +33,7 @@ impl App {
 
     /// A temperature (kept in °C) in the user's units, "21°".
     pub fn temp(&self, celsius: f32) -> String {
-        match self.config.weather_units {
-            config::Units::Celsius => format!("{celsius:.0}°"),
-            config::Units::Fahrenheit => format!("{:.0}°", celsius * 9.0 / 5.0 + 32.0),
-        }
+        self.config.weather_units.show(celsius)
     }
 
     /// What `bus` last reported as its artwork.

@@ -3,7 +3,8 @@
 //! Opened from the CPU and memory pill or `kestrel toggle system`.
 
 use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::services::system::Detail;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -35,8 +36,7 @@ fn msg(m: Message) -> AppMessage {
     AppMessage::Panel(PanelMessage::Monitor(m))
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
-    let st = &mut app.panels.monitor;
+pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
     match m {
         Message::Detail(d) => st.detail = Some(d),
         Message::End(pid) => {
@@ -87,8 +87,8 @@ fn bar<'a>(s: Scheme, v: f32, h: f32) -> Element<'a, AppMessage> {
     .into()
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let st = &app.panels.monitor;
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
     let title = label_w("System", text::HEADING, s.ink, theme::SEMIBOLD);
     let Some(d) = &st.detail else {
         // The first reading is 1.5 s away: the cores from the dashboard's own numbers meanwhile.

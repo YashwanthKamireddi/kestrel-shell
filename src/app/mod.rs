@@ -252,6 +252,8 @@ pub struct App {
     pub meters: crate::services::meters::Meters,
     pub net: network::State,
     pub bt: bluetooth::State,
+    /// A network or device being connected or disconnected (panels show it in progress).
+    pub connecting: Option<panels::cx::Connecting>,
     pub power: power::State,
     pub brightness: Option<f32>,
     pub media: mpris::State,
@@ -429,7 +431,7 @@ impl std::fmt::Debug for Wallpaper {
 pub fn boot() -> (App, Task<Message>) {
     let config = config::load();
     crate::theme::set_glass(config.material != config::Material::Black);
-    let mut app = App {
+    let app = App {
         scheme: Scheme::default(),
         seed: crate::theme::Seed::default(),
         outputs: Vec::new(),
@@ -452,6 +454,7 @@ pub fn boot() -> (App, Task<Message>) {
         meters: crate::services::meters::Meters::default(),
         net: network::State::default(),
         bt: bluetooth::State::default(),
+        connecting: None,
         power: power::State::default(),
         brightness: None,
         media: mpris::State::default(),
@@ -549,7 +552,7 @@ pub fn boot() -> (App, Task<Message>) {
         panels::wallpaper::preload(&app),
         // The launcher's apps read once at start, so even its first open is instant.
         panels::launcher::reload(),
-        panels::keys::open(&mut app),
+        panels::keys::open(),
     ]);
     (
         app,

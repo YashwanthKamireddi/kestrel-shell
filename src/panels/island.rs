@@ -1,30 +1,37 @@
 //! The dashboard the island and the clock open (one panel, not two: design call 2026-11-16): the
 //! day, the weather and music when they have no pill of their own, and the month. Each section appears only when it has something to say.
 
+use super::cx::Cx;
 use super::{calendar, media};
-use crate::app::{App, Message as AppMessage};
+use crate::app::Message as AppMessage;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, card, control, icon, label, label_w};
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+/// The dashboard: weather, the music playing and the month, composed from their panels.
+pub fn view<'a>(
+    cal: &'a super::calendar::State,
+    media_st: &'a super::media::State,
+    cx: &Cx<'a>,
+) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
     // No clock and no date heading: the bar shows both (repeated here they said nothing new;
     // design call 2026-11-16). What has no pill of its own (the weather as the weather panel draws
     // it, what's playing), then the month, today marked.
     let mut col = column![].spacing(tok::L);
-    if !app.config.bar.contains("weather")
-        && let Some(w) = &app.weather
+    if !cx.config.bar.contains("weather")
+        && let Some(w) = &cx.weather
     {
-        col = col.push(super::weather::now(app, w, s));
+        col = col.push(super::weather::now(cx, w, s));
     }
-    if !app.config.bar.contains("media")
-        && let Some(p) = media::current(app)
+    if !cx.config.bar.contains("media")
+        && let Some(p) = media::current(media_st, cx.media)
     {
         col = col.push(playing(s, p));
     }
-    col = col.push(card(s, calendar::month(app, s)));
+    col = col.push(card(s, calendar::month(cal, cx)));
     container(col).padding(tok::L).into()
 }
 

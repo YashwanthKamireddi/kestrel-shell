@@ -75,10 +75,6 @@ pub struct State {
     pings: std::collections::HashMap<String, String>,
     /// Night light warmth while the slider moves (kelvin).
     pub kelvin: Option<u32>,
-    /// What is being connected or disconnected right now (a network's name, a device's
-    /// path), whether it should end up connected, and since when: shown as in progress until
-    /// it is, or for at most `PENDING`.
-    pub pending: Option<(String, bool, std::time::Instant)>,
     /// The Sound page's app whose device list is open.
     sound_open: Option<String>,
     /// The device being paired (its path).
@@ -118,23 +114,9 @@ fn join(ssid: String, cmd: network::Command) -> Task<AppMessage> {
     })
 }
 
-/// How long an attempt shows as in progress at most.
-const PENDING: std::time::Duration = std::time::Duration::from_secs(25);
-
 /// Whether `key` (a network's name or a device's path) is being connected or disconnected.
 pub fn in_progress(app: &App, key: &str) -> Option<bool> {
-    let (k, want, since) = app.panels.control.pending.as_ref()?;
-    if k != key || since.elapsed() > PENDING {
-        return None;
-    }
-    let done = if let Some(d) = app.bt.devices.iter().find(|d| d.path == *k) {
-        d.connected == *want
-    } else {
-        // A network: connected to it (or, when leaving, to nothing).
-        let on = app.net.ssid.as_deref() == Some(k.as_str()) && !app.net.connecting;
-        on == *want
-    };
-    (!done).then_some(*want)
+    app.connecting.as_ref()?.in_progress(key, &app.bt, &app.net)
 }
 
 #[derive(Clone, Debug)]
@@ -520,7 +502,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             if n.active {
                 return Task::none();
             }
-            st.pending = Some((n.ssid.clone(), true, std::time::Instant::now()));
+            app.connecting = Some(super::cx::Connecting::new(n.ssid.clone(), true));
             st.net_error = None;
             if n.known || !n.secure {
                 let ssid = n.ssid.clone();
@@ -548,7 +530,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 && !pw.is_empty()
             {
                 st.net_error = None;
-                st.pending = Some((ssid.clone(), true, std::time::Instant::now()));
+                app.connecting = Some(super::cx::Connecting::new(ssid.clone(), true));
                 return join(
                     ssid.clone(),
                     network::Command::ConnectNew {
@@ -590,7 +572,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::JoinHidden => {
             let (ssid, pw) = std::mem::take(&mut st.hidden);
             if !ssid.trim().is_empty() {
-                st.pending = Some((ssid.clone(), true, std::time::Instant::now()));
+                app.connecting = Some(super::cx::Connecting::new(ssid.clone(), true));
                 st.net_error = None;
                 st.page = Page::Wifi;
                 return join(
@@ -604,8 +586,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::NetDone(ssid, r) => {
             // The attempt is over either way: no more "Connecting…".
-            if st.pending.as_ref().is_some_and(|(k, _, _)| *k == ssid) {
-                st.pending = None;
+            if app.connecting.as_ref().is_some_and(|c| c.is(&ssid)) {
+                app.connecting = None;
             }
             st.net_error = match r {
                 // Cancelling the password prompt is not an error to show.
@@ -615,12 +597,12 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::Disconnect => {
             if let Some(ssid) = app.net.ssid.clone() {
-                st.pending = Some((ssid, false, std::time::Instant::now()));
+                app.connecting = Some(super::cx::Connecting::new(ssid, false));
             }
             return Task::future(network::command(network::Command::Disconnect)).discard();
         }
         Message::Device(path, connected) => {
-            st.pending = Some((path.clone(), !connected, std::time::Instant::now()));
+            app.connecting = Some(super::cx::Connecting::new(path.clone(), !connected));
             st.bt_error = None;
             st.forget = None;
             let cmd = if connected {
@@ -654,8 +636,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     }
                 }
                 Err(why) => {
-                    if st.pending.as_ref().is_some_and(|(p, _, _)| *p == path) {
-                        st.pending = None;
+                    if app.connecting.as_ref().is_some_and(|c| c.is(&path)) {
+                        app.connecting = None;
                     }
                     st.bt_error = Some((path, why));
                 }

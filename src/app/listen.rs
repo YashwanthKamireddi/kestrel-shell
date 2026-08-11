@@ -68,7 +68,7 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
     subs.push(when(needs.tray, crate::subs::tray().map(Message::Tray)));
     // AirPods: their own channel, only while a pair is connected.
     if needs.airpods
-        && let Some(d) = crate::panels::pods::device(app)
+        && let Some(d) = crate::panels::pods::device(&app.bt)
     {
         // Apple's channel takes one listener only: a test copy (KESTREL_NO_AIRPODS, set by the
         // rig) leaves it to the real shell.

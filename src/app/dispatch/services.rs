@@ -178,7 +178,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 &mut app.panels.control.nearby_order,
                 app.bt.nearby.iter().map(|d| d.path.as_str()),
             );
-            if crate::panels::pods::device(app).is_none() {
+            if crate::panels::pods::device(&app.bt).is_none() {
                 app.pods = None;
                 // Their panel goes with them.
                 if app
@@ -197,7 +197,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 && (p.left.is_some() || p.right.is_some() || p.headset.is_some())
             {
                 app.pods_fresh = false;
-                let name = crate::panels::pods::device(app)
+                let name = crate::panels::pods::device(&app.bt)
                     .map_or_else(|| "AirPods".to_string(), |d| d.name.clone());
                 let pct = |c: Option<services::airpods::Charge>| {
                     c.map_or_else(|| "–".to_string(), |c| format!("{}%", c.level))

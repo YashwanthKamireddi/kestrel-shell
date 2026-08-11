@@ -25,7 +25,7 @@ fn pods<'a>(
     s: Scheme,
     open: Option<PanelKind>,
 ) -> Option<Element<'a, Message>> {
-    crate::panels::pods::device(app)?;
+    crate::panels::pods::device(&app.bt)?;
     let id = o.id;
     let d = tok::BAR - 6.0;
     let active = open == Some(PanelKind::Pods);

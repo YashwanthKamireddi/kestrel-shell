@@ -2,7 +2,8 @@
 //! (as GNOME and macOS show it). Each in-use device with the apps using it, by their icon and
 //! name; the screen with its recording's stop. Opened by a click on any indicator.
 
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::theme::{self, Scheme, text, tok};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{column, container, row};
@@ -57,13 +58,13 @@ pub fn ago(t: std::time::Instant) -> String {
 }
 
 /// Camera and microphone use that ended in the last 10 minutes, newest first.
-pub fn recent<'a>(s: Scheme, app: &App) -> Option<Element<'a, AppMessage>> {
-    if app.privacy_recent.is_empty() {
+pub fn recent<'a>(s: Scheme, cx: &Cx<'a>) -> Option<Element<'a, AppMessage>> {
+    if cx.privacy_recent.is_empty() {
         return None;
     }
     let mut c =
         column![label_w("Recently", text::SMALL, s.ink_dim, theme::SEMIBOLD),].spacing(tok::XXS);
-    for (device, name, at) in &app.privacy_recent {
+    for (device, name, at) in cx.privacy_recent {
         let what = if *device == Icon::Video {
             "Camera"
         } else {
@@ -86,29 +87,30 @@ pub fn recent<'a>(s: Scheme, app: &App) -> Option<Element<'a, AppMessage>> {
     Some(c.into())
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
     let mut body = column![].spacing(tok::L);
-    if !app.camera_apps.is_empty() {
-        body = body.push(group(s, Icon::Video, "Camera", &app.camera_apps));
+    if !cx.camera_apps.is_empty() {
+        body = body.push(group(s, Icon::Video, "Camera", cx.camera_apps));
     }
-    if !app.audio.recording.is_empty() {
-        body = body.push(group(s, Icon::Mic, "Microphone", &app.audio.recording));
+    if !cx.audio.recording.is_empty() {
+        body = body.push(group(s, Icon::Mic, "Microphone", &cx.audio.recording));
     }
-    if app.hypr.screencast {
-        let what = if app.hypr.recording.is_some() {
+    if cx.hypr.screencast {
+        let what = if cx.hypr.recording.is_some() {
             "Screen recording"
         } else {
             "Screen shared"
         };
         body = body.push(group(s, Icon::ScreenShare, what, &[]));
     }
-    if app.camera_apps.is_empty() && app.audio.recording.is_empty() && !app.hypr.screencast {
+    if cx.camera_apps.is_empty() && cx.audio.recording.is_empty() && !cx.hypr.screencast {
         body = body.push(
             container(label("Nothing is using them now", text::BODY, s.ink_dim))
                 .padding([tok::S, tok::M]),
         );
     }
-    if let Some(r) = recent(s, app) {
+    if let Some(r) = recent(s, cx) {
         body = body.push(container(r).padding([tok::NONE, tok::M]));
     }
     container(body).padding(tok::M).width(Length::Fill).into()

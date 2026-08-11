@@ -1,7 +1,8 @@
 //! AirPods, opened from their circle in the bar: each bud's and the case's charge, and a way
 //! to disconnect.
 
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::services::airpods::Charge;
 use crate::services::bluetooth;
 use crate::theme::tok;
@@ -13,9 +14,8 @@ use iced::{Alignment, Color, Element, Length};
 pub const WIDTH: f32 = crate::theme::tok::PANEL_S;
 
 /// The connected AirPods, if any.
-pub fn device(app: &App) -> Option<&bluetooth::Device> {
-    app.bt
-        .connected()
+pub fn device(bt: &bluetooth::State) -> Option<&bluetooth::Device> {
+    bt.connected()
         .find(|d| crate::services::airpods::is_airpods(&d.modalias, &d.icon))
 }
 
@@ -32,9 +32,10 @@ pub fn tint(s: Scheme, c: Charge) -> Color {
     }
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let name = device(app).map_or("AirPods", |d| d.name.as_str());
-    let disconnect = device(app).map(|d| {
+pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
+    let name = device(cx.bt).map_or("AirPods", |d| d.name.as_str());
+    let disconnect = device(cx.bt).map(|d| {
         AppMessage::Panel(super::Message::Control(super::control::Message::Device(
             d.path.clone(),
             true,
@@ -49,9 +50,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 theme::SEMIBOLD
             ),
             label(
-                if device(app)
-                    .is_some_and(|d| super::control::in_progress(app, &d.path) == Some(false))
-                {
+                if device(cx.bt).is_some_and(|d| cx.in_progress(&d.path) == Some(false)) {
                     "Disconnecting…"
                 } else {
                     "Connected"
@@ -69,7 +68,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .spacing(tok::L)
     .align_y(Alignment::Center);
 
-    let p = app.pods.clone().unwrap_or_default();
+    let p = cx.pods.cloned().unwrap_or_default();
     let mut list = column![].spacing(tok::L);
     let nothing = p.headset.is_none() && p.left.is_none() && p.right.is_none() && p.case.is_none();
     if nothing {

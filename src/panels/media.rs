@@ -35,10 +35,11 @@ fn msg(m: Message) -> AppMessage {
     AppMessage::Panel(PanelMessage::Media(m))
 }
 
-pub fn current(app: &App) -> Option<&Player> {
-    let sel = app.panels.media.selected.as_ref();
-    sel.and_then(|b| app.media.players.iter().find(|p| &p.bus == b))
-        .or_else(|| app.media.main())
+/// The player shown: the one picked in the panel, else the main one.
+pub fn current<'a>(st: &State, media: &'a mpris::State) -> Option<&'a Player> {
+    let sel = st.selected.as_ref();
+    sel.and_then(|b| media.players.iter().find(|p| &p.bus == b))
+        .or_else(|| media.main())
 }
 
 pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
@@ -74,7 +75,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::Tick => {}
         Message::Poll => {
-            if let Some(p) = current(app) {
+            if let Some(p) = current(&app.panels.media, &app.media) {
                 return Task::perform(mpris::position(p.bus.clone()), |p| {
                     msg(Message::Position(p))
                 });
@@ -332,7 +333,7 @@ pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 pub const EMPTY_WIDTH: f32 = 240.0;
 
 pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let Some(p) = current(app) else {
+    let Some(p) = current(&app.panels.media, &app.media) else {
         // Says why it is empty in the panel itself (a pop-up saying it read as noise).
         return container(crate::ui::empty_reason(
             s,

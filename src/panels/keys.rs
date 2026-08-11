@@ -2,10 +2,11 @@
 //! the text before the first ":" in it.
 
 use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::services::hyprland;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, text};
+use crate::theme::{self, text};
 use crate::ui::{label, label_w};
 use iced::widget::{column, container, row, scrollable};
 use iced::{Alignment, Element, Length, Task};
@@ -26,7 +27,7 @@ static LIST_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("keys-list"));
 
 /// The arrows and Page Up / Down scroll the sheet; Home and End go to its ends.
-pub fn key(_app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(k: super::Key) -> Task<AppMessage> {
     use super::Key;
     use iced::widget::scrollable::{AbsoluteOffset, RelativeOffset};
     let by = |y: f32| {
@@ -49,26 +50,27 @@ pub fn key(_app: &mut App, k: super::Key) -> Task<AppMessage> {
     }
 }
 
-pub fn open(_app: &mut App) -> Task<AppMessage> {
+pub fn open() -> Task<AppMessage> {
     Task::perform(hyprland::binds(), |g| {
         AppMessage::Panel(PanelMessage::Keys(Message::Loaded(g)))
     })
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
     let Message::Loaded(g) = m;
-    app.panels.keys.groups = Some(g);
+    st.groups = Some(g);
     Task::none()
 }
 
 /// The list's most height before it scrolls (a 1080 p screen less the bar and margins).
 const MAX_LIST_H: f32 = 900.0;
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
     // Not read yet, or no bindings found: says which (a box with a lone icon said nothing).
-    let Some(groups) = app.panels.keys.groups.as_ref().filter(|g| !g.is_empty()) else {
-        let why = if app.panels.keys.groups.is_none() {
+    let Some(groups) = st.groups.as_ref().filter(|g| !g.is_empty()) else {
+        let why = if st.groups.is_none() {
             "Reading your shortcuts…"
         } else {
             "No shortcuts found in the Hyprland configuration."

@@ -5,6 +5,7 @@ pub mod calendar;
 pub mod capture;
 pub mod clipboard;
 pub mod control;
+pub mod cx;
 pub mod emoji;
 pub mod files;
 pub mod island;
@@ -90,7 +91,9 @@ impl PanelKind {
         match self {
             Self::Overview => overview::width(app),
             // Nothing playing: only as wide as its one line saying so.
-            Self::Media if media::current(app).is_none() => media::EMPTY_WIDTH,
+            Self::Media if media::current(&app.panels.media, &app.media).is_none() => {
+                media::EMPTY_WIDTH
+            }
             _ => self.width(),
         }
     }
@@ -231,7 +234,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         }
         PanelKind::Launcher => return launcher::open(app),
         PanelKind::Wallpaper => return wallpaper::open(app),
-        PanelKind::Keys => return keys::open(app),
+        PanelKind::Keys => return keys::open(),
         PanelKind::Overview => return overview::open(app),
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
@@ -255,16 +258,16 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             app.panels.calendar.update(m);
             Task::none()
         }
-        Message::Power(m) => power::update(app, m),
+        Message::Power(m) => power::update(&mut app.panels.power, m),
         Message::Capture(m) => capture::update(app, m),
-        Message::Monitor(m) => monitor::update(app, m),
+        Message::Monitor(m) => monitor::update(&mut app.panels.monitor, m),
         Message::Control(m) => control::update(app, m),
         Message::Media(m) => media::update(app, m),
         Message::Notifications(m) => notifications::update(app, m),
         Message::Tray(m) => tray::update(app, m),
         Message::Launcher(m) => launcher::update(app, m),
         Message::Wallpaper(m) => wallpaper::update(app, m),
-        Message::Keys(m) => keys::update(app, m),
+        Message::Keys(m) => keys::update(&mut app.panels.keys, m),
         Message::Overview(m) => overview::update(app, m),
         Message::Clipboard(m) => clipboard::update(app, m),
         Message::Emoji(m) => emoji::update(app, m),
@@ -280,12 +283,12 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Emoji) => emoji::key(app, k),
             Some(PanelKind::Overview) => overview::key(app, k),
             Some(PanelKind::Control) => control::key(app, k),
-            Some(PanelKind::Power) => power::key(app, k),
+            Some(PanelKind::Power) => power::key(&mut app.panels.power, k),
             Some(PanelKind::Capture) => capture::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             Some(PanelKind::Media) => media::key(app, k),
-            Some(PanelKind::Keys) => keys::key(app, k),
+            Some(PanelKind::Keys) => keys::key(k),
             // The calendar: months back and forth, Home for today.
             Some(PanelKind::Calendar | PanelKind::Island) => {
                 let m = match k {
@@ -381,7 +384,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         }));
     }
     // Media position is not signalled: read it while the panel shows it.
-    if open == Some(PanelKind::Media) && media::current(app).is_some_and(|p| p.playing) {
+    if open == Some(PanelKind::Media)
+        && media::current(&app.panels.media, &app.media).is_some_and(|p| p.playing)
+    {
         // Smooth progress: redrawn ten times a second from the last read, re-read every 2 s.
         subs.push(
             iced::time::every(std::time::Duration::from_secs(2))
@@ -438,26 +443,27 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
+    let (p, cx) = cx::of(app);
     match kind {
-        PanelKind::Calendar => calendar::view(app, s),
-        PanelKind::Power => power::view(app, s),
+        PanelKind::Calendar => calendar::view(&p.calendar, &p.media, &cx),
+        PanelKind::Power => power::view(&p.power, &cx),
         PanelKind::Capture => capture::view(app, s),
-        PanelKind::Monitor => monitor::view(app, s),
+        PanelKind::Monitor => monitor::view(&p.monitor, &cx),
         PanelKind::Control => control::view(app, s),
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
-        PanelKind::Privacy => privacy::view(app, s),
+        PanelKind::Privacy => privacy::view(&cx),
         PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
-        PanelKind::Keys => keys::view(app, s),
-        PanelKind::Island => island::view(app, s),
+        PanelKind::Keys => keys::view(&p.keys, &cx),
+        PanelKind::Island => island::view(&p.calendar, &p.media, &cx),
         PanelKind::Overview => overview::view(app, s),
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
         PanelKind::Settings => settings::view(app, s),
-        PanelKind::Weather => weather::view(app, s),
-        PanelKind::Pods => pods::view(app, s),
+        PanelKind::Weather => weather::view(&cx),
+        PanelKind::Pods => pods::view(&cx),
         PanelKind::Files => files::view(app, s),
         PanelKind::Auth => auth::view(&app.panels.auth, s, |m| AppMessage::Panel(Message::Auth(m))),
     }

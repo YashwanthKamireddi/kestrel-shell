@@ -1,10 +1,11 @@
 //! Power: lock, suspend, log out, restart, shut down. The last three ask once more.
 
 use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
+use crate::app::Message as AppMessage;
 use crate::services::{hyprland, logind};
+use crate::theme::text;
 use crate::theme::tok;
-use crate::theme::{Scheme, text};
 use crate::ui::{Icon, control, icon, label};
 use iced::widget::{Space, column, row};
 use iced::{Alignment, Element, Length, Task};
@@ -67,13 +68,13 @@ pub enum Message {
     Press(Action),
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
     let Message::Press(a) = m;
-    if a.confirm().is_some() && app.panels.power.armed != Some(a) {
-        app.panels.power.armed = Some(a);
+    if a.confirm().is_some() && st.armed != Some(a) {
+        st.armed = Some(a);
         return Task::none();
     }
-    app.panels.power.armed = None;
+    st.armed = None;
     let run = match a {
         Action::Lock => Task::future(logind::run(logind::Action::Lock)),
         Action::Suspend => Task::future(logind::run(logind::Action::Suspend)),
@@ -86,10 +87,9 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
 
 /// Up / Down move between the actions, Enter presses (the risky ones still ask a second time,
 /// so Enter twice).
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key) -> Task<AppMessage> {
     use super::Key;
     let n = Action::ALL.len();
-    let st = &mut app.panels.power;
     let at = st.focus.unwrap_or(0);
     match k {
         Key::Down | Key::Tab => st.focus = Some(if st.focus.is_none() { 0 } else { (at + 1) % n }),
@@ -101,16 +101,17 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
             })
         }
         Key::Enter | Key::Space if st.focus.is_some() => {
-            return update(app, Message::Press(Action::ALL[at]));
+            return update(st, Message::Press(Action::ALL[at]));
         }
         _ => {}
     }
     Task::none()
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let armed = app.panels.power.armed;
-    let focus = app.panels.power.focus;
+pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+    let s = cx.scheme;
+    let armed = st.armed;
+    let focus = st.focus;
     let rows = Action::ALL.map(|a| {
         let is_armed = armed == Some(a);
         let focused = focus.is_some_and(|i| Action::ALL[i] == a);
