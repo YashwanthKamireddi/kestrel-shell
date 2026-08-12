@@ -1101,10 +1101,14 @@ fn run_action<Message: std::fmt::Debug>(
             exit_flag.store(true, Ordering::Relaxed);
             ping.ping();
         }
+        // kestrel patch: a redraw the renderer asks for (a picture finished uploading to the
+        // GPU in the background) changed what a surface shows without changing kestrel's state,
+        // so it passes the redraw-key gate (forced), or the picture never appeared.
         Action::Window(iced_runtime::window::Action::RedrawAll) => {
             crate::ktrace!("redraw_all");
             for iced_s in iced_surfaces.values_mut() {
                 iced_s.needs_redraw = true;
+                iced_s.forced = true;
             }
         }
         Action::Window(iced_runtime::window::Action::RelayoutAll) => {
@@ -1115,6 +1119,7 @@ fn run_action<Message: std::fmt::Debug>(
                         .insert(*id, ui.relayout(iced_s.viewport.logical_size(), renderer));
                 }
                 iced_s.needs_redraw = true;
+                iced_s.forced = true;
             }
         }
         _ => {

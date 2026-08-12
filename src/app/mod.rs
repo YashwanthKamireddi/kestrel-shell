@@ -217,8 +217,7 @@ pub struct App {
     pub wallpaper_pending: bool,
     /// The wallpaper is on screen and kestrel's copies of it were let go (the compositor keeps
     /// the picture it was given): its surface is not drawn again until the picture is read
-    /// back (a new wallpaper, or an output that changed). Saves ~25 MB.
-    pub wallpaper_released: bool,
+
     /// Notification groups opened to show every message in full (by app).
     pub notif_open: std::collections::BTreeSet<String>,
     /// Messages whose cut text is shown in full (their arrow).
@@ -342,8 +341,6 @@ pub enum Message {
     Second,
     Frame(Instant),
     WallpaperLoaded(Option<(Seed, Arc<Wallpaper>)>),
-    /// Let go of this wallpaper's picture (it has been on screen for a while).
-    WallpaperRelease(usize),
     /// Give freed memory back to the system (after big pictures were let go).
     Trim,
     /// Open (or close, if already open) a panel under the given button.
@@ -506,7 +503,6 @@ pub fn boot() -> (App, Task<Message>) {
         osd: None,
         osd_sheet: Sheet::new(),
         wallpaper_pending: config.wallpaper.is_some(),
-        wallpaper_released: false,
         notif_open: std::collections::BTreeSet::new(),
         notif_more: std::collections::BTreeSet::new(),
         toast_hover: None,
@@ -666,7 +662,7 @@ pub fn redraw_key(app: &App, id: SurfaceId) -> Option<u64> {
             app.frame().radius.to_bits().hash(&mut h);
         }
         Role::Wallpaper => {
-            if app.wallpaper.is_none() && (app.wallpaper_pending || app.wallpaper_released) {
+            if app.wallpaper.is_none() && app.wallpaper_pending {
                 return Some(iced::NOT_READY);
             }
             colour.hash(&mut h);

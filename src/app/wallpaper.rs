@@ -1,18 +1,8 @@
-//! The wallpaper: reading and scaling the picture off the UI thread, its cache, and
-//! handing it back when outputs change.
+//! The wallpaper: reading and scaling the picture off the UI thread, and its cache. The
+//! picture is kept while shown (it was let go after a guessed 3 s to save 8 MB, which left the
+//! GPU renderer, that uploads pictures in the background, with nothing to draw).
 
 use super::*;
-
-impl App {
-    /// The wallpaper's picture read back when it was let go (an output that changed needs it).
-    pub(crate) fn wallpaper_back(&mut self) -> Task<Message> {
-        if self.wallpaper_released {
-            load_wallpaper(self.config.wallpaper.clone())
-        } else {
-            Task::none()
-        }
-    }
-}
 
 /// Where the screen-sized copy of `path` is kept: named by the file, its size and its time, so
 /// an edited or replaced picture is never shown stale.

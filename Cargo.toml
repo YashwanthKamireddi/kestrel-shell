@@ -16,6 +16,8 @@ iced = { package = "iced_layershell", path = "vendor/iced_layershell", default-f
   "tokio",
   "advanced",
   "tiny-skia",
+  "wgpu",
+  "web-colors",
   "image",
   "svg",
   "canvas",
@@ -70,3 +72,8 @@ memtrace = []
 # `kestrel preview <prompt>` opens a system prompt with a made-up request, for testing its look
 # in the rig (the real agents only answer the live session). Answers go nowhere.
 devtools = []
+
+[dev-dependencies]
+# The screen checks lay panels out with the CPU renderer (the fallback the shell keeps), so they
+# run anywhere, a GPU or not.
+iced_tiny_skia = "0.14"

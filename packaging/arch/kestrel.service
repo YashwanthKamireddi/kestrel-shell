@@ -15,6 +15,8 @@ Wants=kestrel-prompt.service
 Type=simple
 ExecStart=/usr/bin/kestrel
 Environment=KESTREL_SEPARATE_PROMPTS=1
+# CPU renderer until the GPU one draws the same as it (colours were blended differently).
+Environment=ICED_BACKEND=tiny-skia
 Restart=on-failure
 RestartSec=1
 # A freeze restarts it too: kestrel's update loop pings every 10 s (src/watchdog.rs); 20 s

@@ -17,7 +17,11 @@ mod tests {
     /// Lays `el` out in a column `width` wide and draws it; its size.
     fn lay_out_and_draw(el: Element<'_, Message>, width: f32) -> Size {
         let mut el = el;
-        let mut r = iced::Renderer::new(crate::theme::FONT, Pixels(14.0));
+        // The CPU renderer (the shell's fallback): the checks run with or without a GPU.
+        let mut r = iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(
+            crate::theme::FONT,
+            Pixels(14.0),
+        ));
         let mut tree = widget::Tree::new(&el);
         let limits = layout::Limits::new(Size::ZERO, Size::new(width, ROOM));
         let node = el.as_widget_mut().layout(&mut tree, &r, &limits);

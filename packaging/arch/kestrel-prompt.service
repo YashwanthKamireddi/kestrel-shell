@@ -11,6 +11,9 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 ExecStart=/usr/bin/kestrel prompt
+# Drawn on the CPU: a small window almost never shown, where the GPU's fixed ~50 MB per process
+# is not worth it (as COSMIC advises for its small applets). The shell itself draws on the GPU.
+Environment=ICED_BACKEND=tiny-skia
 Restart=always
 RestartSec=1
 WatchdogSec=20

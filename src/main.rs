@@ -101,7 +101,10 @@ fn env_logger() {
         }
         fn log(&self, r: &log::Record) {
             // kestrel's own messages at the chosen level; everyone else's warnings and errors.
-            let ours = self.enabled(r.metadata()) && r.target().starts_with("kestrel");
+            // Also which renderer was chosen (GPU or CPU, API, alpha mode): the first thing to
+            // know when something draws wrong.
+            let ours = self.enabled(r.metadata())
+                && (r.target().starts_with("kestrel") || r.target().starts_with("iced_wgpu"));
             // The SVG parser warns about attributes it skips (`marker-start="none"` in icon
             // files) while drawing them fine: only its errors are worth a line.
             let noise = r.target().starts_with("usvg") && r.level() > log::Level::Error;

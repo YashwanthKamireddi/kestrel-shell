@@ -9,7 +9,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             log::info!("output added: {:?} {:?}", info.name, info.logical_size);
             let t = app.add_output(info);
             app.update_pills(true);
-            Task::batch([t, app.wallpaper_back()])
+            t
         }
         Message::Output(OutputEvent::Removed(id)) => app.remove_output(id),
         Message::Output(OutputEvent::InfoChanged(info)) => {
@@ -22,9 +22,8 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     o.size = size;
                     // Re-apply the bar's size and input region for the new width.
                     o.plan = None;
-                    // Its wallpaper surface will draw again: the picture is read back.
                     o.name = info.name;
-                    return app.wallpaper_back();
+                    return Task::none();
                 }
                 o.name = info.name;
             }
@@ -64,34 +63,13 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 seed.coverage
             );
             app.seed = seed;
-            let id = Arc::as_ptr(&wall) as usize;
             app.wallpaper = Some(wall);
-            app.wallpaper_released = false;
-            // Long enough for every output's wallpaper surface to have presented it.
-            let release = Task::perform(tokio::time::sleep(Duration::from_secs(3)), move |()| {
-                Message::WallpaperRelease(id)
-            });
-            Task::batch([app.recolour(), release])
+            app.recolour()
         }
         Message::Trim => {
             // Safety: malloc_trim only releases free heap memory.
             unsafe {
                 libc::malloc_trim(0);
-            }
-            Task::none()
-        }
-        Message::WallpaperRelease(id) => {
-            if app
-                .wallpaper
-                .as_ref()
-                .is_some_and(|w| Arc::as_ptr(w) as usize == id)
-            {
-                app.wallpaper = None;
-                app.wallpaper_released = true;
-                // Once the renderer's cached copy is gone too (next frame), the memory goes back.
-                return Task::perform(tokio::time::sleep(Duration::from_millis(500)), |()| {
-                    Message::Trim
-                });
             }
             Task::none()
         }

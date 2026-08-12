@@ -53,6 +53,9 @@ default = ["wgpu", "thread-pool"]
 # Renderer backends
 wgpu = ["iced_renderer/wgpu", "iced_renderer/wgpu-bare"]
 tiny-skia = ["iced_renderer/tiny-skia", "iced_renderer/wayland"]
+# kestrel patch: the GPU renderer blends colours as the CPU one, GTK, Qt and browsers do (in
+# sRGB, not linear light), so a translucent surface looks the same on either.
+web-colors = ["iced_renderer/web-colors"]
 
 # Async executors
 tokio = ["iced_futures/tokio"]
