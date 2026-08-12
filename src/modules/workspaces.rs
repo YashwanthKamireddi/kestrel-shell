@@ -3,17 +3,16 @@
 use crate::app::{App, Message, Output};
 use crate::panels::PanelKind;
 use crate::shell::bar::{SLOT, SLOT_GAP};
-use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, label_w};
 use iced::Element;
 use iced::widget::{Space, container, pin, row, stack};
 
-/// Workspaces, the way ii draws them: each occupied one sits on a soft background, and
-/// neighbours that are both occupied join into one shape; the one you are on is an accent
-/// circle that stretches toward the next as you move (its two edges are separate springs:
-/// the leading edge goes first, the trailing one follows) and settles round on it. Open
-/// workspaces show their app's icon, empty ones a quiet number.
+/// Workspaces: the one you are on is an accent circle that stretches toward the next as you
+/// move (its two edges are separate springs: the leading edge goes first, the trailing one
+/// follows) and settles round on it. Open workspaces show their app's icon, empty ones a quiet
+/// number. No shape behind occupied ones (design call 2026-11-16: the bar's pill already groups
+/// them; a second layer inside it was not needed).
 pub fn view<'a>(
     app: &'a App,
     o: &'a Output,
@@ -31,12 +30,6 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     let stride = SLOT + SLOT_GAP;
     // The circle and the occupied shapes: a little smaller than a slot.
     const DOT: f32 = 22.0;
-    let occupied = |id: i32| {
-        app.hypr
-            .workspaces
-            .iter()
-            .any(|w| w.id == id && w.windows > 0)
-    };
     // The active circle's span (left and right edges, springing separately).
     let (cap_l, cap_r) = (o.pill_x.value, o.pill_r.value.max(o.pill_x.value + SLOT));
     let slots = row((first..first + n as i32).map(|id| {
@@ -75,38 +68,7 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     }))
     .spacing(SLOT_GAP);
     let width = n as f32 * stride - SLOT_GAP;
-    let mut layers = stack![].width(width).height(SLOT);
-    // Occupied runs: one rounded shape from the first to the last of each run.
-    let last = first + n as i32 - 1;
-    let mut id = first;
-    while id <= last {
-        if !occupied(id) {
-            id += 1;
-            continue;
-        }
-        let start = id;
-        while id < last && occupied(id + 1) {
-            id += 1;
-        }
-        let x = (start - first) as f32 * stride;
-        let w = (id - start + 1) as f32 * stride - SLOT_GAP;
-        let blob = container(Space::new())
-            .width(w - (SLOT - DOT))
-            .height(DOT)
-            .style(move |_| container::Style {
-                background: Some(s.ink.scale_alpha(tok::FILL * s.opacity).into()),
-                border: iced::Border::default().rounded(DOT / 2.0),
-                ..container::Style::default()
-            });
-        layers = layers.push(
-            pin(blob)
-                .x(x + (SLOT - DOT) / 2.0)
-                .y((SLOT - DOT) / 2.0)
-                .width(width)
-                .height(SLOT),
-        );
-        id += 1;
-    }
+    let layers = stack![].width(width).height(SLOT);
     // Small and see-through (design call 2026-11-13: the full-size bright circle took over the
     // workspace it marked): the accent at part strength, just behind the icon or number.
     let active = container(Space::new())
