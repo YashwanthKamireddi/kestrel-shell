@@ -8,7 +8,7 @@
 
 use crate::app::App;
 use crate::config::Config;
-use crate::services::{airpods, audio, bluetooth, hyprland, mpris, network, web};
+use crate::services::{airpods, audio, bluetooth, hyprland, mpris, network, tray, web};
 use crate::theme::Scheme;
 
 /// A network or device being connected or disconnected right now (a network's name, a
@@ -72,7 +72,10 @@ pub struct Cx<'a> {
     /// The last device that could not be connected or paired, and why.
     pub device_error: Option<&'a (String, String)>,
     pub media: &'a mpris::State,
+    /// Players whose track length is not to be trusted (no progress bar for them).
+    pub length_unreliable: &'a std::collections::HashSet<String>,
     pub weather: Option<&'a web::Weather>,
+    pub tray: &'a tray::State,
     pub pods: Option<&'a airpods::Pods>,
     /// The apps using a camera now.
     pub camera_apps: &'a [String],
@@ -109,7 +112,9 @@ pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
         connecting,
         device_error,
         media,
+        length_unreliable,
         weather,
+        tray,
         pods,
         camera_apps,
         privacy_recent,
@@ -126,7 +131,9 @@ pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
         connecting: connecting.as_ref(),
         device_error: device_error.as_ref(),
         media,
+        length_unreliable,
         weather: weather.as_ref(),
+        tray,
         pods: pods.as_ref(),
         camera_apps,
         privacy_recent,
@@ -147,7 +154,9 @@ pub fn of(app: &App) -> (&super::State, Cx<'_>) {
         connecting: app.connecting.as_ref(),
         device_error: app.device_error.as_ref(),
         media: &app.media,
+        length_unreliable: &app.length_unreliable,
         weather: app.weather.as_ref(),
+        tray: &app.tray,
         pods: app.pods.as_ref(),
         camera_apps: &app.camera_apps,
         privacy_recent: &app.privacy_recent,

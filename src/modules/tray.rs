@@ -16,7 +16,7 @@ pub fn tray_icon<'a>(s: Scheme, item: &tray_service::Item) -> Element<'a, Messag
 /// A tray app's icon at `px`. Apps that send a picture instead of an icon name (Electron
 /// apps: Vesktop, ZapFast) usually send a plain white silhouette, which read as a generic
 /// window; their own app icon (as in the launcher) is used when one is found.
-pub fn tray_icon_at<'a>(s: Scheme, item: &tray_service::Item, px: f32) -> Element<'a, Message> {
+pub fn tray_icon_at<'a, M: 'a>(s: Scheme, item: &tray_service::Item, px: f32) -> Element<'a, M> {
     if matches!(item.icon, Some(tray_service::TrayIcon::Rgba(_)) | None) {
         let id = item.id.to_lowercase();
         let found = [
@@ -68,7 +68,7 @@ pub fn view<'a>(
                 continue;
             }
         }
-        let active = tray_open && crate::panels::tray::showing(app, Some(item));
+        let active = tray_open && crate::panels::tray::showing(&app.panels.tray, Some(item));
         let menu = item.clone();
         let mut ctl =
             ui::control(iced::widget::container(tray_icon(s, item)).center(tok::BAR_ITEM))

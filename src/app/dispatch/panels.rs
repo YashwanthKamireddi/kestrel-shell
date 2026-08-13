@@ -105,9 +105,13 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 .panel
                 .as_ref()
                 .is_some_and(|p| p.open && p.kind == PanelKind::Tray && p.output == output)
-                && panels::tray::showing(app, item.as_ref());
-            let known = item.as_ref().is_none_or(|i| panels::tray::cached(app, i));
-            let task = panels::tray::open(app, item);
+                && panels::tray::showing(&app.panels.tray, item.as_ref());
+            let known = item
+                .as_ref()
+                .is_none_or(|i| panels::tray::cached(&app.panels.tray, i));
+            let a = panels::tray::open(&mut app.panels.tray, item);
+            let task =
+                panels::action::perform(app, a, |m| Message::Panel(panels::Message::Tray(m)));
             let x = rect.unwrap_or_else(|| {
                 let w = app.output(output).map_or(1920.0, |o| o.size.width);
                 Rectangle::new(iced::Point::new(w - 160.0, 0.0), Size::new(0.0, tok::BAR))

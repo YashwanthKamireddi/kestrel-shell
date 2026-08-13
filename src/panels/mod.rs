@@ -90,7 +90,7 @@ impl PanelKind {
     /// The panel's width for what it shows now (the overview fits its cards).
     pub fn width_for(self, app: &App) -> f32 {
         match self {
-            Self::Overview => overview::width(app),
+            Self::Overview => overview::width(&app.hypr),
             // Nothing playing: only as wide as its one line saying so.
             Self::Media if media::current(&app.panels.media, &app.media).is_none() => {
                 media::EMPTY_WIDTH
@@ -103,7 +103,7 @@ impl PanelKind {
     /// rows); others are measured.
     pub fn height_for(self, app: &App) -> Option<f32> {
         match self {
-            Self::Overview => Some(overview::height(app)),
+            Self::Overview => Some(overview::height(&app.hypr)),
             _ => None,
         }
     }
@@ -239,7 +239,10 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         PanelKind::Keys => {
             return action::perform(app, keys::open(), |m| AppMessage::Panel(Message::Keys(m)));
         }
-        PanelKind::Overview => return overview::open(app),
+        PanelKind::Overview => {
+            let a = overview::open(&mut app.panels.overview);
+            return action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)));
+        }
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
         PanelKind::Settings => return settings::open(app),
@@ -275,16 +278,27 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             action::perform(app, a, |m| AppMessage::Panel(Message::Monitor(m)))
         }
         Message::Control(m) => control::update(app, m),
-        Message::Media(m) => media::update(app, m),
+        Message::Media(m) => {
+            let (p, cx) = cx::split(app);
+            let a = media::update(&mut p.media, m, &cx);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Media(m)))
+        }
         Message::Notifications(m) => notifications::update(app, m),
-        Message::Tray(m) => tray::update(app, m),
+        Message::Tray(m) => {
+            let a = tray::update(&mut app.panels.tray, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Tray(m)))
+        }
         Message::Launcher(m) => launcher::update(app, m),
         Message::Wallpaper(m) => wallpaper::update(app, m),
         Message::Keys(m) => {
             let a = keys::update(&mut app.panels.keys, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Keys(m)))
         }
-        Message::Overview(m) => overview::update(app, m),
+        Message::Overview(m) => {
+            let (p, cx) = cx::split(app);
+            let a = overview::update(&mut p.overview, m, &cx);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)))
+        }
         Message::Clipboard(m) => clipboard::update(app, m),
         Message::Emoji(m) => emoji::update(app, m),
         Message::Settings(m) => settings::update(app, m),
@@ -297,7 +311,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Launcher) => launcher::key(app, k),
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
             Some(PanelKind::Emoji) => emoji::key(app, k),
-            Some(PanelKind::Overview) => overview::key(app, k),
+            Some(PanelKind::Overview) => {
+                let (p, cx) = cx::split(app);
+                let a = overview::key(&mut p.overview, k, &cx);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)))
+            }
             Some(PanelKind::Control) => control::key(app, k),
             Some(PanelKind::Power) => {
                 let a = power::key(&mut app.panels.power, k);
@@ -306,7 +324,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Capture) => capture::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
-            Some(PanelKind::Media) => media::key(app, k),
+            Some(PanelKind::Media) => {
+                let (p, cx) = cx::split(app);
+                let a = media::key(&mut p.media, k, &cx);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Media(m)))
+            }
             Some(PanelKind::Keys) => {
                 action::perform(app, keys::key(k), |m| AppMessage::Panel(Message::Keys(m)))
             }
@@ -385,7 +407,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // plays): the compositor hands over a new picture each time a window changes.
     if open == Some(PanelKind::Overview) {
         subs.push(
-            Subscription::run_with(overview::live_jobs(app), |j| {
+            Subscription::run_with(overview::live_jobs(&app.hypr), |j| {
                 crate::services::previews::live(j.clone())
             })
             .map(|f| Message::Overview(overview::Message::Live(f))),
@@ -475,15 +497,19 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
             monitor::view(&p.monitor, &cx).map(|m| AppMessage::Panel(Message::Monitor(m)))
         }
         PanelKind::Control => control::view(app, s),
-        PanelKind::Media => media::view(app, s),
-        PanelKind::Tray => tray::view(app, s),
+        PanelKind::Media => {
+            media::view(&p.media, &cx).map(|m| AppMessage::Panel(Message::Media(m)))
+        }
+        PanelKind::Tray => tray::view(&p.tray, &cx).map(|m| AppMessage::Panel(Message::Tray(m))),
         PanelKind::Privacy => privacy::view(&cx).map(AppMessage::Panel),
         PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(&p.keys, &cx).map(|m| AppMessage::Panel(Message::Keys(m))),
         PanelKind::Island => island::view(&p.calendar, &p.media, &cx).map(AppMessage::Panel),
-        PanelKind::Overview => overview::view(app, s),
+        PanelKind::Overview => {
+            overview::view(&p.overview, &cx).map(|m| AppMessage::Panel(Message::Overview(m)))
+        }
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
         PanelKind::Settings => settings::view(app, s),

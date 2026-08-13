@@ -21,6 +21,19 @@ pub enum Action<M> {
         path: String,
         connect: bool,
     },
+    /// Show a panel on an output, hanging from `at` (a panel that waited for what it shows).
+    Open {
+        kind: super::PanelKind,
+        output: iced::OutputId,
+        at: iced::Rectangle,
+    },
+    /// Open Settings on a page.
+    #[allow(dead_code)] // the launcher's, as it moves onto actions (Phase 9)
+    Settings(super::settings::Page),
+    /// Open Settings › Windows on the rule for an app (its window class).
+    WindowRule(String),
+    /// Read Hyprland's state again now (windows moved since the last event).
+    ReadHyprland,
     /// Several, in order.
     Many(Vec<Action<M>>),
 }
@@ -62,6 +75,13 @@ pub fn perform<M: Send + 'static>(
                 AppMessage::DeviceDone(path.clone(), r)
             })
         }
+        Action::Open { kind, output, at } => app.open_panel(kind, output, at),
+        Action::Settings(page) => Task::done(AppMessage::SettingsAt(page)),
+        Action::WindowRule(class) => Task::done(AppMessage::RuleFor(class)),
+        Action::ReadHyprland => Task::perform(crate::services::hyprland::snapshot(), |s| match s {
+            Some(s) => AppMessage::Hypr(s),
+            None => AppMessage::Batch(Vec::new()),
+        }),
         Action::Many(v) => Task::batch(v.into_iter().map(|a| perform(app, a, wrap))),
     }
 }

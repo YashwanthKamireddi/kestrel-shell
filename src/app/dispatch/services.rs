@@ -118,10 +118,17 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             app.hypr = s;
             app.update_pills(false);
             if moved && overview_open {
-                return Task::batch([app.close(), panels::overview::refresh_missing(app)]);
+                let a = panels::overview::refresh_missing(&app.panels.overview, &app.hypr);
+                let refresh = panels::action::perform(app, a, |m| {
+                    Message::Panel(panels::Message::Overview(m))
+                });
+                return Task::batch([app.close(), refresh]);
             }
             if changed {
-                return panels::overview::refresh_missing(app);
+                let a = panels::overview::refresh_missing(&app.panels.overview, &app.hypr);
+                return panels::action::perform(app, a, |m| {
+                    Message::Panel(panels::Message::Overview(m))
+                });
             }
             Task::none()
         }

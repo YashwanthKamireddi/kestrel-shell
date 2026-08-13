@@ -4,9 +4,8 @@
 //! Nothing is marked until you choose: a thin ring shows the window under the pointer (gone
 //! when it leaves) or the one Tab and the arrows reached; Enter or a click goes there. Nothing fades or glides.
 
-use super::Message as PanelMessage;
 use super::PanelKind;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
 use crate::services::{apps, hyprland};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -45,6 +44,12 @@ struct Ready {
 
 #[derive(Clone, Debug)]
 pub enum Message {
+    /// Go to a workspace (its card's number), closing the overview.
+    Workspace(i32),
+    /// Go to a window, closing the overview.
+    Focus(String),
+    /// Its app's window rule in Settings (right click).
+    Rule(String),
     Submit,
     /// The pointer came onto a window: it becomes the selection.
     Hover(String),
@@ -56,23 +61,15 @@ pub enum Message {
     Fresh(u64, Vec<crate::services::previews::Frame>),
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Overview(m))
-}
+type Act = super::action::Action<Message>;
 
-pub fn open(app: &mut App) -> Task<AppMessage> {
-    let st = &mut app.panels.overview;
+pub fn open(st: &mut State) -> Act {
     // Nothing marked until the pointer or a key chooses (a ring on the current window
     // before you did anything read as a heavy border: design call).
     st.selected = None;
-    Task::batch([
-        // The pictures were taken just before it opened (`prepare`); the live stream keeps
-        // them moving. Positions change without an event (resizing): read them fresh.
-        Task::perform(hyprland::snapshot(), |s| match s {
-            Some(s) => AppMessage::Hypr(s),
-            None => AppMessage::Batch(Vec::new()),
-        }),
-    ])
+    // The pictures were taken just before it opened (`prepare`); the live stream keeps them
+    // moving. Positions change without an event (resizing): read them fresh.
+    Act::ReadHyprland
 }
 
 /// Fresh pictures of every window: captured, scaled and rounded to their tiles off the UI
@@ -82,20 +79,28 @@ pub fn open(app: &mut App) -> Task<AppMessage> {
 /// Opening: every window's picture is taken first (all at once, about a frame), then the
 /// overview shows them, current, never an old picture changing in front of you. If the
 /// compositor is slow, it opens anyway after `WAIT` with what it has.
-pub fn prepare(app: &mut App, output: iced::OutputId, at: iced::Rectangle) -> Task<AppMessage> {
+pub fn prepare(
+    st: &mut State,
+    hypr: &hyprland::State,
+    output: iced::OutputId,
+    at: iced::Rectangle,
+) -> Act {
     const WAIT: std::time::Duration = std::time::Duration::from_millis(90);
     // Every window has a picture already (taken when it opened, kept fresh while shown): open at
     // once and refresh them behind it. Waiting for fresh ones every time put ~40 ms between the
     // key and the overview (the user's "delay").
-    let complete = app
-        .hypr
+    let complete = hypr
         .windows
         .iter()
         .filter(|w| w.workspace > 0)
-        .all(|w| app.panels.overview.previews.contains_key(&w.address));
+        .all(|w| st.previews.contains_key(&w.address));
     if complete {
-        let open = app.open_panel(PanelKind::Overview, output, at);
-        let jobs = live_jobs(app);
+        let open = Act::Open {
+            kind: PanelKind::Overview,
+            output,
+            at,
+        };
+        let jobs = live_jobs(hypr);
         let fresh = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
@@ -104,32 +109,31 @@ pub fn prepare(app: &mut App, output: iced::OutputId, at: iced::Rectangle) -> Ta
                 .await
                 .unwrap_or_default()
             },
-            |frames| msg(Message::Live(frames)),
+            Message::Live,
         );
-        return Task::batch([open, fresh]);
+        return open.and(Act::Run(fresh));
     }
-    let st = &mut app.panels.overview;
     st.token += 1;
     let token = st.token;
     st.pending = Some((token, output, at));
-    let jobs = live_jobs(app);
-    Task::perform(
+    let jobs = live_jobs(hypr);
+    Act::Run(Task::perform(
         async move {
             tokio::task::spawn_blocking(move || crate::services::previews::snapshot(&jobs, WAIT))
                 .await
                 .unwrap_or_default()
         },
-        move |frames| msg(Message::Fresh(token, frames)),
-    )
+        move |frames| Message::Fresh(token, frames),
+    ))
 }
 
 /// Pictures for windows that have none at their tile's size yet (a window opened or was
 /// resized), taken in the background while the overview is closed: the others keep theirs,
 /// so opening one window no longer copies every window on the desktop.
-pub fn refresh_missing(app: &App) -> Task<AppMessage> {
-    let have = &app.panels.overview.previews;
+pub fn refresh_missing(st: &State, hypr: &hyprland::State) -> Act {
+    let have = &st.previews;
     snapshot(
-        live_jobs(app)
+        live_jobs(hypr)
             .into_iter()
             .filter(|j| {
                 have.get(&j.address)
@@ -139,11 +143,11 @@ pub fn refresh_missing(app: &App) -> Task<AppMessage> {
     )
 }
 
-fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Task<AppMessage> {
+fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Act {
     if jobs.is_empty() {
-        return Task::none();
+        return Act::None;
     }
-    Task::perform(
+    Act::Run(Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
                 crate::services::previews::snapshot(&jobs, std::time::Duration::from_millis(250))
@@ -151,15 +155,14 @@ fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Task<AppMessage> {
             .await
             .unwrap_or_default()
         },
-        |v| msg(Message::Live(v)),
-    )
+        Message::Live,
+    ))
 }
 
 /// The windows to keep live while the overview is open, each at its tile's size.
-pub fn live_jobs(app: &App) -> Vec<crate::services::previews::Job> {
+pub fn live_jobs(hypr: &hyprland::State) -> Vec<crate::services::previews::Job> {
     let (cw, ch) = card_size();
-    app.hypr
-        .windows
+    hypr.windows
         .iter()
         // Only windows the overview draws (special workspaces are never shown).
         .filter(|w| w.workspace > 0)
@@ -205,10 +208,9 @@ pub fn card_size() -> (f32, f32) {
 
 /// The workspaces shown: those with windows, and the one you are on (empty ones are left
 /// out: a row of blank cards was noise).
-fn workspace_ids(app: &App) -> Vec<i32> {
-    let current = app.hypr.active_on(&app.hypr.focused_monitor);
-    let mut ids: Vec<i32> = app
-        .hypr
+fn workspace_ids(hypr: &hyprland::State) -> Vec<i32> {
+    let current = hypr.active_on(&hypr.focused_monitor);
+    let mut ids: Vec<i32> = hypr
         .windows
         .iter()
         .map(|w| w.workspace)
@@ -223,13 +225,8 @@ fn workspace_ids(app: &App) -> Vec<i32> {
 /// Windows of a workspace as they are seen: tiled top-left first, floating ones last; a
 /// fullscreen or maximized window covers the rest, so it is the only one (drawing the ones
 /// behind it over it cut it off).
-fn windows_on(app: &App, id: i32) -> Vec<&hyprland::Window> {
-    let mut v: Vec<&hyprland::Window> = app
-        .hypr
-        .windows
-        .iter()
-        .filter(|w| w.workspace == id)
-        .collect();
+fn windows_on(hypr: &hyprland::State, id: i32) -> Vec<&hyprland::Window> {
+    let mut v: Vec<&hyprland::Window> = hypr.windows.iter().filter(|w| w.workspace == id).collect();
     if let Some(top) = v
         .iter()
         .filter(|w| w.fullscreen > 0)
@@ -244,45 +241,52 @@ fn windows_on(app: &App, id: i32) -> Vec<&hyprland::Window> {
 }
 
 /// Every matching window in on-screen order, with its card index.
-fn order(app: &App) -> Vec<(usize, &hyprland::Window)> {
-    workspace_ids(app)
+fn order(hypr: &hyprland::State) -> Vec<(usize, &hyprland::Window)> {
+    workspace_ids(hypr)
         .into_iter()
         .enumerate()
-        .flat_map(|(card, id)| windows_on(app, id).into_iter().map(move |w| (card, w)))
+        .flat_map(|(card, id)| windows_on(hypr, id).into_iter().map(move |w| (card, w)))
         .collect()
 }
 
 /// The window you were in.
-fn focused(app: &App) -> Option<String> {
-    app.hypr
-        .windows
+fn focused(hypr: &hyprland::State) -> Option<String> {
+    hypr.windows
         .iter()
         .min_by_key(|w| w.focus)
         .map(|w| w.address.clone())
 }
 
-fn focus(address: &str) -> Task<AppMessage> {
-    Task::batch([
-        Task::done(AppMessage::Dispatch(
-            crate::services::compositor::Action::FocusWindow(String::from(address)),
-        )),
-        Task::done(AppMessage::Close),
-    ])
+fn focus(address: &str) -> Act {
+    Act::Dispatch(crate::services::compositor::Action::FocusWindow(
+        String::from(address),
+    ))
+    .and(Act::Close)
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message, cx: &Cx) -> Act {
+    let hypr = cx.hypr;
     match m {
+        Message::Workspace(id) => {
+            return Act::Dispatch(crate::services::compositor::Action::FocusWorkspace(id))
+                .and(Act::Close);
+        }
+        Message::Focus(a) => return focus(&a),
+        Message::Rule(class) => return Act::WindowRule(class),
         Message::Fresh(token, frames) => {
-            let _ = update(app, Message::Live(frames));
-            if let Some((t, output, at)) = app.panels.overview.pending
+            let _ = update(st, Message::Live(frames), cx);
+            if let Some((t, output, at)) = st.pending
                 && t == token
             {
-                app.panels.overview.pending = None;
-                return app.open_panel(PanelKind::Overview, output, at);
+                st.pending = None;
+                return Act::Open {
+                    kind: PanelKind::Overview,
+                    output,
+                    at,
+                };
             }
         }
         Message::Live(frames) => {
-            let st = &mut app.panels.overview;
             for f in frames {
                 st.previews.insert(
                     f.address,
@@ -293,79 +297,69 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 );
             }
             // Pictures of windows that have closed go.
-            let open: std::collections::HashSet<&str> = app
-                .hypr
-                .windows
-                .iter()
-                .map(|w| w.address.as_str())
-                .collect();
-            app.panels
-                .overview
-                .previews
-                .retain(|a, _| open.contains(a.as_str()));
+            let open: std::collections::HashSet<&str> =
+                hypr.windows.iter().map(|w| w.address.as_str()).collect();
+            st.previews.retain(|a, _| open.contains(a.as_str()));
         }
-        Message::Hover(a) => app.panels.overview.selected = Some(a),
+        Message::Hover(a) => st.selected = Some(a),
         Message::Unhover(a) => {
-            let st = &mut app.panels.overview;
             if st.selected.as_deref() == Some(a.as_str()) {
                 st.selected = None;
             }
         }
         Message::Submit => {
-            let list = order(app);
-            let st = &app.panels.overview;
+            let list = order(hypr);
             let target = st
                 .selected
                 .as_ref()
                 .filter(|a| list.iter().any(|(_, w)| &w.address == *a))
                 .cloned()
-                .or_else(|| focused(app))
+                .or_else(|| focused(hypr))
                 .or_else(|| list.first().map(|(_, w)| w.address.clone()));
             if let Some(a) = target {
                 return focus(&a);
             }
         }
     }
-    Task::none()
+    Act::None
 }
 
 /// The panel's height, worked out from its rows (not measured after drawing): opening after
 /// the number of rows changed showed the old height for a frame or two, a tall empty frame
 /// snapping shut.
-pub fn height(app: &App) -> f32 {
+pub fn height(hypr: &hyprland::State) -> f32 {
     let (_, ch) = card_size();
-    let rows = workspace_ids(app).len().div_ceil(COLUMNS).max(1) as f32;
+    let rows = workspace_ids(hypr).len().div_ceil(COLUMNS).max(1) as f32;
     2.0 * PAD + rows * (ch + CAPTION_GAP + CAPTION) + (rows - 1.0) * GAP
 }
 
 /// The panel's width: its cards side by side (up to a row of five).
-pub fn width(app: &App) -> f32 {
+pub fn width(hypr: &hyprland::State) -> f32 {
     let (cw, _) = card_size();
-    let n = workspace_ids(app).len().clamp(1, COLUMNS) as f32;
+    let n = workspace_ids(hypr).len().clamp(1, COLUMNS) as f32;
     2.0 * PAD + n * cw + (n - 1.0) * GAP
 }
 
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key, cx: &Cx) -> Act {
     use super::Key;
+    let hypr = cx.hypr;
     if k == Key::Enter {
-        return update(app, Message::Submit);
+        return update(st, Message::Submit, cx);
     }
-    let list = order(app);
+    let list = order(hypr);
     if list.is_empty() {
-        return Task::none();
+        return Act::None;
     }
-    let cur = app
-        .panels
-        .overview
+    let cur = st
         .selected
         .clone()
-        .or_else(|| focused(app))
+        .or_else(|| focused(hypr))
         .and_then(|a| list.iter().position(|(_, w)| w.address == a));
     // Every key moves, starting from the window you are in (the first press used to only mark
     // it: a press that did nothing).
     let Some(cur) = cur else {
-        app.panels.overview.selected = list.first().map(|(_, w)| w.address.clone());
-        return Task::none();
+        st.selected = list.first().map(|(_, w)| w.address.clone());
+        return Act::None;
     };
     let n = list.len();
     let next = match k {
@@ -395,8 +389,8 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
                 })
                 .map(|(i, _)| i);
             if let Some(i) = same {
-                app.panels.overview.selected = Some(list[i].1.address.clone());
-                return Task::none();
+                st.selected = Some(list[i].1.address.clone());
+                return Act::None;
             }
             let card = list[cur].0 as i64;
             let step = if k == Key::Down {
@@ -415,22 +409,23 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         }
         Key::Home => 0,
         Key::End => n - 1,
-        _ => return Task::none(),
+        _ => return Act::None,
     };
-    app.panels.overview.selected = Some(list[next].1.address.clone());
-    Task::none()
+    st.selected = Some(list[next].1.address.clone());
+    Act::None
 }
 
-fn app_icon<'a>(class: &str, px: f32, s: Scheme) -> Element<'a, AppMessage> {
+fn app_icon<'a>(class: &str, px: f32, s: Scheme) -> Element<'a, Message> {
     ui::app_icon(s, class, px, Icon::AppWindow)
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let (s, hypr) = (cx.scheme, cx.hypr);
     let card_w = (WIDTH - 2.0 * PAD - (COLUMNS as f32 - 1.0) * GAP) / COLUMNS as f32;
-    let active = app.hypr.active_on(&app.hypr.focused_monitor);
-    let cards: Vec<Element<'_, AppMessage>> = workspace_ids(app)
+    let active = hypr.active_on(&hypr.focused_monitor);
+    let cards: Vec<Element<'a, Message>> = workspace_ids(hypr)
         .into_iter()
-        .map(|id| card(app, s, id, active == Some(id), card_w))
+        .map(|id| card(st, hypr, s, id, active == Some(id), card_w))
         .collect();
     let mut grid = column![].spacing(GAP);
     let mut it = cards.into_iter().peekable();
@@ -448,14 +443,15 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 fn card<'a>(
-    app: &'a App,
+    st: &'a State,
+    hypr: &'a hyprland::State,
     s: Scheme,
     id: i32,
     current: bool,
     width: f32,
-) -> Element<'a, AppMessage> {
-    let windows = windows_on(app, id);
-    let selected = app.panels.overview.selected.as_deref();
+) -> Element<'a, Message> {
+    let windows = windows_on(hypr, id);
+    let selected = st.selected.as_deref();
     let (_, height) = card_size();
 
     // A plain card (the blurred wallpaper behind each one was the heaviest thing drawn and
@@ -474,10 +470,7 @@ fn card<'a>(
                 }
             )
             .no_press_scale()
-            .on_press(AppMessage::Batch(vec![
-                AppMessage::Dispatch(crate::services::compositor::Action::FocusWorkspace(id)),
-                AppMessage::Close,
-            ]))
+            .on_press(Message::Workspace(id))
     ]
     .width(width)
     .height(height);
@@ -487,9 +480,9 @@ fn card<'a>(
         let alpha = 1.0;
         // The window's last picture, even if its tile changed size since (scaled to fit until
         // the fresh one arrives): an icon flashed for a second before.
-        let ready = app.panels.overview.previews.get(&w.address);
+        let ready = st.previews.get(&w.address);
         let exact = ready.is_some_and(|r| r.size == (bw as u32, bh as u32));
-        let body: Element<'_, AppMessage> = match ready {
+        let body: Element<'_, Message> = match ready {
             Some(r) => iced::widget::image(r.handle.clone())
                 .width(bw)
                 .height(bh)
@@ -534,11 +527,11 @@ fn card<'a>(
             .height(bh)
             .radius(tok::R_CONTROL)
             .no_press_scale()
-            .on_enter(msg(Message::Hover(w.address.clone())))
-            .on_exit(msg(Message::Unhover(w.address.clone())))
+            .on_enter(Message::Hover(w.address.clone()))
+            .on_exit(Message::Unhover(w.address.clone()))
             .on_press(focus_msg(&w.address))
             // Right click: how this app's windows open (its rule in Settings > Windows).
-            .on_right_press(AppMessage::RuleFor(w.class.clone()));
+            .on_right_press(Message::Rule(w.class.clone()));
         layers = layers.push(pin(tile).x(x).y(y));
     }
     // Under the card: its number (in the bar's white capsule when it is the one you are on)
@@ -548,7 +541,7 @@ fn card<'a>(
         1 => apps::name_for_class(&windows[0].class),
         n => format!("{n} windows"),
     };
-    let number: Element<'_, AppMessage> = if current {
+    let number: Element<'_, Message> = if current {
         container(label_w(
             id.to_string(),
             text::SMALL,
@@ -582,13 +575,8 @@ fn card<'a>(
         .into()
 }
 
-fn focus_msg(address: &str) -> AppMessage {
-    AppMessage::Batch(vec![
-        AppMessage::Dispatch(crate::services::compositor::Action::FocusWindow(
-            String::from(address),
-        )),
-        AppMessage::Close,
-    ])
+fn focus_msg(address: &str) -> Message {
+    Message::Focus(String::from(address))
 }
 
 #[cfg(test)]

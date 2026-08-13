@@ -28,7 +28,7 @@ pub fn view<'a>(
     if !cx.config.bar.contains("media")
         && let Some(p) = media::current(media_st, cx.media)
     {
-        col = col.push(playing(s, p));
+        col = col.push(playing(s, p, media::playing(media_st, p)));
     }
     col = col.push(card(
         s,
@@ -38,7 +38,11 @@ pub fn view<'a>(
 }
 
 /// What's playing, with the essential controls.
-fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, super::Message> {
+fn playing<'a>(
+    s: Scheme,
+    p: &'a crate::services::mpris::Player,
+    on: bool,
+) -> Element<'a, super::Message> {
     let bus = p.bus.clone();
     let msg = super::Message::Media;
     let button = |i: Icon, m: Option<super::Message>, primary: bool| {
@@ -89,7 +93,7 @@ fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, 
                     false
                 ),
                 button(
-                    if p.playing { Icon::Pause } else { Icon::Play },
+                    if on { Icon::Pause } else { Icon::Play },
                     Some(msg(media::Message::PlayPause(bus.clone()))),
                     true
                 ),

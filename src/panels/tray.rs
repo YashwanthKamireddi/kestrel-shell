@@ -3,8 +3,7 @@
 //! icon it shows that item's menu, rendered with kestrel's own rows; sub-menus open as a page
 //! with a back row.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
 use crate::services::{icons, tray};
 use crate::theme::tok;
 use crate::theme::{Scheme, text};
@@ -57,10 +56,6 @@ pub enum Message {
     Pin(String),
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Tray(m))
-}
-
 /// The name an item is pinned under: its id, which survives restarts (the bus name does not).
 pub fn pin_key(item: &tray::Item) -> String {
     if item.id.is_empty() {
@@ -78,23 +73,25 @@ fn save_pins(pins: &BTreeSet<String>) {
     crate::state::update(|s| s.tray.pinned = pins.clone());
 }
 
-fn load(st: &mut State, item: tray::Item) -> Task<AppMessage> {
+type Act = super::action::Action<Message>;
+
+fn load(st: &mut State, item: tray::Item) -> Act {
     st.path.clear();
     st.menu = st.cache.get(&item.key).cloned().flatten();
     let key = item.key.clone();
     let task = match &item.menu {
-        Some(m) => Task::perform(tray::menu(item.bus.clone(), m.clone()), move |m| {
-            msg(Message::Loaded(key.clone(), m))
-        }),
-        None => Task::none(),
+        Some(m) => Act::Run(Task::perform(
+            tray::menu(item.bus.clone(), m.clone()),
+            move |m| Message::Loaded(key.clone(), m),
+        )),
+        None => Act::None,
     };
     st.item = Some(item);
     task
 }
 
 /// Open the panel on `item`'s menu, or on the list of all items.
-pub fn open(app: &mut App, item: Option<tray::Item>) -> Task<AppMessage> {
-    let st = &mut app.panels.tray;
+pub fn open(st: &mut State, item: Option<tray::Item>) -> Act {
     st.from_list = false;
     match item {
         Some(item) => load(st, item),
@@ -102,27 +99,25 @@ pub fn open(app: &mut App, item: Option<tray::Item>) -> Task<AppMessage> {
             st.item = None;
             st.menu = None;
             st.path.clear();
-            Task::none()
+            Act::None
         }
     }
 }
 
 /// Whether `item`'s menu has been read before (so it can be shown at once).
-pub fn cached(app: &App, item: &tray::Item) -> bool {
-    item.menu.is_none() || app.panels.tray.cache.contains_key(&item.key)
+pub fn cached(st: &State, item: &tray::Item) -> bool {
+    item.menu.is_none() || st.cache.contains_key(&item.key)
 }
 
 /// Whether the panel currently shows `item` (None: the list).
-pub fn showing(app: &App, item: Option<&tray::Item>) -> bool {
-    let st = &app.panels.tray;
+pub fn showing(st: &State, item: Option<&tray::Item>) -> bool {
     match item {
         Some(i) => !st.from_list && st.item.as_ref().is_some_and(|t| t.key == i.key),
         None => st.item.is_none() || st.from_list,
     }
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
-    let st = &mut app.panels.tray;
+pub fn update(st: &mut State, m: Message) -> Act {
     match m {
         Message::Loaded(key, m) => {
             st.cache.insert(key.clone(), m.clone());
@@ -130,7 +125,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 st.menu = m;
                 // Asked for before it was known: the panel opens now, with the menu in it.
                 if let Some((output, at)) = st.pending.take() {
-                    return app.open_panel(super::PanelKind::Tray, output, at);
+                    return Act::Open {
+                        kind: super::PanelKind::Tray,
+                        output,
+                        at,
+                    };
                 }
             }
         }
@@ -149,7 +148,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         }
         Message::Activate(item) => {
             let t = Task::future(tray::activate(item.bus, item.path, false));
-            return Task::batch([t.discard(), Task::done(AppMessage::Close)]);
+            return Act::Run(t.discard()).and(Act::Close);
         }
         Message::Pin(key) => {
             if !st.pins.remove(&key) {
@@ -162,11 +161,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 && let Some(menu) = &item.menu
             {
                 let t = Task::future(tray::menu_event(item.bus.clone(), menu.clone(), id));
-                return Task::batch([t.discard(), Task::done(AppMessage::Close)]);
+                return Act::Run(t.discard()).and(Act::Close);
             }
         }
     }
-    Task::none()
+    Act::None
 }
 
 fn find(m: &tray::MenuItem, id: i32) -> Option<&tray::MenuItem> {
@@ -176,7 +175,7 @@ fn find(m: &tray::MenuItem, id: i32) -> Option<&tray::MenuItem> {
     m.children.iter().find_map(|c| find(c, id))
 }
 
-fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
+fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, Message> {
     control(
         row![
             icon(Icon::ChevronLeft, tok::ICON, s.ink_dim),
@@ -191,18 +190,18 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, AppMessage> {
     .radius(tok::R_ROW)
     .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
-    .on_press(msg(Message::Back))
+    .on_press(Message::Back)
     .into()
 }
 
 /// Every tray app as a grid of icons with their names (like Windows 11's hidden icons): click
 /// to open the app, right-click for its menu (where it can be kept in the bar). Apps kept in
 /// the bar carry a small accent dot.
-fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+fn list<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     const CELL: f32 = 70.0;
     const COLS: usize = 4;
-    let st = &app.panels.tray;
-    let items: Vec<&tray::Item> = app.tray.items.iter().collect();
+    let items: Vec<&tray::Item> = cx.tray.items.iter().collect();
     // Every app in the tray quit while it was open: a faint mark, not a blank card.
     if items.is_empty() {
         return crate::ui::empty(s, Icon::LayoutGrid);
@@ -234,9 +233,9 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 );
             }
             let primary = if item.item_is_menu {
-                msg(Message::Show(item.clone()))
+                Message::Show(item.clone())
             } else {
-                msg(Message::Activate(item.clone()))
+                Message::Activate(item.clone())
             };
             r = r.push(
                 control(
@@ -258,7 +257,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(primary)
-                .on_right_press(msg(Message::Show(item.clone()))),
+                .on_right_press(Message::Show(item.clone())),
             );
         }
         grid = grid.push(r);
@@ -267,7 +266,7 @@ fn list(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 /// "Keep in the bar", for the app whose menu is open.
-fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, AppMessage> {
+fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, Message> {
     let Some(item) = &st.item else {
         return Space::new().into();
     };
@@ -280,7 +279,7 @@ fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, AppMessage> {
             if pinned { s.accent } else { s.ink_dim }
         ),
         label("Keep in the bar", text::BODY, s.ink).width(Length::Fill),
-        ui::switch(s, pinned, msg(Message::Pin(key))),
+        ui::switch(s, pinned, Message::Pin(key)),
     ]
     .spacing(tok::L)
     .padding([tok::S, tok::L])
@@ -288,10 +287,10 @@ fn keep_row<'a>(st: &State, s: Scheme) -> Element<'a, AppMessage> {
     .into()
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let st = &app.panels.tray;
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     if st.item.is_none() {
-        return list(app, s);
+        return list(st, cx);
     }
     let title = st
         .item
@@ -356,7 +355,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             continue;
         }
         let fg = if c.enabled { s.ink } else { s.ink_faint };
-        let lead: Element<'_, AppMessage> = match (c.toggle, &c.icon) {
+        let lead: Element<'_, Message> = match (c.toggle, &c.icon) {
             (Some(true), _) => icon(
                 if c.radio {
                     Icon::CircleDot
@@ -383,12 +382,10 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         if has_sub {
             r = r.push(icon(Icon::ChevronRight, tok::ICON_S, s.ink_dim));
         }
-        let on = c.enabled.then(|| {
-            if has_sub {
-                msg(Message::Enter(c.id))
-            } else {
-                msg(Message::Click(c.id))
-            }
+        let on = c.enabled.then_some(if has_sub {
+            Message::Enter(c.id)
+        } else {
+            Message::Click(c.id)
         });
         col = col.push(
             control(r)

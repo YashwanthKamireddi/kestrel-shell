@@ -1,8 +1,8 @@
 //! Now playing: artwork, title, artist, progress, transport. Chips to switch only when two
 //! different things are playing.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::action::Action;
+use super::cx::Cx;
 use crate::services::mpris::{self, Player};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -16,6 +16,20 @@ pub struct State {
     pub selected: Option<String>,
     /// Last read position (µs) and when it was read.
     pub position: Option<(i64, std::time::Instant)>,
+    /// Play or pause pressed (the player's bus, playing wanted, when): shown at once, until
+    /// the player says so itself or for at most `WANT`. The player's own state is never
+    /// written ahead of it (it is the truth; this is only what was asked).
+    want: Option<(String, bool, std::time::Instant)>,
+}
+
+const WANT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Whether `p` shows as playing: what was just asked, until the player agrees.
+pub fn playing(st: &State, p: &Player) -> bool {
+    match &st.want {
+        Some((bus, want, at)) if *bus == p.bus && at.elapsed() < WANT => *want,
+        _ => p.playing,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -31,10 +45,6 @@ pub enum Message {
     Tick,
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Media(m))
-}
-
 /// The player shown: the one picked in the panel, else the main one.
 pub fn current<'a>(st: &State, media: &'a mpris::State) -> Option<&'a Player> {
     let sel = st.selected.as_ref();
@@ -42,47 +52,49 @@ pub fn current<'a>(st: &State, media: &'a mpris::State) -> Option<&'a Player> {
         .or_else(|| media.main())
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message, cx: &Cx) -> Action<Message> {
+    let run = |c: mpris::Command| Action::Run(Task::future(mpris::command(c)).discard());
     match m {
         Message::Select(b) => {
-            app.panels.media.selected = Some(b);
-            app.panels.media.position = None;
-            return Task::done(msg(Message::Poll));
+            st.selected = Some(b);
+            st.position = None;
+            return Action::Run(Task::done(Message::Poll));
         }
         Message::PlayPause(b) => {
-            if let Some(p) = app.media.players.iter_mut().find(|p| p.bus == b) {
-                p.playing = !p.playing;
+            if let Some(p) = cx.media.players.iter().find(|p| p.bus == b) {
+                st.want = Some((b.clone(), !playing(st, p), std::time::Instant::now()));
             }
-            return Task::future(mpris::command(mpris::Command::PlayPause(b))).discard();
+            return run(mpris::Command::PlayPause(b));
         }
         Message::Next(b) => {
-            app.panels.media.position = None;
-            return Task::future(mpris::command(mpris::Command::Next(b))).discard();
+            st.position = None;
+            return run(mpris::Command::Next(b));
         }
         Message::Previous(b) => {
-            app.panels.media.position = None;
-            return Task::future(mpris::command(mpris::Command::Previous(b))).discard();
+            st.position = None;
+            return run(mpris::Command::Previous(b));
         }
         Message::Seek(b, frac) => {
-            if let Some(p) = app.media.players.iter().find(|p| p.bus == b) {
+            if let Some(p) = cx.media.players.iter().find(|p| p.bus == b) {
                 let pos = (frac.clamp(0.0, 1.0) as f64 * p.length as f64) as i64;
-                app.panels.media.position = Some((pos, std::time::Instant::now()));
-                return Task::future(mpris::command(mpris::Command::Seek(b, pos))).discard();
+                st.position = Some((pos, std::time::Instant::now()));
+                return run(mpris::Command::Seek(b, pos));
             }
         }
         Message::Position(p) => {
-            app.panels.media.position = p.map(|p| (p, std::time::Instant::now()));
+            st.position = p.map(|p| (p, std::time::Instant::now()));
         }
         Message::Tick => {}
         Message::Poll => {
-            if let Some(p) = current(&app.panels.media, &app.media) {
-                return Task::perform(mpris::position(p.bus.clone()), |p| {
-                    msg(Message::Position(p))
-                });
+            if let Some(p) = current(st, cx.media) {
+                return Action::Run(Task::perform(
+                    mpris::position(p.bus.clone()),
+                    Message::Position,
+                ));
             }
         }
     }
-    Task::none()
+    Action::None
 }
 
 fn clock(us: i64) -> String {
@@ -332,8 +344,9 @@ pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 /// The panel's width with nothing playing.
 pub const EMPTY_WIDTH: f32 = 240.0;
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let Some(p) = current(&app.panels.media, &app.media) else {
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let Some(p) = current(st, cx.media) else {
         // Says why it is empty in the panel itself (a pop-up saying it read as noise).
         return container(crate::ui::empty_reason(
             s,
@@ -346,17 +359,17 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     let bus = p.bus.clone();
 
     let mut top = column![].spacing(tok::L);
-    if app.media.players.len() > 1 {
+    if cx.media.players.len() > 1 {
         // Named by app, unless two come from the same app: then by what they play.
         let same_app = |q: &Player| {
-            app.media
+            cx.media
                 .players
                 .iter()
                 .filter(|o| o.identity == q.identity)
                 .count()
                 > 1
         };
-        let chips = row(app.media.players.iter().map(|q| {
+        let chips = row(cx.media.players.iter().map(|q| {
             let on = q.bus == p.bus;
             control(label(
                 ui::ellipsize(
@@ -380,7 +393,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     crate::ui::control::Kind::Tonal
                 },
             )
-            .on_press(msg(Message::Select(q.bus.clone())))
+            .on_press(Message::Select(q.bus.clone()))
             .into()
         }))
         .spacing(tok::S);
@@ -420,13 +433,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
 
     // Progress, when the player reports a length.
-    if p.length > 0 && !app.length_unreliable.contains(&p.bus) {
-        let pos = app
-            .panels
-            .media
+    if p.length > 0 && !cx.length_unreliable.contains(&p.bus) {
+        let pos = st
             .position
             .map(|(pos, at)| {
-                if p.playing {
+                if playing(st, p) {
                     pos + at.elapsed().as_micros() as i64
                 } else {
                     pos
@@ -441,7 +452,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             frac,
             6.0,
             (s.ink.scale_alpha(tok::SELECTED), s.accent),
-            move |f| msg(Message::Seek(b2.clone(), f)),
+            move |f| Message::Seek(b2.clone(), f),
         );
         meta = meta.push(Space::new().height(tok::XS));
         meta = meta.push(
@@ -457,7 +468,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         );
     }
 
-    let side = |i: Icon, m: Option<AppMessage>| {
+    let side = |i: Icon, m: Option<Message>| {
         control(
             container(icon(
                 i,
@@ -472,7 +483,11 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     };
     let play = control(
         container(icon(
-            if p.playing { Icon::Pause } else { Icon::Play },
+            if playing(st, p) {
+                Icon::Pause
+            } else {
+                Icon::Play
+            },
             20.0,
             s.on_accent,
         ))
@@ -480,16 +495,16 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     )
     .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Primary)
-    .on_press(msg(Message::PlayPause(bus.clone())));
+    .on_press(Message::PlayPause(bus.clone()));
     let transport = row![
         side(
             Icon::SkipBack,
-            p.can_prev.then(|| msg(Message::Previous(bus.clone())))
+            p.can_prev.then(|| Message::Previous(bus.clone()))
         ),
         play,
         side(
             Icon::SkipForward,
-            p.can_next.then(|| msg(Message::Next(bus.clone())))
+            p.can_next.then(|| Message::Next(bus.clone()))
         ),
     ]
     .spacing(tok::L)
@@ -543,7 +558,7 @@ fn mix(a: Color, b: Color, t: f32) -> Color {
 }
 
 /// The bar chip: a small cover and the title.
-pub fn chip<'a>(s: Scheme, p: &Player, active: bool) -> Element<'a, AppMessage> {
+pub fn chip<'a, M: Clone + 'static>(s: Scheme, p: &Player, active: bool) -> Element<'a, M> {
     let fg = if active { s.accent } else { s.ink };
     row![
         art(s, p, 18.0, 5.0),
@@ -591,16 +606,16 @@ mod logo_tests {
 }
 
 /// Space plays or pauses the player in front; the arrows go to the previous or next track.
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key, cx: &Cx) -> Action<Message> {
     use super::Key;
-    let Some(bus) = app.media.main().map(|p| p.bus.clone()) else {
-        return Task::none();
+    let Some(bus) = cx.media.main().map(|p| p.bus.clone()) else {
+        return Action::None;
     };
     let m = match k {
         Key::Space | Key::Enter => Message::PlayPause(bus),
         Key::Left => Message::Previous(bus),
         Key::Right => Message::Next(bus),
-        _ => return Task::none(),
+        _ => return Action::None,
     };
-    update(app, m)
+    update(st, m, cx)
 }

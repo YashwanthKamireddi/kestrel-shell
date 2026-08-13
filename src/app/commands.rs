@@ -86,7 +86,7 @@ impl App {
                 let id = o.id;
                 // The tray opens on its list of apps.
                 if kind == PanelKind::Tray {
-                    let _ = panels::tray::open(self, None);
+                    let _ = panels::tray::open(&mut self.panels.tray, None);
                 }
                 // From the keyboard (a shortcut): the panel takes the keys.
                 self.panel_keys = true;
@@ -96,11 +96,12 @@ impl App {
                     .as_ref()
                     .is_some_and(|p| p.open && p.kind == kind && p.output == id);
                 if kind == PanelKind::Overview && !open_now {
-                    return panels::overview::prepare(
-                        self,
-                        id,
-                        Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
-                    );
+                    let at = Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR));
+                    let a =
+                        panels::overview::prepare(&mut self.panels.overview, &self.hypr, id, at);
+                    return panels::action::perform(self, a, |m| {
+                        Message::Panel(panels::Message::Overview(m))
+                    });
                 }
                 let shown = self.toggle(
                     kind,
