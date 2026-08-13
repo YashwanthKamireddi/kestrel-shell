@@ -2,7 +2,6 @@
 //! to disconnect.
 
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::services::airpods::Charge;
 use crate::services::bluetooth;
 use crate::theme::tok;
@@ -32,15 +31,24 @@ pub fn tint(s: Scheme, c: Charge) -> Color {
     }
 }
 
-pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
+/// What the AirPods panel asks for.
+#[derive(Clone, Debug)]
+pub enum Message {
+    Disconnect(String),
+}
+
+pub fn update(m: Message) -> super::action::Action<Message> {
+    let Message::Disconnect(path) = m;
+    super::action::Action::Device {
+        path,
+        connect: false,
+    }
+}
+
+pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let name = device(cx.bt).map_or("AirPods", |d| d.name.as_str());
-    let disconnect = device(cx.bt).map(|d| {
-        AppMessage::Panel(super::Message::Control(super::control::Message::Device(
-            d.path.clone(),
-            true,
-        )))
-    });
+    let disconnect = device(cx.bt).map(|d| Message::Disconnect(d.path.clone()));
     let header = row![
         column![
             label_w(
@@ -49,15 +57,26 @@ pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
                 s.ink,
                 theme::SEMIBOLD
             ),
-            label(
-                if device(cx.bt).is_some_and(|d| cx.in_progress(&d.path) == Some(false)) {
-                    "Disconnecting…"
-                } else {
-                    "Connected"
-                },
-                text::CAPTION,
-                s.ink_dim
-            ),
+            {
+                // Why a disconnect failed, when it did (said, not left to guess).
+                let failed = device(cx.bt).and_then(|d| {
+                    cx.device_error
+                        .filter(|(p, _)| *p == d.path)
+                        .map(|(_, why)| why.clone())
+                });
+                match failed {
+                    Some(why) => label(why, text::CAPTION, s.bad),
+                    None => label(
+                        if device(cx.bt).is_some_and(|d| cx.in_progress(&d.path) == Some(false)) {
+                            "Disconnecting…"
+                        } else {
+                            "Connected"
+                        },
+                        text::CAPTION,
+                        s.ink_dim,
+                    ),
+                }
+            },
         ]
         .spacing(tok::HAIR)
         .width(Length::Fill),
@@ -95,12 +114,7 @@ pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
 }
 
 /// One part on a line: its glyph and name, then a charge bar and the number.
-fn part<'a>(
-    s: Scheme,
-    glyph: Icon,
-    name: &'a str,
-    charge: Option<Charge>,
-) -> Element<'a, AppMessage> {
+fn part<'a>(s: Scheme, glyph: Icon, name: &'a str, charge: Option<Charge>) -> Element<'a, Message> {
     const TRACK: f32 = 110.0;
     let (fill, color) = match charge {
         Some(c) => (f32::from(c.level) / 100.0, tint(s, c)),
@@ -120,7 +134,7 @@ fn part<'a>(
     if fill > 0.0 {
         track = track.push(bar((TRACK * fill).round().max(6.0), s.fade(color)));
     }
-    let number: Element<'a, AppMessage> = match charge {
+    let number: Element<'a, Message> = match charge {
         Some(c) => {
             let mut r = row![label_w(
                 format!("{}%", c.level),

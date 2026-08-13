@@ -1,5 +1,6 @@
 //! Panels: what hangs from the bar. Each panel is a view built only from the component kit.
 
+pub mod action;
 pub mod auth;
 pub mod calendar;
 pub mod capture;
@@ -168,6 +169,7 @@ pub enum Message {
     Launcher(launcher::Message),
     Wallpaper(wallpaper::Message),
     Keys(keys::Message),
+    Pods(pods::Message),
     Overview(overview::Message),
     Clipboard(clipboard::Message),
     Emoji(emoji::Message),
@@ -234,7 +236,9 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         }
         PanelKind::Launcher => return launcher::open(app),
         PanelKind::Wallpaper => return wallpaper::open(app),
-        PanelKind::Keys => return keys::open(),
+        PanelKind::Keys => {
+            return action::perform(app, keys::open(), |m| AppMessage::Panel(Message::Keys(m)));
+        }
         PanelKind::Overview => return overview::open(app),
         PanelKind::Clipboard => return clipboard::open(app),
         PanelKind::Emoji => return emoji::open(app),
@@ -258,16 +262,28 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             app.panels.calendar.update(m);
             Task::none()
         }
-        Message::Power(m) => power::update(&mut app.panels.power, m),
+        Message::Power(m) => {
+            let a = power::update(&mut app.panels.power, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Power(m)))
+        }
+        Message::Pods(m) => action::perform(app, pods::update(m), |m| {
+            AppMessage::Panel(Message::Pods(m))
+        }),
         Message::Capture(m) => capture::update(app, m),
-        Message::Monitor(m) => monitor::update(&mut app.panels.monitor, m),
+        Message::Monitor(m) => {
+            let a = monitor::update(&mut app.panels.monitor, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Monitor(m)))
+        }
         Message::Control(m) => control::update(app, m),
         Message::Media(m) => media::update(app, m),
         Message::Notifications(m) => notifications::update(app, m),
         Message::Tray(m) => tray::update(app, m),
         Message::Launcher(m) => launcher::update(app, m),
         Message::Wallpaper(m) => wallpaper::update(app, m),
-        Message::Keys(m) => keys::update(&mut app.panels.keys, m),
+        Message::Keys(m) => {
+            let a = keys::update(&mut app.panels.keys, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Keys(m)))
+        }
         Message::Overview(m) => overview::update(app, m),
         Message::Clipboard(m) => clipboard::update(app, m),
         Message::Emoji(m) => emoji::update(app, m),
@@ -283,12 +299,17 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Some(PanelKind::Emoji) => emoji::key(app, k),
             Some(PanelKind::Overview) => overview::key(app, k),
             Some(PanelKind::Control) => control::key(app, k),
-            Some(PanelKind::Power) => power::key(&mut app.panels.power, k),
+            Some(PanelKind::Power) => {
+                let a = power::key(&mut app.panels.power, k);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Power(m)))
+            }
             Some(PanelKind::Capture) => capture::key(app, k),
             Some(PanelKind::Files) => files::key(app, k),
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             Some(PanelKind::Media) => media::key(app, k),
-            Some(PanelKind::Keys) => keys::key(k),
+            Some(PanelKind::Keys) => {
+                action::perform(app, keys::key(k), |m| AppMessage::Panel(Message::Keys(m)))
+            }
             // The calendar: months back and forth, Home for today.
             Some(PanelKind::Calendar | PanelKind::Island) => {
                 let m = match k {
@@ -445,25 +466,29 @@ pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     let (p, cx) = cx::of(app);
     match kind {
-        PanelKind::Calendar => calendar::view(&p.calendar, &p.media, &cx),
-        PanelKind::Power => power::view(&p.power, &cx),
+        PanelKind::Calendar => calendar::view(&p.calendar, &p.media, &cx).map(AppMessage::Panel),
+        PanelKind::Power => {
+            power::view(&p.power, &cx).map(|m| AppMessage::Panel(Message::Power(m)))
+        }
         PanelKind::Capture => capture::view(app, s),
-        PanelKind::Monitor => monitor::view(&p.monitor, &cx),
+        PanelKind::Monitor => {
+            monitor::view(&p.monitor, &cx).map(|m| AppMessage::Panel(Message::Monitor(m)))
+        }
         PanelKind::Control => control::view(app, s),
         PanelKind::Media => media::view(app, s),
         PanelKind::Tray => tray::view(app, s),
-        PanelKind::Privacy => privacy::view(&cx),
+        PanelKind::Privacy => privacy::view(&cx).map(AppMessage::Panel),
         PanelKind::Notifications => notifications::view(app, s),
         PanelKind::Launcher => launcher::view(app, s),
         PanelKind::Wallpaper => wallpaper::view(app, s),
-        PanelKind::Keys => keys::view(&p.keys, &cx),
-        PanelKind::Island => island::view(&p.calendar, &p.media, &cx),
+        PanelKind::Keys => keys::view(&p.keys, &cx).map(|m| AppMessage::Panel(Message::Keys(m))),
+        PanelKind::Island => island::view(&p.calendar, &p.media, &cx).map(AppMessage::Panel),
         PanelKind::Overview => overview::view(app, s),
         PanelKind::Clipboard => clipboard::view(app, s),
         PanelKind::Emoji => emoji::view(app, s),
         PanelKind::Settings => settings::view(app, s),
-        PanelKind::Weather => weather::view(&cx),
-        PanelKind::Pods => pods::view(&cx),
+        PanelKind::Weather => weather::view(&cx).map(AppMessage::Panel),
+        PanelKind::Pods => pods::view(&cx).map(|m| AppMessage::Panel(Message::Pods(m))),
         PanelKind::Files => files::view(app, s),
         PanelKind::Auth => auth::view(&app.panels.auth, s, |m| AppMessage::Panel(Message::Auth(m))),
     }

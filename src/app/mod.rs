@@ -253,6 +253,8 @@ pub struct App {
     pub bt: bluetooth::State,
     /// A network or device being connected or disconnected (panels show it in progress).
     pub connecting: Option<panels::cx::Connecting>,
+    /// The last device that could not be connected or paired, and why (shown beside it).
+    pub device_error: Option<(String, String)>,
     pub power: power::State,
     pub brightness: Option<f32>,
     pub media: mpris::State,
@@ -355,6 +357,8 @@ pub enum Message {
     Close,
     Measured(PanelKind, Size),
     Dispatch(crate::services::compositor::Action),
+    /// A device connected or disconnected at a panel's request, or why not.
+    DeviceDone(String, Result<(), String>),
     /// Ends the screen recording shown (the recorder in Hyprland's state when pressed).
     StopRecording,
     Panel(panels::Message),
@@ -428,7 +432,7 @@ impl std::fmt::Debug for Wallpaper {
 pub fn boot() -> (App, Task<Message>) {
     let config = config::load();
     crate::theme::set_glass(config.material != config::Material::Black);
-    let app = App {
+    let mut app = App {
         scheme: Scheme::default(),
         seed: crate::theme::Seed::default(),
         outputs: Vec::new(),
@@ -452,6 +456,7 @@ pub fn boot() -> (App, Task<Message>) {
         net: network::State::default(),
         bt: bluetooth::State::default(),
         connecting: None,
+        device_error: None,
         power: power::State::default(),
         brightness: None,
         media: mpris::State::default(),
@@ -548,7 +553,9 @@ pub fn boot() -> (App, Task<Message>) {
         panels::wallpaper::preload(&app),
         // The launcher's apps read once at start, so even its first open is instant.
         panels::launcher::reload(),
-        panels::keys::open(),
+        panels::action::perform(&mut app, panels::keys::open(), |m| {
+            Message::Panel(panels::Message::Keys(m))
+        }),
     ]);
     (
         app,

@@ -1,8 +1,6 @@
 //! Calendar: today at a glance, then the month.
 
-use super::Message as PanelMessage;
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon_button, label, label_w};
@@ -48,10 +46,6 @@ impl State {
     }
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Calendar(m))
-}
-
 fn first_of_month(today: NaiveDate, offset: i32) -> NaiveDate {
     let months = today.year() * 12 + today.month0() as i32 + offset;
     NaiveDate::from_ymd_opt(months.div_euclid(12), months.rem_euclid(12) as u32 + 1, 1)
@@ -66,12 +60,12 @@ pub fn view<'a>(
     st: &'a State,
     media: &'a super::media::State,
     cx: &Cx<'a>,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, super::Message> {
     super::island::view(st, media, cx)
 }
 
 /// The month: title with navigation, weekday initials, six weeks.
-pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let today = cx.now.date_naive();
     let first = first_of_month(today, st.offset);
@@ -84,13 +78,13 @@ pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
     .padding([tok::XS, tok::M])
     .radius(tok::R_CONTROL)
     .kind(s, crate::ui::control::Kind::Ghost)
-    .on_press(msg(Message::Today));
+    .on_press(Message::Today);
 
     let nav = row![
         month_title,
         Space::new().width(Length::Fill),
-        icon_button(s, Icon::ChevronLeft, msg(Message::Shift(-1)), false),
-        icon_button(s, Icon::ChevronRight, msg(Message::Shift(1)), false),
+        icon_button(s, Icon::ChevronLeft, Message::Shift(-1), false),
+        icon_button(s, Icon::ChevronRight, Message::Shift(1), false),
     ]
     .spacing(tok::XXS)
     .align_y(Alignment::Center);
@@ -126,10 +120,10 @@ pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
     }
 
     let weeks = iced::widget::mouse_area(weeks).on_scroll(|d| {
-        msg(Message::Scroll(match d {
+        Message::Scroll(match d {
             iced::mouse::ScrollDelta::Lines { y, .. } => y.signum(),
             iced::mouse::ScrollDelta::Pixels { y, .. } => y / 60.0,
-        }))
+        })
     });
     column![
         nav,
@@ -141,12 +135,7 @@ pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
     .into()
 }
 
-fn day<'a>(
-    s: Scheme,
-    date: NaiveDate,
-    today: NaiveDate,
-    in_month: bool,
-) -> Element<'a, AppMessage> {
+fn day<'a>(s: Scheme, date: NaiveDate, today: NaiveDate, in_month: bool) -> Element<'a, Message> {
     // Other months' days are left blank: the month stands on its own.
     if !in_month {
         return Space::new().width(Length::Fill).height(CELL_H).into();

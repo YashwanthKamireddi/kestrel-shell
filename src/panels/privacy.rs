@@ -3,7 +3,6 @@
 //! name; the screen with its recording's stop. Opened by a click on any indicator.
 
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::theme::{self, Scheme, text, tok};
 use crate::ui::{self, Icon, icon, label, label_w};
 use iced::widget::{column, container, row};
@@ -12,7 +11,7 @@ use iced::{Alignment, Element, Length};
 pub const WIDTH: f32 = crate::theme::tok::PANEL_S;
 
 /// An app's row: its icon (from its desktop entry) and its name.
-fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {
+fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, super::Message> {
     let glyph = ui::app_icon(s, name, 20.0, Icon::AppWindow);
     row![
         container(glyph).center(24),
@@ -26,7 +25,7 @@ fn app_row<'a>(s: Scheme, name: &str) -> Element<'a, AppMessage> {
 }
 
 /// One device in use: its name with its icon, then the apps.
-fn group<'a>(s: Scheme, i: Icon, what: &'a str, apps: &[String]) -> Element<'a, AppMessage> {
+fn group<'a>(s: Scheme, i: Icon, what: &'a str, apps: &[String]) -> Element<'a, super::Message> {
     let mut c = column![
         row![
             container(icon(i, tok::ICON_S, s.on_accent))
@@ -58,7 +57,7 @@ pub fn ago(t: std::time::Instant) -> String {
 }
 
 /// Camera and microphone use that ended in the last 10 minutes, newest first.
-pub fn recent<'a>(s: Scheme, cx: &Cx<'a>) -> Option<Element<'a, AppMessage>> {
+pub fn recent<'a>(s: Scheme, cx: &Cx<'a>) -> Option<Element<'a, super::Message>> {
     if cx.privacy_recent.is_empty() {
         return None;
     }
@@ -87,7 +86,7 @@ pub fn recent<'a>(s: Scheme, cx: &Cx<'a>) -> Option<Element<'a, AppMessage>> {
     Some(c.into())
 }
 
-pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
+pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, super::Message> {
     let s = cx.scheme;
     let mut body = column![].spacing(tok::L);
     if !cx.camera_apps.is_empty() {

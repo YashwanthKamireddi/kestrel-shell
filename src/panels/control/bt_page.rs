@@ -37,8 +37,8 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // once: "Forget?" in red, a second press removes it).
     for d in &b.devices {
         let busy = in_progress(app, &d.path);
-        let err = st
-            .bt_error
+        let err = app
+            .device_error
             .as_ref()
             .filter(|(p, _)| *p == d.path)
             .map(|(_, w)| w.clone());
@@ -118,7 +118,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         let sub = if pairing {
             Some("Pairing…".to_string())
         } else {
-            st.bt_error
+            app.device_error
                 .as_ref()
                 .filter(|(p, _)| *p == d.path)
                 .map(|(_, w)| w.clone())

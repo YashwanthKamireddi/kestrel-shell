@@ -2,15 +2,13 @@
 //! with a way to end it (asked once: "End?"). Live every 1.5 s while open, nothing when closed.
 //! Opened from the CPU and memory pill or `kestrel toggle system`.
 
-use super::Message as PanelMessage;
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::services::system::Detail;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Element, Length, Task};
+use iced::{Alignment, Element, Length};
 
 pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 /// The process table's columns (header and rows share them, so the names sit over their
@@ -32,17 +30,13 @@ pub enum Message {
     End(u32),
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Monitor(m))
-}
-
-pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message) -> super::action::Action<Message> {
     match m {
         Message::Detail(d) => st.detail = Some(d),
         Message::End(pid) => {
             if st.armed != Some(pid) {
                 st.armed = Some(pid);
-                return Task::none();
+                return super::action::Action::None;
             }
             st.armed = None;
             // Safety: kill(2) with SIGTERM on one of the user's own processes (only those are
@@ -55,7 +49,7 @@ pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
             }
         }
     }
-    Task::none()
+    super::action::Action::None
 }
 
 fn gib(b: u64) -> String {
@@ -63,7 +57,7 @@ fn gib(b: u64) -> String {
 }
 
 /// A thin bar, `v` of 0..1 filled.
-fn bar<'a>(s: Scheme, v: f32, h: f32) -> Element<'a, AppMessage> {
+fn bar<'a>(s: Scheme, v: f32, h: f32) -> Element<'a, Message> {
     let v = v.clamp(0.0, 1.0);
     let hot = if v > 0.85 { s.bad } else { s.accent };
     row![
@@ -87,7 +81,7 @@ fn bar<'a>(s: Scheme, v: f32, h: f32) -> Element<'a, AppMessage> {
     .into()
 }
 
-pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let title = label_w("System", text::HEADING, s.ink, theme::SEMIBOLD);
     let Some(d) = &st.detail else {
@@ -175,7 +169,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
                 | "xdg-desktop-portal"
                 | "xdg-desktop-portal-hyprland"
         );
-        let end: Element<'_, AppMessage> = if vital {
+        let end: Element<'_, Message> = if vital {
             // Not ended from here (it would end the desktop): a lock says why the ✕ is missing.
             container(icon(Icon::Lock, tok::ICON_XS, s.ink_faint))
                 .center_x(26)
@@ -185,14 +179,14 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
                 .padding([tok::XS, tok::M])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
-                .on_press(msg(Message::End(*pid)))
+                .on_press(Message::End(*pid))
                 .into()
         } else {
             control(icon(Icon::X, tok::ICON_S, s.ink_dim))
                 .padding(tok::XS)
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(msg(Message::End(*pid)))
+                .on_press(Message::End(*pid))
                 .into()
         };
         procs = procs.push(

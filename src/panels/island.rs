@@ -3,7 +3,6 @@
 
 use super::cx::Cx;
 use super::{calendar, media};
-use crate::app::Message as AppMessage;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, card, control, icon, label, label_w};
@@ -15,7 +14,7 @@ pub fn view<'a>(
     cal: &'a super::calendar::State,
     media_st: &'a super::media::State,
     cx: &Cx<'a>,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, super::Message> {
     let s = cx.scheme;
     // No clock and no date heading: the bar shows both (repeated here they said nothing new;
     // design call 2026-11-16). What has no pill of its own (the weather as the weather panel draws
@@ -31,15 +30,18 @@ pub fn view<'a>(
     {
         col = col.push(playing(s, p));
     }
-    col = col.push(card(s, calendar::month(cal, cx)));
+    col = col.push(card(
+        s,
+        calendar::month(cal, cx).map(super::Message::Calendar),
+    ));
     container(col).padding(tok::L).into()
 }
 
 /// What's playing, with the essential controls.
-fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, AppMessage> {
+fn playing<'a>(s: Scheme, p: &'a crate::services::mpris::Player) -> Element<'a, super::Message> {
     let bus = p.bus.clone();
-    let msg = |m: media::Message| AppMessage::Panel(super::Message::Media(m));
-    let button = |i: Icon, m: Option<AppMessage>, primary: bool| {
+    let msg = super::Message::Media;
+    let button = |i: Icon, m: Option<super::Message>, primary: bool| {
         let fg = if primary {
             s.on_accent
         } else if m.is_some() {

@@ -1,9 +1,7 @@
 //! Keybind cheatsheet, read live from Hyprland: every bind that has a description, grouped by
 //! the text before the first ":" in it.
 
-use super::Message as PanelMessage;
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::services::hyprland;
 use crate::theme::tok;
 use crate::theme::{self, text};
@@ -27,7 +25,9 @@ static LIST_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("keys-list"));
 
 /// The arrows and Page Up / Down scroll the sheet; Home and End go to its ends.
-pub fn key(k: super::Key) -> Task<AppMessage> {
+type Act = super::action::Action<Message>;
+
+pub fn key(k: super::Key) -> Act {
     use super::Key;
     use iced::widget::scrollable::{AbsoluteOffset, RelativeOffset};
     let by = |y: f32| {
@@ -37,35 +37,33 @@ pub fn key(k: super::Key) -> Task<AppMessage> {
         ))
     };
     match k {
-        Key::Down => by(60.0),
-        Key::Up => by(-60.0),
-        Key::PageDown | Key::Space => by(320.0),
-        Key::PageUp => by(-320.0),
-        Key::Home => Task::Iced(iced::widget::snap_to(
+        Key::Down => Act::Run(by(60.0)),
+        Key::Up => Act::Run(by(-60.0)),
+        Key::PageDown | Key::Space => Act::Run(by(320.0)),
+        Key::PageUp => Act::Run(by(-320.0)),
+        Key::Home => Act::Run(Task::Iced(iced::widget::snap_to(
             LIST_ID.clone(),
             RelativeOffset { x: 0.0, y: 0.0 },
-        )),
-        Key::End => Task::Iced(iced::widget::snap_to_end(LIST_ID.clone())),
-        _ => Task::none(),
+        ))),
+        Key::End => Act::Run(Task::Iced(iced::widget::snap_to_end(LIST_ID.clone()))),
+        _ => Act::None,
     }
 }
 
-pub fn open() -> Task<AppMessage> {
-    Task::perform(hyprland::binds(), |g| {
-        AppMessage::Panel(PanelMessage::Keys(Message::Loaded(g)))
-    })
+pub fn open() -> Act {
+    Act::Run(Task::perform(hyprland::binds(), Message::Loaded))
 }
 
-pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message) -> Act {
     let Message::Loaded(g) = m;
     st.groups = Some(g);
-    Task::none()
+    Act::None
 }
 
 /// The list's most height before it scrolls (a 1080 p screen less the bar and margins).
 const MAX_LIST_H: f32 = 900.0;
 
-pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let header = label_w("Keyboard shortcuts", text::HEADING, s.ink, theme::SEMIBOLD);
     // Not read yet, or no bindings found: says which (a box with a lone icon said nothing).
@@ -82,7 +80,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
         .into();
     };
     // Two columns, filled group by group, balancing by row count.
-    let mut cols: [Vec<Element<'_, AppMessage>>; 2] = [Vec::new(), Vec::new()];
+    let mut cols: [Vec<Element<'_, Message>>; 2] = [Vec::new(), Vec::new()];
     let mut heights = [0usize; 2];
     for (name, binds) in groups {
         let c = usize::from(heights[1] < heights[0]);

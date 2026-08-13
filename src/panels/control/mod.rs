@@ -79,8 +79,6 @@ pub struct State {
     sound_open: Option<String>,
     /// The device being paired (its path).
     pub pairing: Option<String>,
-    /// A device whose last action failed, and why (shown under its name).
-    pub bt_error: Option<(String, String)>,
     /// A network whose last join failed, and why (shown under its name).
     pub net_error: Option<(String, String)>,
     /// The device whose Forget was pressed once (asks before removing).
@@ -602,24 +600,20 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             return Task::future(network::command(network::Command::Disconnect)).discard();
         }
         Message::Device(path, connected) => {
-            app.connecting = Some(super::cx::Connecting::new(path.clone(), !connected));
-            st.bt_error = None;
             st.forget = None;
-            let cmd = if connected {
-                bluetooth::Command::Disconnect(path.clone())
-            } else {
-                bluetooth::Command::Connect(path.clone())
+            // The shell connects it (the AirPods panel asks the same way).
+            let a = super::action::Action::<Message>::Device {
+                path,
+                connect: !connected,
             };
-            return Task::perform(bluetooth::command(cmd), move |r| {
-                msg(Message::BtDone(path.clone(), r))
-            });
+            return super::action::perform(app, a, msg);
         }
         Message::Pair(path) => {
             if st.pairing.is_some() {
                 return Task::none();
             }
             st.pairing = Some(path.clone());
-            st.bt_error = None;
+            app.device_error = None;
             return Task::perform(
                 bluetooth::command(bluetooth::Command::Pair(path.clone())),
                 move |r| msg(Message::BtDone(path.clone(), r)),
@@ -629,19 +623,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             if st.pairing.as_deref() == Some(path.as_str()) {
                 st.pairing = None;
             }
-            match r {
-                Ok(()) => {
-                    if st.bt_error.as_ref().is_some_and(|(p, _)| *p == path) {
-                        st.bt_error = None;
-                    }
-                }
-                Err(why) => {
-                    if app.connecting.as_ref().is_some_and(|c| c.is(&path)) {
-                        app.connecting = None;
-                    }
-                    st.bt_error = Some((path, why));
-                }
-            }
+            return Task::done(AppMessage::DeviceDone(path, r));
         }
         Message::Forget(path) => {
             if st.forget.as_deref() != Some(path.as_str()) {

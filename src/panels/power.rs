@@ -1,8 +1,6 @@
 //! Power: lock, suspend, log out, restart, shut down. The last three ask once more.
 
-use super::Message as PanelMessage;
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::services::{hyprland, logind};
 use crate::theme::text;
 use crate::theme::tok;
@@ -68,11 +66,13 @@ pub enum Message {
     Press(Action),
 }
 
-pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
+type Act = super::action::Action<Message>;
+
+pub fn update(st: &mut State, m: Message) -> Act {
     let Message::Press(a) = m;
     if a.confirm().is_some() && st.armed != Some(a) {
         st.armed = Some(a);
-        return Task::none();
+        return Act::None;
     }
     st.armed = None;
     let run = match a {
@@ -82,12 +82,12 @@ pub fn update(st: &mut State, m: Message) -> Task<AppMessage> {
         Action::ShutDown => Task::future(logind::run(logind::Action::PowerOff)),
         Action::LogOut => Task::future(hyprland::dispatch("hl.dsp.exit()".into())),
     };
-    Task::batch([Task::done(AppMessage::Close), run.discard()])
+    Act::Close.and(Act::Run(run.discard()))
 }
 
 /// Up / Down move between the actions, Enter presses (the risky ones still ask a second time,
 /// so Enter twice).
-pub fn key(st: &mut State, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key) -> Act {
     use super::Key;
     let n = Action::ALL.len();
     let at = st.focus.unwrap_or(0);
@@ -105,10 +105,10 @@ pub fn key(st: &mut State, k: super::Key) -> Task<AppMessage> {
         }
         _ => {}
     }
-    Task::none()
+    Act::None
 }
 
-pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
+pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let armed = st.armed;
     let focus = st.focus;
@@ -142,7 +142,7 @@ pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, AppMessage> {
         .width(Length::Fill)
         .radius(tok::R_ROW)
         .kind(s, kind)
-        .on_press(AppMessage::Panel(PanelMessage::Power(Message::Press(a))))
+        .on_press(Message::Press(a))
         .into()
     });
     column(rows).spacing(tok::XXS).padding(tok::M).into()

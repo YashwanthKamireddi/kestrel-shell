@@ -67,6 +67,22 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             crate::services::compositor::run(a).await;
         })
         .discard(),
+        Message::DeviceDone(path, r) => {
+            match r {
+                Ok(()) => {
+                    if app.device_error.as_ref().is_some_and(|(p, _)| *p == path) {
+                        app.device_error = None;
+                    }
+                }
+                Err(why) => {
+                    if app.connecting.as_ref().is_some_and(|c| c.is(&path)) {
+                        app.connecting = None;
+                    }
+                    app.device_error = Some((path, why));
+                }
+            }
+            Task::none()
+        }
         Message::StopRecording => {
             // SIGINT, so wf-recorder finishes the file; only this session's recorder (the one
             // Hyprland's state names), never every wf-recorder on the machine.

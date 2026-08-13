@@ -2,7 +2,6 @@
 //! like, humidity, wind, sun), the next hours and the coming days. Only the weather.
 
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::services::web::Weather;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -16,7 +15,7 @@ pub const WIDTH: f32 = crate::theme::tok::PANEL_M;
 /// headings, the hours and the days all line up on it (they sat at four different insets).
 const INSET: f32 = tok::L;
 
-pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
+pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, super::Message> {
     let s = cx.scheme;
     let Some(w) = &cx.weather else {
         // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
@@ -33,7 +32,7 @@ pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, AppMessage> {
 }
 
 /// Now: place, temperature, condition and today's range, on the sky.
-pub fn now<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+pub fn now<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, super::Message> {
     let white = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC));
     let soft = s.fade(Color::from_rgb8(0xF7, 0xF8, 0xFC).scale_alpha(0.78));
     let left = column![
@@ -82,7 +81,7 @@ pub fn now<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage
 }
 
 /// Feels like, humidity, wind, and the sun: four even columns.
-fn details<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn details<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, super::Message> {
     let cell = |i: Icon, tint: Color, value: String, name: &'static str| {
         column![
             icon(i, tok::ICON_M, s.fade(tint)),
@@ -135,12 +134,12 @@ fn sun_next(w: &Weather) -> (Icon, String, &'static str) {
     }
 }
 
-fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
+fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, super::Message> {
     crate::ui::section(s, title, INSET)
 }
 
 /// The next hours: time, condition, temperature.
-fn hours<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn hours<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, super::Message> {
     let cells = w
         .hours
         .iter()
@@ -180,7 +179,7 @@ fn hours<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> 
 }
 
 /// The coming days: name, condition, and the range as a bar on the week's scale.
-fn days<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, AppMessage> {
+fn days<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, super::Message> {
     let lo = w.days.iter().map(|d| d.3).fold(f32::INFINITY, f32::min);
     let hi = w.days.iter().map(|d| d.2).fold(f32::NEG_INFINITY, f32::max);
     let span = (hi - lo).max(1.0);

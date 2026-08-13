@@ -76,8 +76,8 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             continue;
         }
         let busy = crate::panels::control::in_progress(app, &d.path);
-        let err = cst
-            .bt_error
+        let err = app
+            .device_error
             .as_ref()
             .filter(|(p, _)| *p == d.path)
             .map(|(_, w)| w.clone());
@@ -152,8 +152,8 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             continue;
         }
         let pairing = cst.pairing.as_deref() == Some(d.path.as_str());
-        let err = cst
-            .bt_error
+        let err = app
+            .device_error
             .as_ref()
             .filter(|(p, _)| *p == d.path)
             .map(|(_, w)| w.clone());
