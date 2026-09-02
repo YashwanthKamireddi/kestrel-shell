@@ -3,10 +3,9 @@
 //! Along the bottom, the categories (as on macOS and Windows): a click jumps to one, and the
 //! one in view is marked as you scroll.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
 use crate::theme::tok;
-use crate::theme::{self, Scheme, text};
+use crate::theme::{self, text};
 use crate::ui::{self, control, label, label_w};
 use iced::widget::{column, container, mouse_area, row};
 use iced::{Alignment, Element, Length, Task};
@@ -71,25 +70,22 @@ pub enum Message {
     Jump(Option<usize>),
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Emoji(m))
-}
+type Act = super::action::Action<Message>;
 
 pub(super) static INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("emoji-input"));
 
-pub fn open(app: &mut App) -> Task<AppMessage> {
-    let st = &mut app.panels.emoji;
+pub fn open(st: &mut State) -> Act {
     st.query.clear();
     st.selected = 0;
     st.top = 0;
     st.recent = crate::state::get(|s| s.emoji.recent.clone());
-    Task::Iced(iced::widget::focus(INPUT_ID.clone()))
+    Act::Run(Task::Iced(iced::widget::focus(INPUT_ID.clone())))
 }
 
 /// Reads the emoji font in the background (done at start: the first open read it on the UI
 /// thread, ~40 ms).
-pub fn warm() -> iced::Task<AppMessage> {
+pub fn warm<M: Send + 'static>() -> iced::Task<M> {
     Task::future(async {
         let _ = tokio::task::spawn_blocking(|| drawable().len()).await;
     })
@@ -167,8 +163,7 @@ fn settle(st: &mut State, n: usize) {
     }
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
-    let st = &mut app.panels.emoji;
+pub fn update(st: &mut State, m: Message) -> Act {
     match m {
         Message::Query(q) => {
             st.query = q;
@@ -206,11 +201,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 st.scroll = 0.0;
             }
             // The keyboard back on the search (a click on a tab left it on nothing).
-            return Task::Iced(iced::widget::focus(INPUT_ID.clone()));
+            return Act::Run(Task::Iced(iced::widget::focus(INPUT_ID.clone())));
         }
         Message::Pick(i) => {
             let Some((e, _)) = shown(st).get(i).copied() else {
-                return Task::none();
+                return Act::None;
             };
             let e = e.to_string();
             st.recent.retain(|r| *r != e);
@@ -219,25 +214,17 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             let recent = st.recent.clone();
             crate::state::update(|s| s.emoji.recent = recent);
             // Copied, and pasted into the window that had focus.
-            let (address, class) = (
-                app.hypr.window_address.clone(),
-                app.hypr.window_class.clone(),
-            );
-            return Task::batch([
-                Task::future(super::clipboard::type_into(e, address, class)).discard(),
-                Task::done(AppMessage::Close),
-            ]);
+            return Act::Type(e).and(Act::Close);
         }
     }
-    Task::none()
+    Act::None
 }
 
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key) -> Act {
     use super::Key;
-    let st = &mut app.panels.emoji;
     let n = shown(st).len();
     if n == 0 {
-        return Task::none();
+        return Act::None;
     }
     let i = st.selected as i64;
     let c = COLUMNS as i64;
@@ -250,23 +237,23 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         Key::PageDown => i + c * ROWS as i64,
         Key::Home => 0,
         Key::End => n as i64 - 1,
-        _ => return Task::none(),
+        _ => return Act::None,
     };
     st.selected = to.clamp(0, n as i64 - 1) as usize;
     settle(st, n);
-    Task::none()
+    Act::None
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let st = &app.panels.emoji;
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     let list = shown(st);
     let field = ui::search_field(
         s,
         "Search emoji",
         &st.query,
         INPUT_ID.clone(),
-        |q| msg(Message::Query(q)),
-        Some(msg(Message::Pick(st.selected))),
+        Message::Query,
+        Some(Message::Pick(st.selected)),
     );
 
     let grid_h = ROWS as f32 * (CELL + 4.0);
@@ -295,22 +282,22 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         crate::ui::control::Kind::Ghost
                     },
                 )
-                .on_enter(msg(Message::Hover(i)))
-                .on_press(msg(Message::Pick(i))),
+                .on_enter(Message::Hover(i))
+                .on_press(Message::Pick(i)),
             );
         }
         grid = grid.push(line);
     }
-    let body: Element<'_, AppMessage> = if list.is_empty() {
+    let body: Element<'_, Message> = if list.is_empty() {
         // Nothing found: said where the grid would be.
         crate::ui::empty_reason(s, format!("No emoji for “{}”", st.query.trim()), grid_h)
     } else {
         mouse_area(container(grid).height(grid_h))
             .on_scroll(|d| {
-                msg(Message::Scroll(match d {
+                Message::Scroll(match d {
                     iced::mouse::ScrollDelta::Lines { y, .. } => y,
                     iced::mouse::ScrollDelta::Pixels { y, .. } => y / CELL,
-                }))
+                })
             })
             .into()
     };
@@ -353,7 +340,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     crate::ui::control::Kind::Ghost
                 },
             )
-            .on_press(msg(Message::Jump(m)))
+            .on_press(Message::Jump(m))
         };
         if recents > 0 {
             footer = footer.push(tab("🕘", here.is_none(), None));

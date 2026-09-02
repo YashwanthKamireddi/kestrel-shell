@@ -234,7 +234,10 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             app.panels.media.position = None;
             return Task::done(AppMessage::Panel(Message::Media(media::Message::Poll)));
         }
-        PanelKind::Launcher => return launcher::open(app),
+        PanelKind::Launcher => {
+            let a = launcher::open(&mut app.panels.launcher);
+            return action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)));
+        }
         PanelKind::Wallpaper => return wallpaper::open(app),
         PanelKind::Keys => {
             return action::perform(app, keys::open(), |m| AppMessage::Panel(Message::Keys(m)));
@@ -244,7 +247,10 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             return action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)));
         }
         PanelKind::Clipboard => return clipboard::open(app),
-        PanelKind::Emoji => return emoji::open(app),
+        PanelKind::Emoji => {
+            let a = emoji::open(&mut app.panels.emoji);
+            return action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)));
+        }
         PanelKind::Settings => return settings::open(app),
         PanelKind::Tray
         | PanelKind::Notifications
@@ -288,7 +294,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             let a = tray::update(&mut app.panels.tray, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Tray(m)))
         }
-        Message::Launcher(m) => launcher::update(app, m),
+        Message::Launcher(m) => {
+            let a = launcher::update(&mut app.panels.launcher, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)))
+        }
         Message::Wallpaper(m) => wallpaper::update(app, m),
         Message::Keys(m) => {
             let a = keys::update(&mut app.panels.keys, m);
@@ -300,7 +309,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)))
         }
         Message::Clipboard(m) => clipboard::update(app, m),
-        Message::Emoji(m) => emoji::update(app, m),
+        Message::Emoji(m) => {
+            let a = emoji::update(&mut app.panels.emoji, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)))
+        }
         Message::Settings(m) => settings::update(app, m),
         Message::Files(m) => files::update(app, m),
         Message::Auth(m) => match app.panels.auth.update(m) {
@@ -308,9 +320,15 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             auth::Outcome::Stay => Task::none(),
         },
         Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
-            Some(PanelKind::Launcher) => launcher::key(app, k),
+            Some(PanelKind::Launcher) => {
+                let a = launcher::key(&mut app.panels.launcher, k);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)))
+            }
             Some(PanelKind::Clipboard) => clipboard::key(app, k),
-            Some(PanelKind::Emoji) => emoji::key(app, k),
+            Some(PanelKind::Emoji) => {
+                let a = emoji::key(&mut app.panels.emoji, k);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)))
+            }
             Some(PanelKind::Overview) => {
                 let (p, cx) = cx::split(app);
                 let a = overview::key(&mut p.overview, k, &cx);
@@ -503,7 +521,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Tray => tray::view(&p.tray, &cx).map(|m| AppMessage::Panel(Message::Tray(m))),
         PanelKind::Privacy => privacy::view(&cx).map(AppMessage::Panel),
         PanelKind::Notifications => notifications::view(app, s),
-        PanelKind::Launcher => launcher::view(app, s),
+        PanelKind::Launcher => {
+            launcher::view(&p.launcher, &cx).map(|m| AppMessage::Panel(Message::Launcher(m)))
+        }
         PanelKind::Wallpaper => wallpaper::view(app, s),
         PanelKind::Keys => keys::view(&p.keys, &cx).map(|m| AppMessage::Panel(Message::Keys(m))),
         PanelKind::Island => island::view(&p.calendar, &p.media, &cx).map(AppMessage::Panel),
@@ -511,7 +531,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
             overview::view(&p.overview, &cx).map(|m| AppMessage::Panel(Message::Overview(m)))
         }
         PanelKind::Clipboard => clipboard::view(app, s),
-        PanelKind::Emoji => emoji::view(app, s),
+        PanelKind::Emoji => {
+            emoji::view(&p.emoji, &cx).map(|m| AppMessage::Panel(Message::Emoji(m)))
+        }
         PanelKind::Settings => settings::view(app, s),
         PanelKind::Weather => weather::view(&cx).map(AppMessage::Panel),
         PanelKind::Pods => pods::view(&cx).map(|m| AppMessage::Panel(Message::Pods(m))),

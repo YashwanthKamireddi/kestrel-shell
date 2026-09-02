@@ -552,7 +552,7 @@ pub fn boot() -> (App, Task<Message>) {
     let warm = Task::batch([
         panels::wallpaper::preload(&app),
         // The launcher's apps read once at start, so even its first open is instant.
-        panels::launcher::reload(),
+        panels::launcher::reload().map(|m| Message::Panel(panels::Message::Launcher(m))),
         panels::action::perform(&mut app, panels::keys::open(), |m| {
             Message::Panel(panels::Message::Keys(m))
         }),

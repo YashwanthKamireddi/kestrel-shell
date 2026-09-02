@@ -14,7 +14,6 @@ pub enum Action<M> {
     /// Close the open panel.
     Close,
     /// Ask the compositor (focus a window, start a program, open a file).
-    #[allow(dead_code)] // the launcher's and overview's, as they move onto actions (Phase 9)
     Dispatch(compositor::Action),
     /// Connect (true) or disconnect a Bluetooth device, shown in progress until it is so.
     Device {
@@ -28,12 +27,13 @@ pub enum Action<M> {
         at: iced::Rectangle,
     },
     /// Open Settings on a page.
-    #[allow(dead_code)] // the launcher's, as it moves onto actions (Phase 9)
     Settings(super::settings::Page),
     /// Open Settings › Windows on the rule for an app (its window class).
     WindowRule(String),
     /// Read Hyprland's state again now (windows moved since the last event).
     ReadHyprland,
+    /// Put text on the clipboard and paste it into the window that had focus (an emoji).
+    Type(String),
     /// Several, in order.
     Many(Vec<Action<M>>),
 }
@@ -82,6 +82,13 @@ pub fn perform<M: Send + 'static>(
             Some(s) => AppMessage::Hypr(s),
             None => AppMessage::Batch(Vec::new()),
         }),
+        Action::Type(text) => {
+            let (address, class) = (
+                app.hypr.window_address.clone(),
+                app.hypr.window_class.clone(),
+            );
+            Task::future(super::clipboard::type_into(text, address, class)).discard()
+        }
         Action::Many(v) => Task::batch(v.into_iter().map(|a| perform(app, a, wrap))),
     }
 }
