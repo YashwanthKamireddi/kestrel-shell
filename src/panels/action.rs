@@ -40,6 +40,9 @@ pub enum Action<M> {
         key: String,
         paste: bool,
     },
+    /// Deliver the answer to a question the shell itself asked (built by the asker: the panel
+    /// only hands it back, e.g. the file kestrel's Settings asked the file picker for).
+    Reply(Box<AppMessage>),
     /// Several, in order.
     Many(Vec<Action<M>>),
 }
@@ -108,6 +111,7 @@ pub fn perform<M: Send + 'static>(
             })
             .discard()
         }
+        Action::Reply(m) => Task::done(*m),
         Action::Many(v) => Task::batch(v.into_iter().map(|a| perform(app, a, wrap))),
     }
 }

@@ -320,7 +320,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)))
         }
         Message::Settings(m) => settings::update(app, m),
-        Message::Files(m) => files::update(app, m),
+        Message::Files(m) => {
+            let a = files::update(&mut app.panels.files, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Files(m)))
+        }
         Message::Auth(m) => match app.panels.auth.update(m) {
             auth::Outcome::Close => Task::done(AppMessage::Close),
             auth::Outcome::Stay => Task::none(),
@@ -349,7 +352,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
                 action::perform(app, a, |m| AppMessage::Panel(Message::Power(m)))
             }
             Some(PanelKind::Capture) => capture::key(app, k),
-            Some(PanelKind::Files) => files::key(app, k),
+            Some(PanelKind::Files) => {
+                let a = files::key(&mut app.panels.files, k);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Files(m)))
+            }
             Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
             Some(PanelKind::Media) => {
                 let (p, cx) = cx::split(app);
@@ -548,7 +554,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Settings => settings::view(app, s),
         PanelKind::Weather => weather::view(&cx).map(AppMessage::Panel),
         PanelKind::Pods => pods::view(&cx).map(|m| AppMessage::Panel(Message::Pods(m))),
-        PanelKind::Files => files::view(app, s),
+        PanelKind::Files => {
+            files::view(&p.files, &cx).map(|m| AppMessage::Panel(Message::Files(m)))
+        }
         PanelKind::Auth => auth::view(&app.panels.auth, s, |m| AppMessage::Panel(Message::Auth(m))),
     }
 }

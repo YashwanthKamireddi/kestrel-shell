@@ -81,7 +81,7 @@ impl App {
                 .as_ref()
                 .is_some_and(|p| p.open && p.kind == PanelKind::Files)
         {
-            panels::files::closed(self);
+            panels::files::closed(&mut self.panels.files);
         }
         let Some(o) = self.output(output) else {
             return Task::none();
@@ -137,7 +137,7 @@ impl App {
             .as_ref()
             .is_some_and(|p| p.open && p.kind == PanelKind::Files)
         {
-            panels::files::closed(self);
+            panels::files::closed(&mut self.panels.files);
         }
         // A password prompt closed without an answer: the app hears "cancelled".
         if self

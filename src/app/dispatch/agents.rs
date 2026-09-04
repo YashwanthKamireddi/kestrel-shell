@@ -125,7 +125,9 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             Task::none()
         }
         Message::FileRequest(r) => {
-            let begin = panels::files::begin(app, r);
+            let a = panels::files::begin(&mut app.panels.files, r);
+            let begin =
+                panels::action::perform(app, a, |m| Message::Panel(panels::Message::Files(m)));
             let Some(id) = app.focused_output() else {
                 return begin;
             };
