@@ -40,6 +40,10 @@ pub enum Action<M> {
         key: String,
         paste: bool,
     },
+    /// Say something in the island's OSD (a countdown's number).
+    Notice(crate::ui::Icon, String),
+    /// Take the OSD's message away.
+    HideNotice,
     /// Deliver the answer to a question the shell itself asked (built by the asker: the panel
     /// only hands it back, e.g. the file kestrel's Settings asked the file picker for).
     Reply(Box<AppMessage>),
@@ -112,6 +116,14 @@ pub fn perform<M: Send + 'static>(
             .discard()
         }
         Action::Reply(m) => Task::done(*m),
+        Action::Notice(icon, title) => {
+            app.show_event(icon, title, String::new());
+            Task::none()
+        }
+        Action::HideNotice => {
+            app.hide_osd();
+            Task::none()
+        }
         Action::Many(v) => Task::batch(v.into_iter().map(|a| perform(app, a, wrap))),
     }
 }

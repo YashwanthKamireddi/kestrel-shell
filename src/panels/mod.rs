@@ -281,7 +281,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Pods(m) => action::perform(app, pods::update(m), |m| {
             AppMessage::Panel(Message::Pods(m))
         }),
-        Message::Capture(m) => capture::update(app, m),
+        Message::Capture(m) => {
+            let a = capture::update(&mut app.panels.capture, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Capture(m)))
+        }
         Message::Monitor(m) => {
             let a = monitor::update(&mut app.panels.monitor, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Monitor(m)))
@@ -351,7 +354,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
                 let a = power::key(&mut app.panels.power, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Power(m)))
             }
-            Some(PanelKind::Capture) => capture::key(app, k),
+            Some(PanelKind::Capture) => {
+                let a = capture::key(&mut app.panels.capture, k);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Capture(m)))
+            }
             Some(PanelKind::Files) => {
                 let a = files::key(&mut app.panels.files, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Files(m)))
@@ -525,7 +531,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Power => {
             power::view(&p.power, &cx).map(|m| AppMessage::Panel(Message::Power(m)))
         }
-        PanelKind::Capture => capture::view(app, s),
+        PanelKind::Capture => {
+            capture::view(&p.capture, &cx).map(|m| AppMessage::Panel(Message::Capture(m)))
+        }
         PanelKind::Monitor => {
             monitor::view(&p.monitor, &cx).map(|m| AppMessage::Panel(Message::Monitor(m)))
         }

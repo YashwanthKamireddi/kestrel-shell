@@ -6,8 +6,7 @@
 //! under the bar: 3, 2, 1, gone before the capture). Recordings take sound from nothing, the
 //! computer (what is playing) or the microphone, the same for a region, a window or the screen.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, control, icon, label, label_w};
@@ -56,9 +55,7 @@ pub enum Message {
     Tick,
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Capture(m))
-}
+type Act = super::action::Action<Message>;
 
 /// The shell command for a capture.
 fn command(st: &State) -> String {
@@ -99,28 +96,24 @@ fn command(st: &State) -> String {
     format!("sleep 0.3 && {run}")
 }
 
-fn run(st: &State) -> Task<AppMessage> {
-    Task::done(AppMessage::Dispatch(
-        crate::services::compositor::Action::Exec(command(st)),
+fn run(st: &State) -> Act {
+    Act::Dispatch(crate::services::compositor::Action::Exec(command(st)))
+}
+
+fn second() -> Act {
+    Act::Run(Task::perform(
+        tokio::time::sleep(std::time::Duration::from_secs(1)),
+        |()| Message::Tick,
     ))
 }
 
-fn second() -> Task<AppMessage> {
-    Task::perform(
-        tokio::time::sleep(std::time::Duration::from_secs(1)),
-        |()| msg(Message::Tick),
-    )
-}
-
 /// The countdown's number, where the OSD shows.
-fn show_left(app: &mut App) {
-    let st = &app.panels.capture;
+fn show_left(st: &State) -> Act {
     let what = if st.record { "Recording" } else { "Screenshot" };
-    app.show_event(Icon::Timer, format!("{what} in {}", st.left), String::new());
+    Act::Notice(Icon::Timer, format!("{what} in {}", st.left))
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
-    let st = &mut app.panels.capture;
+pub fn update(st: &mut State, m: Message) -> Act {
     match m {
         Message::What(w) => st.what = w,
         Message::Record(r) => st.record = r,
@@ -128,28 +121,27 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
         Message::Sound(v) => st.sound = v,
         Message::Go => {
             if st.delay == 0 {
-                return Task::batch([Task::done(AppMessage::Close), run(st)]);
+                return Act::Close.and(run(st));
             }
             st.left = st.delay;
             // The panel goes first (its closing must not hide the first number).
-            return Task::done(AppMessage::Close).chain(Task::done(msg(Message::Tick)));
+            return Act::Close.and(Act::Run(Task::done(Message::Tick)));
         }
         Message::Tick => {
             // After "1" has had its second: the number goes, then the capture.
             if st.left == 0 {
-                app.hide_osd();
-                return run(&app.panels.capture);
+                return Act::HideNotice.and(run(st));
             }
-            show_left(app);
-            app.panels.capture.left -= 1;
-            return second();
+            let shown = show_left(st);
+            st.left -= 1;
+            return shown.and(second());
         }
     }
-    Task::none()
+    Act::None
 }
 
 /// A big choice: icon over its name, the chosen one filled.
-fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Element<'a, AppMessage> {
+fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Element<'a, Message> {
     control(
         container(
             column![
@@ -173,12 +165,12 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
         },
     )
     .no_press_scale()
-    .on_press(msg(m))
+    .on_press(m)
     .into()
 }
 
 /// A small choice in a row (the kind, the delay).
-fn chip<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMessage> {
+fn chip<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Message> {
     control(
         container(label(
             name,
@@ -199,12 +191,12 @@ fn chip<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMes
         },
     )
     .no_press_scale()
-    .on_press(msg(m))
+    .on_press(m)
     .into()
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let st = &app.panels.capture;
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     let kind = container(
         row![
             chip(s, "Screenshot".into(), !st.record, Message::Record(false)),
@@ -292,7 +284,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     )
     .pill(s, crate::ui::control::Pill::Primary)
     .width(Length::Fill)
-    .on_press(msg(Message::Go));
+    .on_press(Message::Go);
     let mut body = column![kind, what, delays].spacing(tok::L);
     if let Some(r) = sound {
         body = body.push(r);
@@ -304,9 +296,9 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 /// Enter takes it; the rest is by pointer.
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key) -> Act {
     if k == super::Key::Enter {
-        return update(app, Message::Go);
+        return update(st, Message::Go);
     }
-    Task::none()
+    Act::None
 }
