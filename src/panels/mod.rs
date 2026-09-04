@@ -246,7 +246,10 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             let a = overview::open(&mut app.panels.overview);
             return action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)));
         }
-        PanelKind::Clipboard => return clipboard::open(app),
+        PanelKind::Clipboard => {
+            let a = clipboard::open(&mut app.panels.clipboard);
+            return action::perform(app, a, |m| AppMessage::Panel(Message::Clipboard(m)));
+        }
         PanelKind::Emoji => {
             let a = emoji::open(&mut app.panels.emoji);
             return action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)));
@@ -308,7 +311,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             let a = overview::update(&mut p.overview, m, &cx);
             action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)))
         }
-        Message::Clipboard(m) => clipboard::update(app, m),
+        Message::Clipboard(m) => {
+            let a = clipboard::update(&mut app.panels.clipboard, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Clipboard(m)))
+        }
         Message::Emoji(m) => {
             let a = emoji::update(&mut app.panels.emoji, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)))
@@ -324,7 +330,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
                 let a = launcher::key(&mut app.panels.launcher, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)))
             }
-            Some(PanelKind::Clipboard) => clipboard::key(app, k),
+            Some(PanelKind::Clipboard) => {
+                let a = clipboard::key(&mut app.panels.clipboard, k);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Clipboard(m)))
+            }
             Some(PanelKind::Emoji) => {
                 let a = emoji::key(&mut app.panels.emoji, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)))
@@ -530,7 +539,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Overview => {
             overview::view(&p.overview, &cx).map(|m| AppMessage::Panel(Message::Overview(m)))
         }
-        PanelKind::Clipboard => clipboard::view(app, s),
+        PanelKind::Clipboard => {
+            clipboard::view(&p.clipboard, &cx).map(|m| AppMessage::Panel(Message::Clipboard(m)))
+        }
         PanelKind::Emoji => {
             emoji::view(&p.emoji, &cx).map(|m| AppMessage::Panel(Message::Emoji(m)))
         }

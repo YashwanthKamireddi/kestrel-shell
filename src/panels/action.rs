@@ -34,6 +34,12 @@ pub enum Action<M> {
     ReadHyprland,
     /// Put text on the clipboard and paste it into the window that had focus (an emoji).
     Type(String),
+    /// Put a clipboard history entry (by its key) back on the clipboard; with `paste`, also
+    /// paste it into the window that had focus once the compositor has it.
+    PasteClip {
+        key: String,
+        paste: bool,
+    },
     /// Several, in order.
     Many(Vec<Action<M>>),
 }
@@ -88,6 +94,19 @@ pub fn perform<M: Send + 'static>(
                 app.hypr.window_class.clone(),
             );
             Task::future(super::clipboard::type_into(text, address, class)).discard()
+        }
+        Action::PasteClip { key, paste } => {
+            let (address, class) = (
+                app.hypr.window_address.clone(),
+                app.hypr.window_class.clone(),
+            );
+            Task::future(async move {
+                super::clipboard::clip_copy(key).await;
+                if paste && !class.is_empty() {
+                    super::clipboard::paste_into(&address, &class).await;
+                }
+            })
+            .discard()
         }
         Action::Many(v) => Task::batch(v.into_iter().map(|a| perform(app, a, wrap))),
     }
