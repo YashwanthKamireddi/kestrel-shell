@@ -45,6 +45,9 @@ struct Item {
     modified: Option<SystemTime>,
     /// Where it is, for results from elsewhere (a search, recent files): "Pictures/Roll".
     rel: Option<String>,
+    /// Its type by its name (shared MIME database; read once, no file opened), for the app's
+    /// file-type filters.
+    mime: Option<String>,
 }
 
 /// What the list shows.
@@ -219,7 +222,8 @@ pub fn begin(st: &mut State, req: Request) -> Act {
         .filter(|p| p.is_dir())
         .unwrap_or_else(home);
     st.name = req.name.clone();
-    st.filter = 0;
+    // The app's chosen filter first (its `current_filter`), else its first.
+    st.filter = req.current.unwrap_or(0);
     st.picked.clear();
     let save = req.save;
     st.req = Some(req);
@@ -285,6 +289,7 @@ mod tests {
             size: 1,
             modified: Some(UNIX_EPOCH + Duration::from_secs(t)),
             rel: None,
+            mime: None,
         };
         let mut v = vec![
             it("old dir", true, 1),
@@ -301,5 +306,53 @@ mod tests {
         assert_eq!(v[0].name, "new.msix");
         super::sort(&mut v, super::Sort::default());
         assert!(v[0].dir && v[1].dir && !v[2].dir);
+    }
+
+    /// An upload's filters as Chromium sends them ("Custom files": types and patterns,
+    /// chosen first by `current_filter`): every file of those types shows, whatever the
+    /// case of its name; others only under "All files".
+    #[test]
+    fn upload_filters_show_what_the_app_takes() {
+        use crate::services::filechooser::{Filter, Request};
+        if crate::services::open::type_by_name("a.png").is_none() {
+            return; // no shared MIME database here
+        }
+        let file = |name: &str| super::Item {
+            path: name.into(),
+            name: name.into(),
+            dir: false,
+            size: 1,
+            modified: None,
+            rel: None,
+            mime: crate::services::open::type_by_name(name),
+        };
+        let mut st = super::State {
+            req: Some(Request {
+                filters: vec![Filter {
+                    name: "Custom files".into(),
+                    globs: vec!["*.pdf".into()],
+                    mimes: vec!["image/*".into(), "application/pdf".into()],
+                }],
+                current: Some(0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        st.filter = 0;
+        for shown in [
+            "IMG_0001.HEIC",
+            "photo.webp",
+            "scan.JPG",
+            "Report.PDF",
+            "a.avif",
+        ] {
+            assert!(super::folder::passes(&st, &file(shown)), "{shown} hidden");
+        }
+        for hidden in ["notes.txt", "song.mp3"] {
+            assert!(!super::folder::passes(&st, &file(hidden)), "{hidden} shown");
+        }
+        // "All files": past the app's own.
+        st.filter = 1;
+        assert!(super::folder::passes(&st, &file("song.mp3")));
     }
 }

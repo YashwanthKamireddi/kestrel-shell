@@ -204,6 +204,23 @@ fn with_parents(mime: &str) -> Vec<String> {
     out
 }
 
+/// Whether a file of type `file_type` is a `wanted` (a file-type filter's MIME type): itself,
+/// one of its parents (`text/rust` is a `text/plain`), a family (`image/*`), or anything
+/// (`*/*`), as GTK's chooser matches a filter's types (g_content_type_is_a).
+pub fn is_a(file_type: &str, wanted: &str) -> bool {
+    if wanted == "*/*" {
+        return true;
+    }
+    let types = with_parents(file_type);
+    match wanted.strip_suffix("/*") {
+        Some(family) => types.iter().any(|t| t.split('/').next() == Some(family)),
+        None => {
+            let wanted = db().aliases.get(wanted).map_or(wanted, String::as_str);
+            types.iter().any(|t| t == wanted)
+        }
+    }
+}
+
 fn percent_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
@@ -286,6 +303,28 @@ mod tests {
         assert!(m("*.[ch]", "x.h"));
         assert!(!m("*.[!ch]", "x.c"));
         assert!(m("README*", "README.md"));
+    }
+
+    #[test]
+    fn types_match_as_gtk_matches_filters() {
+        // Needs the shared MIME database (shared-mime-info); skipped where it is absent.
+        if type_by_name("a.png").is_none() {
+            return;
+        }
+        let png = type_by_name("a.png").unwrap();
+        assert!(is_a(&png, "image/png"));
+        assert!(is_a(&png, "image/*"));
+        assert!(is_a(&png, "*/*"));
+        assert!(!is_a(&png, "video/*"));
+        let docx = type_by_name("a.docx").unwrap();
+        assert!(is_a(
+            &docx,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ));
+        // A parent: a Rust file is plain text.
+        if let Some(rs) = type_by_name("main.rs") {
+            assert!(is_a(&rs, "text/plain"));
+        }
     }
 
     #[test]

@@ -20,7 +20,7 @@ pub const BUS_NAME: &str = "org.freedesktop.impl.portal.desktop.kestrel";
 pub struct Filter {
     pub name: String,
     pub globs: Vec<String>,
-    /// MIME types ("image/png"), matched by file extension through a small table.
+    /// MIME types ("image/png", "image/*"), matched by a file's type (crate::open::is_a).
     pub mimes: Vec<String>,
 }
 
@@ -35,6 +35,8 @@ pub struct Request {
     /// Choose a folder, not a file.
     pub directory: bool,
     pub filters: Vec<Filter>,
+    /// The filter the app wants chosen first (`current_filter`), as an index into `filters`.
+    pub current: Option<usize>,
     /// Saving: the suggested name.
     pub name: String,
     /// Where to start.
@@ -76,6 +78,7 @@ pub fn local(
             multiple: false,
             directory: false,
             filters: filter.into_iter().collect(),
+            current: None,
             name: String::new(),
             folder,
             accept: String::new(),
@@ -122,23 +125,35 @@ impl Chooser {
         o: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let filters = get::<Vec<(String, Vec<(u32, String)>)>>(&o, "filters")
+        let filter = |(name, rules): (String, Vec<(u32, String)>)| Filter {
+            name,
+            globs: rules
+                .iter()
+                .filter(|(k, _)| *k == 0)
+                .map(|(_, g)| g.clone())
+                .collect(),
+            mimes: rules
+                .iter()
+                .filter(|(k, _)| *k == 1)
+                .map(|(_, m)| m.clone())
+                .collect(),
+        };
+        let mut filters: Vec<Filter> = get::<Vec<(String, Vec<(u32, String)>)>>(&o, "filters")
             .unwrap_or_default()
             .into_iter()
-            .map(|(name, rules)| Filter {
-                name,
-                globs: rules
-                    .iter()
-                    .filter(|(k, _)| *k == 0)
-                    .map(|(_, g)| g.clone())
-                    .collect(),
-                mimes: rules
-                    .iter()
-                    .filter(|(k, _)| *k == 1)
-                    .map(|(_, m)| m.clone())
-                    .collect(),
-            })
+            .map(filter)
             .collect();
+        // The one the app wants chosen first: one of its filters, or (the spec allows it) one
+        // of its own, added to the list.
+        let current = get::<(String, Vec<(u32, String)>)>(&o, "current_filter")
+            .map(filter)
+            .map(|c| match filters.iter().position(|f| *f == c) {
+                Some(i) => i,
+                None => {
+                    filters.push(c);
+                    filters.len() - 1
+                }
+            });
         let folder = get::<Vec<u8>>(&o, "current_folder").and_then(|b| {
             let b: Vec<u8> = b.into_iter().take_while(|&c| c != 0).collect();
             use std::os::unix::ffi::OsStringExt;
@@ -152,6 +167,7 @@ impl Chooser {
             multiple: get(&o, "multiple").unwrap_or(false),
             directory: get(&o, "directory").unwrap_or(false),
             filters,
+            current,
             name: get(&o, "current_name").unwrap_or_default(),
             folder,
             accept: get(&o, "accept_label").unwrap_or_default(),

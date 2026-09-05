@@ -8,8 +8,13 @@ pub(super) fn last_folder() -> Option<PathBuf> {
 
 pub(super) fn item(path: PathBuf, rel: Option<String>) -> Option<Item> {
     let meta = std::fs::metadata(&path).ok()?;
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let mime = (!meta.is_dir())
+        .then(|| crate::services::open::type_by_name(&name))
+        .flatten();
     Some(Item {
-        name: path.file_name()?.to_string_lossy().into_owned(),
+        name,
+        mime,
         dir: meta.is_dir(),
         size: meta.len(),
         modified: meta.modified().ok(),
@@ -226,28 +231,6 @@ pub(super) async fn search_below(dir: PathBuf, q: String, hidden: bool) -> Vec<P
         .unwrap_or_default()
 }
 
-/// File extensions for the MIME types apps commonly filter by.
-pub(super) fn mime_exts(m: &str) -> Option<&'static [&'static str]> {
-    Some(match m {
-        "image/*" => &[
-            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif", "heic", "tif", "tiff",
-        ],
-        "image/png" => &["png"],
-        "image/jpeg" => &["jpg", "jpeg"],
-        "image/gif" => &["gif"],
-        "image/webp" => &["webp"],
-        "image/svg+xml" => &["svg"],
-        "video/*" => &["mp4", "mkv", "webm", "mov", "avi"],
-        "audio/*" => &["mp3", "flac", "ogg", "opus", "wav", "m4a"],
-        "application/pdf" => &["pdf"],
-        "text/plain" => &["txt", "md", "log"],
-        "text/csv" => &["csv"],
-        "application/zip" => &["zip"],
-        "application/json" => &["json"],
-        _ => return None,
-    })
-}
-
 pub(super) fn glob(pattern: &str, name: &str) -> bool {
     fn m(p: &[char], n: &[char]) -> bool {
         match (p.first(), n.first()) {
@@ -276,24 +259,14 @@ pub(super) fn passes(st: &State, it: &Item) -> bool {
     let Some(f) = st.req.as_ref().and_then(|r| r.filters.get(st.filter)) else {
         return true;
     };
-    let ext = Path::new(&it.name)
-        .extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    let mut known = f.globs.is_empty();
-    let by_glob = f.globs.iter().any(|g| glob(g, &it.name));
-    let by_mime = f.mimes.iter().any(|m| match mime_exts(m) {
-        Some(exts) => {
-            known = false;
-            exts.contains(&ext.as_str())
-        }
-        None => {
-            known = true;
-            false
-        }
-    });
-    // A MIME type this picker does not know lets everything through rather than hide files.
-    by_glob || by_mime || (known && f.globs.is_empty())
+    // As GTK's chooser: a name pattern (any case: "*.PNG" is a .png), or the file's type is
+    // one of the filter's (its parents and families count: a .rs file is text/plain).
+    let lower = it.name.to_lowercase();
+    f.globs.iter().any(|g| glob(&g.to_lowercase(), &lower))
+        || it
+            .mime
+            .as_deref()
+            .is_some_and(|t| f.mimes.iter().any(|m| crate::services::open::is_a(t, m)))
 }
 
 /// Whether one of the app's filters already lets everything through (no "All files" added).
