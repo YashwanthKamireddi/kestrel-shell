@@ -161,7 +161,7 @@ pub struct State {
     /// A search of the folders below is running.
     searching: bool,
     /// For kestrel's own requests (`filechooser::OWN`): what the choice becomes.
-    pub then: Option<fn(PathBuf) -> AppMessage>,
+    pub then: Option<Box<dyn Fn(PathBuf) -> AppMessage>>,
 }
 
 #[derive(Clone, Debug)]

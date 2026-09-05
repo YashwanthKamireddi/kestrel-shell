@@ -238,7 +238,11 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             let a = launcher::open(&mut app.panels.launcher);
             return action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)));
         }
-        PanelKind::Wallpaper => return wallpaper::open(app),
+        PanelKind::Wallpaper => {
+            let (p, cx) = cx::split(app);
+            let a = wallpaper::open(&mut p.wallpaper, &cx);
+            return action::perform(app, a, |m| AppMessage::Panel(Message::Wallpaper(m)));
+        }
         PanelKind::Keys => {
             return action::perform(app, keys::open(), |m| AppMessage::Panel(Message::Keys(m)));
         }
@@ -304,7 +308,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             let a = launcher::update(&mut app.panels.launcher, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)))
         }
-        Message::Wallpaper(m) => wallpaper::update(app, m),
+        Message::Wallpaper(m) => {
+            let (p, cx) = cx::split(app);
+            let a = wallpaper::update(&mut p.wallpaper, m, &cx);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Wallpaper(m)))
+        }
         Message::Keys(m) => {
             let a = keys::update(&mut app.panels.keys, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Keys(m)))
@@ -362,7 +370,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
                 let a = files::key(&mut app.panels.files, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Files(m)))
             }
-            Some(PanelKind::Wallpaper) => wallpaper::key(app, k),
+            Some(PanelKind::Wallpaper) => {
+                let (p, cx) = cx::split(app);
+                let a = wallpaper::key(&mut p.wallpaper, k, &cx);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Wallpaper(m)))
+            }
             Some(PanelKind::Media) => {
                 let (p, cx) = cx::split(app);
                 let a = media::key(&mut p.media, k, &cx);
@@ -547,7 +559,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Launcher => {
             launcher::view(&p.launcher, &cx).map(|m| AppMessage::Panel(Message::Launcher(m)))
         }
-        PanelKind::Wallpaper => wallpaper::view(app, s),
+        PanelKind::Wallpaper => {
+            wallpaper::view(&p.wallpaper, &cx).map(|m| AppMessage::Panel(Message::Wallpaper(m)))
+        }
         PanelKind::Keys => keys::view(&p.keys, &cx).map(|m| AppMessage::Panel(Message::Keys(m))),
         PanelKind::Island => island::view(&p.calendar, &p.media, &cx).map(AppMessage::Panel),
         PanelKind::Overview => {

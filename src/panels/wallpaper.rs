@@ -3,11 +3,10 @@
 //! folder's name chooses another folder (kestrel's file picker, folders only; saved as
 //! `wallpaper_dir`); a folder with no pictures says so.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::cx::Cx;
 use crate::config;
+use crate::theme::text;
 use crate::theme::tok;
-use crate::theme::{Scheme, text};
 use crate::ui::{self, Icon, control, empty, label_w};
 use iced::widget::{column, container, image, row, scrollable};
 use iced::{Alignment, Element, Length, Task};
@@ -30,6 +29,17 @@ pub struct State {
     stamps: Vec<(PathBuf, u64)>,
     /// How far the grid is scrolled (to bring a key-marked row into view only when needed).
     offset: f32,
+}
+
+impl State {
+    /// Forgets the folder's pictures and what was read of it, together: dropping the pictures
+    /// but keeping `stamps` made a re-read think every file was already made, and the picker
+    /// showed "No pictures" for a full folder.
+    fn forget(&mut self) {
+        self.items = None;
+        self.stamps.clear();
+        self.sel = None;
+    }
 }
 
 static GRID_ID: std::sync::LazyLock<iced::widget::Id> =
@@ -59,16 +69,14 @@ pub enum Message {
     Folder(PathBuf),
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Wallpaper(m))
-}
+type Act = super::action::Action<Message>;
 
-pub fn folder(app: &App) -> PathBuf {
-    if let Some(d) = &app.config.wallpaper_dir {
+pub fn folder(config: &config::Config) -> PathBuf {
+    if let Some(d) = &config.wallpaper_dir {
         return config::expand(d);
     }
     // Default: the folder of the current wallpaper, else ~/Pictures/Wallpapers.
-    app.config
+    config
         .wallpaper
         .as_deref()
         .map(config::expand)
@@ -183,8 +191,8 @@ async fn thumbs(files: Vec<PathBuf>) -> Vec<(PathBuf, image::Handle)> {
 }
 
 /// Brings the marked tile's row into view (keys move past the three rows shown).
-fn reveal(app: &App) -> Task<AppMessage> {
-    let Some(i) = app.panels.wallpaper.sel else {
+fn reveal(st: &State) -> Task<Message> {
+    let Some(i) = st.sel else {
         return Task::none();
     };
     let row = (i / COLS) as f32;
@@ -193,7 +201,7 @@ fn reveal(app: &App) -> Task<AppMessage> {
     // showing at the top).
     let shown = ((VIEW_H + 10.0) / ROW_STEP).floor().max(1.0);
     let y = ((row + 1.0 - shown).max(0.0)) * ROW_STEP;
-    let off = app.panels.wallpaper.offset;
+    let off = st.offset;
     let to = if top < off {
         top
     } else if top + THUMB_H + 6.0 > off + VIEW_H {
@@ -209,39 +217,34 @@ fn reveal(app: &App) -> Task<AppMessage> {
 
 /// Read the folder and make its thumbnails in the background when the shell starts, so the
 /// first open shows them at once (it was empty for a second while 96 pictures decoded).
-pub fn preload(app: &App) -> Task<AppMessage> {
-    Task::perform(list(folder(app)), |v| msg(Message::Listed(v)))
+pub fn preload(config: &config::Config) -> Task<Message> {
+    Task::perform(list(folder(config)), Message::Listed)
 }
 
-pub fn open(app: &mut App) -> Task<AppMessage> {
+pub fn open(st: &mut State, cx: &Cx) -> Act {
     // The kept thumbnails show at once; the folder is read again behind them.
-    let current = app.config.wallpaper.as_deref().map(config::expand);
-    let st = &mut app.panels.wallpaper;
+    let current = cx.config.wallpaper.as_deref().map(config::expand);
     st.sel = st.items.as_ref().and_then(|v| {
         v.iter()
             .position(|(p, _)| Some(p.as_path()) == current.as_deref())
     });
-    let dir = folder(app);
-    Task::batch([
-        Task::perform(list(dir), |v| msg(Message::Listed(v))),
-        // Opens on the row of the current wallpaper (from the top: the grid's own scroll may
-        // not be what was last heard).
-        {
-            app.panels.wallpaper.offset = f32::MAX;
-            reveal(app)
-        },
-    ])
+    // Opens on the row of the current wallpaper (from the top: the grid's own scroll may not
+    // be what was last heard).
+    st.offset = f32::MAX;
+    Act::Run(Task::batch([
+        Task::perform(list(folder(cx.config)), Message::Listed),
+        reveal(st),
+    ]))
 }
 
 /// Arrows move over the tiles, Enter sets the one they are on.
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key, cx: &Cx) -> Act {
     use super::Key;
-    let n = app.panels.wallpaper.items.as_ref().map_or(0, Vec::len);
+    let n = st.items.as_ref().map_or(0, Vec::len);
     if n == 0 {
-        return Task::none();
+        return Act::None;
     }
-    let current = app.config.wallpaper.as_deref().map(config::expand);
-    let st = &mut app.panels.wallpaper;
+    let current = cx.config.wallpaper.as_deref().map(config::expand);
     // Keys start from the current wallpaper when nothing is marked.
     let at = st
         .sel
@@ -267,22 +270,21 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
                 .and_then(|v| v.get(at as usize))
                 .map(|(p, _)| p.clone());
             return match path {
-                Some(p) => update(app, Message::Set(p)),
-                None => Task::none(),
+                Some(p) => update(st, Message::Set(p), cx),
+                None => Act::None,
             };
         }
-        _ => return Task::none(),
+        _ => return Act::None,
     };
     st.sel = Some(to.clamp(0, n as i64 - 1) as usize);
-    reveal(app)
+    Act::Run(reveal(st))
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message, cx: &Cx) -> Act {
     match m {
         Message::Listed(now) => {
-            let st = &mut app.panels.wallpaper;
             if st.items.is_some() && now == st.stamps {
-                return Task::none();
+                return Act::None;
             }
             // Only new or changed files are decoded; the rest keep their pictures.
             let need: Vec<PathBuf> = now
@@ -290,12 +292,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 .filter(|f| !st.stamps.contains(f))
                 .map(|(p, _)| p.clone())
                 .collect();
-            Task::perform(thumbs(need), move |made| {
-                msg(Message::Loaded(now.clone(), made))
-            })
+            Act::Run(Task::perform(thumbs(need), move |made| {
+                Message::Loaded(now.clone(), made)
+            }))
         }
         Message::Loaded(now, made) => {
-            let st = &mut app.panels.wallpaper;
             let mut have: std::collections::HashMap<PathBuf, image::Handle> = st
                 .items
                 .take()
@@ -309,19 +310,19 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     .collect(),
             );
             st.stamps = now;
-            Task::none()
+            Act::None
         }
         Message::Scrolled(y) => {
-            app.panels.wallpaper.offset = y;
-            Task::none()
+            st.offset = y;
+            Act::None
         }
         Message::Hover(i) => {
-            app.panels.wallpaper.sel = Some(i);
-            Task::none()
+            st.sel = Some(i);
+            Act::None
         }
         Message::Shuffle => {
-            let current = app.config.wallpaper.as_deref().map(config::expand);
-            let pick = app.panels.wallpaper.items.as_ref().and_then(|v| {
+            let current = cx.config.wallpaper.as_deref().map(config::expand);
+            let pick = st.items.as_ref().and_then(|v| {
                 let others: Vec<&PathBuf> = v
                     .iter()
                     .map(|(p, _)| p)
@@ -336,48 +337,39 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 Some(others[n % others.len()].clone())
             });
             match pick {
-                Some(p) => update(app, Message::Set(p)),
-                None => Task::none(),
+                Some(p) => update(st, Message::Set(p), cx),
+                None => Act::None,
             }
         }
-        Message::ChooseFolder => {
-            app.panels.files.then = Some(|p| msg(Message::Folder(p)));
-            let req = crate::services::filechooser::Request {
+        Message::ChooseFolder => Act::AskFile {
+            request: crate::services::filechooser::Request {
                 id: crate::services::filechooser::OWN,
                 title: "Wallpaper folder".into(),
                 directory: true,
-                folder: Some(folder(app)),
+                folder: Some(folder(cx.config)),
                 accept: "Choose".into(),
                 ..Default::default()
-            };
-            Task::done(AppMessage::Close).chain(Task::done(AppMessage::FileRequest(req)))
-        }
+            },
+            reply: Message::Folder,
+        },
+        // Back to the pictures, now from there.
         Message::Folder(p) => {
-            let h = std::env::var("HOME").unwrap_or_default();
-            let shown = match p.strip_prefix(&h) {
-                Ok(rest) => format!("~/{}", rest.display()),
-                Err(_) => p.display().to_string(),
-            };
-            config::set(&[], "wallpaper_dir", toml_edit::value(shown.clone()));
-            app.config.wallpaper_dir = Some(shown);
-            app.panels.wallpaper.items = None;
-            // Back to the pictures, now from there.
-            Task::done(AppMessage::Ipc("toggle wallpaper".into()))
+            // Its pictures were of the old folder.
+            st.forget();
+            Act::WallpaperFolder(p)
         }
         Message::Set(p) => {
-            if let Some(v) = &app.panels.wallpaper.items {
-                app.panels.wallpaper.sel = v.iter().position(|(q, _)| *q == p);
+            if let Some(v) = &st.items {
+                st.sel = v.iter().position(|(q, _)| *q == p);
             }
-            let s = p.to_string_lossy().into_owned();
-            config::set_wallpaper(&s);
-            app.config.wallpaper = Some(s);
-            Task::done(AppMessage::ReloadWallpaper)
+            Act::SetWallpaper(p)
         }
     }
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let name = folder(app)
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let name = folder(cx.config)
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
@@ -392,19 +384,13 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .align_y(Alignment::Center)
         )
         .pill(s, crate::ui::control::Pill::Plain)
-        .on_press(msg(Message::ChooseFolder)),
+        .on_press(Message::ChooseFolder),
     ]
     .spacing(tok::M)
     .align_y(Alignment::Center)
     .height(tok::BAR_ITEM + 4.0);
     // Shuffle only with something to shuffle to.
-    let header = if app
-        .panels
-        .wallpaper
-        .items
-        .as_ref()
-        .is_some_and(|v| v.len() > 1)
-    {
+    let header = if st.items.as_ref().is_some_and(|v| v.len() > 1) {
         header.push(
             control(
                 row![
@@ -415,17 +401,17 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .align_y(Alignment::Center),
             )
             .pill(s, crate::ui::control::Pill::Plain)
-            .on_press(msg(Message::Shuffle)),
+            .on_press(Message::Shuffle),
         )
     } else {
         header
     };
-    let current = app.config.wallpaper.as_deref().map(config::expand);
-    let body: Element<'_, AppMessage> = match &app.panels.wallpaper.items {
+    let current = cx.config.wallpaper.as_deref().map(config::expand);
+    let body: Element<'_, Message> = match &st.items {
         None => empty(s, Icon::Image),
         // A folder with no pictures (or none at all) says which, not just an icon.
         Some(v) if v.is_empty() => {
-            let f = folder(app);
+            let f = folder(cx.config);
             let h = std::env::var("HOME").unwrap_or_default();
             let shown = match f.strip_prefix(&h) {
                 Ok(rest) => format!("~/{}", rest.display()),
@@ -443,7 +429,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }
         Some(v) => {
             let mut grid = column![].spacing(tok::L);
-            let sel = app.panels.wallpaper.sel;
+            let sel = st.sel;
             for (ci, chunk) in v.chunks(COLS).enumerate() {
                 let mut r = row![].spacing(tok::L);
                 for (ti, (path, thumb)) in chunk.iter().enumerate() {
@@ -498,8 +484,8 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                             .radius(tok::R_ROW)
                             .kind(s, crate::ui::control::Kind::Bare)
                             .no_press_scale()
-                            .on_enter(msg(Message::Hover(i)))
-                            .on_press(msg(Message::Set(path.clone()))),
+                            .on_enter(Message::Hover(i))
+                            .on_press(Message::Set(path.clone())),
                     );
                 }
                 grid = grid.push(r);
@@ -507,7 +493,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             crate::ui::smooth(
                 scrollable(grid)
                     .id(GRID_ID.clone())
-                    .on_scroll(|v| msg(Message::Scrolled(v.absolute_offset().y)))
+                    .on_scroll(|v| Message::Scrolled(v.absolute_offset().y))
                     .height(Length::Fixed(VIEW_H))
                     .direction(scrollable::Direction::Vertical(
                         scrollable::Scrollbar::new().width(0).scroller_width(0),

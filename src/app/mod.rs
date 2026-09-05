@@ -550,7 +550,8 @@ pub fn boot() -> (App, Task<Message>) {
     // The wallpaper picker's thumbnails and the shortcuts list, read now so their first open
     // is already full.
     let warm = Task::batch([
-        panels::wallpaper::preload(&app),
+        panels::wallpaper::preload(&app.config)
+            .map(|m| Message::Panel(panels::Message::Wallpaper(m))),
         // The launcher's apps read once at start, so even its first open is instant.
         panels::launcher::reload().map(|m| Message::Panel(panels::Message::Launcher(m))),
         panels::action::perform(&mut app, panels::keys::open(), |m| {

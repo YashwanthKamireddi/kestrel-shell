@@ -40,6 +40,16 @@ pub enum Action<M> {
         key: String,
         paste: bool,
     },
+    /// Make this picture the wallpaper (saved in config.toml, shown at once).
+    SetWallpaper(std::path::PathBuf),
+    /// The folder the wallpaper picker shows (saved in config.toml), and show it again.
+    WallpaperFolder(std::path::PathBuf),
+    /// Ask the file picker (kestrel's own question); the choice comes back to the panel as
+    /// `reply(path)`.
+    AskFile {
+        request: crate::services::filechooser::Request,
+        reply: fn(std::path::PathBuf) -> M,
+    },
     /// Say something in the island's OSD (a countdown's number).
     Notice(crate::ui::Icon, String),
     /// Take the OSD's message away.
@@ -116,6 +126,26 @@ pub fn perform<M: Send + 'static>(
             .discard()
         }
         Action::Reply(m) => Task::done(*m),
+        Action::SetWallpaper(p) => {
+            let s = p.to_string_lossy().into_owned();
+            crate::config::set_wallpaper(&s);
+            app.config.wallpaper = Some(s);
+            Task::done(AppMessage::ReloadWallpaper)
+        }
+        Action::WallpaperFolder(p) => {
+            let h = std::env::var("HOME").unwrap_or_default();
+            let shown = match p.strip_prefix(&h) {
+                Ok(rest) => format!("~/{}", rest.display()),
+                Err(_) => p.display().to_string(),
+            };
+            crate::config::set(&[], "wallpaper_dir", toml_edit::value(shown.clone()));
+            app.config.wallpaper_dir = Some(shown);
+            Task::done(AppMessage::Ipc("toggle wallpaper".into()))
+        }
+        Action::AskFile { request, reply } => {
+            app.panels.files.then = Some(Box::new(move |p| wrap(reply(p))));
+            Task::done(AppMessage::Close).chain(Task::done(AppMessage::FileRequest(request)))
+        }
         Action::Notice(icon, title) => {
             app.show_event(icon, title, String::new());
             Task::none()
