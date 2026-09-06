@@ -130,9 +130,7 @@ impl App {
                 shown
             }
             (Some("close"), _) => self.close(),
-            (Some("game-mode"), _) => Task::done(Message::Panel(panels::Message::Control(
-                panels::control::Message::GameMode,
-            ))),
+            (Some("game-mode"), _) => self.change(Change::GameMode),
             #[cfg(feature = "devtools")]
             (Some("preview"), Some(which)) => {
                 use panels::auth::Preview;

@@ -1,6 +1,7 @@
 //! Settings › displays: its page.
 
 use super::*;
+use crate::app::Change;
 use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
@@ -345,7 +346,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 s,
                 "Night light",
                 None,
-                ui::switch(s, app.night_light, snd(C::NightLight)),
+                ui::switch(s, app.night_light, set(Change::NightLight)),
             ),
             row_of(
                 s,
@@ -374,7 +375,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         text::SMALL,
                         s.ink_dim
                     ),
-                    ui::switch(s, auto, snd(C::Schedule(!auto))),
+                    ui::switch(s, auto, set(Change::NightSchedule(!auto))),
                 ]
                 .spacing(tok::L)
                 .align_y(Alignment::Center)

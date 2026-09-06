@@ -6,7 +6,7 @@ use crate::theme::tok;
 use iced::widget::column;
 
 /// A thin live level under a slider (Windows' mixer shows the sound moving the same way).
-pub(super) fn meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> {
+pub(super) fn meter<'a>(s: Scheme, value: f32) -> Element<'a, Message> {
     let v = value.clamp(0.0, 1.0);
     let fill = container(Space::new())
         .width(Length::FillPortion(((v * 1000.0) as u16).max(1)))
@@ -58,24 +58,24 @@ pub fn mode_name(description: &str) -> String {
 /// Sound, like Windows' volume mixer: the output (level, live meter, device, mode, balance),
 /// the microphone (level, live meter, device), every app playing sound (its own level, live
 /// meter, mute, output) and every app recording (its level, mute, microphone).
-pub(super) fn output_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub(super) fn output_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     // The control centre scrolls as a whole: no scroll of its own.
-    sound(app, s, true).into()
+    sound(st, cx, true).into()
 }
 
 /// The whole mixer (output, microphone, apps, recording): in the control centre's Sound page
 /// (`header`: with its back row) and in Settings > Sound (one implementation).
-pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, AppMessage> {
-    let head = subpage_header(
-        s,
-        "Sound",
-        msg(Message::Page(Page::Main)),
-        Space::new().into(),
-    );
+pub(super) fn sound<'a>(
+    st: &'a State,
+    cx: &Cx<'a>,
+    header: bool,
+) -> iced::widget::Column<'a, Message> {
+    let s = cx.scheme;
+    let head = subpage_header(s, "Sound", Message::Page(Page::Main), Space::new().into());
     let heading = |t: &'static str| {
         container(label_w(t, text::SMALL, s.ink_dim, theme::SEMIBOLD)).padding([tok::XS, tok::S])
     };
-    let check = |on: bool| -> Element<'_, AppMessage> {
+    let check = |on: bool| -> Element<'_, Message> {
         if on {
             icon(Icon::Check, tok::ICON, s.accent).into()
         } else {
@@ -86,13 +86,12 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
     if header {
         col = col.push(head);
     }
-    let st = &app.panels.control;
 
     // Output: its level and the sound moving, the devices, its card's modes, the balance.
     let mut out = column![heading("Output")].spacing(tok::S);
-    let sink = app.audio.sink();
+    let sink = cx.audio.sink();
     if let Some(d) = sink {
-        let top = boost_top(app);
+        let top = cx.boost_top();
         out = out.push(level_row_to(
             s,
             level_icon(Some(d)),
@@ -102,18 +101,18 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             Message::SinkMute,
             Trail::Bare,
         ));
-        out = out.push(meter(s, if d.muted { 0.0 } else { app.meters.output }));
+        out = out.push(meter(s, if d.muted { 0.0 } else { cx.meters.output }));
     }
-    let sinks: Vec<&audio::Device> = app
+    let sinks: Vec<&audio::Device> = cx
         .audio
         .sinks
         .iter()
-        .filter(|d| d.plugged || d.name == app.audio.default_sink)
+        .filter(|d| d.plugged || d.name == cx.audio.default_sink)
         .collect();
     let names = short_names(sinks.iter().map(|d| device_name(&d.description)));
     let mut list = column![].spacing(tok::XXS);
     for (d, name) in sinks.into_iter().zip(names) {
-        let active = d.name == app.audio.default_sink;
+        let active = d.name == cx.audio.default_sink;
         let i = if d.bluetooth || d.headphones {
             Icon::Headphones
         } else {
@@ -126,7 +125,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             None,
             check(active),
             active,
-            Some(msg(Message::Sink(d.name.clone()))),
+            Some(Message::Sink(d.name.clone())),
         ));
     }
     out = out.push(list);
@@ -136,7 +135,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
     if let Some(card) = sink
         .filter(|d| d.bluetooth)
         .and_then(|d| d.card)
-        .and_then(|c| app.audio.cards.iter().find(|k| k.index == c))
+        .and_then(|c| cx.audio.cards.iter().find(|k| k.index == c))
         .filter(|k| k.profiles.len() > 1)
     {
         let mut modes = column![heading("Mode")].spacing(tok::XXS);
@@ -154,7 +153,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                 None,
                 check(active),
                 active,
-                Some(msg(Message::CardMode(card.index, name.clone()))),
+                Some(Message::CardMode(card.index, name.clone())),
             ));
         }
         out = out.push(modes);
@@ -187,14 +186,14 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                 s.ink.scale_alpha(tok::TONAL * s.opacity),
                 s.accent.scale_alpha(0.35 * s.opacity),
             ),
-            |v| msg(Message::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
+            |v| Message::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0),
         );
         out = out.push(column![heading("Balance"), bar].spacing(tok::S));
     }
     col = col.push(out);
 
     // Input: the microphone's level and the sound it hears, then the microphones.
-    if let Some(d) = app.audio.source() {
+    if let Some(d) = cx.audio.source() {
         let mut input = column![heading("Input")].spacing(tok::S).push(level_row(
             s,
             if d.muted { Icon::MicOff } else { Icon::Mic },
@@ -203,12 +202,12 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             Message::SourceMute,
             Trail::Bare,
         ));
-        input = input.push(meter(s, if d.muted { 0.0 } else { app.meters.input }));
-        let sources: Vec<&audio::Device> = app
+        input = input.push(meter(s, if d.muted { 0.0 } else { cx.meters.input }));
+        let sources: Vec<&audio::Device> = cx
             .audio
             .sources
             .iter()
-            .filter(|d| d.plugged || d.name == app.audio.default_source)
+            .filter(|d| d.plugged || d.name == cx.audio.default_source)
             .collect();
         if sources.len() > 1 {
             let names = short_names(
@@ -218,7 +217,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
             );
             let mut mics = column![].spacing(tok::XXS);
             for (d, name) in sources.into_iter().zip(names) {
-                let active = d.name == app.audio.default_source;
+                let active = d.name == cx.audio.default_source;
                 mics = mics.push(list_row(
                     s,
                     icon(Icon::Mic, tok::ICON, if active { s.accent } else { s.ink }).into(),
@@ -226,7 +225,7 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
                     None,
                     check(active),
                     active,
-                    Some(msg(Message::Source(d.name.clone()))),
+                    Some(Message::Source(d.name.clone())),
                 ));
             }
             input = input.push(mics);
@@ -235,25 +234,25 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
     }
 
     // Apps playing sound.
-    if !app.audio.apps.is_empty() {
+    if !cx.audio.apps.is_empty() {
         let mut apps = column![heading("Apps")].spacing(tok::L);
-        for a in &app.audio.apps {
-            let level = app
+        for a in &cx.audio.apps {
+            let level = cx
                 .meters
                 .apps
                 .iter()
                 .filter(|(i, _)| a.streams.contains(i))
                 .map(|(_, v)| *v)
                 .fold(0.0, f32::max);
-            apps = apps.push(app_row(app, s, a, level, st.sound_open.as_deref(), false));
+            apps = apps.push(app_row(cx, a, level, st.sound_open.as_deref(), false));
         }
         col = col.push(apps);
     }
     // Apps recording (a microphone).
-    if !app.audio.recorders.is_empty() {
+    if !cx.audio.recorders.is_empty() {
         let mut rec = column![heading("Recording")].spacing(tok::L);
-        for a in &app.audio.recorders {
-            rec = rec.push(app_row(app, s, a, 0.0, st.sound_open.as_deref(), true));
+        for a in &cx.audio.recorders {
+            rec = rec.push(app_row(cx, a, 0.0, st.sound_open.as_deref(), true));
         }
         col = col.push(rec);
     }
@@ -264,15 +263,15 @@ pub fn sound(app: &App, s: Scheme, header: bool) -> iced::widget::Column<'_, App
 /// opens the list to choose another), its level and, for playback, the sound moving.
 /// `recording`: an app using a microphone (its device is a microphone).
 pub(super) fn app_row<'a>(
-    app: &'a App,
-    s: Scheme,
+    cx: &Cx<'a>,
     a: &'a audio::App,
     level: f32,
     open: Option<&str>,
     recording: bool,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
+    let s = cx.scheme;
     let ids = a.streams.clone();
-    let lead: Element<'a, AppMessage> = match a.icon_path() {
+    let lead: Element<'a, Message> = match a.icon_path() {
         Some(p) => ui::image_file_faded(&p, 24.0, if a.muted { 0.4 } else { 1.0 } * s.opacity),
         None => icon(
             if a.muted {
@@ -290,16 +289,16 @@ pub(super) fn app_row<'a>(
     let mute = ui::control(container(lead).center(32))
         .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
-        .on_press(msg(if recording {
+        .on_press(if recording {
             Message::RecMute(ids.clone())
         } else {
             Message::AppMute(ids.clone())
-        }));
+        });
     // The devices it could use, and the one it does.
     let (devices, default) = if recording {
-        (&app.audio.sources, app.audio.default_source.as_str())
+        (&cx.audio.sources, cx.audio.default_source.as_str())
     } else {
-        (&app.audio.sinks, app.audio.default_sink.as_str())
+        (&cx.audio.sinks, cx.audio.default_sink.as_str())
     };
     let usable: Vec<&audio::Device> = devices
         .iter()
@@ -354,16 +353,12 @@ pub(super) fn app_row<'a>(
                 .align_y(Alignment::Center),
             )
             .pill(s, crate::ui::control::Pill::Quiet)
-            .on_press(msg(Message::AppPick(if expanded {
-                None
-            } else {
-                Some(key)
-            }))),
+            .on_press(Message::AppPick(if expanded { None } else { Some(key) })),
         );
     }
     // An app playing may be boosted past 100 % like the output (the real level shown, the boost
     // past 100 % in red); a recording stays at 100 %.
-    let most = if recording { 1.0 } else { boost_top(app) };
+    let most = if recording { 1.0 } else { cx.boost_top() };
     let value = if a.muted { 0.0 } else { a.volume.min(most) };
     let top = if value > 1.0 { most } else { 1.0 };
     let on_track = value / top;
@@ -387,11 +382,11 @@ pub(super) fn app_row<'a>(
         22.0,
         (s.ink.scale_alpha(tok::TONAL * s.opacity), s.accent),
         move |v| {
-            msg(if recording {
+            if recording {
                 Message::RecVolume(ids2.clone(), v * top)
             } else {
                 Message::AppVolume(ids2.clone(), v * top)
-            })
+            }
         },
     )
     .boost(1.0 / top, s.bad);
@@ -420,11 +415,11 @@ pub(super) fn app_row<'a>(
                     Space::new().into()
                 },
                 active,
-                Some(msg(if recording {
+                Some(if recording {
                     Message::RecTo(ids.clone(), d.name.clone())
                 } else {
                     Message::AppTo(ids.clone(), d.name.clone())
-                })),
+                }),
             ));
         }
         body = body.push(list);

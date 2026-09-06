@@ -39,10 +39,10 @@ pub enum Message {
 
 pub fn update(m: Message) -> super::action::Action<Message> {
     let Message::Disconnect(path) = m;
-    super::action::Action::Device {
+    super::action::Action::Change(crate::app::Change::Device {
         path,
         connect: false,
-    }
+    })
 }
 
 pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, Message> {

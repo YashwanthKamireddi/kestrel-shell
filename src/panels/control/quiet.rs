@@ -20,12 +20,13 @@ pub fn until_text(t: u64) -> String {
 }
 
 /// Do not disturb: on for an hour, a few hours, until the morning, or until turned off.
-pub(super) fn quiet_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub(super) fn quiet_page<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     let header = subpage_header(
         s,
         "Do not disturb",
-        msg(Message::Page(Page::Main)),
-        switch(s, app.dnd, msg(Message::Dnd)),
+        Message::Page(Page::Main),
+        switch(s, cx.dnd, Message::Dnd),
     );
     let until = crate::state::get(|st| st.toggles.dnd_until);
     let mut list = column![].spacing(tok::XXS);
@@ -35,7 +36,7 @@ pub(super) fn quiet_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         ("Until tomorrow morning", u64::MAX),
         ("Until I turn it off", 0),
     ] {
-        let on = app.dnd && minutes == 0 && until.is_none();
+        let on = cx.dnd && minutes == 0 && until.is_none();
         list = list.push(list_row(
             s,
             icon(
@@ -52,10 +53,10 @@ pub(super) fn quiet_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 Space::new().into()
             },
             on,
-            Some(msg(Message::DndFor(minutes))),
+            Some(Message::DndFor(minutes)),
         ));
     }
-    if app.dnd
+    if cx.dnd
         && let Some(t) = until
     {
         list = list.push(

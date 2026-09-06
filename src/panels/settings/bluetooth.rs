@@ -1,6 +1,7 @@
 //! Settings › bluetooth: its page.
 
 use super::*;
+use crate::app::Change;
 use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
@@ -46,7 +47,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         s,
         "Bluetooth",
         None,
-        ui::switch(s, b.powered, snd(C::Bluetooth(!b.powered))),
+        ui::switch(s, b.powered, set(Change::Bluetooth(!b.powered))),
     )];
     if b.powered {
         // While this page is open, other devices can find this computer by this name.
@@ -75,7 +76,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         if !matches(&d.name) && !matches("bluetooth") {
             continue;
         }
-        let busy = crate::panels::control::in_progress(app, &d.path);
+        let busy = app.in_progress(&d.path);
         let err = app
             .device_error
             .as_ref()
@@ -122,7 +123,10 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         s.ink
                     ))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(snd(C::Device(d.path.clone(), d.connected))),
+                    .on_press(set(Change::Device {
+                        path: d.path.clone(),
+                        connect: !d.connected,
+                    })),
                     control(label(
                         if armed { "Forget?" } else { "Forget" },
                         text::SMALL,
@@ -151,7 +155,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         if !matches(&d.name) && !matches("bluetooth") {
             continue;
         }
-        let pairing = cst.pairing.as_deref() == Some(d.path.as_str());
+        let pairing = app.pairing.as_deref() == Some(d.path.as_str());
         let err = app
             .device_error
             .as_ref()
@@ -165,8 +169,8 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         }
         let mut pair =
             control(label("Pair", text::SMALL, s.ink)).pill(s, crate::ui::control::Pill::Plain);
-        if cst.pairing.is_none() {
-            pair = pair.on_press(snd(C::Pair(d.path.clone())));
+        if app.pairing.is_none() {
+            pair = pair.on_press(set(Change::Pair(d.path.clone())));
         }
         near.push(Some(
             container(

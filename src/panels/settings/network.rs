@@ -1,6 +1,7 @@
 //! Settings › network: its page.
 
 use super::*;
+use crate::app::Change;
 use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
@@ -19,14 +20,14 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         s,
         "Airplane mode",
         None,
-        ui::switch(s, airplane, snd(C::Airplane)),
+        ui::switch(s, airplane, set(Change::Airplane)),
     )];
     if n.has_wifi {
         top.push(row_of(
             s,
             "Wi-Fi",
             None,
-            ui::switch(s, n.wifi_enabled, snd(C::Wifi(!n.wifi_enabled))),
+            ui::switch(s, n.wifi_enabled, set(Change::Wifi(!n.wifi_enabled))),
         ));
     }
     out.extend(group(s, None, top));
@@ -49,8 +50,12 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             if !matches(&net.ssid) && !matches("wi-fi") {
                 continue;
             }
-            let busy = crate::panels::control::in_progress(app, &net.ssid);
-            let failed = crate::panels::control::st_net_error(app, &net.ssid).map(|(_, e)| e);
+            let busy = app.in_progress(&net.ssid);
+            let failed = app
+                .net_error
+                .as_ref()
+                .filter(|(k, _)| *k == net.ssid)
+                .map(|(_, e)| e.clone());
             let state: String = match busy {
                 Some(true) => "Connecting…".into(),
                 Some(false) => "Disconnecting…".into(),
@@ -67,7 +72,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             let trailing: Element<'_, AppMessage> = if net.active {
                 control(label("Disconnect", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(snd(C::Disconnect))
+                    .on_press(set(Change::Disconnect))
                     .into()
             } else if net.secure && !net.known {
                 icon(Icon::Lock, tok::ICON_S, s.ink_faint).into()
@@ -497,7 +502,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             s,
             "Cloudflare WARP",
             None,
-            ui::switch(s, on, snd(C::Warp(!on))),
+            ui::switch(s, on, set(Change::Warp(!on))),
         ));
     }
     if let Some(on) = app.vpn.tailscale {
@@ -505,7 +510,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             s,
             "Tailscale",
             None,
-            ui::switch(s, on, snd(C::Tailscale(!on))),
+            ui::switch(s, on, set(Change::Tailscale(!on))),
         ));
     }
     out.extend(group(s, Some("VPN"), vpn));

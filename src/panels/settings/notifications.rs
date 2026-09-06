@@ -17,11 +17,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
             s,
             "Do not disturb",
             None,
-            ui::switch(
-                s,
-                app.dnd,
-                AppMessage::Panel(PanelMessage::Control(crate::panels::control::Message::Dnd)),
-            ),
+            ui::switch(s, app.dnd, AppMessage::Change(crate::app::Change::Dnd)),
         ),
         row_of(
             s,

@@ -5,19 +5,16 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let on = app.night_light;
+pub(super) fn night_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let on = cx.night_light;
     let header = subpage_header(
         s,
         "Night light",
-        msg(Message::Page(Page::Main)),
-        switch(s, on, msg(Message::NightLight)),
+        Message::Page(Page::Main),
+        switch(s, on, Message::NightLight),
     );
-    let k = app
-        .panels
-        .control
-        .kelvin
-        .unwrap_or(app.config.night_light_temperature);
+    let k = st.kelvin.unwrap_or(cx.config.night_light_temperature);
     let v = ((k as f32 - WARMEST) / (COOLEST - WARMEST)).clamp(0.0, 1.0);
     // The track runs from candle to daylight, so the slider shows what it does.
     let inner = row![
@@ -37,9 +34,9 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         v,
         32.0,
         (s.ink.scale_alpha(tok::TONAL * s.opacity), s.fade(warm)),
-        |v| msg(Message::Warmth(v)),
+        Message::Warmth,
     )
-    .on_release(msg(Message::WarmthDone));
+    .on_release(Message::WarmthDone);
     let ends = row![
         label("Warmer", text::CAPTION, s.ink_faint),
         Space::new().width(Length::Fill),
@@ -47,17 +44,17 @@ pub(super) fn night_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     ];
     // Sunset to sunrise: the times come from the weather (its city); without them the switch
     // has nothing to follow, so it is not offered.
-    let schedule: Element<'_, AppMessage> = match &app.weather {
+    let schedule: Element<'_, Message> = match cx.weather {
         Some(w) if !w.sunset.is_empty() => {
-            let auto = app.config.night_light_schedule;
+            let auto = cx.config.night_light_schedule;
             list_row(
                 s,
                 icon(Icon::Sunset, tok::ICON, s.ink_dim).into(),
                 "Sunset to sunrise",
                 Some(format!("{} – {}", w.sunset, w.sunrise)),
-                switch(s, auto, msg(Message::Schedule(!auto))),
+                switch(s, auto, Message::Schedule(!auto)),
                 false,
-                Some(msg(Message::Schedule(!auto))),
+                Some(Message::Schedule(!auto)),
             )
         }
         _ => Space::new().into(),

@@ -290,9 +290,7 @@ fn notifications_mark<'a>(
                     iced::Size::new(0.0, tok::BAR),
                 ),
             ))
-            .on_right_press(Message::Panel(crate::panels::Message::Control(
-                crate::panels::control::Message::Dnd,
-            )))
+            .on_right_press(Message::Change(crate::app::Change::Dnd))
             .into(),
     )
 }

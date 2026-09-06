@@ -138,10 +138,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::Net(s) => {
             let before = std::mem::replace(&mut app.net, *s);
-            panels::control::keep_order(
-                &mut app.panels.control.wifi_order,
-                app.net.networks.iter().map(|n| n.ssid.as_str()),
-            );
+            app.panels.control.lists_changed(&app.net, &app.bt);
             panels::settings::network_changed(app, &before)
         }
         Message::Bt(s) => {
@@ -181,10 +178,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 }
             }
             app.bt = s;
-            panels::control::keep_order(
-                &mut app.panels.control.nearby_order,
-                app.bt.nearby.iter().map(|d| d.path.as_str()),
-            );
+            app.panels.control.lists_changed(&app.net, &app.bt);
             if crate::panels::pods::device(&app.bt).is_none() {
                 app.pods = None;
                 // Their panel goes with them.

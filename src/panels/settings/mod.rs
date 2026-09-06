@@ -1918,7 +1918,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             });
         }
         Message::JoinNet(n) => {
-            let joined = super::control::update(app, super::control::Message::Join(n));
+            // The control centre's join (it asks for a password when one is needed).
+            let joined = super::update(
+                app,
+                super::Message::Control(super::control::Message::Join(n)),
+            );
             return Task::batch([
                 joined,
                 Task::Iced(iced::widget::focus(iced::widget::Id::new("net-password"))),
@@ -2796,6 +2800,11 @@ pub fn combo(key: &iced::keyboard::Key, m: iced::keyboard::Modifiers) -> Option<
 }
 
 /// A control-centre sound action (one implementation of what each does).
+/// A change to the system, asked of the shell.
+fn set(c: crate::app::Change) -> AppMessage {
+    AppMessage::Change(c)
+}
+
 fn snd(m: super::control::Message) -> AppMessage {
     AppMessage::Panel(PanelMessage::Control(m))
 }

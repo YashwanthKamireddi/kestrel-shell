@@ -294,7 +294,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             let a = monitor::update(&mut app.panels.monitor, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Monitor(m)))
         }
-        Message::Control(m) => control::update(app, m),
+        Message::Control(m) => {
+            let (p, cx) = cx::split(app);
+            let a = control::update(&mut p.control, m, &cx);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Control(m)))
+        }
         Message::Media(m) => {
             let (p, cx) = cx::split(app);
             let a = media::update(&mut p.media, m, &cx);
@@ -361,7 +365,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
                 let a = overview::key(&mut p.overview, k, &cx);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Overview(m)))
             }
-            Some(PanelKind::Control) => control::key(app, k),
+            Some(PanelKind::Control) => {
+                let (p, cx) = cx::split(app);
+                let a = control::key(&mut p.control, k, &cx);
+                action::perform(app, a, |m| AppMessage::Panel(Message::Control(m)))
+            }
             Some(PanelKind::Power) => {
                 let a = power::key(&mut app.panels.power, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Power(m)))
@@ -553,7 +561,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Monitor => {
             monitor::view(&p.monitor, &cx).map(|m| AppMessage::Panel(Message::Monitor(m)))
         }
-        PanelKind::Control => control::view(app, s),
+        PanelKind::Control => {
+            control::view(&p.control, &cx).map(|m| AppMessage::Panel(Message::Control(m)))
+        }
         PanelKind::Media => {
             media::view(&p.media, &cx).map(|m| AppMessage::Panel(Message::Media(m)))
         }

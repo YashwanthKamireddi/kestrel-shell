@@ -5,14 +5,15 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn power_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub(super) fn power_page<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     let header = subpage_header(
         s,
         "Power mode",
-        msg(Message::Page(Page::Main)),
+        Message::Page(Page::Main),
         Space::new().into(),
     );
-    let current = app.power.profile;
+    let current = cx.power.profile;
     let mut list = column![].spacing(tok::XXS);
     for (p, i, note) in [
         (
@@ -39,7 +40,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 Space::new().into()
             },
             active,
-            Some(msg(Message::SetProfile(p))),
+            Some(Message::SetProfile(p)),
         ));
     }
     column![header, list].spacing(tok::M).into()

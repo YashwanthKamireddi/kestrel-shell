@@ -8,7 +8,9 @@
 
 use crate::app::App;
 use crate::config::Config;
-use crate::services::{airpods, audio, bluetooth, hyprland, mpris, network, tray, web};
+use crate::services::{
+    airpods, audio, bluetooth, hyprland, meters, mpris, network, power, tray, vpn, web,
+};
 use crate::theme::Scheme;
 
 /// A network or device being connected or disconnected right now (a network's name, a
@@ -85,6 +87,45 @@ pub struct Cx<'a> {
     pub notifications: &'a [crate::services::notifications::Notification],
     /// The size of the screen the open panel is on.
     pub screen: Option<iced::Size>,
+    pub power: &'a power::State,
+    pub vpn: &'a vpn::State,
+    /// Sound levels as heard now (output and input).
+    pub meters: &'a meters::Meters,
+    /// The quick toggles.
+    pub dnd: bool,
+    pub night_light: bool,
+    pub caffeine: bool,
+    pub game_mode: bool,
+    /// What the brightness slider sets.
+    pub light: Light,
+    /// The device being paired (its path).
+    pub pairing: Option<&'a str>,
+    /// A network whose last join failed, and why.
+    pub net_error: Option<&'a (String, String)>,
+}
+
+/// What the brightness slider sets, and its level (0 to 1).
+#[derive(Clone, Copy, Debug)]
+pub enum Light {
+    /// The laptop panel's backlight, while that screen is on.
+    Backlight(f32),
+    /// An external monitor that answers DDC/CI: its own backlight.
+    Monitor(f32),
+    /// Neither: the picture is dimmed instead (night light's tool).
+    Dim(f32),
+}
+
+impl Light {
+    fn of(app: &App) -> Self {
+        let laptop = app.outputs.iter().any(|o| o.name.starts_with("eDP"));
+        match app.brightness.filter(|_| laptop) {
+            Some(v) => Light::Backlight(v),
+            None => match app.ddc_target() {
+                Some(bus) => Light::Monitor(app.ddc_level.get(&bus).copied().unwrap_or(0.5)),
+                None => Light::Dim(app.dim),
+            },
+        }
+    }
 }
 
 impl Cx<'_> {
@@ -92,6 +133,18 @@ impl Cx<'_> {
     /// disconnected (Some(false)).
     pub fn in_progress(&self, key: &str) -> Option<bool> {
         self.connecting?.in_progress(key, self.bt, self.net)
+    }
+
+    /// The reason the last join of `ssid` failed, if it did.
+    pub fn net_error(&self, ssid: &str) -> Option<&str> {
+        self.net_error
+            .filter(|(k, _)| k == ssid)
+            .map(|(_, e)| e.as_str())
+    }
+
+    /// How far the output's volume may go (1.5 = 150 %): `[sound] max`, at least 100 %.
+    pub fn boost_top(&self) -> f32 {
+        (self.config.sound.max as f32 / 100.0).max(1.0)
     }
 
     /// A temperature in the units chosen in Settings ("21°").
@@ -105,6 +158,7 @@ impl Cx<'_> {
 #[allow(dead_code)]
 pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
     let screen = screen(app);
+    let light = Light::of(app);
     let App {
         panels,
         scheme,
@@ -124,6 +178,15 @@ pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
         camera_apps,
         privacy_recent,
         notifications,
+        power,
+        vpn,
+        meters,
+        dnd,
+        night_light,
+        caffeine,
+        game_mode,
+        pairing,
+        net_error,
         ..
     } = app;
     let cx = Cx {
@@ -145,6 +208,16 @@ pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
         privacy_recent,
         notifications,
         screen,
+        power,
+        vpn,
+        meters,
+        dnd: *dnd,
+        night_light: *night_light,
+        caffeine: *caffeine,
+        game_mode: *game_mode,
+        light,
+        pairing: pairing.as_deref(),
+        net_error: net_error.as_ref(),
     };
     (panels, cx)
 }
@@ -170,6 +243,16 @@ pub fn of(app: &App) -> (&super::State, Cx<'_>) {
         privacy_recent: &app.privacy_recent,
         notifications: &app.notifications,
         screen: screen(app),
+        power: &app.power,
+        vpn: &app.vpn,
+        meters: &app.meters,
+        dnd: app.dnd,
+        night_light: app.night_light,
+        caffeine: app.caffeine,
+        game_mode: app.game_mode,
+        light: Light::of(app),
+        pairing: app.pairing.as_deref(),
+        net_error: app.net_error.as_ref(),
     };
     (&app.panels, cx)
 }

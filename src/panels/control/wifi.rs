@@ -5,13 +5,14 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let n = &app.net;
+pub(super) fn wifi_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let n = &cx.net;
     let header = subpage_header(
         s,
         "Wi-Fi",
-        msg(Message::Page(Page::Main)),
-        switch(s, n.wifi_enabled, msg(Message::Wifi(!n.wifi_enabled))),
+        Message::Page(Page::Main),
+        switch(s, n.wifi_enabled, Message::Wifi(!n.wifi_enabled)),
     );
     let mut list = column![].spacing(tok::XXS);
     if !n.wifi_enabled {
@@ -19,9 +20,9 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     } else if n.networks.is_empty() {
         list = list.push(ui::waiting(s, Icon::Search, "Looking for networks…"));
     }
-    let pw = &app.panels.control.password;
+    let pw = &st.password;
     // In the order they had when the page opened (`keep_order`).
-    let order = &app.panels.control.wifi_order;
+    let order = &st.wifi_order;
     let mut shown: Vec<&network::Network> = n.networks.iter().collect();
     shown.sort_by_key(|net| {
         order
@@ -30,7 +31,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .unwrap_or(usize::MAX)
     });
     for net in shown.into_iter().filter(|_| n.wifi_enabled).take(12) {
-        let busy = in_progress(app, &net.ssid);
+        let busy = cx.in_progress(&net.ssid);
         let sub = if let Some(want) = busy {
             Some(
                 if want {
@@ -42,15 +43,15 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             )
         } else if net.active {
             Some("Connected".to_string())
-        } else if let Some((_, e)) = st_net_error(app, &net.ssid) {
-            Some(e)
+        } else if let Some(e) = cx.net_error(&net.ssid) {
+            Some(e.to_string())
         } else if net.known {
             Some("Saved".to_string())
         } else {
             None
         };
-        let trailing: Element<'_, AppMessage> = if net.active || net.known {
-            info_button(s, msg(Message::NetworkInfo(net.ssid.clone())))
+        let trailing: Element<'_, Message> = if net.active || net.known {
+            info_button(s, Message::NetworkInfo(net.ssid.clone()))
         } else if net.secure {
             icon(Icon::Lock, tok::ICON_S, s.ink_faint).into()
         } else {
@@ -72,7 +73,7 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             sub,
             trailing,
             net.active,
-            Some(msg(Message::Join(net.clone()))),
+            Some(Message::Join(net.clone())),
         ));
         if let Some((ssid, _, text_value)) = pw
             && *ssid == net.ssid
@@ -83,8 +84,8 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                         text_input("Password", text_value)
                             .id(PASSWORD_ID.clone())
                             .secure(true)
-                            .on_input(|t| msg(Message::Password(t)))
-                            .on_submit(msg(Message::SubmitPassword))
+                            .on_input(Message::Password)
+                            .on_submit(Message::SubmitPassword)
                             .padding([tok::M, tok::L])
                             .size(text::BODY)
                             .font(theme::FONT)
@@ -112,9 +113,9 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     icon(Icon::Wifi, tok::ICON, s.ink_faint).into(),
                     k.ssid.clone(),
                     None,
-                    info_button(s, msg(Message::NetworkInfo(k.ssid.clone()))),
+                    info_button(s, Message::NetworkInfo(k.ssid.clone())),
                     false,
-                    Some(msg(Message::NetworkInfo(k.ssid.clone()))),
+                    Some(Message::NetworkInfo(k.ssid.clone())),
                 ));
             }
         }
@@ -125,14 +126,14 @@ pub(super) fn wifi_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             None,
             Space::new().into(),
             false,
-            Some(msg(Message::Page(Page::Hidden))),
+            Some(Message::Page(Page::Hidden)),
         ));
     }
     column![header, list].spacing(tok::M).into()
 }
 
 /// A small heading over a part of a list.
-pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, AppMessage> {
+pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, Message> {
     // Room above it, a little below: it belongs to the rows under it.
     container(ui::section(s, t, tok::L))
         .padding(iced::Padding {
@@ -144,7 +145,7 @@ pub(super) fn section<'a>(s: Scheme, t: &'a str) -> Element<'a, AppMessage> {
 }
 
 /// The round "i" at the end of a row: opens its details.
-pub(super) fn info_button<'a>(s: Scheme, m: AppMessage) -> Element<'a, AppMessage> {
+pub(super) fn info_button<'a>(s: Scheme, m: Message) -> Element<'a, Message> {
     crate::ui::control(icon(Icon::Info, tok::ICON_M, s.ink_dim))
         .padding(tok::S)
         .radius(tok::FULL)
@@ -154,7 +155,7 @@ pub(super) fn info_button<'a>(s: Scheme, m: AppMessage) -> Element<'a, AppMessag
 }
 
 /// One line of details: what it is, and its value (selectable by copying: a click copies it).
-pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element<'a, AppMessage> {
+pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element<'a, Message> {
     crate::ui::control(
         row![
             label(what, text::SMALL, s.ink_dim).width(Length::Fill),
@@ -168,20 +169,20 @@ pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element
     .radius(tok::R_ROW)
     .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
-    .on_press(msg(Message::CopyIp(value)))
+    .on_press(Message::CopyIp(value))
     .into()
 }
 
 /// A Wi-Fi network's page: its connection in detail (when it is the one in use; a click on a
 /// value copies it), joining by itself, disconnect, and forget (asked once).
-pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let st = &app.panels.control;
-    let n = &app.net;
+pub(super) fn network_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let n = &cx.net;
     let ssid = st.network.clone().unwrap_or_default();
     let header = subpage_header(
         s,
         ssid.clone(),
-        msg(Message::Page(Page::Wifi)),
+        Message::Page(Page::Wifi),
         Space::new().into(),
     );
     let mut body = column![].spacing(tok::XXS);
@@ -223,7 +224,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             container(
                 row![
                     label("Join automatically", text::BODY, s.ink).width(Length::Fill),
-                    switch(s, k.auto, msg(Message::AutoJoin(!k.auto))),
+                    switch(s, k.auto, Message::AutoJoin(!k.auto)),
                 ]
                 .align_y(Alignment::Center),
             )
@@ -235,7 +236,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         buttons = buttons.push(
             crate::ui::control(label_w("Disconnect", text::SMALL, s.ink, theme::MEDIUM))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::Disconnect)),
+                .on_press(Message::Disconnect),
         );
     }
     if saved.is_some() {
@@ -244,11 +245,11 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 .padding([tok::S, tok::L])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
-                .on_press(msg(Message::ForgetNetwork))
+                .on_press(Message::ForgetNetwork)
         } else {
             crate::ui::control(label_w("Forget", text::SMALL, s.ink, theme::MEDIUM))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::ForgetNetwork))
+                .on_press(Message::ForgetNetwork)
         });
     }
     column![header, body, container(buttons).padding([tok::M, tok::XS])]
@@ -257,12 +258,13 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 }
 
 /// Joining a network that does not announce its name: its name, its password (if any), Join.
-pub(super) fn hidden_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let (name, pw) = &app.panels.control.hidden;
+pub(super) fn hidden_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let (name, pw) = &st.hidden;
     let header = subpage_header(
         s,
         "Other network",
-        msg(Message::Page(Page::Wifi)),
+        Message::Page(Page::Wifi),
         Space::new().into(),
     );
     let field = |id: &'static str,
@@ -274,8 +276,8 @@ pub(super) fn hidden_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             text_input(placeholder, value)
                 .id(iced::widget::Id::new(id))
                 .secure(secure)
-                .on_input(move |t| msg(on(t)))
-                .on_submit(msg(Message::JoinHidden))
+                .on_input(on)
+                .on_submit(Message::JoinHidden)
                 .padding([tok::M, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
@@ -285,7 +287,7 @@ pub(super) fn hidden_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     };
     let join = crate::ui::control(label_w("Join", text::SMALL, s.on_accent, theme::SEMIBOLD))
         .pill(s, crate::ui::control::Pill::Primary)
-        .on_press_maybe((!name.trim().is_empty()).then(|| msg(Message::JoinHidden)));
+        .on_press_maybe((!name.trim().is_empty()).then_some(Message::JoinHidden));
     column![
         header,
         field(

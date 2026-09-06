@@ -3,7 +3,7 @@
 //! or off.
 
 use crate::app::{App, Message, Output};
-use crate::panels::{Message as PanelMessage, PanelKind, control};
+use crate::panels::PanelKind;
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{Icon, icon, label_w};
@@ -35,7 +35,7 @@ pub fn view<'a>(
             ),
         )
     };
-    let dnd = Message::Panel(PanelMessage::Control(control::Message::Dnd));
+    let dnd = Message::Change(crate::app::Change::Dnd);
     if app.dnd {
         return vec![
             super::icon_chip(s, Icon::BellOff, s.ink_dim, active)

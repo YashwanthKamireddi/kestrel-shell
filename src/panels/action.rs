@@ -15,11 +15,14 @@ pub enum Action<M> {
     Close,
     /// Ask the compositor (focus a window, start a program, open a file).
     Dispatch(compositor::Action),
-    /// Connect (true) or disconnect a Bluetooth device, shown in progress until it is so.
-    Device {
-        path: String,
-        connect: bool,
-    },
+    /// Change the system (radios, sound, brightness, a network, a device…).
+    Change(crate::app::Change),
+    /// The same, and `M` back to the panel once it is done (to read the result again).
+    ChangeThen(crate::app::Change, M),
+    /// Open (or close) a panel by its name, where the shell puts it ("settings", "capture").
+    Toggle(&'static str),
+    /// Open a tray app's menu, from the open panel.
+    TrayMenu(crate::services::tray::Item),
     /// Show a panel on an output, hanging from `at` (a panel that waited for what it shows).
     Open {
         kind: super::PanelKind,
@@ -103,19 +106,13 @@ pub fn perform<M: Send + 'static>(
         Action::Run(t) => t.map(wrap),
         Action::Close => Task::done(AppMessage::Close),
         Action::Dispatch(a) => Task::done(AppMessage::Dispatch(a)),
-        Action::Device { path, connect } => {
-            use crate::services::bluetooth;
-            app.connecting = Some(super::cx::Connecting::new(path.clone(), connect));
-            app.device_error = None;
-            let cmd = if connect {
-                bluetooth::Command::Connect(path.clone())
-            } else {
-                bluetooth::Command::Disconnect(path.clone())
-            };
-            Task::perform(bluetooth::command(cmd), move |r| {
-                AppMessage::DeviceDone(path.clone(), r)
-            })
-        }
+        Action::Change(c) => app.change(c),
+        Action::ChangeThen(c, m) => app.change(c).chain(Task::done(wrap(m))),
+        Action::Toggle(name) => app.ipc(&format!("toggle {name}")),
+        Action::TrayMenu(item) => match app.panel.as_ref().map(|p| p.output) {
+            Some(o) => Task::done(AppMessage::TrayMenu(Some(item), o, None)),
+            None => Task::none(),
+        },
         Action::Open { kind, output, at } => app.open_panel(kind, output, at),
         Action::Settings(page) => Task::done(AppMessage::SettingsAt(page)),
         Action::WindowRule(class) => Task::done(AppMessage::RuleFor(class)),

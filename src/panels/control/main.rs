@@ -5,10 +5,11 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
+pub(super) fn main_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
     // Header: battery summary and session buttons.
-    let p = &app.power;
-    let summary: Element<'_, AppMessage> = if p.has_battery {
+    let p = &cx.power;
+    let summary: Element<'_, Message> = if p.has_battery {
         let detail = if p.full {
             "Fully charged".to_string()
         } else if p.time_left > 0 {
@@ -57,27 +58,10 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 left: ui::TILE_INSET,
                 ..iced::Padding::ZERO
             }),
-        icon_button(
-            s,
-            Icon::Settings,
-            AppMessage::Ipc("toggle settings".into()),
-            false
-        ),
-        icon_button(
-            s,
-            Icon::Camera,
-            AppMessage::Ipc("toggle capture".into()),
-            false
-        ),
-        icon_button(s, Icon::Image, AppMessage::OpenWallpaper, false),
-        icon_button(
-            s,
-            Icon::Lock,
-            AppMessage::Panel(PanelMessage::Power(crate::panels::power::Message::Press(
-                crate::panels::power::Action::Lock
-            ))),
-            false
-        ),
+        icon_button(s, Icon::Settings, Message::Toggle("settings"), false),
+        icon_button(s, Icon::Camera, Message::Toggle("capture"), false),
+        icon_button(s, Icon::Image, Message::Toggle("wallpaper"), false),
+        icon_button(s, Icon::Lock, Message::Lock, false),
     ]
     .spacing(tok::XXS)
     .padding(iced::Padding {
@@ -86,8 +70,8 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     })
     .align_y(Alignment::Center);
 
-    let focus = app.panels.control.focus;
-    let tiles: Vec<Element<'_, AppMessage>> = tiles(app)
+    let focus = st.focus;
+    let tiles: Vec<Element<'_, Message>> = tiles(cx)
         .into_iter()
         .enumerate()
         .map(|(i, t)| {
@@ -115,9 +99,9 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     }
 
     let mut levels = column![].spacing(tok::M);
-    let sink = app.audio.sink();
+    let sink = cx.audio.sink();
     if let Some(d) = sink {
-        let top = boost_top(app);
+        let top = cx.boost_top();
         levels = levels.push(level_row_to(
             s,
             level_icon(Some(d)),
@@ -125,10 +109,10 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             top,
             Message::SinkVolume,
             Message::SinkMute,
-            Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
+            Trail::Open(Box::new(Message::Page(Page::Output))),
         ));
     }
-    if let Some(d) = app.audio.source() {
+    if let Some(d) = cx.audio.source() {
         levels = levels.push(level_row(
             s,
             if d.muted { Icon::MicOff } else { Icon::Mic },
@@ -136,56 +120,33 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Message::SourceVolume,
             Message::SourceMute,
             // The Sound page has the microphones too.
-            Trail::Open(Box::new(msg(Message::Page(Page::Output)))),
+            Trail::Open(Box::new(Message::Page(Page::Output))),
         ));
     }
     // Brightness: the laptop panel's backlight while that screen is on; otherwise (docked to
     // a monitor kestrel cannot set) the picture is dimmed instead, with night light's tool.
-    match app
-        .brightness
-        .filter(|_| app.outputs.iter().any(|o| o.name.starts_with("eDP")))
-    {
-        Some(v) => {
-            levels = levels.push(level_row(
-                s,
-                Icon::Sun,
-                v,
-                Message::Brightness,
-                Message::BrightnessDone,
-                Trail::Room,
-            ));
-        }
-        // An external monitor that answers DDC/CI: its real backlight.
-        None if app.ddc_target().is_some() => {
-            let bus = app.ddc_target().unwrap_or_default();
-            levels = levels.push(level_row(
-                s,
-                Icon::Sun,
-                app.ddc_level.get(&bus).copied().unwrap_or(0.5),
-                Message::DdcBrightness,
-                Message::BrightnessDone,
-                Trail::Room,
-            ));
-        }
-        None => {
-            levels = levels.push(level_row(
-                s,
-                Icon::Sun,
-                app.dim,
-                Message::Dim,
-                Message::BrightnessDone,
-                Trail::Room,
-            ));
-        }
-    }
+    // Brightness: the laptop panel's backlight while that screen is on; otherwise an external
+    // monitor's own (DDC/CI), or the picture dimmed instead, with night light's tool.
+    let (level, set): (f32, fn(f32) -> Message) = match cx.light {
+        Light::Backlight(v) => (v, Message::Brightness),
+        Light::Monitor(v) => (v, Message::DdcBrightness),
+        Light::Dim(v) => (v, Message::Dim),
+    };
+    levels = levels.push(level_row(
+        s,
+        Icon::Sun,
+        level,
+        set,
+        Message::BrightnessDone,
+        Trail::Room,
+    ));
 
     let mut page = column![header, grid, card(s, levels)].spacing(tok::L);
     // Apps running in the background (the system tray), here with the rest of the system: a
     // click opens the app, a right click its menu.
-    if !app.tray.items.is_empty() {
-        let out = app.panel.as_ref().map(|p| p.output);
+    if !cx.tray.items.is_empty() {
         let mut icons = row![].spacing(tok::XXS).align_y(Alignment::Center);
-        for item in &app.tray.items {
+        for item in &cx.tray.items {
             let menu = item.clone();
             let mut c = ui::control(
                 container(crate::modules::tray_icon_at(s, item, tok::ICON_L))
@@ -193,10 +154,8 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             )
             .radius((tok::BAR_ITEM + 4.0) / 2.0)
             .kind(s, crate::ui::control::Kind::Ghost);
-            if let Some(o) = out {
-                c = c.on_right_press(AppMessage::TrayMenu(Some(menu), o, None));
-            }
-            c = c.on_press(AppMessage::Panel(PanelMessage::TrayActivate(item.clone())));
+            c = c.on_right_press(Message::TrayMenu(menu));
+            c = c.on_press(Message::TrayActivate(item.clone()));
             icons = icons.push(c);
         }
         // A section like Notifications under it: its heading, then the icons on the tiles'
@@ -229,17 +188,12 @@ pub(super) fn main_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     page.into()
 }
 
-/// How far the output's volume may go (1.5 = 150 %): `[sound] max`, at least 100 %.
-pub(super) fn boost_top(app: &App) -> f32 {
-    (app.config.sound.max as f32 / 100.0).max(1.0)
-}
-
 /// What sits at a level row's end: nothing (the Sound page's full-width rows), the room a
 /// button takes (so rows with and without one line up), or the button opening its page.
 pub(super) enum Trail {
     Bare,
     Room,
-    Open(Box<AppMessage>),
+    Open(Box<Message>),
 }
 
 pub(super) fn level_row<'a>(
@@ -249,7 +203,7 @@ pub(super) fn level_row<'a>(
     on_change: fn(f32) -> Message,
     on_icon: Message,
     details: Trail,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     level_row_to(s, i, value, 1.0, on_change, on_icon, details)
 }
 
@@ -263,7 +217,7 @@ pub(super) fn level_row_to<'a>(
     on_change: fn(f32) -> Message,
     on_icon: Message,
     details: Trail,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     // The plain 0–100 slider until the volume is boosted (keys can go past 100 %); then the
     // track runs to the maximum with the boost in red.
     let top = if value > 1.0 { top.max(1.0) } else { 1.0 };
@@ -284,7 +238,7 @@ pub(super) fn level_row_to<'a>(
         ui::control(container(icon(i, tok::ICON, s.on_accent)).center(32))
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::OnAccent)
-            .on_press(msg(on_icon)),
+            .on_press(on_icon),
         Space::new().width(Length::Fill),
         pct,
         Space::new().width(tok::L),
@@ -295,7 +249,7 @@ pub(super) fn level_row_to<'a>(
         on_track,
         32.0,
         (s.ink.scale_alpha(tok::TONAL * s.opacity), s.accent),
-        move |v| msg(on_change(v * top)),
+        move |v| on_change(v * top),
     )
     .boost(1.0 / top, s.bad);
     let mut r = row![bar].spacing(tok::XS).align_y(Alignment::Center);
@@ -314,14 +268,14 @@ pub(super) struct Spec {
     pub(super) title: String,
     pub(super) status: String,
     pub(super) on: bool,
-    pub(super) press: AppMessage,
-    pub(super) details: Option<AppMessage>,
+    pub(super) press: Message,
+    pub(super) details: Option<Message>,
 }
 
 /// Every tile, in order. The view draws these and the keyboard acts on them, so the two
 /// always agree.
-pub(super) fn tiles(app: &App) -> Vec<Spec> {
-    let n = &app.net;
+pub(super) fn tiles(cx: &Cx<'_>) -> Vec<Spec> {
+    let n = &cx.net;
     let (wifi_title, wifi_status) = match n.link {
         network::Link::Wired => ("Ethernet".to_string(), "Connected".to_string()),
         _ if !n.wifi_enabled => ("Wi-Fi".to_string(), "Off".to_string()),
@@ -336,8 +290,8 @@ pub(super) fn tiles(app: &App) -> Vec<Spec> {
             }),
         ),
     };
-    let b = &app.bt;
-    let bt_busy = b.devices.iter().find_map(|d| in_progress(app, &d.path));
+    let b = &cx.bt;
+    let bt_busy = b.devices.iter().find_map(|d| cx.in_progress(&d.path));
     let bt_status = if !b.powered {
         "Off".to_string()
     } else if let Some(want) = bt_busy {
@@ -362,8 +316,8 @@ pub(super) fn tiles(app: &App) -> Vec<Spec> {
             title: wifi_title,
             status: wifi_status,
             on: n.wifi_enabled || n.link == network::Link::Wired,
-            press: msg(Message::Wifi(!n.wifi_enabled)),
-            details: n.has_wifi.then(|| msg(Message::Page(Page::Wifi))),
+            press: Message::Wifi(!n.wifi_enabled),
+            details: n.has_wifi.then_some(Message::Page(Page::Wifi)),
         },
         Spec {
             icon: if b.powered {
@@ -374,21 +328,21 @@ pub(super) fn tiles(app: &App) -> Vec<Spec> {
             title: "Bluetooth".into(),
             status: bt_status,
             on: b.powered,
-            press: msg(Message::Bluetooth(!b.powered)),
-            details: b.available.then(|| msg(Message::Page(Page::Bluetooth))),
+            press: Message::Bluetooth(!b.powered),
+            details: b.available.then_some(Message::Page(Page::Bluetooth)),
         },
         Spec {
             icon: Icon::Plane,
             title: "Airplane mode".into(),
             status: on_off(crate::state::get(|s| s.toggles.airplane.is_some())),
             on: crate::state::get(|s| s.toggles.airplane.is_some()),
-            press: msg(Message::Airplane),
+            press: Message::Airplane,
             details: None,
         },
         Spec {
-            icon: if app.dnd { Icon::BellOff } else { Icon::Bell },
+            icon: if cx.dnd { Icon::BellOff } else { Icon::Bell },
             title: "Do not disturb".into(),
-            status: if !app.dnd {
+            status: if !cx.dnd {
                 "Off".into()
             } else {
                 match crate::state::get(|s| s.toggles.dnd_until) {
@@ -396,32 +350,32 @@ pub(super) fn tiles(app: &App) -> Vec<Spec> {
                     None => "On".into(),
                 }
             },
-            on: app.dnd,
-            press: msg(Message::Dnd),
-            details: Some(msg(Message::Page(Page::Quiet))),
+            on: cx.dnd,
+            press: Message::Dnd,
+            details: Some(Message::Page(Page::Quiet)),
         },
         Spec {
             icon: Icon::Sunset,
             title: "Night light".into(),
-            status: if app.night_light {
-                format!("{} K", app.config.night_light_temperature)
+            status: if cx.night_light {
+                format!("{} K", cx.config.night_light_temperature)
             } else {
                 "Off".into()
             },
-            on: app.night_light,
-            press: msg(Message::NightLight),
-            details: Some(msg(Message::Page(Page::NightLight))),
+            on: cx.night_light,
+            press: Message::NightLight,
+            details: Some(Message::Page(Page::NightLight)),
         },
         Spec {
             icon: Icon::Coffee,
             title: "Caffeine".into(),
-            status: if app.caffeine { "Staying awake" } else { "Off" }.into(),
-            on: app.caffeine,
-            press: msg(Message::Caffeine),
+            status: if cx.caffeine { "Staying awake" } else { "Off" }.into(),
+            on: cx.caffeine,
+            press: Message::Caffeine,
             details: None,
         },
     ];
-    if let Some(prof) = app.power.profile {
+    if let Some(prof) = cx.power.profile {
         v.push(Spec {
             icon: match prof {
                 power::Profile::PowerSaver => Icon::Leaf,
@@ -431,36 +385,36 @@ pub(super) fn tiles(app: &App) -> Vec<Spec> {
             title: "Power mode".into(),
             status: prof.label().to_string(),
             on: prof != power::Profile::Balanced,
-            press: msg(Message::Profile),
-            details: Some(msg(Message::Page(Page::Power))),
+            press: Message::Profile,
+            details: Some(Message::Page(Page::Power)),
         });
     }
     v.push(Spec {
         icon: Icon::Gamepad2,
         title: "Game mode".into(),
-        status: if app.game_mode { "Effects off" } else { "Off" }.into(),
-        on: app.game_mode,
-        press: msg(Message::GameMode),
+        status: if cx.game_mode { "Effects off" } else { "Off" }.into(),
+        on: cx.game_mode,
+        press: Message::GameMode,
         details: None,
     });
-    if let Some(on) = app.vpn.warp {
+    if let Some(on) = cx.vpn.warp {
         v.push(Spec {
             icon: Icon::Cloud,
             title: "WARP".into(),
             status: if on { "Connected" } else { "Off" }.into(),
             on,
-            press: msg(Message::Warp(!on)),
-            details: Some(msg(Message::Page(Page::Warp))),
+            press: Message::Warp(!on),
+            details: Some(Message::Page(Page::Warp)),
         });
     }
-    if let Some(on) = app.vpn.tailscale {
+    if let Some(on) = cx.vpn.tailscale {
         v.push(Spec {
             icon: Icon::Network,
             title: "Tailscale".into(),
             status: on_off(on),
             on,
-            press: msg(Message::Tailscale(!on)),
-            details: Some(msg(Message::Page(Page::Tailscale))),
+            press: Message::Tailscale(!on),
+            details: Some(Message::Page(Page::Tailscale)),
         });
     }
     v

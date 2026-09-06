@@ -75,14 +75,18 @@ pub fn update(st: &mut State, m: Message) -> Act {
         return Act::None;
     }
     st.armed = None;
-    let run = match a {
+    Act::Close.and(Act::Run(run(a).discard()))
+}
+
+/// Does a session action (the control centre's lock button asks here too).
+pub fn run(a: Action) -> Task<()> {
+    match a {
         Action::Lock => Task::future(logind::run(logind::Action::Lock)),
         Action::Suspend => Task::future(logind::run(logind::Action::Suspend)),
         Action::Restart => Task::future(logind::run(logind::Action::Reboot)),
         Action::ShutDown => Task::future(logind::run(logind::Action::PowerOff)),
         Action::LogOut => Task::future(hyprland::dispatch("hl.dsp.exit()".into())),
-    };
-    Act::Close.and(Act::Run(run.discard()))
+    }
 }
 
 /// Up / Down move between the actions, Enter presses (the risky ones still ask a second time,

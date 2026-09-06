@@ -6,7 +6,7 @@ use crate::theme::tok;
 use iced::widget::column;
 
 /// A section title inside a page.
-pub(super) fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, AppMessage> {
+pub(super) fn heading<'a>(s: Scheme, title: &'a str) -> Element<'a, Message> {
     container(ui::section(s, title, tok::S))
         .padding([tok::S, tok::NONE])
         .into()
@@ -17,7 +17,7 @@ pub(super) fn fact<'a>(
     s: Scheme,
     name: impl Into<String>,
     value: impl Into<String>,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     row![
         label(name.into(), text::SMALL, s.ink_dim).width(Length::Fill),
         label(value.into(), text::SMALL, s.ink),
@@ -27,12 +27,7 @@ pub(super) fn fact<'a>(
 }
 
 /// A setting with a switch.
-pub(super) fn setting<'a>(
-    s: Scheme,
-    name: &'a str,
-    on: bool,
-    m: AppMessage,
-) -> Element<'a, AppMessage> {
+pub(super) fn setting<'a>(s: Scheme, name: &'a str, on: bool, m: Message) -> Element<'a, Message> {
     row![
         label(name, text::BODY, s.ink).width(Length::Fill),
         switch(s, on, m)
@@ -49,7 +44,7 @@ pub(super) fn summary<'a>(
     on: bool,
     title: String,
     sub: String,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     row![
         container(icon(
             i,
@@ -81,15 +76,16 @@ pub(super) fn summary<'a>(
     .into()
 }
 
-pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let on = app.vpn.warp.unwrap_or(false);
+pub(super) fn warp_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let on = cx.vpn.warp.unwrap_or(false);
     let header = subpage_header(
         s,
         "Cloudflare WARP",
-        msg(Message::Page(Page::Main)),
-        switch(s, on, msg(Message::Warp(!on))),
+        Message::Page(Page::Main),
+        switch(s, on, Message::Warp(!on)),
     );
-    let w = app.panels.control.warp.clone().filter(|_| on);
+    let w = st.warp.clone().filter(|_| on);
     let Some(w) = w else {
         return column![
             header,
@@ -156,7 +152,7 @@ pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 Space::new().into()
             },
             active,
-            Some(msg(Message::WarpMode(m.to_string()))),
+            Some(Message::WarpMode(m.to_string())),
         ));
     }
     col = col.push(modes);
@@ -173,14 +169,14 @@ pub(super) fn warp_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     col.into()
 }
 
-pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let on = app.vpn.tailscale.unwrap_or(false);
-    let st = &app.panels.control;
+pub(super) fn tailscale_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let on = cx.vpn.tailscale.unwrap_or(false);
     let header = subpage_header(
         s,
         "Tailscale",
-        msg(Message::Page(Page::Main)),
-        switch(s, on, msg(Message::Tailscale(!on))),
+        Message::Page(Page::Main),
+        switch(s, on, Message::Tailscale(!on)),
     );
     let Some(net) = st.tailnet.as_ref().filter(|_| on) else {
         return column![
@@ -200,11 +196,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .spacing(tok::L)
         .into();
     };
-    let ts = |args: &[&str]| {
-        msg(Message::Tailscale2(
-            args.iter().map(|a| a.to_string()).collect(),
-        ))
-    };
+    let ts = |args: &[&str]| Message::Tailscale2(args.iter().map(|a| a.to_string()).collect());
     let running = net.state == "Running";
     let mut col = column![header].spacing(tok::S);
     if net.state == "NeedsLogin" {
@@ -223,7 +215,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 theme::SEMIBOLD,
             ))
             .pill(s, crate::ui::control::Pill::Primary)
-            .on_press(msg(Message::Login)),
+            .on_press(Message::Login),
         );
         return col.into();
     }
@@ -256,7 +248,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             .padding([tok::XS, tok::S])
             .radius(tok::R_CONTROL)
             .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(msg(Message::CopyIp(net.ip.clone()))),
+            .on_press(Message::CopyIp(net.ip.clone())),
         );
     }
     if !net.ip6.is_empty() {
@@ -343,11 +335,11 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             format!("Last seen {}", p.last_seen)
         };
         sub.push_str(&format!(" · {}", p.ip));
-        let trailing: Element<'_, AppMessage> = match st.pings.get(&p.ip) {
+        let trailing: Element<'_, Message> = match st.pings.get(&p.ip) {
             Some(r) => label(r.clone(), text::CAPTION, s.ink_dim).into(),
             None if p.online => ui::control(label("Ping", text::CAPTION, s.ink_dim))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::Ping(p.ip.clone())))
+                .on_press(Message::Ping(p.ip.clone()))
                 .into(),
             None => Space::new().into(),
         };
@@ -358,7 +350,7 @@ pub(super) fn tailscale_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             Some(sub),
             trailing,
             false,
-            Some(msg(Message::CopyIp(p.ip.clone()))),
+            Some(Message::CopyIp(p.ip.clone())),
         ));
     }
     col = col.push(list);

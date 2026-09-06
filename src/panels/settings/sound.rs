@@ -1,6 +1,7 @@
 //! Settings › sound: its page.
 
 use super::*;
+use crate::app::Change;
 use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
@@ -138,7 +139,7 @@ pub(super) fn choice_row<'a>(
 /// Settings > Sound, laid out like the other pages (and like Windows' Sound settings): Output,
 /// Input, each app's volume, and apps recording; every row a name and its control.
 pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    use crate::panels::control::{Message as C, device_name, mic_name, mode_name, short_names};
+    use crate::panels::control::{device_name, mic_name, mode_name, short_names};
     let au = &app.audio;
     let pick = app.panels.settings.sound_pick.as_deref();
     let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
@@ -173,7 +174,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     n.clone(),
                     x.name == d.name,
-                    snd(C::Sink(x.name.clone())),
+                    set(Change::Sink(x.name.clone())),
                 ));
             }
         }
@@ -185,8 +186,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 s,
                 d.volume,
                 d.muted,
-                |v| snd(C::SinkVolume(v)),
-                snd(C::SinkMute),
+                |v| set(Change::SinkVolume(v)),
+                set(Change::SinkMute),
                 (Icon::Volume2, Icon::VolumeX),
             ),
         ));
@@ -216,7 +217,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         s,
                         mode_name(desc),
                         *name == card.active,
-                        snd(C::CardMode(card.index, name.clone())),
+                        set(Change::CardMode(card.index, name.clone())),
                     ));
                 }
             }
@@ -253,7 +254,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s.ink.scale_alpha(tok::FILL * s.opacity),
                     s.accent.scale_alpha(0.35 * s.opacity),
                 ),
-                |v| snd(C::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
+                |v| set(Change::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
             );
             let even = d.balance.abs() < 0.03;
             rows.push(row_of(
@@ -328,7 +329,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     n.clone(),
                     x.name == d.name,
-                    snd(C::Source(x.name.clone())),
+                    set(Change::Source(x.name.clone())),
                 ));
             }
         }
@@ -340,8 +341,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 s,
                 d.volume,
                 d.muted,
-                |v| snd(C::SourceVolume(v)),
-                snd(C::SourceMute),
+                |v| set(Change::SourceVolume(v)),
+                set(Change::SourceMute),
                 (Icon::Mic, Icon::MicOff),
             ),
         ));
@@ -413,8 +414,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     a.volume,
                     a.muted,
-                    move |v| snd(C::RecVolume(ids.clone(), v)),
-                    snd(C::RecMute(ids2)),
+                    move |v| set(Change::RecVolume(ids.clone(), v)),
+                    set(Change::RecMute(ids2)),
                     (Icon::Mic, Icon::MicOff),
                 )
             } else {
@@ -422,8 +423,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     a.volume,
                     a.muted,
-                    move |v| snd(C::AppVolume(ids.clone(), v)),
-                    snd(C::AppMute(ids2)),
+                    move |v| set(Change::AppVolume(ids.clone(), v)),
+                    set(Change::AppMute(ids2)),
                     (Icon::Volume2, Icon::VolumeX),
                 )
             };
@@ -453,9 +454,9 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         n.clone(),
                         d.name == current,
                         if recording {
-                            snd(C::RecTo(ids, d.name.clone()))
+                            set(Change::RecTo(ids, d.name.clone()))
                         } else {
-                            snd(C::AppTo(ids, d.name.clone()))
+                            set(Change::AppTo(ids, d.name.clone()))
                         },
                     ));
                 }

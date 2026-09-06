@@ -19,15 +19,15 @@ pub fn device_icon(icon_name: &str) -> Icon {
     }
 }
 
-pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let b = &app.bt;
+pub(super) fn bt_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let b = &cx.bt;
     let header = subpage_header(
         s,
         "Bluetooth",
-        msg(Message::Page(Page::Main)),
-        switch(s, b.powered, msg(Message::Bluetooth(!b.powered))),
+        Message::Page(Page::Main),
+        switch(s, b.powered, Message::Bluetooth(!b.powered)),
     );
-    let st = &app.panels.control;
     let mut list = column![].spacing(tok::XXS);
     if !b.powered {
         list = list.push(empty(s, Icon::BluetoothOff));
@@ -36,8 +36,8 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     // Your devices: a click connects or disconnects; the trailing button forgets (asking
     // once: "Forget?" in red, a second press removes it).
     for d in &b.devices {
-        let busy = in_progress(app, &d.path);
-        let err = app
+        let busy = cx.in_progress(&d.path);
+        let err = cx
             .device_error
             .as_ref()
             .filter(|(p, _)| *p == d.path)
@@ -57,15 +57,15 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             (false, _) => None,
         };
         let armed = st.forget.as_deref() == Some(d.path.as_str());
-        let forget: Element<'_, AppMessage> = if armed {
+        let forget: Element<'_, Message> = if armed {
             crate::ui::control(label_w("Forget?", text::SMALL, s.base, theme::MEDIUM))
                 .padding([tok::XS, tok::L])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Danger)
-                .on_press(msg(Message::Forget(d.path.clone())))
+                .on_press(Message::Forget(d.path.clone()))
                 .into()
         } else {
-            crate::ui::remove_button(s, msg(Message::Forget(d.path.clone())))
+            crate::ui::remove_button(s, Message::Forget(d.path.clone()))
         };
         list = list.push(list_row(
             s,
@@ -83,7 +83,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             sub,
             forget,
             d.connected,
-            Some(msg(Message::Device(d.path.clone(), d.connected))),
+            Some(Message::Device(d.path.clone(), d.connected)),
         ));
     }
     // Devices nearby (searched for while this page is open): a click pairs, trusts and
@@ -114,11 +114,11 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         }),
     );
     for d in in_order(&b.nearby, &st.nearby_order, |d| &d.path) {
-        let pairing = st.pairing.as_deref() == Some(d.path.as_str());
+        let pairing = cx.pairing == Some(d.path.as_str());
         let sub = if pairing {
             Some("Pairing…".to_string())
         } else {
-            app.device_error
+            cx.device_error
                 .as_ref()
                 .filter(|(p, _)| *p == d.path)
                 .map(|(_, w)| w.clone())
@@ -135,7 +135,7 @@ pub(super) fn bt_page(app: &App, s: Scheme) -> Element<'_, AppMessage> {
             sub,
             Space::new().into(),
             false,
-            (st.pairing.is_none()).then(|| msg(Message::Pair(d.path.clone()))),
+            (cx.pairing.is_none()).then(|| Message::Pair(d.path.clone())),
         ));
     }
     column![header, list].spacing(tok::M).into()

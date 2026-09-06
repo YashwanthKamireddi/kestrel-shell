@@ -1,9 +1,10 @@
 //! Control centre: quick toggles, levels, notifications, and pages for Wi-Fi, Bluetooth,
 //! sound output, night light, power mode, Cloudflare WARP and Tailscale.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
-use crate::services::{audio, bluetooth, network, power, toggles};
+use super::action::Action as Act;
+use super::cx::{Cx, Light};
+use crate::app::Change;
+use crate::services::{audio, network, power, toggles};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::slider::slider;
@@ -13,6 +14,8 @@ use crate::ui::{
 };
 use iced::widget::{Space, container, row, text_input};
 use iced::{Alignment, Element, Length, Task};
+
+type Action = Act<Message>;
 
 // One file per page (its view and what only it uses); this file keeps the state, messages,
 // update, the panel's frame and what every page shares. Public pieces are re-exported, so
@@ -77,10 +80,6 @@ pub struct State {
     pub kelvin: Option<u32>,
     /// The Sound page's app whose device list is open.
     sound_open: Option<String>,
-    /// The device being paired (its path).
-    pub pairing: Option<String>,
-    /// A network whose last join failed, and why (shown under its name).
-    pub net_error: Option<(String, String)>,
     /// The device whose Forget was pressed once (asks before removing).
     pub forget: Option<String>,
     /// The Wi-Fi network whose details page is open.
@@ -91,30 +90,24 @@ pub struct State {
     pub hidden: (String, String),
 }
 
+impl State {
+    /// The Wi-Fi networks or nearby devices changed: the lists keep their rows where they
+    /// are; found ones join at the end (called by the shell after each report).
+    pub fn lists_changed(&mut self, net: &network::State, bt: &crate::services::bluetooth::State) {
+        keep_order(
+            &mut self.wifi_order,
+            net.networks.iter().map(|n| n.ssid.as_str()),
+        );
+        keep_order(
+            &mut self.nearby_order,
+            bt.nearby.iter().map(|d| d.path.as_str()),
+        );
+    }
+}
+
 /// Whether the control centre is waiting for typing (a Wi-Fi password).
 pub fn typing(st: &State) -> bool {
     st.password.is_some() || st.page == Page::Hidden
-}
-
-/// The reason the last join of `ssid` failed, if it did.
-pub fn st_net_error(app: &App, ssid: &str) -> Option<(String, String)> {
-    app.panels
-        .control
-        .net_error
-        .clone()
-        .filter(|(k, _)| k == ssid)
-}
-
-/// Joins a network and reports how it ended (connected, or why not).
-fn join(ssid: String, cmd: network::Command) -> Task<AppMessage> {
-    Task::perform(network::try_command(cmd), move |r| {
-        msg(Message::NetDone(ssid.clone(), r))
-    })
-}
-
-/// Whether `key` (a network's name or a device's path) is being connected or disconnected.
-pub fn in_progress(app: &App, key: &str) -> Option<bool> {
-    app.connecting.as_ref()?.in_progress(key, &app.bt, &app.net)
 }
 
 #[derive(Clone, Debug)]
@@ -167,8 +160,6 @@ pub enum Message {
     Device(String, bool),
     /// Pair with a device found nearby.
     Pair(String),
-    /// A Bluetooth action ended: the device's path and how.
-    BtDone(String, Result<(), String>),
     /// Forget a paired device: the first press asks, the second removes it.
     Forget(String),
     Sink(String),
@@ -198,514 +189,287 @@ pub enum Message {
     HiddenName(String),
     HiddenPassword(String),
     JoinHidden,
-    /// A join ended: the network and how.
-    NetDone(String, Result<(), String>),
+    /// Read WARP's or the tailnet's state again (after a change to it).
+    ReadWarp,
+    ReadTailnet,
+    /// Start a tray app (a click on its icon), or open its menu (a right click).
+    TrayActivate(crate::services::tray::Item),
+    TrayMenu(crate::services::tray::Item),
+    /// A header button: open a panel by name ("settings", "capture", "wallpaper").
+    Toggle(&'static str),
+    Lock,
 }
 
 /// Night light's range, warmest to coolest (kelvin).
 pub const WARMEST: f32 = 2500.0;
 pub const COOLEST: f32 = 6000.0;
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Control(m))
+fn read_warp() -> Action {
+    Act::Run(Task::perform(
+        crate::services::vpn::warp(),
+        Message::WarpInfo,
+    ))
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
-    let st = &mut app.panels.control;
+fn read_tailnet() -> Action {
+    Act::Run(Task::perform(
+        crate::services::vpn::tailnet(),
+        Message::Tailnet,
+    ))
+}
+
+pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
+    let change = Act::Change;
     match m {
         Message::Page(p) => {
             st.page = p;
             st.password = None;
             match p {
-                Page::Bluetooth => {
-                    st.nearby_order.clear();
-                }
+                Page::Bluetooth => st.nearby_order.clear(),
                 Page::Wifi => {
                     st.wifi_order.clear();
                     keep_order(
                         &mut st.wifi_order,
-                        app.net.networks.iter().map(|n| n.ssid.as_str()),
+                        cx.net.networks.iter().map(|n| n.ssid.as_str()),
                     );
-                    return Task::future(network::command(network::Command::Scan)).discard();
+                    return Act::Run(
+                        Task::future(network::command(network::Command::Scan)).discard(),
+                    );
                 }
                 Page::Hidden => {
-                    return Task::Iced(iced::widget::focus(iced::widget::Id::new("hidden-name")));
+                    return Act::Run(Task::Iced(iced::widget::focus(iced::widget::Id::new(
+                        "hidden-name",
+                    ))));
                 }
-                Page::Tailscale => {
-                    return Task::perform(crate::services::vpn::tailnet(), |t| {
-                        msg(Message::Tailnet(t))
-                    });
-                }
-                Page::Warp => {
-                    return Task::perform(crate::services::vpn::warp(), |w| {
-                        msg(Message::WarpInfo(w))
-                    });
-                }
+                Page::Tailscale => return read_tailnet(),
+                Page::Warp => return read_warp(),
                 _ => {}
             }
+            Act::None
         }
+        // Warmth follows the slider at once (night light's own tool); kept when let go.
         Message::Warmth(v) => {
             let k = (WARMEST + v.clamp(0.0, 1.0) * (COOLEST - WARMEST)).round() as u32;
             let k = k / 100 * 100;
             st.kelvin = Some(k);
-            return Task::future(toggles::set_temperature(k)).discard();
+            Act::Run(Task::future(toggles::set_temperature(k)).discard())
         }
-        Message::Schedule(on) => {
-            app.config.night_light_schedule = on;
-            crate::config::set(&[], "night_light_schedule", toml_edit::value(on));
-            app.night_auto = None;
-            return app.night_schedule();
+        Message::WarmthDone => match st.kelvin.take() {
+            Some(k) => change(Change::NightTemperature(k)),
+            None => Act::None,
+        },
+        Message::Schedule(on) => change(Change::NightSchedule(on)),
+        Message::SetProfile(p) => change(Change::Profile(p)),
+        Message::Tailnet(t) => {
+            st.tailnet = t;
+            Act::None
         }
-        Message::WarmthDone => {
-            if let Some(k) = st.kelvin.take() {
-                app.config.night_light_temperature = k;
-                crate::config::set(
-                    &[],
-                    "night_light_temperature",
-                    toml_edit::value(i64::from(k)),
-                );
-            }
+        Message::WarpInfo(w) => {
+            st.warp = w;
+            Act::None
         }
-        Message::SetProfile(p) => {
-            app.power.profile = Some(p);
-            return Task::future(power::set_profile(p)).discard();
-        }
-        Message::Tailnet(t) => st.tailnet = t,
-        Message::WarpInfo(w) => st.warp = w,
+        Message::ReadWarp => read_warp(),
+        Message::ReadTailnet => read_tailnet(),
         Message::WarpMode(m) => {
             if let Some(w) = &mut st.warp {
                 w.mode = m.clone();
             }
-            return Task::perform(
+            Act::Run(Task::perform(
                 async move {
                     crate::services::vpn::warp_mode(m).await;
                     crate::services::vpn::warp().await
                 },
-                |w| msg(Message::WarpInfo(w)),
-            );
+                Message::WarpInfo,
+            ))
         }
         Message::Tailscale2(args) => {
             st.ts_error = None;
-            return Task::perform(crate::services::vpn::tailscale(args), |r| {
-                msg(Message::TailscaleDone(r))
-            });
+            Act::Run(Task::perform(
+                crate::services::vpn::tailscale(args),
+                Message::TailscaleDone,
+            ))
         }
         Message::TailscaleDone(r) => {
             st.ts_error = r.err();
-            return Task::perform(crate::services::vpn::tailnet(), |t| {
-                msg(Message::Tailnet(t))
-            });
+            read_tailnet()
         }
         Message::Ping(ip) => {
             st.pings.insert(ip.clone(), "…".into());
-            return Task::perform(
+            Act::Run(Task::perform(
                 async move {
                     let r = crate::services::vpn::tailscale_ping(ip.clone()).await;
                     (ip, r)
                 },
-                |(ip, r)| msg(Message::Pinged(ip, r)),
-            );
+                |(ip, r)| Message::Pinged(ip, r),
+            ))
         }
         Message::Pinged(ip, r) => {
             st.pings.insert(ip, r.unwrap_or_else(|| "no reply".into()));
+            Act::None
         }
-        Message::Login => {
-            return Task::future(crate::services::vpn::tailscale_login()).discard();
-        }
+        Message::Login => Act::Run(Task::future(crate::services::vpn::tailscale_login()).discard()),
         Message::CopyIp(ip) => {
-            return Task::future(crate::panels::clipboard::copy_text(ip)).discard();
+            Act::Run(Task::future(crate::panels::clipboard::copy_text(ip)).discard())
         }
-        Message::Wifi(on) => {
-            app.net.wifi_enabled = on;
-            return Task::future(network::command(network::Command::SetWifi(on))).discard();
-        }
-        Message::Airplane => {
-            let before = crate::state::get(|s| s.toggles.airplane);
-            let (wifi, bt) = match before {
-                // Off: each radio back to how it was.
-                Some(was) => {
-                    crate::state::update(|s| s.toggles.airplane = None);
-                    was
-                }
-                // On: remember them, then both off.
-                None => {
-                    let was = (app.net.wifi_enabled, app.bt.powered);
-                    crate::state::update(|s| s.toggles.airplane = Some(was));
-                    (false, false)
-                }
-            };
-            app.net.wifi_enabled = wifi;
-            app.bt.powered = bt;
-            return Task::batch([
-                Task::future(network::command(network::Command::SetWifi(wifi))).discard(),
-                Task::future(bluetooth::command(bluetooth::Command::SetPowered(bt))).discard(),
-            ]);
-        }
-        Message::Bluetooth(on) => {
-            app.bt.powered = on;
-            return Task::future(bluetooth::command(bluetooth::Command::SetPowered(on))).discard();
-        }
-        Message::Dnd => {
-            app.dnd = !app.dnd;
-            let on = app.dnd;
-            crate::state::update(|s| {
-                s.toggles.dnd = on;
-                s.toggles.dnd_until = None;
-            });
-        }
+        Message::Wifi(on) => change(Change::Wifi(on)),
+        Message::Airplane => change(Change::Airplane),
+        Message::Bluetooth(on) => change(Change::Bluetooth(on)),
+        Message::Dnd => change(Change::Dnd),
         Message::DndFor(minutes) => {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs());
-            let until = match minutes {
-                0 => None,
-                // Until 7:00 tomorrow (or today, before 7).
-                u64::MAX => {
-                    let local = chrono::Local::now();
-                    let mut day = local.date_naive();
-                    if local.time() >= chrono::NaiveTime::from_hms_opt(7, 0, 0).unwrap_or_default()
-                    {
-                        day = day.succ_opt().unwrap_or(day);
-                    }
-                    day.and_hms_opt(7, 0, 0)
-                        .and_then(|t| t.and_local_timezone(chrono::Local).single())
-                        .map(|t| t.timestamp().max(0) as u64)
-                }
-                m => Some(now + m * 60),
-            };
-            app.dnd = true;
-            crate::state::update(|s| {
-                s.toggles.dnd = true;
-                s.toggles.dnd_until = until;
-            });
             st.page = Page::Main;
+            change(Change::DndFor(minutes))
         }
-        Message::NightLight => {
-            app.night_light = !app.night_light;
-            let on = app.night_light;
-            crate::state::update(|s| s.toggles.night_light = on);
-            let k = app.config.night_light_temperature;
-            return Task::future(toggles::set_night_light(on, k)).discard();
-        }
-        Message::Caffeine => {
-            let on = !app.caffeine;
-            app.caffeine = on;
-            crate::state::update(|s| s.toggles.caffeine = on);
-            return Task::future(toggles::set_caffeine(on)).discard();
-        }
-        Message::Profile => {
-            if let Some(p) = app.power.profile {
-                let next = p.next();
-                app.power.profile = Some(next);
-                return Task::future(power::set_profile(next)).discard();
-            }
-        }
-        Message::GameMode => {
-            app.game_mode = !app.game_mode;
-            crate::app::remember_game_mode(app.game_mode);
-            // No shell motion at all while a game runs.
-            crate::motion::set_still(app.game_mode);
-            // Game mode drops the screen frame too, so the game gets every pixel.
-            let hypr = Task::future(crate::services::hyprland::game_mode(app.game_mode)).discard();
-            return Task::batch([hypr, app.apply_frame()]);
-        }
+        Message::NightLight => change(Change::NightLight),
+        Message::Caffeine => change(Change::Caffeine),
+        Message::Profile => change(Change::NextProfile),
+        Message::GameMode => change(Change::GameMode),
+        // The page shows what WARP or Tailscale says once the change is done.
         Message::Warp(on) => {
-            app.vpn.warp = Some(on);
             st.warp = None;
-            // Read back once it has had a moment, so the page shows what WARP says.
-            return Task::perform(
-                async move {
-                    crate::services::vpn::set_warp(on).await;
-                    crate::services::vpn::warp().await
-                },
-                |w| msg(Message::WarpInfo(w)),
-            );
+            Act::ChangeThen(Change::Warp(on), Message::ReadWarp)
         }
         Message::Tailscale(on) => {
-            app.vpn.tailscale = Some(on);
             st.tailnet = None;
-            return Task::perform(
-                async move {
-                    crate::services::vpn::set_tailscale(on).await;
-                    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-                    crate::services::vpn::tailnet().await
-                },
-                |t| msg(Message::Tailnet(t)),
-            );
+            Act::ChangeThen(Change::Tailscale(on), Message::ReadTailnet)
         }
-        Message::SinkVolume(v) => {
-            if let Some(d) = app
-                .audio
-                .sinks
-                .iter_mut()
-                .find(|d| d.name == app.audio.default_sink)
-            {
-                d.volume = v;
-                d.muted = false;
-                audio::command(audio::Command::SinkVolume(d.name.clone(), d.channels, v));
-                if v > 0.0 {
-                    audio::command(audio::Command::SinkMute(d.name.clone(), false));
-                }
-            }
-        }
-        Message::SinkMute => {
-            if let Some(d) = app
-                .audio
-                .sinks
-                .iter_mut()
-                .find(|d| d.name == app.audio.default_sink)
-            {
-                d.muted = !d.muted;
-                audio::command(audio::Command::SinkMute(d.name.clone(), d.muted));
-            }
-        }
-        Message::SourceVolume(v) => {
-            if let Some(d) = app
-                .audio
-                .sources
-                .iter_mut()
-                .find(|d| d.name == app.audio.default_source)
-            {
-                d.volume = v;
-                audio::command(audio::Command::SourceVolume(d.name.clone(), d.channels, v));
-            }
-        }
-        Message::SourceMute => {
-            if let Some(d) = app
-                .audio
-                .sources
-                .iter_mut()
-                .find(|d| d.name == app.audio.default_source)
-            {
-                d.muted = !d.muted;
-                audio::command(audio::Command::SourceMute(d.name.clone(), d.muted));
-            }
-        }
-        Message::Brightness(v) => {
-            app.brightness = Some(v);
-            return Task::future(power::set_brightness(v)).discard();
-        }
-        Message::BrightnessDone => {}
-        Message::DdcBrightness(v) => {
-            if let Some(bus) = app.ddc_target() {
-                app.ddc_level.insert(bus, v);
-                return Task::future(crate::services::ddc::set(bus, v)).discard();
-            }
-        }
-        Message::Dim(v) => {
-            app.dim = v.max(toggles::MIN_GAMMA as f32 / 100.0);
-            return Task::future(toggles::set_dim(v)).discard();
-        }
+        Message::SinkVolume(v) => change(Change::SinkVolume(v)),
+        Message::SinkMute => change(Change::SinkMute),
+        Message::SourceVolume(v) => change(Change::SourceVolume(v)),
+        Message::SourceMute => change(Change::SourceMute),
+        Message::Brightness(v) => change(Change::Brightness(v)),
+        Message::BrightnessDone => Act::None,
+        Message::DdcBrightness(v) => change(Change::DdcBrightness(v)),
+        Message::Dim(v) => change(Change::Dim(v)),
         Message::Join(n) => {
             if n.active {
-                return Task::none();
+                return Act::None;
             }
-            app.connecting = Some(super::cx::Connecting::new(n.ssid.clone(), true));
-            st.net_error = None;
             if n.known || !n.secure {
-                let ssid = n.ssid.clone();
                 let cmd = if n.known {
-                    network::Command::Connect(n.ssid)
+                    network::Command::Connect(n.ssid.clone())
                 } else {
                     network::Command::ConnectNew {
-                        ssid: n.ssid,
+                        ssid: n.ssid.clone(),
                         ap: n.ap,
                         password: None,
                     }
                 };
-                return join(ssid, cmd);
+                return change(Change::Join(n.ssid, cmd));
             }
+            // A new secured network: its password first (typed here).
             st.password = Some((n.ssid, n.ap, String::new()));
-            return Task::Iced(iced::widget::focus(PASSWORD_ID.clone()));
+            Act::Run(Task::Iced(iced::widget::focus(PASSWORD_ID.clone())))
         }
         Message::Password(p) => {
             if let Some(pw) = &mut st.password {
                 pw.2 = p;
             }
+            Act::None
         }
-        Message::SubmitPassword => {
-            if let Some((ssid, ap, pw)) = st.password.take()
-                && !pw.is_empty()
-            {
-                st.net_error = None;
-                app.connecting = Some(super::cx::Connecting::new(ssid.clone(), true));
-                return join(
-                    ssid.clone(),
-                    network::Command::ConnectNew {
-                        ssid,
-                        ap,
-                        password: Some(pw),
-                    },
-                );
-            }
-        }
+        Message::SubmitPassword => match st.password.take() {
+            Some((ssid, ap, pw)) if !pw.is_empty() => change(Change::Join(
+                ssid.clone(),
+                network::Command::ConnectNew {
+                    ssid,
+                    ap,
+                    password: Some(pw),
+                },
+            )),
+            _ => Act::None,
+        },
         Message::NetworkInfo(ssid) => {
             st.network = Some(ssid);
             st.forget_net = false;
             st.password = None;
             st.page = Page::Network;
+            Act::None
         }
         Message::ForgetNetwork => {
             if !st.forget_net {
                 st.forget_net = true;
-                return Task::none();
+                return Act::None;
             }
             st.forget_net = false;
-            if let Some(ssid) = st.network.take() {
-                st.page = Page::Wifi;
-                return Task::future(network::command(network::Command::Forget(ssid))).discard();
-            }
-        }
-        Message::AutoJoin(on) => {
-            if let Some(ssid) = st.network.clone() {
-                if let Some(k) = app.net.saved.iter_mut().find(|k| k.ssid == ssid) {
-                    k.auto = on;
+            match st.network.take() {
+                Some(ssid) => {
+                    st.page = Page::Wifi;
+                    change(Change::ForgetNetwork(ssid))
                 }
-                return Task::future(network::command(network::Command::AutoJoin(ssid, on)))
-                    .discard();
+                None => Act::None,
             }
         }
-        Message::HiddenName(t) => st.hidden.0 = t,
-        Message::HiddenPassword(t) => st.hidden.1 = t,
+        Message::AutoJoin(on) => match st.network.clone() {
+            Some(ssid) => change(Change::AutoJoin(ssid, on)),
+            None => Act::None,
+        },
+        Message::HiddenName(t) => {
+            st.hidden.0 = t;
+            Act::None
+        }
+        Message::HiddenPassword(t) => {
+            st.hidden.1 = t;
+            Act::None
+        }
         Message::JoinHidden => {
             let (ssid, pw) = std::mem::take(&mut st.hidden);
-            if !ssid.trim().is_empty() {
-                app.connecting = Some(super::cx::Connecting::new(ssid.clone(), true));
-                st.net_error = None;
-                st.page = Page::Wifi;
-                return join(
-                    ssid.clone(),
-                    network::Command::ConnectHidden {
-                        ssid,
-                        password: (!pw.is_empty()).then_some(pw),
-                    },
-                );
+            if ssid.trim().is_empty() {
+                return Act::None;
             }
+            st.page = Page::Wifi;
+            change(Change::Join(
+                ssid.clone(),
+                network::Command::ConnectHidden {
+                    ssid,
+                    password: (!pw.is_empty()).then_some(pw),
+                },
+            ))
         }
-        Message::NetDone(ssid, r) => {
-            // The attempt is over either way: no more "Connecting…".
-            if app.connecting.as_ref().is_some_and(|c| c.is(&ssid)) {
-                app.connecting = None;
-            }
-            st.net_error = match r {
-                // Cancelling the password prompt is not an error to show.
-                Err(e) if e != "Cancelled" => Some((ssid, e)),
-                _ => None,
-            };
-        }
-        Message::Disconnect => {
-            if let Some(ssid) = app.net.ssid.clone() {
-                app.connecting = Some(super::cx::Connecting::new(ssid, false));
-            }
-            return Task::future(network::command(network::Command::Disconnect)).discard();
-        }
+        Message::Disconnect => change(Change::Disconnect),
         Message::Device(path, connected) => {
             st.forget = None;
-            // The shell connects it (the AirPods panel asks the same way).
-            let a = super::action::Action::<Message>::Device {
+            change(Change::Device {
                 path,
                 connect: !connected,
-            };
-            return super::action::perform(app, a, msg);
+            })
         }
-        Message::Pair(path) => {
-            if st.pairing.is_some() {
-                return Task::none();
-            }
-            st.pairing = Some(path.clone());
-            app.device_error = None;
-            return Task::perform(
-                bluetooth::command(bluetooth::Command::Pair(path.clone())),
-                move |r| msg(Message::BtDone(path.clone(), r)),
-            );
-        }
-        Message::BtDone(path, r) => {
-            if st.pairing.as_deref() == Some(path.as_str()) {
-                st.pairing = None;
-            }
-            return Task::done(AppMessage::DeviceDone(path, r));
-        }
+        Message::Pair(path) => change(Change::Pair(path)),
         Message::Forget(path) => {
             if st.forget.as_deref() != Some(path.as_str()) {
                 st.forget = Some(path);
-                return Task::none();
+                return Act::None;
             }
             st.forget = None;
-            return Task::perform(
-                bluetooth::command(bluetooth::Command::Forget(path.clone())),
-                move |r| msg(Message::BtDone(path.clone(), r)),
-            );
+            change(Change::ForgetDevice(path))
         }
-        Message::Source(name) => {
-            app.audio.default_source = name.clone();
-            audio::command(audio::Command::DefaultSource(name));
+        Message::Source(name) => change(Change::Source(name)),
+        Message::AppVolume(ids, v) => change(Change::AppVolume(ids, v)),
+        Message::AppMute(ids) => change(Change::AppMute(ids)),
+        Message::AppPick(key) => {
+            st.sound_open = key;
+            Act::None
         }
-        // Applied here at once (the slider never waits for the sound server) and sent on.
-        Message::AppVolume(ids, v) => {
-            if let Some(a) = app.audio.apps.iter_mut().find(|a| a.streams == ids) {
-                a.volume = v;
-                a.muted = false;
-                audio::command(audio::Command::AppVolume(ids.clone(), a.channels, v));
-                audio::command(audio::Command::AppMute(ids, false));
-            }
-        }
-        Message::AppMute(ids) => {
-            if let Some(a) = app.audio.apps.iter_mut().find(|a| a.streams == ids) {
-                a.muted = !a.muted;
-                audio::command(audio::Command::AppMute(ids, a.muted));
-            }
-        }
-        Message::AppPick(key) => st.sound_open = key,
         Message::AppTo(ids, sink) => {
-            if let Some(a) = app.audio.apps.iter_mut().find(|a| a.streams == ids) {
-                a.sink = sink.clone();
-            }
             st.sound_open = None;
-            audio::command(audio::Command::AppMove(ids, sink));
+            change(Change::AppTo(ids, sink))
         }
         Message::RecTo(ids, source) => {
-            if let Some(a) = app.audio.recorders.iter_mut().find(|a| a.streams == ids) {
-                a.sink = source.clone();
-            }
             st.sound_open = None;
-            audio::command(audio::Command::RecorderMove(ids, source));
+            change(Change::RecTo(ids, source))
         }
-        Message::RecVolume(ids, v) => {
-            if let Some(a) = app.audio.recorders.iter_mut().find(|a| a.streams == ids) {
-                a.volume = v;
-                a.muted = false;
-                audio::command(audio::Command::RecorderVolume(ids.clone(), a.channels, v));
-                audio::command(audio::Command::RecorderMute(ids, false));
-            }
-        }
-        Message::RecMute(ids) => {
-            if let Some(a) = app.audio.recorders.iter_mut().find(|a| a.streams == ids) {
-                a.muted = !a.muted;
-                audio::command(audio::Command::RecorderMute(ids, a.muted));
-            }
-        }
-        Message::Balance(b) => {
-            let name = app.audio.default_sink.clone();
-            if let Some(d) = app.audio.sinks.iter_mut().find(|d| d.name == name) {
-                d.balance = b;
-            }
-            audio::command(audio::Command::SinkBalance(name, b));
-        }
-        Message::CardMode(card, profile) => {
-            if let Some(k) = app.audio.cards.iter_mut().find(|k| k.index == card) {
-                k.active = profile.clone();
-            }
-            app.mode_switch = Some((card, profile.clone(), std::time::Instant::now()));
-            audio::command(audio::Command::CardProfile(card, profile));
-        }
-        Message::Sink(name) => {
-            // Choosing an output ends any mode switch's hold: the user's choice is what shows.
-            app.mode_switch = None;
-            app.audio.default_sink = name.clone();
-            audio::command(audio::Command::DefaultSink(name));
-        }
+        Message::RecVolume(ids, v) => change(Change::RecVolume(ids, v)),
+        Message::RecMute(ids) => change(Change::RecMute(ids)),
+        Message::Balance(b) => change(Change::Balance(b)),
+        Message::CardMode(card, profile) => change(Change::CardMode(card, profile)),
+        Message::Sink(name) => change(Change::Sink(name)),
+        Message::TrayActivate(item) => Act::Run(
+            Task::future(crate::services::tray::activate(item.bus, item.path, false)).discard(),
+        ),
+        Message::TrayMenu(item) => Act::TrayMenu(item),
+        Message::Toggle(name) => Act::Toggle(name),
+        Message::Lock => Act::Close.and(Act::Run(
+            super::power::run(super::power::Action::Lock).discard(),
+        )),
     }
-    Task::none()
 }
 
 static PASSWORD_ID: std::sync::LazyLock<iced::widget::Id> =
@@ -781,32 +545,28 @@ pub fn duration(secs: i64) -> String {
     }
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let body = match app.panels.control.page {
-        Page::Main => main_page(app, s),
-        Page::Wifi => wifi_page(app, s),
-        Page::Bluetooth => bt_page(app, s),
-        Page::Output => output_page(app, s),
-        Page::NightLight => night_page(app, s),
-        Page::Quiet => quiet_page(app, s),
-        Page::Power => power_page(app, s),
-        Page::Warp => warp_page(app, s),
-        Page::Tailscale => tailscale_page(app, s),
-        Page::Network => network_page(app, s),
-        Page::Hidden => hidden_page(app, s),
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let body = match st.page {
+        Page::Main => main_page(st, cx),
+        Page::Wifi => wifi_page(st, cx),
+        Page::Bluetooth => bt_page(st, cx),
+        Page::Output => output_page(st, cx),
+        Page::NightLight => night_page(st, cx),
+        Page::Quiet => quiet_page(cx),
+        Page::Power => power_page(cx),
+        Page::Warp => warp_page(st, cx),
+        Page::Tailscale => tailscale_page(st, cx),
+        Page::Network => network_page(st, cx),
+        Page::Hidden => hidden_page(st, cx),
     };
     // Never past the screen: at most the height under the bar (a few tall notifications, a
     // screenshot's picture, ran the panel off the bottom edge); taller pages scroll.
-    let room = app
-        .panel
-        .as_ref()
-        .and_then(|p| app.output(p.output))
-        .map_or(f32::INFINITY, |o| {
-            o.size.height - crate::theme::tok::BAR - 2.0 * tok::XL
-        });
-    // The main page keeps its tiles still and scrolls only its notifications (`main_page`);
-    // other pages scroll whole when taller than the screen.
-    if app.panels.control.page == Page::Main {
+    let room = cx.screen.map_or(f32::INFINITY, |o| {
+        o.height - crate::theme::tok::BAR - 2.0 * tok::XL
+    });
+    // The main page keeps its tiles still; other pages scroll whole when taller than the
+    // screen.
+    if st.page == Page::Main {
         return container(body).padding(tok::L).into();
     }
     container(crate::ui::smooth(
@@ -824,28 +584,29 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
 
 /// Keys on the main page: arrows move between tiles (two per row), Space flips the tile,
 /// Enter opens its page (or flips it when it has none). On a page, Left goes back.
-pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
+pub fn key(st: &mut State, k: super::Key, cx: &Cx<'_>) -> Action {
     use super::Key;
-    if app.panels.control.page != Page::Main {
+    if st.page != Page::Main {
         if k == Key::Left {
-            return update(app, Message::Page(Page::Main));
+            return update(st, Message::Page(Page::Main), cx);
         }
-        return Task::none();
+        return Act::None;
     }
-    let list = tiles(app);
+    let list = tiles(cx);
     let n = list.len();
     if n == 0 {
-        return Task::none();
+        return Act::None;
     }
-    let cur = app.panels.control.focus;
+    let cur = st.focus;
     let at = cur.unwrap_or(0);
     let to = match k {
         // Enter goes in (a tile's page), Space flips it.
         Key::Enter if cur.is_some() => {
             let t = &list[at];
-            return Task::done(t.details.clone().unwrap_or_else(|| t.press.clone()));
+            let m = t.details.clone().unwrap_or_else(|| t.press.clone());
+            return update(st, m, cx);
         }
-        Key::Space if cur.is_some() => return Task::done(list[at].press.clone()),
+        Key::Space if cur.is_some() => return update(st, list[at].press.clone(), cx),
         _ if cur.is_none() => 0,
         Key::Right | Key::Tab => (at + 1).min(n - 1),
         Key::Left | Key::BackTab => at.saturating_sub(1),
@@ -853,10 +614,10 @@ pub fn key(app: &mut App, k: super::Key) -> Task<AppMessage> {
         Key::Up => at.saturating_sub(2),
         Key::Home => 0,
         Key::End => n - 1,
-        _ => return Task::none(),
+        _ => return Act::None,
     };
-    app.panels.control.focus = Some(to);
-    Task::none()
+    st.focus = Some(to);
+    Act::None
 }
 
 #[cfg(test)]

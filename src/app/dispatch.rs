@@ -63,6 +63,8 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::Ipc { .. }
         | Message::Dispatch { .. }
         | Message::DeviceDone { .. }
+        | Message::Change { .. }
+        | Message::NetDone { .. }
         | Message::StopRecording
         | Message::Batch { .. }) => panels::handle(app, m),
         Message::Alive => {

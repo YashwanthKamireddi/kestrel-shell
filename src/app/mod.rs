@@ -23,6 +23,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod alerts;
+mod change;
 mod commands;
 mod dispatch;
 mod frames;
@@ -34,6 +35,7 @@ mod system;
 mod wallpaper;
 #[allow(unused_imports)]
 use alerts::*;
+pub use change::Change;
 #[allow(unused_imports)]
 pub(crate) use commands::*;
 #[allow(unused_imports)]
@@ -251,6 +253,10 @@ pub struct App {
     pub connecting: Option<panels::cx::Connecting>,
     /// The last device that could not be connected or paired, and why (shown beside it).
     pub device_error: Option<(String, String)>,
+    /// The device being paired (its path).
+    pub pairing: Option<String>,
+    /// A network whose last join failed, and why (shown under its name).
+    pub net_error: Option<(String, String)>,
     pub power: power::State,
     pub brightness: Option<f32>,
     pub media: mpris::State,
@@ -353,8 +359,12 @@ pub enum Message {
     Close,
     Measured(PanelKind, Size),
     Dispatch(crate::services::compositor::Action),
-    /// A device connected or disconnected at a panel's request, or why not.
+    /// A device connected, disconnected, paired or forgotten as asked, or why not.
     DeviceDone(String, Result<(), String>),
+    /// A change to the system (panels, the bar's buttons, Settings, IPC all ask this way).
+    Change(Change),
+    /// A join ended: the network and how.
+    NetDone(String, Result<(), String>),
     /// Ends the screen recording shown (the recorder in Hyprland's state when pressed).
     StopRecording,
     Panel(panels::Message),
@@ -453,6 +463,8 @@ pub fn boot() -> (App, Task<Message>) {
         bt: bluetooth::State::default(),
         connecting: None,
         device_error: None,
+        pairing: None,
+        net_error: None,
         power: power::State::default(),
         brightness: None,
         media: mpris::State::default(),
