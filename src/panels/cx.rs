@@ -81,6 +81,10 @@ pub struct Cx<'a> {
     pub camera_apps: &'a [String],
     /// What used the camera, microphone or screen lately: (device, app, when).
     pub privacy_recent: &'a [(crate::ui::Icon, String, std::time::Instant)],
+    /// The notifications, oldest first.
+    pub notifications: &'a [crate::services::notifications::Notification],
+    /// The size of the screen the open panel is on.
+    pub screen: Option<iced::Size>,
 }
 
 impl Cx<'_> {
@@ -100,6 +104,7 @@ impl Cx<'_> {
 /// panels' updates as they move onto it).
 #[allow(dead_code)]
 pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
+    let screen = screen(app);
     let App {
         panels,
         scheme,
@@ -118,6 +123,7 @@ pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
         pods,
         camera_apps,
         privacy_recent,
+        notifications,
         ..
     } = app;
     let cx = Cx {
@@ -137,6 +143,8 @@ pub fn split(app: &mut App) -> (&mut super::State, Cx<'_>) {
         pods: pods.as_ref(),
         camera_apps,
         privacy_recent,
+        notifications,
+        screen,
     };
     (panels, cx)
 }
@@ -160,6 +168,14 @@ pub fn of(app: &App) -> (&super::State, Cx<'_>) {
         pods: app.pods.as_ref(),
         camera_apps: &app.camera_apps,
         privacy_recent: &app.privacy_recent,
+        notifications: &app.notifications,
+        screen: screen(app),
     };
     (&app.panels, cx)
+}
+
+/// The size of the screen the open panel is on.
+fn screen(app: &App) -> Option<iced::Size> {
+    let p = app.panel.as_ref()?;
+    app.output(p.output).map(|o| o.size)
 }

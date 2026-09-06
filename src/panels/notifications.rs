@@ -1,14 +1,15 @@
 //! Notifications: the list in the control centre and the toasts. Both use the same card.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::action::{Action as Act, Note};
+use super::cx::Cx;
 use crate::services::icons;
-use crate::services::notifications::{self, Image, Notification, Reason};
+use crate::services::notifications::{Image, Notification};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
 use crate::ui::{self, Icon, control, icon, label, label_w};
 use iced::widget::{Space, column, container, image, row};
-use iced::{Alignment, Element, Length, Task};
+use iced::{Alignment, Element, Length};
+use std::collections::BTreeSet;
 use std::time::SystemTime;
 
 #[derive(Clone, Debug)]
@@ -28,172 +29,54 @@ pub enum Message {
     Hover(u32, bool),
 }
 
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Notifications(m))
+/// The panel's own state: how the list is shown. The notifications themselves are the
+/// shell's (the bar's banners, the history and Lua see them too); dismissing, clearing and an
+/// app's buttons are asked of the shell (`Note`).
+#[derive(Debug, Default)]
+pub struct State {
+    /// Apps whose group is open (each message its own card).
+    open: BTreeSet<String>,
+    /// Messages whose cut text is shown in full.
+    more: BTreeSet<u32>,
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
-    let task = update_inner(app, m);
-    // The last one gone while the list is open: the list closes at once (an empty list says
-    // nothing).
-    if app.notifications.is_empty()
-        && app
-            .panel
-            .as_ref()
-            .is_some_and(|p| p.open && p.kind == super::PanelKind::Notifications)
-    {
-        // Closed in this same update (closing a frame later drew it empty first: a flicker).
-        return Task::batch([task, app.close()]);
+impl State {
+    /// Forgets what is about notifications no longer listed (called by the shell after every
+    /// change to the list, however it changed).
+    pub fn keep(&mut self, list: &[Notification]) {
+        self.open.retain(|app| list.iter().any(|n| &n.app == app));
+        self.more.retain(|id| list.iter().any(|n| n.id == *id));
     }
-    task
 }
 
-fn update_inner(app: &mut App, m: Message) -> Task<AppMessage> {
+pub fn update(st: &mut State, m: Message) -> Act<Message> {
     match m {
-        Message::Dismiss(id) => {
-            app.notifications.retain(|n| n.id != id);
-            app.toasts.retain(|t| t.id != id);
-            Task::future(notifications::closed(id, Reason::Dismissed)).discard()
-        }
-        // Kestrel's own entries: open a file or folder, or save a copied picture.
-        Message::Action(id, key) if key.starts_with("kestrel-") => {
-            app.toasts.retain(|t| t.id != id);
-            if let Some(path) = key.strip_prefix("kestrel-open:") {
-                let open = crate::services::compositor::Action::Open(path.into());
-                return Task::done(AppMessage::Dispatch(open));
-            } else if let Some(path) = key.strip_prefix("kestrel-copy:") {
-                copy_file(path);
-            } else if let Some(path) = key.strip_prefix("kestrel-save:")
-                && let Some(saved) = save_picture(path)
-            {
-                {
-                    // The entry now points at the saved file.
-                    if let Some(n) = app.notifications.iter_mut().find(|n| n.id == id) {
-                        n.body = format!(
-                            "Saved in {}",
-                            saved
-                                .parent()
-                                .map_or(String::new(), |p| p.display().to_string())
-                        );
-                        n.actions =
-                            vec![(format!("kestrel-open:{}", saved.display()), "Open".into())];
-                    }
-                }
-            }
-            Task::none()
-        }
-        Message::Action(id, key) => {
-            app.notifications.retain(|n| n.id != id);
-            app.toasts.retain(|t| t.id != id);
-            Task::future(notifications::invoke(id, key)).discard()
-        }
+        Message::Dismiss(id) => Act::Note(Note::Dismiss(id)),
+        Message::Action(id, key) => Act::Note(Note::Invoke(id, key)),
         Message::Open(group, on) => {
             if on {
-                app.notif_open.insert(group);
+                st.open.insert(group);
             } else {
-                app.notif_open.remove(&group);
+                st.open.remove(&group);
             }
-            Task::none()
+            Act::None
         }
         Message::DismissGroup(group) => {
-            let ids: Vec<u32> = app
-                .notifications
-                .iter()
-                .filter(|n| n.app == group)
-                .map(|n| n.id)
-                .collect();
-            app.notifications.retain(|n| n.app != group);
-            app.toasts.retain(|t| !ids.contains(&t.id));
-            app.notif_open.remove(&group);
-            Task::batch(
-                ids.into_iter()
-                    .map(|id| Task::future(notifications::closed(id, Reason::Dismissed)).discard()),
-            )
+            st.open.remove(&group);
+            Act::Note(Note::DismissApp(group))
         }
         Message::More(id, on) => {
             if on {
-                app.notif_more.insert(id);
+                st.more.insert(id);
             } else {
-                app.notif_more.remove(&id);
+                st.more.remove(&id);
             }
-            Task::none()
+            Act::None
         }
-        Message::Hide(id) => {
-            app.toasts.retain(|t| t.id != id);
-            Task::none()
-        }
-        Message::Hover(id, on) => {
-            if on {
-                app.toast_hover = Some(id);
-            } else if app.toast_hover == Some(id) {
-                app.toast_hover = None;
-                // Its time starts again in full once the pointer leaves (DMS restarts it).
-                if let Some(t) = app.toasts.iter_mut().find(|t| t.id == id) {
-                    t.until = std::time::Instant::now() + t.secs;
-                }
-            }
-            Task::none()
-        }
-        Message::ClearAll => {
-            let ids: Vec<u32> = app.notifications.iter().map(|n| n.id).collect();
-            app.notifications.clear();
-            app.toasts.clear();
-            Task::batch(
-                ids.into_iter()
-                    .map(|id| Task::future(notifications::closed(id, Reason::Dismissed)).discard()),
-            )
-        }
+        Message::Hide(id) => Act::Note(Note::HideBanner(id)),
+        Message::Hover(id, on) => Act::Note(Note::HoldBanner(id, on)),
+        Message::ClearAll => Act::Note(Note::ClearAll),
     }
-}
-
-/// Puts a file on the clipboard: a picture as the picture itself (pastes into any chat or
-/// editor), anything else (a recording) as the file (pastes into a chat, a folder, an upload).
-fn copy_file(path: &str) {
-    let p = std::path::Path::new(path);
-    let picture = matches!(
-        p.extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_lowercase)
-            .as_deref(),
-        Some("png" | "jpg" | "jpeg" | "webp")
-    );
-    let (mime, data) = if picture {
-        let mime = match p
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_lowercase)
-            .as_deref()
-        {
-            Some("png") => "image/png",
-            Some("webp") => "image/webp",
-            _ => "image/jpeg",
-        };
-        match std::fs::read(p) {
-            Ok(d) => (mime, d),
-            Err(_) => return,
-        }
-    } else {
-        (
-            "text/uri-list",
-            format!("{}\r\n", crate::services::filechooser::uri(p)).into_bytes(),
-        )
-    };
-    crate::services::clipboard::copy(&[mime], data);
-}
-
-/// Copies a kept picture into Pictures/Screenshots under a dated name.
-fn save_picture(from: &str) -> Option<std::path::PathBuf> {
-    let dir = crate::services::xdg::user_dir("PICTURES").join("Screenshots");
-    std::fs::create_dir_all(&dir).ok()?;
-    let ext = std::path::Path::new(from)
-        .extension()
-        .map_or("png".into(), |e| e.to_string_lossy().into_owned());
-    let to = dir.join(format!(
-        "Screenshot_{}.{ext}",
-        chrono::Local::now().format("%Y-%m-%d_%H.%M.%S")
-    ));
-    std::fs::copy(from, &to).ok()?;
-    Some(to)
 }
 
 fn ago(t: SystemTime) -> String {
@@ -208,12 +91,12 @@ fn ago(t: SystemTime) -> String {
 
 /// The app's own icon, large enough to tell at a glance who it is from (its name is tried
 /// when it sent no icon: "vesktop", "kitty").
-fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, AppMessage> {
+fn app_icon<'a>(s: Scheme, n: &Notification) -> Element<'a, Message> {
     icon_sized(s, n, AVATAR)
 }
 
-/// A notification's app icon `size` px across (the island shows them small).
-pub fn icon_sized<'a>(s: Scheme, n: &Notification, size: f32) -> Element<'a, AppMessage> {
+/// A notification's app icon `size` px across.
+fn icon_sized<'a>(s: Scheme, n: &Notification, size: f32) -> Element<'a, Message> {
     let k = size / AVATAR;
     // Kestrel's own entries: its own glyph on a soft round, like its other icons.
     if n.app == "kestrel" {
@@ -338,7 +221,7 @@ fn app_name(n: &Notification) -> &str {
 }
 
 /// The notification's picture, a rounded square (DMS: at most THUMB, its own shape).
-fn thumb<'a>(n: &Notification) -> Option<Element<'a, AppMessage>> {
+fn thumb<'a>(n: &Notification) -> Option<Element<'a, Message>> {
     match n.image.as_ref()? {
         Image::Path(p) => ui::rounded_file(std::path::Path::new(p), THUMB, THUMB, tok::R_CARD)
             .map(|h| image(h).width(THUMB).height(THUMB).into()),
@@ -354,12 +237,12 @@ fn actions(n: &Notification) -> impl Iterator<Item = &(String, String)> {
 }
 
 /// What a tap on a card does: the app's default action (DMS: "default", else its first).
-fn default_action(n: &Notification) -> Option<AppMessage> {
+fn default_action(n: &Notification) -> Option<Message> {
     n.actions
         .iter()
         .find(|(k, _)| k == "default" || k.starts_with("kestrel-open:"))
         .or_else(|| n.actions.first())
-        .map(|(k, _)| msg(Message::Action(n.id, k.clone())))
+        .map(|(k, _)| Message::Action(n.id, k.clone()))
 }
 
 /// How a card sits in its list and what it offers.
@@ -377,7 +260,7 @@ struct Place {
 /// right, the text under it (two lines; all of it when opened), a picture at the right; under
 /// the pointer a ✕ in place of the time and the app's own buttons under the text. A tap does
 /// what the app asks (a folded stack: opens it); swiped sideways it goes.
-fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage> {
+fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, Message> {
     let tw = text_width(p.width);
     let pic = thumb(n);
     // The text always the full width: a picture goes under it, so the time and ✕ stay in the
@@ -404,7 +287,7 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
             .padding(tok::XS)
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Tonal)
-            .on_press(msg(close)),
+            .on_press(close),
     ]
     .spacing(tok::S)
     .align_y(Alignment::Center);
@@ -453,7 +336,7 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
                     .padding([tok::XS, tok::M])
                     .radius(tok::FULL)
                     .kind(s, crate::ui::control::Kind::Tonal)
-                    .on_press(msg(Message::Action(n.id, k.clone()))),
+                    .on_press(Message::Action(n.id, k.clone())),
                 );
             }
             words = words.push(container(r).padding(iced::Padding::ZERO.top(tok::XS)));
@@ -476,28 +359,28 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
             },
         )
         .no_press_scale()
-        .on_enter(msg(Message::Hover(n.id, true)))
-        .on_exit(msg(Message::Hover(n.id, false)));
+        .on_enter(Message::Hover(n.id, true))
+        .on_exit(Message::Hover(n.id, false));
     let tap = if p.count > 1 {
-        Some(msg(Message::Open(n.app.clone(), true)))
+        Some(Message::Open(n.app.clone(), true))
     } else {
-        default_action(n).or_else(|| can_expand.then(|| msg(Message::More(n.id, !p.more))))
+        default_action(n).or_else(|| can_expand.then_some(Message::More(n.id, !p.more)))
     };
-    let card: Element<'a, AppMessage> = ui::swipe(surface)
+    let card: Element<'a, Message> = ui::swipe(surface)
         .identity(u64::from(n.id))
         .on_tap_maybe(tap)
-        .on_dismiss(msg(if p.count > 1 {
+        .on_dismiss(if p.count > 1 {
             Message::DismissGroup(n.app.clone())
         } else {
             Message::Dismiss(n.id)
-        }))
+        })
         .into();
     if p.count <= 1 {
         return card;
     }
     // A folded stack (macOS): the newest card, and the next ones peeking under it as thinner,
     // fainter edges (one for two, two for three or more).
-    let layer = |inset: f32, alpha: f32| -> Element<'a, AppMessage> {
+    let layer = |inset: f32, alpha: f32| -> Element<'a, Message> {
         container(
             container(Space::new())
                 .width(Length::Fill)
@@ -528,7 +411,7 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, AppMessage>
 }
 
 /// A pop-up (the same card, ✕ and the arrow on hover).
-pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<'a, AppMessage> {
+pub fn popup<'a>(st: &State, s: Scheme, n: &Notification, width: f32) -> Element<'a, Message> {
     card_of(
         s,
         n,
@@ -536,14 +419,15 @@ pub fn popup<'a>(app: &App, s: Scheme, n: &Notification, width: f32) -> Element<
             width,
             count: 1,
             popup: true,
-            more: app.notif_more.contains(&n.id),
+            more: st.more.contains(&n.id),
         },
     )
 }
 
 /// The notifications panel at the island: the list, or a quiet bell when there is none.
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    if app.notifications.is_empty() {
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    if cx.notifications.is_empty() {
         // Compact: one quiet line (a big box with a lone bell looked like a glitch).
         return container(
             row![
@@ -557,14 +441,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         .padding(tok::L)
         .into();
     }
-    let room = app
-        .panel
-        .as_ref()
-        .and_then(|p| app.output(p.output))
-        .map_or(f32::INFINITY, |o| o.size.height - tok::BAR - 2.0 * tok::XL)
+    let room = cx
+        .screen
+        .map_or(f32::INFINITY, |o| o.height - tok::BAR - 2.0 * tok::XL)
         // A compact panel: about five cards, then it scrolls (it ran down the whole screen).
         .min(LIST_MAX);
-    container(section(app, s, room))
+    container(section(st, cx, room))
         .padding(tok::PANEL_PAD)
         .into()
 }
@@ -581,21 +463,22 @@ const LIST_W: f32 = tok::PANEL_M - 2.0 * tok::PANEL_PAD;
 /// Notifications inside the control centre: one grouped list, an app's messages folded into
 /// its newest card (DMS); it scrolls in `room` (the tiles above stay still). Nothing at all
 /// when there are none.
-pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
-    if app.notifications.is_empty() {
+fn section<'a>(st: &'a State, cx: &Cx<'a>, room: f32) -> Element<'a, Message> {
+    let s = cx.scheme;
+    if cx.notifications.is_empty() {
         return Space::new().into();
     }
     let header = row![
         label_w("Notifications", text::BODY, s.ink, theme::SEMIBOLD).width(Length::Fill),
         control(label("Clear all", text::SMALL, s.ink_dim))
             .pill(s, crate::ui::control::Pill::Quiet)
-            .on_press(msg(Message::ClearAll)),
+            .on_press(Message::ClearAll),
     ]
     .align_y(Alignment::Center)
     .padding([tok::NONE, tok::XS]);
     // One group per app, the newest first (DMS, ii).
     let mut groups: Vec<Vec<&Notification>> = Vec::new();
-    for n in app.notifications.iter().rev() {
+    for n in cx.notifications.iter().rev() {
         match groups.iter_mut().find(|g| g[0].app == n.app) {
             Some(g) => g.push(n),
             None => groups.push(vec![n]),
@@ -604,7 +487,7 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
     let mut list = column![].spacing(tok::S);
     for g in &groups {
         let n = g[0];
-        let open = g.len() > 1 && app.notif_open.contains(&n.app);
+        let open = g.len() > 1 && st.open.contains(&n.app);
         if !open {
             list = list.push(card_of(
                 s,
@@ -613,7 +496,7 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                     width: LIST_W,
                     count: g.len(),
                     popup: false,
-                    more: app.notif_more.contains(&n.id),
+                    more: st.more.contains(&n.id),
                 },
             ));
             continue;
@@ -629,12 +512,12 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
             .width(Length::Fill),
             control(label("Show less", text::SMALL, s.ink_dim))
                 .pill(s, crate::ui::control::Pill::Quiet)
-                .on_press(msg(Message::Open(n.app.clone(), false))),
+                .on_press(Message::Open(n.app.clone(), false)),
             control(icon(Icon::X, tok::ICON_XS, s.ink_dim))
                 .padding(tok::XS + tok::XXS)
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Tonal)
-                .on_press(msg(Message::DismissGroup(n.app.clone()))),
+                .on_press(Message::DismissGroup(n.app.clone())),
         ]
         .spacing(tok::XS)
         .align_y(Alignment::Center)
@@ -648,7 +531,7 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
                     width: LIST_W,
                     count: 1,
                     popup: false,
-                    more: app.notif_more.contains(&m.id),
+                    more: st.more.contains(&m.id),
                 },
             ));
         }
@@ -669,7 +552,7 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
     let cards: usize = groups
         .iter()
         .map(|g| {
-            if app.notif_open.contains(&g[0].app) {
+            if st.open.contains(&g[0].app) {
                 g.len().min(LIMIT)
             } else {
                 1
@@ -677,8 +560,8 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
         })
         .sum();
     // Five fit in LIST_MAX; only a sixth runs past its edge.
-    let list: Element<'_, AppMessage> = if cards > 5 && room <= LIST_MAX {
-        let tint = if app.config.material == crate::config::Material::Frosted {
+    let list: Element<'_, Message> = if cards > 5 && room <= LIST_MAX {
+        let tint = if cx.config.material == crate::config::Material::Frosted {
             s.base.scale_alpha(0.42 * s.opacity)
         } else {
             s.base
@@ -707,4 +590,39 @@ pub fn section(app: &App, s: Scheme, room: f32) -> Element<'_, AppMessage> {
         list.into()
     };
     column![header, list].spacing(tok::M).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn note(id: u32, app: &str) -> Notification {
+        Notification {
+            id,
+            app: app.into(),
+            app_icon: String::new(),
+            summary: String::new(),
+            body: String::new(),
+            actions: Vec::new(),
+            image: None,
+            urgency: 1,
+            timeout: -1,
+            time: SystemTime::now(),
+            sound: Default::default(),
+            replaced: false,
+        }
+    }
+
+    /// Open groups and expanded texts go with their notifications, however those went.
+    #[test]
+    fn keeps_only_what_is_listed() {
+        let mut st = State::default();
+        let _ = update(&mut st, Message::Open("Mail".into(), true));
+        let _ = update(&mut st, Message::Open("Signal".into(), true));
+        let _ = update(&mut st, Message::More(1, true));
+        let _ = update(&mut st, Message::More(2, true));
+        st.keep(&[note(2, "Signal")]);
+        assert_eq!(st.open.iter().collect::<Vec<_>>(), ["Signal"]);
+        assert_eq!(st.more.iter().collect::<Vec<_>>(), [&2]);
+    }
 }

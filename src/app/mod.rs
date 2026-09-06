@@ -218,10 +218,6 @@ pub struct App {
     /// The wallpaper is on screen and kestrel's copies of it were let go (the compositor keeps
     /// the picture it was given): its surface is not drawn again until the picture is read
 
-    /// Notification groups opened to show every message in full (by app).
-    pub notif_open: std::collections::BTreeSet<String>,
-    /// Messages whose cut text is shown in full (their arrow).
-    pub notif_more: std::collections::BTreeSet<u32>,
     /// The pop-up under the pointer: its ✕ shows and its time stands still.
     pub toast_hover: Option<u32>,
     /// The apps using a camera (shown by the privacy indicator).
@@ -508,8 +504,6 @@ pub fn boot() -> (App, Task<Message>) {
         osd: None,
         osd_sheet: Sheet::new(),
         wallpaper_pending: config.wallpaper.is_some(),
-        notif_open: std::collections::BTreeSet::new(),
-        notif_more: std::collections::BTreeSet::new(),
         toast_hover: None,
         camera_apps: Vec::new(),
         privacy_glyphs: Vec::new(),

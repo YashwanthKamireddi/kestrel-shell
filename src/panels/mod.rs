@@ -154,6 +154,7 @@ pub struct State {
     pub settings: settings::State,
     pub files: files::State,
     pub auth: auth::State,
+    pub notifications: notifications::State,
 }
 
 #[derive(Clone, Debug)]
@@ -299,7 +300,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             let a = media::update(&mut p.media, m, &cx);
             action::perform(app, a, |m| AppMessage::Panel(Message::Media(m)))
         }
-        Message::Notifications(m) => notifications::update(app, m),
+        Message::Notifications(m) => {
+            let a = notifications::update(&mut app.panels.notifications, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Notifications(m)))
+        }
         Message::Tray(m) => {
             let a = tray::update(&mut app.panels.tray, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Tray(m)))
@@ -555,7 +559,8 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         }
         PanelKind::Tray => tray::view(&p.tray, &cx).map(|m| AppMessage::Panel(Message::Tray(m))),
         PanelKind::Privacy => privacy::view(&cx).map(AppMessage::Panel),
-        PanelKind::Notifications => notifications::view(app, s),
+        PanelKind::Notifications => notifications::view(&p.notifications, &cx)
+            .map(|m| AppMessage::Panel(Message::Notifications(m))),
         PanelKind::Launcher => {
             launcher::view(&p.launcher, &cx).map(|m| AppMessage::Panel(Message::Launcher(m)))
         }

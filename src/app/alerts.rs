@@ -122,7 +122,104 @@ impl App {
                 self.toasts.retain(|t| t.id != id);
             }
         }
+        self.notes_changed();
         self.settle_toasts();
+        Task::none()
+    }
+
+    /// After every change to the list, however it came (an app, a panel, the 50 limit): the
+    /// panel forgets what was about ones now gone.
+    fn notes_changed(&mut self) {
+        self.panels.notifications.keep(&self.notifications);
+    }
+
+    /// A change to the list asked by a panel or a banner (`panels::action::Note`).
+    pub(crate) fn note(&mut self, n: crate::panels::action::Note) -> Task<Message> {
+        use crate::panels::action::Note;
+        let task = match n {
+            Note::Dismiss(id) => self.dismiss_notes(|n| n.id == id),
+            Note::DismissApp(app) => self.dismiss_notes(|n| n.app == app),
+            Note::ClearAll => self.dismiss_notes(|_| true),
+            // Kestrel's own entries: open a file or folder, copy it, or save a copied picture.
+            Note::Invoke(id, key) if key.starts_with("kestrel-") => {
+                self.toasts.retain(|t| t.id != id);
+                self.own_action(id, &key)
+            }
+            Note::Invoke(id, key) => {
+                self.notifications.retain(|n| n.id != id);
+                self.toasts.retain(|t| t.id != id);
+                Task::future(notifications::invoke(id, key)).discard()
+            }
+            Note::HideBanner(id) => {
+                self.toasts.retain(|t| t.id != id);
+                Task::none()
+            }
+            Note::HoldBanner(id, on) => {
+                if on {
+                    self.toast_hover = Some(id);
+                } else if self.toast_hover == Some(id) {
+                    self.toast_hover = None;
+                    // Its time starts again in full once the pointer leaves (DMS restarts it).
+                    if let Some(t) = self.toasts.iter_mut().find(|t| t.id == id) {
+                        t.until = Instant::now() + t.secs;
+                    }
+                }
+                Task::none()
+            }
+        };
+        self.notes_changed();
+        // The last one gone while the list is open: the list closes at once, in this same
+        // update (closing a frame later drew it empty first: a flicker).
+        let open = self
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.open && p.kind == PanelKind::Notifications);
+        if self.notifications.is_empty() && open {
+            return Task::batch([task, self.close()]);
+        }
+        task
+    }
+
+    /// Takes away the notifications `which` picks, and their banners; their apps are told.
+    fn dismiss_notes(
+        &mut self,
+        which: impl Fn(&notifications::Notification) -> bool,
+    ) -> Task<Message> {
+        let ids: Vec<u32> = self
+            .notifications
+            .iter()
+            .filter(|n| which(n))
+            .map(|n| n.id)
+            .collect();
+        self.notifications.retain(|n| !which(n));
+        self.toasts.retain(|t| !ids.contains(&t.id));
+        Task::batch(ids.into_iter().map(|id| {
+            Task::future(notifications::closed(id, notifications::Reason::Dismissed)).discard()
+        }))
+    }
+
+    /// A button on kestrel's own notification (a screenshot's, a recording's).
+    fn own_action(&mut self, id: u32, key: &str) -> Task<Message> {
+        if let Some(path) = key.strip_prefix("kestrel-open:") {
+            return Task::done(Message::Dispatch(services::compositor::Action::Open(
+                path.into(),
+            )));
+        }
+        if let Some(path) = key.strip_prefix("kestrel-copy:") {
+            copy_file(path);
+        } else if let Some(path) = key.strip_prefix("kestrel-save:")
+            && let Some(saved) = save_picture(path)
+            // The entry now points at the saved file.
+            && let Some(n) = self.notifications.iter_mut().find(|n| n.id == id)
+        {
+            n.body = format!(
+                "Saved in {}",
+                saved
+                    .parent()
+                    .map_or(String::new(), |p| p.display().to_string())
+            );
+            n.actions = vec![(format!("kestrel-open:{}", saved.display()), "Open".into())];
+        }
         Task::none()
     }
 
@@ -400,4 +497,46 @@ pub(crate) fn device_icon(bluez: &str) -> Icon {
         _ if bluez.contains("watch") => Icon::Watch,
         _ => Icon::Bluetooth,
     }
+}
+
+/// Puts a file on the clipboard: a picture as the picture itself (pastes into any chat or
+/// editor), anything else (a recording) as the file (pastes into a chat, a folder, an upload).
+fn copy_file(path: &str) {
+    let p = std::path::Path::new(path);
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_lowercase);
+    let picture = match ext.as_deref() {
+        Some("png") => Some("image/png"),
+        Some("webp") => Some("image/webp"),
+        Some("jpg" | "jpeg") => Some("image/jpeg"),
+        _ => None,
+    };
+    let (mime, data) = match picture {
+        Some(mime) => match std::fs::read(p) {
+            Ok(d) => (mime, d),
+            Err(_) => return,
+        },
+        None => (
+            "text/uri-list",
+            format!("{}\r\n", services::filechooser::uri(p)).into_bytes(),
+        ),
+    };
+    services::clipboard::copy(&[mime], data);
+}
+
+/// Copies a kept picture into Pictures/Screenshots under a dated name.
+fn save_picture(from: &str) -> Option<std::path::PathBuf> {
+    let dir = services::xdg::user_dir("PICTURES").join("Screenshots");
+    std::fs::create_dir_all(&dir).ok()?;
+    let ext = std::path::Path::new(from)
+        .extension()
+        .map_or("png".into(), |e| e.to_string_lossy().into_owned());
+    let to = dir.join(format!(
+        "Screenshot_{}.{ext}",
+        chrono::Local::now().format("%Y-%m-%d_%H.%M.%S")
+    ));
+    std::fs::copy(from, &to).ok()?;
+    Some(to)
 }

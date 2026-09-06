@@ -57,8 +57,26 @@ pub enum Action<M> {
     /// Deliver the answer to a question the shell itself asked (built by the asker: the panel
     /// only hands it back, e.g. the file kestrel's Settings asked the file picker for).
     Reply(Box<AppMessage>),
+    /// Change the notification list (the shell's: the bar's banners and history show it).
+    Note(Note),
     /// Several, in order.
     Many(Vec<Action<M>>),
+}
+
+/// What may be done to the notification list and its banners.
+#[derive(Clone, Debug)]
+pub enum Note {
+    /// Take one away (the app is told it was dismissed).
+    Dismiss(u32),
+    /// Take away every one from an app.
+    DismissApp(String),
+    ClearAll,
+    /// Press one of its buttons (or the card itself: its default action).
+    Invoke(u32, String),
+    /// Take its banner off the screen; it stays in the list.
+    HideBanner(u32),
+    /// The pointer is on its banner (true): its time stops until it leaves.
+    HoldBanner(u32, bool),
 }
 
 impl<M> Action<M> {
@@ -154,6 +172,7 @@ pub fn perform<M: Send + 'static>(
             app.hide_osd();
             Task::none()
         }
+        Action::Note(n) => app.note(n),
         Action::Many(v) => Task::batch(v.into_iter().map(|a| perform(app, a, wrap))),
     }
 }

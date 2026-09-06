@@ -357,12 +357,15 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         // While shrinking back (its banner gone) the last one stays drawn, fading with the width.
         let id = app.toasts.last().map(|t| t.id).or(app.toast_last);
         if let Some(n) = id.and_then(|id| app.notifications.iter().find(|n| n.id == id)) {
-            cards = cards.push(panels::notifications::popup(
-                app,
-                fs,
-                n,
-                TOAST_WIDTH - 2.0 * tok::XS,
-            ));
+            cards = cards.push(
+                panels::notifications::popup(
+                    &app.panels.notifications,
+                    fs,
+                    n,
+                    TOAST_WIDTH - 2.0 * tok::XS,
+                )
+                .map(|m| Message::Panel(panels::Message::Notifications(m))),
+            );
         }
         layers.push(
             pin(ui::reveal(cards, TOAST_WIDTH, grown_h).on_measure(Message::MeasuredToasts))
