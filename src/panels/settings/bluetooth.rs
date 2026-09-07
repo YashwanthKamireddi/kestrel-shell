@@ -12,15 +12,15 @@ pub(super) fn renamable<'a>(
     st: &'a State,
     target: Option<String>,
     now: String,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     match &st.bt_rename {
         Some((t, text)) if *t == target => field(
             s,
             "bt-rename",
             "Name",
             text,
-            |t| msg(Message::BtRenameText(t)),
-            Some(msg(Message::BtRenameDone)),
+            Message::BtRenameText,
+            Some(Message::BtRenameDone),
             false,
         ),
         _ => control(label(now.clone(), text::BODY, s.ink_dim))
@@ -28,17 +28,15 @@ pub(super) fn renamable<'a>(
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
-            .on_press(msg(Message::BtRename(target, now)))
+            .on_press(Message::BtRename(target, now))
             .into(),
     }
 }
 
-pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    use crate::panels::control::Message as C;
-    let st = &app.panels.settings;
-    let cst = &app.panels.control;
-    let b = &app.bt;
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+pub(super) fn bluetooth_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let b = &cx.bt;
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     if !b.available {
         out.push(crate::ui::empty(s, Icon::Bluetooth));
         return out;
@@ -47,7 +45,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         s,
         "Bluetooth",
         None,
-        ui::switch(s, b.powered, set(Change::Bluetooth(!b.powered))),
+        ui::switch(s, b.powered, chg(Change::Bluetooth(!b.powered))),
     )];
     if b.powered {
         // While this page is open, other devices can find this computer by this name.
@@ -76,8 +74,8 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         if !matches(&d.name) && !matches("bluetooth") {
             continue;
         }
-        let busy = app.in_progress(&d.path);
-        let err = app
+        let busy = cx.in_progress(&d.path);
+        let err = cx
             .device_error
             .as_ref()
             .filter(|(p, _)| *p == d.path)
@@ -90,8 +88,8 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
             (None, true, None) => "Connected".to_string(),
             (None, false, _) => "Not connected".to_string(),
         };
-        let armed = cst.forget.as_deref() == Some(d.path.as_str());
-        let name: Element<'_, AppMessage> = match &st.bt_rename {
+        let armed = st.forget.as_deref() == Some(d.path.as_str());
+        let name: Element<'_, Message> = match &st.bt_rename {
             Some((Some(p), _)) if *p == d.path => {
                 renamable(s, st, Some(d.path.clone()), d.name.clone())
             }
@@ -102,7 +100,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                     .radius(tok::R_ROW)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
-                    .on_press(msg(Message::BtRename(Some(d.path.clone()), d.name.clone()))),
+                    .on_press(Message::BtRename(Some(d.path.clone()), d.name.clone())),
                 container(label(state, text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::S]),
             ]
             .spacing(tok::NONE)
@@ -123,7 +121,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         s.ink
                     ))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(set(Change::Device {
+                    .on_press(chg(Change::Device {
                         path: d.path.clone(),
                         connect: !d.connected,
                     })),
@@ -133,7 +131,7 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         if armed { s.bad } else { s.ink }
                     ))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(snd(C::Forget(d.path.clone()))),
+                    .on_press(Message::Forget(d.path.clone())),
                 ]
                 .spacing(tok::L)
                 .align_y(Alignment::Center),
@@ -149,14 +147,12 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
     // Devices nearby, found while this page is open: Pair pairs, trusts and connects.
     let mut near = Vec::new();
     // Found devices join at the end (the order kept since the page opened).
-    for d in
-        crate::panels::control::in_order(&b.nearby, &app.panels.control.nearby_order, |d| &d.path)
-    {
+    for d in crate::panels::control::in_order(&b.nearby, &st.nearby_order, |d| &d.path) {
         if !matches(&d.name) && !matches("bluetooth") {
             continue;
         }
-        let pairing = app.pairing.as_deref() == Some(d.path.as_str());
-        let err = app
+        let pairing = cx.pairing == Some(d.path.as_str());
+        let err = cx
             .device_error
             .as_ref()
             .filter(|(p, _)| *p == d.path)
@@ -169,8 +165,8 @@ pub(super) fn bluetooth_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         }
         let mut pair =
             control(label("Pair", text::SMALL, s.ink)).pill(s, crate::ui::control::Pill::Plain);
-        if app.pairing.is_none() {
-            pair = pair.on_press(set(Change::Pair(d.path.clone())));
+        if cx.pairing.is_none() {
+            pair = pair.on_press(chg(Change::Pair(d.path.clone())));
         }
         near.push(Some(
             container(

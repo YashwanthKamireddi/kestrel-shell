@@ -3,8 +3,9 @@
 //! file never disagree. Opened from the gear in the control centre, or `kestrel toggle
 //! settings`.
 
-use super::Message as PanelMessage;
-use crate::app::{App, Message as AppMessage};
+use super::action::Action as Act;
+use super::cx::Cx;
+use crate::app::Change;
 use crate::config::{self, BarStyle};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -226,6 +227,18 @@ static SEARCH_ID: std::sync::LazyLock<iced::widget::Id> =
 #[derive(Default)]
 pub struct State {
     pub page: Page,
+    /// The Wi-Fi list's and nearby devices' order while their page is open (as the control
+    /// centre keeps its own: a rescan never moves the row under the pointer).
+    wifi_order: Vec<String>,
+    nearby_order: Vec<String>,
+    /// A network waiting for its password: (ssid, access point, typed text).
+    password: Option<(String, String, String)>,
+    /// A hidden network being typed in: name and password.
+    hidden: (String, String),
+    /// The device whose Forget was pressed once (asks before removing).
+    forget: Option<String>,
+    /// Night light's warmth while the slider moves (kelvin).
+    kelvin: Option<u32>,
     /// The search in the sidebar.
     query: String,
     /// config.toml as last read, for the modules' options.
@@ -678,10 +691,31 @@ pub enum Message {
     Profile(crate::services::power::Profile),
     IdleOpen(Option<crate::services::idle::Step>),
     Idle(crate::services::idle::Step, u64),
-}
-
-fn msg(m: Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Settings(m))
+    /// A new secured network's password, typed and sent.
+    Password(String),
+    SubmitPassword,
+    /// A hidden network's name and password, and joining it.
+    HiddenName(String),
+    HiddenPassword(String),
+    JoinHidden,
+    /// Forget a paired device: the first press asks, the second removes it.
+    Forget(String),
+    /// Night light's warmth (0 warmest, 1 coolest) while dragging; then kept.
+    Warmth(f32),
+    WarmthDone,
+    /// Put text on the clipboard (the system report, an address).
+    Copy(String),
+    /// Read config.toml's module options, or the installed plugins, again (after a change).
+    ReadDoc,
+    ReadPlugins,
+    /// A change to the system (a radio, the sound, a device), asked of the shell.
+    Change(crate::app::Change),
+    /// Several, in order.
+    Batch(Vec<Message>),
+    /// Close Settings' panel (after starting something in a terminal).
+    Close,
+    /// Show the wallpaper picker.
+    OpenWallpaper,
 }
 
 /// config.toml as it is on disk (module options are read from it).
@@ -692,34 +726,34 @@ fn read_doc() -> toml::Table {
         .unwrap_or_default()
 }
 
-pub fn open(app: &mut App) -> Task<AppMessage> {
+pub fn open(st: &mut State, cx: &Cx<'_>) -> Action {
     // Each open starts fresh: no search left from last time.
-    app.panels.settings.query.clear();
-    app.panels.settings.doc = read_doc();
-    app.panels.settings.city = app.config.weather_city.clone().unwrap_or_default();
-    app.panels.settings.plugins = crate::lua::installed();
+    st.query.clear();
+    st.doc = read_doc();
+    st.city = cx.config.weather_city.clone().unwrap_or_default();
+    st.plugins = crate::lua::installed();
     // The first open reads every page's data in the background, so switching pages shows a full
     // page at once (a page read only when chosen drew empty for a frame, then filled in). Later
     // opens keep that data and read again only the page shown: each page refreshes itself when
     // chosen. Updates is left to its page: checking for updates is slow and uses the network.
-    let mut tasks: Vec<Task<AppMessage>> = Vec::new();
-    if !app.panels.settings.preloaded {
-        app.panels.settings.preloaded = true;
+    let mut tasks: Vec<Task<Message>> = Vec::new();
+    if !st.preloaded {
+        st.preloaded = true;
         tasks.extend(
             SYSTEM
                 .into_iter()
-                .filter(|p| *p != Page::Updates && *p != app.panels.settings.page)
+                .filter(|p| *p != Page::Updates && *p != st.page)
                 .map(load),
         );
     }
-    tasks.push(load(app.panels.settings.page));
+    tasks.push(load(st.page));
     // Typing searches at once.
     tasks.push(Task::Iced(iced::widget::focus(SEARCH_ID.clone())));
-    Task::batch(tasks)
+    Act::Run(Task::batch(tasks))
 }
 
 /// The page scrolled to its end (where a rule opened from the overview is).
-pub fn to_end() -> Task<AppMessage> {
+pub fn to_end<M: Send + 'static>() -> Task<M> {
     Task::Iced(iced::widget::snap_to(
         BODY_ID.clone(),
         iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
@@ -730,7 +764,7 @@ static BODY_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("settings-body"));
 
 /// What a system page shows, read fresh when it opens (off the UI thread).
-fn load(p: Page) -> Task<AppMessage> {
+fn load(p: Page) -> Task<Message> {
     match p {
         Page::About => Task::perform(
             async {
@@ -738,10 +772,10 @@ fn load(p: Page) -> Task<AppMessage> {
                     .await
                     .unwrap_or_default()
             },
-            |a| msg(Message::About(a)),
+            Message::About,
         ),
         Page::DateTime => Task::batch([
-            Task::perform(crate::services::timedate::read(), |t| msg(Message::Time(t))),
+            Task::perform(crate::services::timedate::read(), Message::Time),
             Task::perform(
                 async {
                     tokio::task::spawn_blocking(|| {
@@ -753,13 +787,13 @@ fn load(p: Page) -> Task<AppMessage> {
                     .await
                     .unwrap_or_default()
                 },
-                |(r, now)| msg(Message::Regions(r, now)),
+                |(r, now)| Message::Regions(r, now),
             ),
         ]),
         Page::Power => Task::batch([
-            Task::perform(crate::services::power::lid(), |l| msg(Message::Lid(l))),
+            Task::perform(crate::services::power::lid(), Message::Lid),
             Task::perform(crate::services::power::low_battery(), |l| {
-                msg(Message::LowBattery(l))
+                Message::LowBattery(l)
             }),
             Task::perform(
                 async {
@@ -773,7 +807,7 @@ fn load(p: Page) -> Task<AppMessage> {
                     .await
                     .unwrap_or_default()
                 },
-                |(h, c, i)| msg(Message::Power(h, c, i)),
+                |(h, c, i)| Message::Power(h, c, i),
             ),
         ]),
         Page::Account => Task::perform(
@@ -782,11 +816,9 @@ fn load(p: Page) -> Task<AppMessage> {
                     .await
                     .unwrap_or_default()
             },
-            |a| msg(Message::Account(a)),
+            Message::Account,
         ),
-        Page::Storage => {
-            Task::perform(crate::services::disks::list(), |v| msg(Message::Volumes(v)))
-        }
+        Page::Storage => Task::perform(crate::services::disks::list(), Message::Volumes),
         Page::Privacy => Task::perform(
             async {
                 tokio::task::spawn_blocking(|| {
@@ -803,7 +835,7 @@ fn load(p: Page) -> Task<AppMessage> {
                 .await
                 .unwrap_or((None, true, -1))
             },
-            |(l, r, d)| msg(Message::Privacy(l, r, d)),
+            |(l, r, d)| Message::Privacy(l, r, d),
         ),
         Page::Appearance => Task::perform(
             async {
@@ -827,7 +859,7 @@ fn load(p: Page) -> Task<AppMessage> {
                 .await
                 .unwrap_or_default()
             },
-            |l| msg(Message::Look(l)),
+            Message::Look,
         ),
         Page::Network => Task::batch([
             Task::perform(
@@ -837,7 +869,7 @@ fn load(p: Page) -> Task<AppMessage> {
                         crate::services::network::hotspot()
                     )
                 },
-                |(p, h)| msg(Message::NetRead(p, h)),
+                |(p, h)| Message::NetRead(p, h),
             ),
             // Networks in range, fresh (NetworkManager scans rarely while connected).
             Task::future(crate::services::network::command(
@@ -845,9 +877,7 @@ fn load(p: Page) -> Task<AppMessage> {
             ))
             .discard(),
         ]),
-        Page::Updates => Task::perform(crate::services::updates::list(), |v| {
-            msg(Message::Updates(v))
-        }),
+        Page::Updates => Task::perform(crate::services::updates::list(), Message::Updates),
         Page::Startup => Task::perform(
             async {
                 tokio::task::spawn_blocking(|| {
@@ -859,11 +889,9 @@ fn load(p: Page) -> Task<AppMessage> {
                 .await
                 .unwrap_or_default()
             },
-            |(l, a)| msg(Message::Startup(l, a)),
+            |(l, a)| Message::Startup(l, a),
         ),
-        Page::Displays => Task::perform(crate::services::displays::read(), |d| {
-            msg(Message::Displays(d))
-        }),
+        Page::Displays => Task::perform(crate::services::displays::read(), Message::Displays),
         Page::Defaults => Task::batch([
             Task::perform(
                 async {
@@ -878,7 +906,7 @@ fn load(p: Page) -> Task<AppMessage> {
                     .await
                     .unwrap_or_default()
                 },
-                |(t, ts, es)| msg(Message::Terminals(t, ts, es)),
+                |(t, ts, es)| Message::Terminals(t, ts, es),
             ),
             Task::perform(
                 async {
@@ -893,20 +921,18 @@ fn load(p: Page) -> Task<AppMessage> {
                     .await
                     .unwrap_or_default()
                 },
-                |(a, n)| msg(Message::Defaults(a, n)),
+                |(a, n)| Message::Defaults(a, n),
             ),
         ]),
-        Page::Shortcuts => Task::perform(crate::services::hyprland::binds(), |b| {
-            msg(Message::Binds(b))
-        }),
+        Page::Shortcuts => Task::perform(crate::services::hyprland::binds(), Message::Binds),
         Page::Access => Task::batch([
-            Task::perform(crate::services::audio::mono(), |m| msg(Message::Mono(m))),
+            Task::perform(crate::services::audio::mono(), Message::Mono),
             Task::perform(crate::hypr_settings::text_scale(), |f| {
-                msg(Message::TextScale(f))
+                Message::TextScale(f)
             }),
             Task::perform(
                 crate::hypr_settings::read(crate::hypr_settings::ACCESS.to_vec()),
-                |v| msg(Message::Hypr(v)),
+                Message::Hypr,
             ),
         ]),
         Page::Windows => {
@@ -914,7 +940,7 @@ fn load(p: Page) -> Task<AppMessage> {
             Task::batch([
                 Task::perform(
                     crate::hypr_settings::read([WINDOW_LOOK, WINDOW_BEHAVIOUR].concat()),
-                    |v| msg(Message::Hypr(v)),
+                    Message::Hypr,
                 ),
                 Task::perform(
                     async {
@@ -927,7 +953,7 @@ fn load(p: Page) -> Task<AppMessage> {
                         .await
                         .unwrap_or_default()
                     },
-                    |(r, a)| msg(Message::Rules(r, a)),
+                    |(r, a)| Message::Rules(r, a),
                 ),
             ])
         }
@@ -937,7 +963,7 @@ fn load(p: Page) -> Task<AppMessage> {
             opts.push(LAYOUTS);
             opts.push(crate::hypr_settings::KB_OPTIONS);
             Task::batch([
-                Task::perform(crate::hypr_settings::read(opts), |v| msg(Message::Hypr(v))),
+                Task::perform(crate::hypr_settings::read(opts), Message::Hypr),
                 Task::perform(
                     async {
                         let devices = crate::services::hyprland::pointer_devices().await;
@@ -947,7 +973,7 @@ fn load(p: Page) -> Task<AppMessage> {
                                 .unwrap_or_default();
                         (devices, speeds)
                     },
-                    |(d, sp)| msg(Message::Pointers(d, sp)),
+                    |(d, sp)| Message::Pointers(d, sp),
                 ),
             ])
         }
@@ -956,7 +982,7 @@ fn load(p: Page) -> Task<AppMessage> {
             let mut opts: Vec<Opt> = [KEYBOARD, MOUSE, TOUCHPAD].concat();
             opts.push(LAYOUTS);
             opts.push(crate::hypr_settings::KB_OPTIONS);
-            Task::perform(crate::hypr_settings::read(opts), |v| msg(Message::Hypr(v)))
+            Task::perform(crate::hypr_settings::read(opts), Message::Hypr)
         }
         _ => Task::none(),
     }
@@ -964,37 +990,479 @@ fn load(p: Page) -> Task<AppMessage> {
 
 /// The network changed: the Network page, when shown, reads its connection and hotspot again
 /// (another network's IP settings, a hotspot started).
-pub fn network_changed(app: &App, before: &crate::services::network::State) -> Task<AppMessage> {
-    let n = &app.net;
-    let moved = n.link != before.link
-        || n.ssid != before.ssid
-        || n.hotspot != before.hotspot
-        || n.wired.as_ref().map(|w| w.connected) != before.wired.as_ref().map(|w| w.connected);
-    if moved && app.settings_window.is_some() && app.panels.settings.page == Page::Network {
-        load(Page::Network)
+pub fn network_changed(
+    st: &State,
+    now: &crate::services::network::State,
+    before: &crate::services::network::State,
+) -> Action {
+    let moved = now.link != before.link
+        || now.ssid != before.ssid
+        || now.hotspot != before.hotspot
+        || now.wired.as_ref().map(|w| w.connected) != before.wired.as_ref().map(|w| w.connected);
+    if moved && st.page == Page::Network {
+        Act::Run(load(Page::Network))
     } else {
-        Task::none()
+        Act::None
     }
 }
 
-pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
+impl State {
+    /// The Wi-Fi networks or nearby devices changed: the lists keep their rows where they
+    /// are; found ones join at the end (called by the shell after each report).
+    pub fn lists_changed(
+        &mut self,
+        net: &crate::services::network::State,
+        bt: &crate::services::bluetooth::State,
+    ) {
+        crate::panels::control::keep_order(
+            &mut self.wifi_order,
+            net.networks.iter().map(|n| n.ssid.as_str()),
+        );
+        crate::panels::control::keep_order(
+            &mut self.nearby_order,
+            bt.nearby.iter().map(|d| d.path.as_str()),
+        );
+    }
+}
+
+/// One setting in config.toml, changed by the shell (written, then applied at once).
+fn setting(table: &[&str], key: &str, value: toml_edit::Item) -> Action {
+    Act::Change(Change::Settings(vec![config::Edit::new(table, key, value)]))
+}
+
+type Action = Act<Message>;
+
+/// What a message asks of the shell (settings, the power mode, joining, files, terminals),
+/// and everything else as Settings' own work.
+pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
+    let run = |t: Task<Message>| Act::Run(t);
+    match m {
+        Message::WeekStart(sunday) => {
+            setting(&["clock"], "week_starts_sunday", toml_edit::value(sunday))
+        }
+        Message::Profile(p) => Act::Change(Change::Profile(p)),
+        Message::Quiet(q) => {
+            st.quiet_open = None;
+            let (from, to) = q.unzip();
+            Act::Change(Change::Settings(vec![
+                config::Edit::new(
+                    &[],
+                    "quiet_from",
+                    toml_edit::value(from.unwrap_or_default()),
+                ),
+                config::Edit::new(&[], "quiet_to", toml_edit::value(to.unwrap_or_default())),
+            ]))
+        }
+        Message::SoundStep(v) => setting(&["sound"], "step", toml_edit::value(i64::from(v))),
+        Message::SoundMax(v) => setting(&["sound"], "max", toml_edit::value(i64::from(v))),
+        Message::SoundOpt(key, v) => setting(&["sound"], key, toml_edit::Item::Value(v)),
+        Message::CursorSize(n) => {
+            setting(&[], "cursor_size", toml_edit::value(i64::from(n)))
+                .and(run(
+                    Task::future(crate::hypr_settings::apply_cursor(n)).discard()
+                ))
+        }
+        Message::NotifyRule(name, rule) => {
+            let rules = &cx.config.notifications;
+            let without = |l: &[String]| -> Vec<String> {
+                l.iter().filter(|a| **a != name).cloned().collect()
+            };
+            let (mut muted, mut quiet) = (without(&rules.muted), without(&rules.quiet));
+            match rule {
+                1 => quiet.push(name),
+                2 => muted.push(name),
+                _ => {}
+            }
+            Act::Change(Change::Settings(vec![
+                config::Edit::new(&["notifications"], "muted", config::list(&muted)),
+                config::Edit::new(&["notifications"], "quiet", config::list(&quiet)),
+            ]))
+        }
+        Message::NotifyOpt(key, v) => setting(&["notifications"], key, toml_edit::Item::Value(v)),
+        Message::NotifySilent(name, sound) => {
+            let mut silent: Vec<String> = cx
+                .config
+                .notifications
+                .silent
+                .iter()
+                .filter(|a| **a != name)
+                .cloned()
+                .collect();
+            if !sound {
+                silent.push(name);
+            }
+            setting(&["notifications"], "silent", config::list(&silent))
+        }
+        Message::PickPicture => {
+            let filter = crate::services::filechooser::Filter {
+                name: "Pictures".into(),
+                globs: vec![],
+                mimes: vec!["image/png".into(), "image/jpeg".into(), "image/webp".into()],
+            };
+            let pics =
+                std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Pictures"));
+            let (req, rx) =
+                crate::services::filechooser::local("Choose a picture", Some(filter), pics);
+            Act::Ask(req).and(run(Task::perform(rx, |a| {
+                Message::Picture(match a {
+                    Ok(crate::services::filechooser::Answer::Chosen(v)) => v.into_iter().next(),
+                    _ => None,
+                })
+            })))
+        }
+        Message::OpenFile(path) => {
+            // A file not made yet is made empty (a folder, made), so it opens.
+            if !path.exists() {
+                if path.extension().is_none() {
+                    let _ = std::fs::create_dir_all(&path);
+                } else {
+                    if let Some(d) = path.parent() {
+                        let _ = std::fs::create_dir_all(d);
+                    }
+                    let _ = std::fs::write(&path, "");
+                }
+            }
+            Act::Dispatch(crate::services::compositor::Action::Open(
+                path.to_string_lossy().into(),
+            ))
+        }
+        Message::FirmwareUpdate(id) => {
+            // The device id is fwupd's hex: nothing else reaches the shell.
+            let id: String = id.chars().filter(char::is_ascii_hexdigit).collect();
+            let line = crate::services::defaults::in_terminal(
+                &format!("sh -c 'fwupdmgr update {id}; echo; read -p \"Press Enter to close.\" _'"),
+                Some("Firmware"),
+            );
+            Act::Dispatch(crate::services::compositor::Action::Exec(line))
+        }
+        Message::InTerminal(cmd, title) => {
+            let line = crate::services::defaults::in_terminal(cmd, Some(title));
+            Act::Dispatch(crate::services::compositor::Action::Exec(line))
+        }
+        Message::EditorSet(e) => {
+            let line = format!("hl.env(\"EDITOR\", \"{e}\") hl.env(\"VISUAL\", \"{e}\")");
+            setting(&[], "editor", toml_edit::value(e.clone())).and(run(Task::future(async move {
+                crate::services::hyprland::eval(line).await;
+                crate::hypr_settings::write_lua();
+            })
+            .discard()))
+        }
+        Message::Clear(which) => {
+            if st.clear_armed != Some(which) {
+                st.clear_armed = Some(which);
+                return Act::None;
+            }
+            st.clear_armed = None;
+            // The clipboard panel reads its list again whenever it opens.
+            run(Task::perform(
+                async move {
+                    if which == 0 {
+                        // GTK keeps them in one file; it starts a new one when it is gone.
+                        let f = std::env::var_os("HOME")
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_default()
+                            .join(".local/share/recently-used.xbel");
+                        match std::fs::remove_file(f) {
+                            Ok(()) => Ok(()),
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                            Err(e) => Err(e.to_string()),
+                        }
+                    } else {
+                        // Pinned entries stay, as with the clipboard panel's "Clear all".
+                        tokio::task::spawn_blocking(crate::services::clips::clear)
+                            .await
+                            .map_err(|_| "The clipboard history was not cleared".to_string())
+                    }
+                },
+                Message::Done,
+            ))
+        }
+        Message::LookSet(which, name) => {
+            st.look_open = None;
+            let key = ["font", "mono", "icons", "cursor"][usize::from(which.min(3))];
+            let look = {
+                let mut l = cx.config.look.clone();
+                // The other font (and sizes) stay as they are in use now.
+                let now = st.look.as_ref();
+                if let Some((f, fs)) = now.and_then(|x| x.font_now.clone()) {
+                    l.font.get_or_insert(f);
+                    l.font_size.get_or_insert(fs);
+                }
+                if let Some((m, ms)) = now.and_then(|x| x.mono_now.clone()) {
+                    l.mono.get_or_insert(m);
+                    l.mono_size.get_or_insert(ms);
+                }
+                match which {
+                    0 => l.font = Some(name.clone()),
+                    1 => l.mono = Some(name.clone()),
+                    2 => l.icons = Some(name.clone()),
+                    _ => l.cursor = Some(name.clone()),
+                }
+                l
+            };
+            if let Some(lists) = &mut st.look {
+                match which {
+                    2 => lists.icons_now = name.clone(),
+                    3 => lists.cursor_now = name.clone(),
+                    _ => {}
+                }
+            }
+            let size = cx.config.cursor_size.unwrap_or(24);
+            setting(&["look"], key, toml_edit::value(name.clone())).and(run(Task::future(
+                async move {
+                    match which {
+                        0 | 1 => {
+                            let ((f, fs), (m, ms)) = (look.font(), look.mono());
+                            crate::look::apply_fonts(f, fs, m, ms).await;
+                        }
+                        2 => crate::look::apply_icons(name).await,
+                        _ => {
+                            crate::look::apply_cursor(name, size).await;
+                            crate::hypr_settings::write_lua();
+                        }
+                    }
+                },
+            )
+            .discard()))
+        }
+        Message::LookSize(which, n) => {
+            let key = if which == 0 { "font_size" } else { "mono_size" };
+            let mut l = cx.config.look.clone();
+            // A size alone keeps the font in use (not kestrel's default in its place).
+            let now = st.look.as_ref();
+            if l.font.is_none()
+                && let Some((f, _)) = now.and_then(|x| x.font_now.clone())
+            {
+                l.font = Some(f);
+            }
+            if l.mono.is_none()
+                && let Some((m, _)) = now.and_then(|x| x.mono_now.clone())
+            {
+                l.mono = Some(m);
+            }
+            if which == 0 {
+                l.font_size = Some(n);
+            } else {
+                l.mono_size = Some(n);
+            }
+            setting(&["look"], key, toml_edit::value(i64::from(n))).and(run(Task::future(
+                async move {
+                    let ((f, fs), (m, ms)) = (l.font(), l.mono());
+                    crate::look::apply_fonts(f, fs, m, ms).await;
+                },
+            )
+            .discard()))
+        }
+        Message::Accent(a) => setting(
+            &[],
+            "accent",
+            match a {
+                Some(hex) => toml_edit::value(hex),
+                None => toml_edit::Item::None,
+            },
+        ),
+        Message::Units(u) => setting(&[], "weather_units", toml_edit::value(u)),
+        Message::Style(b) => setting(
+            &["bar"],
+            "style",
+            toml_edit::value(match b {
+                BarStyle::Full => "full",
+                BarStyle::Pills => "pills",
+            }),
+        ),
+        Message::Workspaces(n) => setting(&[], "workspaces", toml_edit::value(n.clamp(1, 10))),
+        Message::ThemeApps(on) => setting(&[], "theme_apps", toml_edit::value(on)),
+        Message::Material(m) => setting(
+            &[],
+            "material",
+            toml_edit::value(match m {
+                crate::config::Material::Black => "black",
+                crate::config::Material::Frosted => "frosted",
+            }),
+        ),
+        Message::SubmitCity => {
+            let c = st.city.trim().to_string();
+            setting(&[], "weather_city", toml_edit::value(c))
+        }
+        Message::Opt(m, o, v) => {
+            let Some(opt) = crate::modules::MODULES
+                .get(m)
+                .and_then(|m| m.options.get(o))
+            else {
+                return Act::None;
+            };
+            let item = match v {
+                OptValue::Bool(b) => toml_edit::value(b),
+                OptValue::Str(t) => toml_edit::value(t),
+            };
+            Act::ChangeThen(
+                Change::Settings(vec![config::Edit::new(opt.table, opt.key, item)]),
+                Message::ReadDoc,
+            )
+        }
+        Message::Plugin(id, on) => Act::ChangeThen(
+            Change::Settings(vec![config::Edit::new(
+                &["plugins", &id],
+                "enabled",
+                toml_edit::value(on),
+            )]),
+            Message::ReadPlugins,
+        ),
+        Message::BarMove(id, d) => {
+            let mut l = layout(cx);
+            if let Some((sec, at)) = find_in(&l, &id) {
+                let to = at as i32 + d;
+                if to >= 0 && (to as usize) < l[sec].len() {
+                    l[sec].swap(at, to as usize);
+                    return save_layout(&l);
+                }
+            }
+            Act::None
+        }
+        Message::BarSection(id, d) => {
+            let mut l = layout(cx);
+            if let Some((sec, at)) = find_in(&l, &id) {
+                let to = sec as i32 + d;
+                if (0..3).contains(&to) {
+                    let m = l[sec].remove(at);
+                    // Into the near end of the next section (right: its start; left: its end).
+                    if d > 0 {
+                        l[to as usize].insert(0, m);
+                    } else {
+                        l[to as usize].push(m);
+                    }
+                    return save_layout(&l);
+                }
+            }
+            Act::None
+        }
+        Message::BarRemove(id) => {
+            let mut l = layout(cx);
+            for list in &mut l {
+                list.retain(|m| *m != id);
+            }
+            save_layout(&l)
+        }
+        Message::BarAdd(id) => {
+            let mut l = layout(cx);
+            let sec = match crate::modules::info(&id).map(|m| m.home) {
+                Some(crate::modules::Home::Left) => 0,
+                Some(crate::modules::Home::Center) => 1,
+                _ => 2,
+            };
+            if find_in(&l, &id).is_some() {
+                return Act::None;
+            }
+            // The right section's end is the power button's place: added before it.
+            let at = if sec == 2 {
+                l[2].iter().position(|m| m == "power").unwrap_or(l[2].len())
+            } else {
+                l[sec].len()
+            };
+            l[sec].insert(at, id);
+            save_layout(&l)
+        }
+        Message::BarReset => {
+            if !st.bar_reset_armed {
+                st.bar_reset_armed = true;
+                return Act::None;
+            }
+            st.bar_reset_armed = false;
+            let d = crate::config::BarConfig::default();
+            save_layout(&[d.left, d.center, d.right])
+        }
+        Message::VolumeOpen(path, mount) => match mount {
+            Some(m) => open_folder(m),
+            None => run(Task::perform(
+                crate::services::disks::mount(path),
+                Message::Mounted,
+            )),
+        },
+        Message::Mounted(r) => match r {
+            Ok(m) => open_folder(m).and(run(load(Page::Storage))),
+            Err(e) => {
+                st.error = Some(e);
+                Act::None
+            }
+        },
+        // Joining as the control centre does: at once, or after its password.
+        Message::JoinNet(n) => {
+            if n.active {
+                return Act::None;
+            }
+            if let Some(c) = Change::join(&n) {
+                return Act::Change(c);
+            }
+            st.password = Some((n.ssid, n.ap, String::new()));
+            run(Task::Iced(iced::widget::focus(iced::widget::Id::new(
+                "net-password",
+            ))))
+        }
+        Message::SubmitPassword => match st.password.take() {
+            Some((ssid, ap, pw)) if !pw.is_empty() => Act::Change(Change::Join(
+                ssid.clone(),
+                crate::services::network::Command::ConnectNew {
+                    ssid,
+                    ap,
+                    password: Some(pw),
+                },
+            )),
+            _ => Act::None,
+        },
+        Message::JoinHidden => {
+            let (ssid, pw) = std::mem::take(&mut st.hidden);
+            if ssid.trim().is_empty() {
+                return Act::None;
+            }
+            Act::Change(Change::Join(
+                ssid.clone(),
+                crate::services::network::Command::ConnectHidden {
+                    ssid,
+                    password: (!pw.is_empty()).then_some(pw),
+                },
+            ))
+        }
+        Message::Forget(path) => {
+            if st.forget.as_deref() != Some(path.as_str()) {
+                st.forget = Some(path);
+                return Act::None;
+            }
+            st.forget = None;
+            Act::Change(Change::ForgetDevice(path))
+        }
+        Message::WarmthDone => match st.kelvin.take() {
+            Some(k) => Act::Change(Change::NightTemperature(k)),
+            None => Act::None,
+        },
+        Message::Change(c) => Act::Change(c),
+        Message::Batch(v) => Act::Many(v.into_iter().map(|m| update(st, m, cx)).collect()),
+        Message::Close => Act::Close,
+        Message::OpenWallpaper => Act::Command("toggle wallpaper".into()),
+        Message::Copy(text) => {
+            run(Task::future(crate::panels::clipboard::copy_text(text)).discard())
+        }
+        m => run(own(st, m, cx)),
+    }
+}
+
+/// Settings' own work: its state and its tasks (what needs the shell is in `update`).
+fn own(st: &mut State, m: Message, cx: &Cx<'_>) -> Task<Message> {
     match m {
         Message::Page(p) => {
-            let st = &mut app.panels.settings;
             st.page = p;
             st.query.clear();
             st.error = None;
             st.zones_open = false;
             if p == Page::Bluetooth {
-                app.panels.control.nearby_order.clear();
+                st.nearby_order.clear();
             }
             if p == Page::Network {
                 // Networks sorted fresh on opening, then kept in place (as the control
                 // centre's Wi-Fi page).
-                app.panels.control.wifi_order.clear();
+                st.wifi_order.clear();
                 crate::panels::control::keep_order(
-                    &mut app.panels.control.wifi_order,
-                    app.net.networks.iter().map(|n| n.ssid.as_str()),
+                    &mut st.wifi_order,
+                    cx.net.networks.iter().map(|n| n.ssid.as_str()),
                 );
             }
             // Each page starts at its top (the last page's scroll carried over).
@@ -1006,42 +1474,34 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 )),
             ]);
         }
-        Message::About(a) => app.panels.settings.about = Some(a),
-        Message::Time(t) => app.panels.settings.time = Some(t),
-        Message::WeekStart(sunday) => {
-            app.config.clock.week_starts_sunday = sunday;
-            config::set(&["clock"], "week_starts_sunday", toml_edit::value(sunday));
-        }
+        Message::About(a) => st.about = Some(a),
+        Message::Time(t) => st.time = Some(t),
         Message::Ntp(on) => {
-            if let Some(t) = &mut app.panels.settings.time {
+            if let Some(t) = &mut st.time {
                 t.ntp = on;
             }
-            return Task::perform(crate::services::timedate::set_ntp(on), |r| {
-                msg(Message::Done(r))
-            });
+            return Task::perform(crate::services::timedate::set_ntp(on), Message::Done);
         }
         Message::ZonesOpen(open) => {
-            let st = &mut app.panels.settings;
             st.zones_open = open;
             st.zone_query.clear();
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("zone-search")));
             }
         }
-        Message::ZoneQuery(q) => app.panels.settings.zone_query = q,
+        Message::ZoneQuery(q) => st.zone_query = q,
         Message::Zone(z) => {
-            let st = &mut app.panels.settings;
             st.zones_open = false;
             if let Some(t) = &mut st.time {
                 t.timezone = z.clone();
             }
             return Task::perform(crate::services::timedate::set_timezone(z), |r| {
-                msg(Message::Done(r))
+                Message::Done(r)
             });
         }
-        Message::Hypr(v) => app.panels.settings.hypr.extend(v),
+        Message::Hypr(v) => st.hypr.extend(v),
         Message::HyprSet(o, v, save) => {
-            app.panels.settings.hypr.insert(o.option, v.clone());
+            st.hypr.insert(o.option, v.clone());
             return Task::future(async move {
                 if save {
                     crate::hypr_settings::save(o, v).await;
@@ -1052,47 +1512,42 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             .discard();
         }
         Message::HyprKeep(o) => {
-            if let Some(v) = app.panels.settings.hypr.get(o.option).cloned() {
+            if let Some(v) = st.hypr.get(o.option).cloned() {
                 return Task::future(crate::hypr_settings::save(o, v)).discard();
             }
         }
         Message::LayoutsOpen(open) => {
-            let st = &mut app.panels.settings;
             st.layouts_open = open;
             st.layout_query.clear();
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("layout-search")));
             }
         }
-        Message::LayoutQuery(q) => app.panels.settings.layout_query = q,
+        Message::LayoutQuery(q) => st.layout_query = q,
         Message::Xkb(k, v) => {
             let o = crate::hypr_settings::KB_OPTIONS;
-            let now = app
-                .panels
-                .settings
+            let now = st
                 .hypr
                 .get(o.option)
                 .map(crate::hypr_settings::Value::as_str)
                 .unwrap_or_default();
             let new = crate::hypr_settings::xkb_with(&now, &crate::hypr_settings::XKB[k], &v);
             let v = crate::hypr_settings::Value::Str(new);
-            app.panels.settings.hypr.insert(o.option, v.clone());
+            st.hypr.insert(o.option, v.clone());
             return Task::future(crate::hypr_settings::save(o, v)).discard();
         }
         Message::Defaults(apps, now) => {
-            let st = &mut app.panels.settings;
             st.apps = apps;
             st.defaults = now;
         }
-        Message::DefaultOpen(k) => app.panels.settings.default_open = k,
+        Message::DefaultOpen(k) => st.default_open = k,
         Message::Power(h, c, idle) => {
-            let st = &mut app.panels.settings;
             st.health = h;
             st.charging = c;
             st.idle = idle;
         }
         Message::Charging(c) => {
-            if let Some((_, now)) = &mut app.panels.settings.charging {
+            if let Some((_, now)) = &mut st.charging {
                 *now = c;
             }
             return Task::perform(
@@ -1101,25 +1556,19 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                         .await
                         .unwrap_or_else(|e| Err(e.to_string()))
                 },
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
-        Message::Profile(p) => {
-            app.power.profile = Some(p);
-            return Task::future(crate::services::power::set_profile(p)).discard();
-        }
-        Message::IdleOpen(step) => app.panels.settings.idle_open = step,
+        Message::IdleOpen(step) => st.idle_open = step,
         Message::Displays(d) => {
-            let st = &mut app.panels.settings;
             if st.pending.is_none() {
                 st.kept = d.clone();
                 st.displays = d;
             }
         }
-        Message::ModeOpen(i) => app.panels.settings.mode_open = i,
-        Message::Display(i, change) => return change_display(app, i, change),
+        Message::ModeOpen(i) => st.mode_open = i,
+        Message::Display(i, change) => return change_display(st, i, change),
         Message::DisplayKeep => {
-            let st = &mut app.panels.settings;
             st.pending = None;
             st.kept = st.displays.clone();
             let all = st.displays.clone();
@@ -1129,45 +1578,42 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                         .await
                         .unwrap_or_else(|e| Err(e.to_string()))
                 },
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
-        Message::DisplayRevert => return revert_displays(app),
+        Message::DisplayRevert => return revert_displays(st),
         Message::DisplayTimeout(n) => {
-            if app.panels.settings.pending.is_some_and(|(p, _)| p == n) {
-                return revert_displays(app);
+            if st.pending.is_some_and(|(p, _)| p == n) {
+                return revert_displays(st);
             }
         }
         Message::DisplayTick => {}
         Message::Startup(list, apps) => {
-            let st = &mut app.panels.settings;
             st.startup = list;
             if !apps.is_empty() {
                 st.apps = apps;
             }
         }
         Message::StartupOn(id, on) => {
-            if let Some(e) = app.panels.settings.startup.iter_mut().find(|e| e.id == id) {
+            if let Some(e) = st.startup.iter_mut().find(|e| e.id == id) {
                 e.enabled = on;
             }
             return startup_job(move || crate::services::autostart::set_enabled(&id, on));
         }
         Message::StartupRemove(id) => {
-            app.panels.settings.startup.retain(|e| e.id != id);
+            st.startup.retain(|e| e.id != id);
             return startup_job(move || crate::services::autostart::remove(&id));
         }
         Message::StartupAddOpen(open) => {
-            let st = &mut app.panels.settings;
             st.startup_add = open;
             st.startup_query.clear();
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("startup-search")));
             }
         }
-        Message::StartupQuery(q) => app.panels.settings.startup_query = q,
-        Message::Updates(v) => app.panels.settings.updates = Some(v),
+        Message::StartupQuery(q) => st.startup_query = q,
+        Message::Updates(v) => st.updates = Some(v),
         Message::Volumes(v) => {
-            let st = &mut app.panels.settings;
             st.volumes = v;
             // The home folder's use: measured only while Storage is shown (never by the preload),
             // again when the last count is over five minutes old.
@@ -1180,43 +1626,22 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     .map(std::path::PathBuf::from)
                     .unwrap_or_default();
                 return Task::perform(crate::services::disks::usage(home), |(t, v)| {
-                    msg(Message::Usage(t, v))
+                    Message::Usage(t, v)
                 });
             }
         }
         Message::Usage(total, items) => {
-            let st = &mut app.panels.settings;
             st.measuring = false;
             st.measured = Some(std::time::Instant::now());
             st.usage = Some((total, items));
         }
-        Message::Account(a) => app.panels.settings.account = Some(a),
+        Message::Account(a) => st.account = Some(a),
         Message::FullName(t) => {
-            let open = t.is_some() && app.panels.settings.full_name.is_none();
-            app.panels.settings.full_name = t;
+            let open = t.is_some() && st.full_name.is_none();
+            st.full_name = t;
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("full-name")));
             }
-        }
-        Message::PickPicture => {
-            let filter = crate::services::filechooser::Filter {
-                name: "Pictures".into(),
-                globs: vec![],
-                mimes: vec!["image/png".into(), "image/jpeg".into(), "image/webp".into()],
-            };
-            let pics =
-                std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Pictures"));
-            let (req, rx) =
-                crate::services::filechooser::local("Choose a picture", Some(filter), pics);
-            return Task::batch([
-                Task::done(AppMessage::FileRequest(req)),
-                Task::perform(rx, |a| {
-                    msg(Message::Picture(match a {
-                        Ok(crate::services::filechooser::Answer::Chosen(v)) => v.into_iter().next(),
-                        _ => None,
-                    }))
-                }),
-            ]);
         }
         Message::Picture(p) => {
             if let Some(p) = p {
@@ -1226,84 +1651,49 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                             .await
                             .unwrap_or_else(|e| Err(e.to_string()))
                     },
-                    |r| msg(Message::Done(r)),
+                    Message::Done,
                 );
             }
         }
         Message::FullNameSubmit => {
-            if let Some(n) = app.panels.settings.full_name.take() {
+            if let Some(n) = st.full_name.take() {
                 return Task::perform(crate::services::about::set_full_name(n), |r| {
-                    msg(Message::Done(r))
+                    Message::Done(r)
                 });
             }
         }
-        Message::VolumeOpen(path, mount) => {
-            return match mount {
-                Some(m) => open_folder(m),
-                None => Task::perform(crate::services::disks::mount(path), |r| {
-                    msg(Message::Mounted(r))
-                }),
-            };
-        }
-        Message::Mounted(r) => {
-            return match r {
-                Ok(m) => Task::batch([open_folder(m), load(Page::Storage)]),
-                Err(e) => {
-                    app.panels.settings.error = Some(e);
-                    Task::none()
-                }
-            };
-        }
         Message::VolumeEject(path, drive) => {
             return Task::perform(crate::services::disks::eject(path, drive), |r| {
-                msg(Message::Done(r))
+                Message::Done(r)
             });
         }
         Message::StartupAdd(id) => {
-            app.panels.settings.startup_add = false;
+            st.startup_add = false;
             return startup_job(move || {
                 let f = crate::services::apps::desktop_file(&id).ok_or("app not found")?;
                 crate::services::autostart::add(&f)
             });
         }
         Message::Rename(t) => {
-            let open = t.is_some() && app.panels.settings.rename.is_none();
-            app.panels.settings.rename = t;
+            let open = t.is_some() && st.rename.is_none();
+            st.rename = t;
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("rename")));
             }
         }
         Message::RenameSubmit => {
-            if let Some(name) = app.panels.settings.rename.take()
+            if let Some(name) = st.rename.take()
                 && !name.trim().is_empty()
             {
-                return Task::perform(crate::services::about::rename(name), |r| {
-                    msg(Message::Done(r))
-                });
+                return Task::perform(crate::services::about::rename(name), Message::Done);
             }
         }
-        Message::Quiet(q) => {
-            app.panels.settings.quiet_open = None;
-            let (from, to) = q.unzip();
-            app.config.quiet_from = from.clone();
-            app.config.quiet_to = to.clone();
-            config::set(
-                &[],
-                "quiet_from",
-                toml_edit::value(from.unwrap_or_default()),
-            );
-            config::set(&[], "quiet_to", toml_edit::value(to.unwrap_or_default()));
-            app.quiet_auto = None;
-            app.quiet_schedule();
-        }
-        Message::QuietOpen(w) => app.panels.settings.quiet_open = w,
+        Message::QuietOpen(w) => st.quiet_open = w,
         Message::Binds(b) => {
-            let st = &mut app.panels.settings;
             st.binds = b;
             st.custom = crate::hypr_settings::shortcuts();
         }
         Message::Record(on) => {
-            let st = &mut app.panels.settings;
             st.recording = on;
             st.rebinding = None;
             if on {
@@ -1311,29 +1701,24 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             }
         }
         Message::Rebind(old) => {
-            let st = &mut app.panels.settings;
             st.recording = true;
             st.error = None;
             st.rebinding = Some(old);
         }
         Message::Recorded(k) => {
-            let st = &mut app.panels.settings;
             st.recording = false;
             if let Some(old) = st.rebinding.take() {
                 if let Some(what) = taken_by(st, &k) {
                     st.error = Some(format!("{k} is already {what}"));
                     return Task::none();
                 }
-                return Task::perform(crate::hypr_settings::rebind(old, k), |r| {
-                    msg(Message::Done(r))
-                });
+                return Task::perform(crate::hypr_settings::rebind(old, k), Message::Done);
             }
             st.new_keys = Some(k);
         }
-        Message::NewName(t) => app.panels.settings.new_name = t,
-        Message::NewCommand(t) => app.panels.settings.new_command = t,
+        Message::NewName(t) => st.new_name = t,
+        Message::NewCommand(t) => st.new_command = t,
         Message::AddShortcut => {
-            let st = &mut app.panels.settings;
             if let Some(keys) = st.new_keys.take()
                 && !st.new_command.trim().is_empty()
             {
@@ -1356,13 +1741,13 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
                             crate::services::hyprland::binds().await
                         },
-                        |b| msg(Message::Binds(b)),
+                        Message::Binds,
                     ),
                 ]);
             }
         }
         Message::RemoveShortcut(keys) => {
-            app.panels.settings.custom.retain(|c| c.keys != keys);
+            st.custom.retain(|c| c.keys != keys);
             return Task::batch([
                 Task::future(crate::hypr_settings::remove_shortcut(keys)).discard(),
                 Task::perform(
@@ -1370,55 +1755,16 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                         tokio::time::sleep(std::time::Duration::from_millis(150)).await;
                         crate::services::hyprland::binds().await
                     },
-                    |b| msg(Message::Binds(b)),
+                    Message::Binds,
                 ),
             ]);
         }
-        Message::SoundPick(k) => app.panels.settings.sound_pick = k,
-        Message::SoundStep(v) => {
-            app.config.sound.step = v;
-            config::set(&["sound"], "step", toml_edit::value(i64::from(v)));
-        }
-        Message::SoundMax(v) => {
-            app.config.sound.max = v;
-            config::set(&["sound"], "max", toml_edit::value(i64::from(v)));
-        }
-        Message::SoundOpt(key, v) => {
-            config::set(&["sound"], key, toml_edit::Item::Value(v));
-        }
+        Message::SoundPick(k) => st.sound_pick = k,
         Message::TextScale(f) => {
-            app.panels.settings.text_scale = f;
+            st.text_scale = f;
             return Task::future(crate::hypr_settings::set_text_scale(f)).discard();
         }
-        Message::CursorSize(n) => {
-            app.config.cursor_size = Some(n);
-            config::set(&[], "cursor_size", toml_edit::value(i64::from(n)));
-            return Task::future(crate::hypr_settings::apply_cursor(n)).discard();
-        }
-        Message::NotifyRule(name, rule) => {
-            let rules = &app.config.notifications;
-            let mut muted: Vec<String> = rules
-                .muted
-                .iter()
-                .filter(|a| **a != name)
-                .cloned()
-                .collect();
-            let mut quiet: Vec<String> = rules
-                .quiet
-                .iter()
-                .filter(|a| **a != name)
-                .cloned()
-                .collect();
-            match rule {
-                1 => quiet.push(name),
-                2 => muted.push(name),
-                _ => {}
-            }
-            config::set(&["notifications"], "muted", config::list(&muted));
-            config::set(&["notifications"], "quiet", config::list(&quiet));
-        }
         Message::NetRead(primary, hot) => {
-            let st = &mut app.panels.settings;
             let (now, ip) = match primary {
                 Some((path, name, ip)) => (Some((path, name)), ip),
                 None => (None, Default::default()),
@@ -1434,9 +1780,8 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             }
             st.hotspot = hot;
         }
-        Message::IpEdit(e) => app.panels.settings.ip_edit = e,
+        Message::IpEdit(e) => st.ip_edit = e,
         Message::IpApply => {
-            let st = &mut app.panels.settings;
             let Some((path, _)) = st.ip_for.clone() else {
                 return Task::none();
             };
@@ -1450,12 +1795,11 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 crate::services::network::try_command(crate::services::network::Command::SetIp(
                     path, ip,
                 )),
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
-        Message::HotspotEdit(n, p) => app.panels.settings.hotspot_edit = (n, p),
+        Message::HotspotEdit(n, p) => st.hotspot_edit = (n, p),
         Message::HotspotOn(on) => {
-            let st = &mut app.panels.settings;
             let (name, pass) = st.hotspot_edit.clone();
             let cmd = if on {
                 if name.trim().is_empty() || pass.chars().count() < 8 {
@@ -1468,11 +1812,10 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             };
             st.error = None;
             return Task::perform(crate::services::network::try_command(cmd), |r| {
-                msg(Message::Done(r))
+                Message::Done(r)
             });
         }
         Message::ForgetNet(ssid) => {
-            let st = &mut app.panels.settings;
             if st.forget_net.as_deref() != Some(ssid.as_str()) {
                 st.forget_net = Some(ssid);
                 return Task::none();
@@ -1482,7 +1825,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 crate::services::network::try_command(crate::services::network::Command::Forget(
                     ssid,
                 )),
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
         Message::AutoJoinNet(ssid, on) => {
@@ -1490,43 +1833,39 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 crate::services::network::try_command(crate::services::network::Command::AutoJoin(
                     ssid, on,
                 )),
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
         Message::Terminals(t, ts, es) => {
-            let st = &mut app.panels.settings;
             st.terminal = Some(t);
             st.terminals = ts;
             st.editors = es;
         }
         Message::Regions(r, now) => {
-            let st = &mut app.panels.settings;
             st.regions = r;
             st.region_now = now;
         }
         Message::RegionOpen(open) => {
-            let st = &mut app.panels.settings;
             st.region_open = open;
             st.region_query.clear();
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("region-search")));
             }
         }
-        Message::RegionQuery(q) => app.panels.settings.region_query = q,
+        Message::RegionQuery(q) => st.region_query = q,
         Message::RegionSet(r) => {
-            app.panels.settings.region_open = false;
-            return Task::perform(crate::services::region::set(r), |r| msg(Message::Done(r)));
+            st.region_open = false;
+            return Task::perform(crate::services::region::set(r), Message::Done);
         }
         Message::RegionReset => {
-            app.panels.settings.region_open = false;
-            return Task::perform(crate::services::region::reset(), |r| msg(Message::Done(r)));
+            st.region_open = false;
+            return Task::perform(crate::services::region::reset(), Message::Done);
         }
         Message::Pointers(d, sp) => {
-            app.panels.settings.pointers = d;
-            app.panels.settings.device_speeds = sp;
+            st.pointers = d;
+            st.device_speeds = sp;
         }
         Message::DeviceSpeed(name, v, keep) => {
-            let st = &mut app.panels.settings;
             let d = crate::hypr_settings::DeviceSpeed {
                 name: name.clone(),
                 sensitivity: v,
@@ -1537,26 +1876,25 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             }
             return Task::future(crate::hypr_settings::set_device_speed(d, keep)).discard();
         }
-        Message::Mono(m) => app.panels.settings.mono = m,
+        Message::Mono(m) => st.mono = m,
         Message::MonoSet(on) => {
-            app.panels.settings.mono = Some(on);
+            st.mono = Some(on);
             return Task::future(crate::services::audio::set_mono(on)).discard();
         }
         Message::SpeakerTest => {
-            app.panels.settings.speaker_test = true;
+            st.speaker_test = true;
             return Task::perform(crate::services::sounds::speaker_test(), |()| {
-                msg(Message::SpeakerDone)
+                Message::SpeakerDone
             });
         }
-        Message::SpeakerDone => app.panels.settings.speaker_test = false,
+        Message::SpeakerDone => st.speaker_test = false,
         Message::MicTest => {
-            app.panels.settings.mic_test = 1;
+            st.mic_test = 1;
             return Task::perform(crate::services::sounds::mic_record(3), |r| {
-                msg(Message::MicRecorded(r))
+                Message::MicRecorded(r)
             });
         }
         Message::MicRecorded(r) => {
-            let st = &mut app.panels.settings;
             let pcm = match r {
                 Ok(p) => p,
                 Err(e) => {
@@ -1567,36 +1905,18 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             };
             st.mic_test = 2;
             return Task::perform(crate::services::sounds::mic_playback(pcm), |()| {
-                msg(Message::MicDone)
+                Message::MicDone
             });
         }
-        Message::MicDone => app.panels.settings.mic_test = 0,
+        Message::MicDone => st.mic_test = 0,
         Message::AlertPlay => {
-            let v = app.config.sound.alert_volume();
+            let v = cx.config.sound.alert_volume();
             return Task::future(async move {
                 crate::services::sounds::play_now(crate::services::sounds::MESSAGE, v).await;
             })
             .discard();
         }
-        Message::Units(u) => config::set(&[], "weather_units", toml_edit::value(u)),
-        Message::OpenFile(path) => {
-            // A file not made yet is made empty (a folder, made), so it opens.
-            if !path.exists() {
-                if path.extension().is_none() {
-                    let _ = std::fs::create_dir_all(&path);
-                } else {
-                    if let Some(d) = path.parent() {
-                        let _ = std::fs::create_dir_all(d);
-                    }
-                    let _ = std::fs::write(&path, "");
-                }
-            }
-            return Task::done(AppMessage::Dispatch(
-                crate::services::compositor::Action::Open(path.to_string_lossy().into()),
-            ));
-        }
         Message::Restart => {
-            let st = &mut app.panels.settings;
             if !st.restart_armed {
                 st.restart_armed = true;
                 return Task::none();
@@ -1611,34 +1931,17 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             .discard();
         }
         Message::Firmware(v) => {
-            app.panels.settings.firmware = Some(v);
-            app.panels.settings.firmware_checking = false;
+            st.firmware = Some(v);
+            st.firmware_checking = false;
         }
         Message::CheckFirmware => {
-            app.panels.settings.firmware_checking = true;
+            st.firmware_checking = true;
             return Task::perform(crate::services::updates::firmware(), |v| {
-                msg(Message::Firmware(v))
+                Message::Firmware(v)
             });
         }
-        Message::FirmwareUpdate(id) => {
-            // The device id is fwupd's hex: nothing else reaches the shell.
-            let id: String = id.chars().filter(char::is_ascii_hexdigit).collect();
-            let line = crate::services::defaults::in_terminal(
-                &format!("sh -c 'fwupdmgr update {id}; echo; read -p \"Press Enter to close.\" _'"),
-                Some("Firmware"),
-            );
-            return Task::done(AppMessage::Dispatch(
-                crate::services::compositor::Action::Exec(line),
-            ));
-        }
-        Message::InTerminal(cmd, title) => {
-            let line = crate::services::defaults::in_terminal(cmd, Some(title));
-            return Task::done(AppMessage::Dispatch(
-                crate::services::compositor::Action::Exec(line),
-            ));
-        }
         Message::TerminalSet(id) => {
-            app.panels.settings.terminal = Some(id.clone());
+            st.terminal = Some(id.clone());
             return Task::perform(
                 async move {
                     tokio::task::spawn_blocking(move || {
@@ -1647,32 +1950,23 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     .await
                     .unwrap_or_else(|e| Err(e.to_string()))
                 },
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
-        Message::EditorSet(e) => {
-            config::set(&[], "editor", toml_edit::value(e.clone()));
-            let line = format!("hl.env(\"EDITOR\", \"{e}\") hl.env(\"VISUAL\", \"{e}\")");
-            return Task::future(async move {
-                crate::services::hyprland::eval(line).await;
-                crate::hypr_settings::write_lua();
-            })
-            .discard();
-        }
         Message::Privacy(l, r, d) => {
-            app.panels.settings.privacy = Some((l, r, d));
-            app.panels.settings.clear_armed = None;
+            st.privacy = Some((l, r, d));
+            st.clear_armed = None;
         }
         Message::LockOnSleep(on) => {
-            if let Some(p) = &mut app.panels.settings.privacy {
+            if let Some(p) = &mut st.privacy {
                 p.0 = Some(on);
             }
             return Task::perform(crate::services::idle::set_lock_on_sleep(on), |r| {
-                msg(Message::Done(r))
+                Message::Done(r)
             });
         }
         Message::RememberRecent(on) => {
-            if let Some(p) = &mut app.panels.settings.privacy {
+            if let Some(p) = &mut st.privacy {
                 p.1 = on;
             }
             return Task::future(gsettings_privacy(
@@ -1682,7 +1976,7 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             .discard();
         }
         Message::RecentDays(d) => {
-            if let Some(p) = &mut app.panels.settings.privacy {
+            if let Some(p) = &mut st.privacy {
                 p.2 = d;
             }
             return Task::future(gsettings_privacy(
@@ -1691,160 +1985,33 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             ))
             .discard();
         }
-        Message::Clear(which) => {
-            let st = &mut app.panels.settings;
-            if st.clear_armed != Some(which) {
-                st.clear_armed = Some(which);
-                return Task::none();
-            }
-            st.clear_armed = None;
-            return Task::perform(
-                async move {
-                    if which == 0 {
-                        // GTK keeps them in one file; it starts a new one when it is gone.
-                        let f = std::env::var_os("HOME")
-                            .map(std::path::PathBuf::from)
-                            .unwrap_or_default()
-                            .join(".local/share/recently-used.xbel");
-                        match std::fs::remove_file(f) {
-                            Ok(()) => Ok(()),
-                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                            Err(e) => Err(e.to_string()),
-                        }
-                    } else {
-                        // Pinned entries stay, as with the clipboard panel's "Clear all".
-                        tokio::task::spawn_blocking(crate::services::clips::clear)
-                            .await
-                            .map_err(|_| "The clipboard history was not cleared".to_string())
-                    }
-                },
-                move |r| {
-                    let mut all = vec![];
-                    // The clipboard panel's list goes with the history (once it is gone).
-                    if which == 1 && r.is_ok() {
-                        all.push(AppMessage::Panel(PanelMessage::Clipboard(
-                            super::clipboard::Message::Loaded(Vec::new()),
-                        )));
-                    }
-                    all.push(msg(Message::Done(r)));
-                    AppMessage::Batch(all)
-                },
-            );
-        }
-        Message::Look(l) => app.panels.settings.look = Some(l),
+        Message::Look(l) => st.look = Some(l),
         Message::LookOpen(which) => {
-            let st = &mut app.panels.settings;
             st.look_open = which;
             st.look_query.clear();
             if which.is_some() {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("look-search")));
             }
         }
-        Message::LookQuery(q) => app.panels.settings.look_query = q,
-        Message::LookSet(which, name) => {
-            let st = &mut app.panels.settings;
-            st.look_open = None;
-            let key = ["font", "mono", "icons", "cursor"][usize::from(which.min(3))];
-            config::set(&["look"], key, toml_edit::value(name.clone()));
-            let look = {
-                let mut l = app.config.look.clone();
-                // The other font (and sizes) stay as they are in use now.
-                let now = app.panels.settings.look.as_ref();
-                if let Some((f, fs)) = now.and_then(|x| x.font_now.clone()) {
-                    l.font.get_or_insert(f);
-                    l.font_size.get_or_insert(fs);
-                }
-                if let Some((m, ms)) = now.and_then(|x| x.mono_now.clone()) {
-                    l.mono.get_or_insert(m);
-                    l.mono_size.get_or_insert(ms);
-                }
-                match which {
-                    0 => l.font = Some(name.clone()),
-                    1 => l.mono = Some(name.clone()),
-                    2 => l.icons = Some(name.clone()),
-                    _ => l.cursor = Some(name.clone()),
-                }
-                l
-            };
-            if let Some(lists) = &mut app.panels.settings.look {
-                match which {
-                    2 => lists.icons_now = name.clone(),
-                    3 => lists.cursor_now = name.clone(),
-                    _ => {}
-                }
-            }
-            let size = app.config.cursor_size.unwrap_or(24);
-            return Task::future(async move {
-                match which {
-                    0 | 1 => {
-                        let ((f, fs), (m, ms)) = (look.font(), look.mono());
-                        crate::look::apply_fonts(f, fs, m, ms).await;
-                    }
-                    2 => crate::look::apply_icons(name).await,
-                    _ => {
-                        crate::look::apply_cursor(name, size).await;
-                        crate::hypr_settings::write_lua();
-                    }
-                }
-            })
-            .discard();
-        }
-        Message::LookSize(which, n) => {
-            let key = if which == 0 { "font_size" } else { "mono_size" };
-            config::set(&["look"], key, toml_edit::value(i64::from(n)));
-            let mut l = app.config.look.clone();
-            // A size alone keeps the font in use (not kestrel's default in its place).
-            let now = app.panels.settings.look.as_ref();
-            if l.font.is_none()
-                && let Some((f, _)) = now.and_then(|x| x.font_now.clone())
-            {
-                l.font = Some(f);
-            }
-            if l.mono.is_none()
-                && let Some((m, _)) = now.and_then(|x| x.mono_now.clone())
-            {
-                l.mono = Some(m);
-            }
-            if which == 0 {
-                l.font_size = Some(n);
-            } else {
-                l.mono_size = Some(n);
-            }
-            return Task::future(async move {
-                let ((f, fs), (m, ms)) = (l.font(), l.mono());
-                crate::look::apply_fonts(f, fs, m, ms).await;
-            })
-            .discard();
-        }
-        Message::Accent(a) => config::set(
-            &[],
-            "accent",
-            match a {
-                Some(hex) => toml_edit::value(hex),
-                None => toml_edit::Item::None,
-            },
-        ),
-        Message::Lid(l) => app.panels.settings.lid = l,
-        Message::LowBattery(l) => app.panels.settings.low = l,
+        Message::LookQuery(q) => st.look_query = q,
+        Message::Lid(l) => st.lid = l,
+        Message::LowBattery(l) => st.low = l,
         Message::LowSet(warn, action) => {
-            if let Some(l) = &mut app.panels.settings.low {
+            if let Some(l) = &mut st.low {
                 l.warn_at = warn;
                 l.action = action.clone();
             }
             return Task::perform(
                 async move { crate::services::power::set_low_battery(warn, &action).await },
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
         Message::LidSet(l) => {
             // Shown at once; logind is changed once the password is given (or it reads back).
-            app.panels.settings.lid = Some(l);
-            return Task::perform(crate::services::power::set_lid(l), |r| {
-                msg(Message::Done(r))
-            });
+            st.lid = Some(l);
+            return Task::perform(crate::services::power::set_lid(l), Message::Done);
         }
         Message::Rules(r, a) => {
-            let st = &mut app.panels.settings;
             // A rule opened before the saved ones were read (from the overview): its saved
             // form, if it has one.
             if let Some(e) = &st.rule_edit
@@ -1856,7 +2023,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             st.rule_apps = a;
         }
         Message::RulePick(q) => {
-            let st = &mut app.panels.settings;
             let start = st.rule_pick.is_none() && q.is_some();
             st.rule_pick = q;
             st.rule_edit = None;
@@ -1865,7 +2031,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             }
         }
         Message::RuleOpen(class) => {
-            let st = &mut app.panels.settings;
             st.rule_pick = None;
             st.rule_edit = class.map(|c| {
                 st.rules.iter().find(|r| r.class == c).cloned().unwrap_or(
@@ -1877,7 +2042,6 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             });
         }
         Message::RuleSet(r) => {
-            let st = &mut app.panels.settings;
             match st.rules.iter_mut().find(|x| x.class == r.class) {
                 Some(x) => *x = r.clone(),
                 None => st.rules.push(r.clone()),
@@ -1886,22 +2050,21 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
             return Task::future(crate::hypr_settings::set_window_rule(r)).discard();
         }
         Message::RuleRemove(class) => {
-            let st = &mut app.panels.settings;
             st.rules.retain(|r| r.class != class);
             st.rule_edit = None;
             return Task::future(crate::hypr_settings::remove_window_rule(class)).discard();
         }
         Message::BtRename(target, now) => {
-            app.panels.settings.bt_rename = Some((target, now));
+            st.bt_rename = Some((target, now));
             return Task::Iced(iced::widget::focus(iced::widget::Id::new("bt-rename")));
         }
         Message::BtRenameText(t) => {
-            if let Some((_, text)) = &mut app.panels.settings.bt_rename {
+            if let Some((_, text)) = &mut st.bt_rename {
                 *text = t;
             }
         }
         Message::BtRenameDone => {
-            let Some((target, name)) = app.panels.settings.bt_rename.take() else {
+            let Some((target, name)) = st.bt_rename.take() else {
                 return Task::none();
             };
             let name = name.trim().to_string();
@@ -1914,55 +2077,23 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 Some(path) => B::RenameDevice(path, name),
             };
             return Task::perform(crate::services::bluetooth::command(cmd), |r| {
-                msg(Message::Done(r))
+                Message::Done(r)
             });
         }
-        Message::JoinNet(n) => {
-            // The control centre's join (it asks for a password when one is needed).
-            let joined = super::update(
-                app,
-                super::Message::Control(super::control::Message::Join(n)),
-            );
-            return Task::batch([
-                joined,
-                Task::Iced(iced::widget::focus(iced::widget::Id::new("net-password"))),
-            ]);
-        }
         Message::HiddenOpen(open) => {
-            app.panels.settings.hidden_open = open;
+            st.hidden_open = open;
             if open {
                 return Task::Iced(iced::widget::focus(iced::widget::Id::new("hidden-name")));
             }
         }
-        Message::NotifyOpt(key, v) => {
-            config::set(&["notifications"], key, toml_edit::Item::Value(v));
-        }
-        Message::NotifySilent(name, sound) => {
-            let mut silent: Vec<String> = app
-                .config
-                .notifications
-                .silent
-                .iter()
-                .filter(|a| **a != name)
-                .cloned()
-                .collect();
-            if !sound {
-                silent.push(name);
-            }
-            config::set(&["notifications"], "silent", config::list(&silent));
-        }
         Message::Idle(step, secs) => {
-            let st = &mut app.panels.settings;
             st.idle_open = None;
             if let Some(e) = st.idle.iter_mut().find(|(s, _)| *s == step) {
                 e.1 = Some(secs);
             }
-            return Task::perform(crate::services::idle::set(step, secs), |r| {
-                msg(Message::Done(r))
-            });
+            return Task::perform(crate::services::idle::set(step, secs), Message::Done);
         }
         Message::DefaultSet(k, id) => {
-            let st = &mut app.panels.settings;
             st.default_open = None;
             if let Some(slot) = st.defaults.get_mut(k) {
                 *slot = Some(id.clone());
@@ -1975,19 +2106,19 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                     .await
                     .unwrap_or_else(|e| Err(e.to_string()))
                 },
-                |r| msg(Message::Done(r)),
+                Message::Done,
             );
         }
-        Message::LayoutAdd(code) => return change_layouts(app, code, true),
-        Message::LayoutRemove(code) => return change_layouts(app, code, false),
+        Message::LayoutAdd(code) => return change_layouts(st, code, true),
+        Message::LayoutRemove(code) => return change_layouts(st, code, false),
         Message::Done(r) => {
-            app.panels.settings.error = r.err();
-            return load(app.panels.settings.page);
+            st.error = r.err();
+            return load(st.page);
         }
         Message::Query(q) => {
             // The first letter typed reads the quick system pages, so their settings are found.
-            let first = app.panels.settings.query.is_empty() && !q.is_empty();
-            app.panels.settings.query = q;
+            let first = st.query.is_empty() && !q.is_empty();
+            st.query = q;
             if first {
                 return Task::batch([
                     load(Page::Keyboard),
@@ -1998,107 +2129,68 @@ pub fn update(app: &mut App, m: Message) -> Task<AppMessage> {
                 ]);
             }
         }
-        Message::Style(s) => config::set(
-            &["bar"],
-            "style",
-            toml_edit::value(match s {
-                BarStyle::Full => "full",
-                BarStyle::Pills => "pills",
-            }),
-        ),
-        Message::Workspaces(n) => config::set(&[], "workspaces", toml_edit::value(n.clamp(1, 10))),
-        Message::ThemeApps(on) => config::set(&[], "theme_apps", toml_edit::value(on)),
-        Message::Material(m) => config::set(
-            &[],
-            "material",
-            toml_edit::value(match m {
-                crate::config::Material::Black => "black",
-                crate::config::Material::Frosted => "frosted",
-            }),
-        ),
-        Message::City(c) => app.panels.settings.city = c,
-        Message::SubmitCity => {
-            let c = app.panels.settings.city.trim().to_string();
-            config::set(&[], "weather_city", toml_edit::value(c));
-        }
-        Message::Opt(m, o, v) => {
-            if let Some(opt) = crate::modules::MODULES
-                .get(m)
-                .and_then(|m| m.options.get(o))
-            {
-                let item = match v {
-                    OptValue::Bool(b) => toml_edit::value(b),
-                    OptValue::Str(t) => toml_edit::value(t),
-                };
-                config::set(opt.table, opt.key, item);
-                app.panels.settings.doc = read_doc();
+        Message::City(c) => st.city = c,
+        // Asked of the shell: see `update`.
+        Message::WeekStart(..)
+        | Message::Profile(..)
+        | Message::Quiet(..)
+        | Message::SoundStep(..)
+        | Message::SoundMax(..)
+        | Message::SoundOpt(..)
+        | Message::CursorSize(..)
+        | Message::NotifyRule(..)
+        | Message::PickPicture
+        | Message::OpenFile(..)
+        | Message::FirmwareUpdate(..)
+        | Message::InTerminal(..)
+        | Message::EditorSet(..)
+        | Message::Clear(..)
+        | Message::LookSet(..)
+        | Message::LookSize(..)
+        | Message::Accent(..)
+        | Message::JoinNet(..)
+        | Message::NotifyOpt(..)
+        | Message::NotifySilent(..)
+        | Message::Units(..)
+        | Message::Style(..)
+        | Message::Workspaces(..)
+        | Message::ThemeApps(..)
+        | Message::Material(..)
+        | Message::SubmitCity
+        | Message::Opt(..)
+        | Message::Plugin(..)
+        | Message::BarMove(..)
+        | Message::BarSection(..)
+        | Message::BarRemove(..)
+        | Message::BarAdd(..)
+        | Message::BarReset
+        | Message::VolumeOpen(..)
+        | Message::Mounted(..)
+        | Message::SubmitPassword
+        | Message::JoinHidden
+        | Message::Forget(..)
+        | Message::WarmthDone
+        | Message::Copy(..)
+        | Message::Change(..)
+        | Message::Batch(..)
+        | Message::Close
+        | Message::OpenWallpaper => {}
+        Message::Password(p) => {
+            if let Some(pw) = &mut st.password {
+                pw.2 = p;
             }
         }
-        Message::Plugin(id, on) => {
-            config::set(&["plugins", &id], "enabled", toml_edit::value(on));
-            app.panels.settings.plugins = crate::lua::installed();
+        Message::HiddenName(t) => st.hidden.0 = t,
+        Message::HiddenPassword(t) => st.hidden.1 = t,
+        // Warmth follows the slider at once (night light's own tool); kept when let go.
+        Message::Warmth(v) => {
+            use crate::panels::control::{COOLEST, WARMEST};
+            let k = (WARMEST + v.clamp(0.0, 1.0) * (COOLEST - WARMEST)).round() as u32 / 100 * 100;
+            st.kelvin = Some(k);
+            return Task::future(crate::services::toggles::set_temperature(k)).discard();
         }
-        Message::BarMove(id, d) => {
-            let mut l = layout(app);
-            if let Some((sec, at)) = find_in(&l, &id) {
-                let to = at as i32 + d;
-                if to >= 0 && (to as usize) < l[sec].len() {
-                    l[sec].swap(at, to as usize);
-                    save_layout(&l);
-                }
-            }
-        }
-        Message::BarSection(id, d) => {
-            let mut l = layout(app);
-            if let Some((sec, at)) = find_in(&l, &id) {
-                let to = sec as i32 + d;
-                if (0..3).contains(&to) {
-                    let m = l[sec].remove(at);
-                    // Into the near end of the next section (right: its start; left: its end).
-                    if d > 0 {
-                        l[to as usize].insert(0, m);
-                    } else {
-                        l[to as usize].push(m);
-                    }
-                    save_layout(&l);
-                }
-            }
-        }
-        Message::BarRemove(id) => {
-            let mut l = layout(app);
-            for list in &mut l {
-                list.retain(|m| *m != id);
-            }
-            save_layout(&l);
-        }
-        Message::BarAdd(id) => {
-            let mut l = layout(app);
-            let sec = match crate::modules::info(&id).map(|m| m.home) {
-                Some(crate::modules::Home::Left) => 0,
-                Some(crate::modules::Home::Center) => 1,
-                _ => 2,
-            };
-            if find_in(&l, &id).is_none() {
-                // The right section's end is the power button's place: added before it.
-                let at = if sec == 2 {
-                    l[2].iter().position(|m| m == "power").unwrap_or(l[2].len())
-                } else {
-                    l[sec].len()
-                };
-                l[sec].insert(at, id);
-                save_layout(&l);
-            }
-        }
-        Message::BarReset => {
-            let st = &mut app.panels.settings;
-            if !st.bar_reset_armed {
-                st.bar_reset_armed = true;
-                return Task::none();
-            }
-            st.bar_reset_armed = false;
-            let d = crate::config::BarConfig::default();
-            save_layout(&[d.left, d.center, d.right]);
-        }
+        Message::ReadDoc => st.doc = read_doc(),
+        Message::ReadPlugins => st.plugins = crate::lua::installed(),
     }
     Task::none()
 }
@@ -2121,8 +2213,8 @@ fn row_of<'a>(
     s: Scheme,
     name: &'a str,
     note: Option<&'a str>,
-    control_: Element<'a, AppMessage>,
-) -> Option<Element<'a, AppMessage>> {
+    control_: Element<'a, Message>,
+) -> Option<Element<'a, Message>> {
     // While searching, only the settings whose name matches.
     if !QUERY.with(|q| {
         let q = q.borrow();
@@ -2151,9 +2243,9 @@ fn row_of<'a>(
 fn group<'a>(
     s: Scheme,
     title: Option<&'a str>,
-    rows: Vec<Option<Element<'a, AppMessage>>>,
-) -> Option<Element<'a, AppMessage>> {
-    let rows: Vec<Element<'a, AppMessage>> = rows.into_iter().flatten().collect();
+    rows: Vec<Option<Element<'a, Message>>>,
+) -> Option<Element<'a, Message>> {
+    let rows: Vec<Element<'a, Message>> = rows.into_iter().flatten().collect();
     if rows.is_empty() {
         return None;
     }
@@ -2192,7 +2284,7 @@ fn group<'a>(
 }
 
 /// Two or more choices, one of them chosen.
-fn segments<'a>(s: Scheme, options: &[(&'a str, bool, AppMessage)]) -> Element<'a, AppMessage> {
+fn segments<'a>(s: Scheme, options: &[(&'a str, bool, Message)]) -> Element<'a, Message> {
     let mut r = row![].spacing(tok::XXS);
     for (name, on, m) in options {
         r = r.push(
@@ -2230,9 +2322,9 @@ pub fn on_sound(st: &State) -> bool {
 }
 
 /// Settings as its own window: the same view on the shell's solid surface colour.
-pub fn window(app: &App) -> Element<'_, AppMessage> {
-    let s = app.scheme.faded(1.0);
-    let body = container(view(app, s))
+pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme.faded(1.0);
+    let body = container(view(st, &cx.with_scheme(s)))
         .width(Length::Fill)
         .height(Length::Fill);
     // The shell's look: Black is solid; Frosted is the panels' own glass (the compositor's
@@ -2253,19 +2345,20 @@ pub fn window(app: &App) -> Element<'_, AppMessage> {
     }
 }
 
-pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
-    let page = app.panels.settings.page;
+pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let page = st.page;
     let shell_pages: Vec<Page> = SHELL
         .into_iter()
-        .filter(|p| *p != Page::Plugins || !app.panels.settings.plugins.is_empty())
+        .filter(|p| *p != Page::Plugins || !st.plugins.is_empty())
         .collect();
     // Sidebar: the pages, the open one on a soft neutral fill.
     let search = container(
         row![
             icon(Icon::Search, tok::ICON, s.ink_dim),
-            text_input("Search", &app.panels.settings.query)
+            text_input("Search", &st.query)
                 .id(SEARCH_ID.clone())
-                .on_input(|q| msg(Message::Query(q)))
+                .on_input(Message::Query)
                 .padding([tok::S, tok::XS])
                 .size(text::BODY)
                 .font(theme::FONT)
@@ -2341,7 +2434,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                 },
             )
             .no_press_scale()
-            .on_press(msg(Message::Page(p))),
+            .on_press(Message::Page(p)),
         );
     }
     let side = container(
@@ -2356,36 +2449,36 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     .padding([tok::L, tok::L]);
 
     // Searching: every page's matching settings at once.
-    let q = app.panels.settings.query.trim().to_lowercase();
+    let q = st.query.trim().to_lowercase();
     QUERY.with(|cell| *cell.borrow_mut() = q.clone());
     let body = if q.is_empty() {
         column![label_w(page.name(), text::HEADING, s.ink, theme::SEMIBOLD)]
             .spacing(tok::XL)
             .extend(match page {
-                Page::Bar => bar_page(app, s),
-                Page::Appearance => appearance_page(app, s),
-                Page::Time => time_page(app, s),
-                Page::Plugins => plugins_page(app, s),
-                Page::Keyboard => keyboard_page(app, s),
-                Page::Mouse => mouse_page(app, s),
-                Page::Defaults => defaults_page(app, s),
-                Page::Power => power_page(app, s),
-                Page::Access => access_page(app, s),
-                Page::Shortcuts => shortcuts_page(app, s),
-                Page::Displays => displays_page(app, s),
-                Page::Windows => windows_page(app, s),
-                Page::Notifications => notifications_page(app, s),
-                Page::Privacy => privacy_page(app, s),
-                Page::Startup => startup_page(app, s),
-                Page::Updates => updates_page(app, s),
-                Page::Storage => storage_page(app, s),
-                Page::Network => network_page(app, s),
-                Page::Bluetooth => bluetooth_page(app, s),
-                Page::Account => account_page(app, s),
-                Page::Sound => sound_page(app, s),
-                Page::DateTime => datetime_page(app, s),
-                Page::Developer => developer_page(app, s),
-                Page::About => about_page(app, s),
+                Page::Bar => bar_page(st, cx),
+                Page::Appearance => appearance_page(st, cx),
+                Page::Time => time_page(st, cx),
+                Page::Plugins => plugins_page(st, cx),
+                Page::Keyboard => keyboard_page(st, cx),
+                Page::Mouse => mouse_page(st, cx),
+                Page::Defaults => defaults_page(st, cx),
+                Page::Power => power_page(st, cx),
+                Page::Access => access_page(st, cx),
+                Page::Shortcuts => shortcuts_page(st, cx),
+                Page::Displays => displays_page(st, cx),
+                Page::Windows => windows_page(st, cx),
+                Page::Notifications => notifications_page(st, cx),
+                Page::Privacy => privacy_page(st, cx),
+                Page::Startup => startup_page(st, cx),
+                Page::Updates => updates_page(st, cx),
+                Page::Storage => storage_page(st, cx),
+                Page::Network => network_page(st, cx),
+                Page::Bluetooth => bluetooth_page(st, cx),
+                Page::Account => account_page(st, cx),
+                Page::Sound => sound_page(st, cx),
+                Page::DateTime => datetime_page(st, cx),
+                Page::Developer => developer_page(st, cx),
+                Page::About => about_page(st, cx),
             })
     } else {
         // Pages first: by name or by what they hold ("wifi" → Network, "blue" → Bluetooth), the
@@ -2415,7 +2508,7 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
                     .radius(tok::R_ROW)
                     .kind(s, crate::ui::control::Kind::Tonal)
                     .no_press_scale()
-                    .on_press(msg(Message::Page(p))),
+                    .on_press(Message::Page(p)),
                 );
             }
             Element::from(c)
@@ -2423,18 +2516,18 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
         column![label_w("Search", text::HEADING, s.ink, theme::SEMIBOLD)]
             .spacing(tok::XL)
             .extend(page_rows)
-            .extend(bar_page(app, s))
-            .extend(appearance_page(app, s))
-            .extend(time_page(app, s))
-            .extend(plugins_page(app, s))
+            .extend(bar_page(st, cx))
+            .extend(appearance_page(st, cx))
+            .extend(time_page(st, cx))
+            .extend(plugins_page(st, cx))
             // The system pages that have been read (searching reads the quick ones).
-            .extend(power_page(app, s))
-            .extend(access_page(app, s))
-            .extend(keyboard_page(app, s))
-            .extend(mouse_page(app, s))
-            .extend(windows_page(app, s))
-            .extend(datetime_page(app, s))
-            .extend(notifications_page(app, s))
+            .extend(power_page(st, cx))
+            .extend(access_page(st, cx))
+            .extend(keyboard_page(st, cx))
+            .extend(mouse_page(st, cx))
+            .extend(windows_page(st, cx))
+            .extend(datetime_page(st, cx))
+            .extend(notifications_page(st, cx))
     };
     QUERY.with(|cell| cell.borrow_mut().clear());
     // A comfortable reading width however wide the window (rows and sliders stretched over a
@@ -2468,12 +2561,12 @@ pub fn view(app: &App, s: Scheme) -> Element<'_, AppMessage> {
     row![side, divider, body].height(Length::Fill).into()
 }
 
-fn stepper<'a>(s: Scheme, n: i64) -> Element<'a, AppMessage> {
+fn stepper<'a>(s: Scheme, n: i64) -> Element<'a, Message> {
     let arrow = |i: Icon, m: Message| {
         control(container(icon(i, tok::ICON, s.ink)).center(28))
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(msg(m))
+            .on_press(m)
     };
     row![
         arrow(Icon::ChevronLeft, Message::Workspaces(n - 1)),
@@ -2485,7 +2578,7 @@ fn stepper<'a>(s: Scheme, n: i64) -> Element<'a, AppMessage> {
 }
 
 /// A setting that only shows a value (About): its name and the value, right-aligned.
-fn value_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, AppMessage>> {
+fn value_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, Message>> {
     row_of(s, name, None, label(value, text::BODY, s.ink_dim).into())
 }
 
@@ -2526,10 +2619,10 @@ fn field<'a>(
     id: &'static str,
     placeholder: &'a str,
     value: &str,
-    on_input: impl Fn(String) -> AppMessage + 'a,
-    on_submit: Option<AppMessage>,
+    on_input: impl Fn(String) -> Message + 'a,
+    on_submit: Option<Message>,
     secure: bool,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     let mut t = text_input(placeholder, value)
         .id(iced::widget::Id::new(id))
         .on_input(on_input)
@@ -2546,7 +2639,7 @@ fn field<'a>(
 }
 
 /// A value that copies itself when clicked (addresses, passwords).
-fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, AppMessage>> {
+fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, Message>> {
     row_of(
         s,
         name,
@@ -2556,7 +2649,7 @@ fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, A
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
-            .on_press(snd(super::control::Message::CopyIp(value)))
+            .on_press(Message::Copy(value))
             .into(),
     )
 }
@@ -2565,7 +2658,7 @@ fn copy_row<'a>(s: Scheme, name: &'a str, value: String) -> Option<Element<'a, A
 fn detail_rows<'a>(
     s: Scheme,
     d: &crate::services::network::Details,
-) -> Vec<Option<Element<'a, AppMessage>>> {
+) -> Vec<Option<Element<'a, Message>>> {
     let mut rows = Vec::new();
     if let Some(ip) = &d.ipv4 {
         rows.push(copy_row(s, "IP address", ip.clone()));
@@ -2588,11 +2681,11 @@ fn pick_search<'a>(
     id: &'static str,
     value: &'a str,
     on: fn(String) -> Message,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     container(
         text_input("Search", value)
             .id(iced::widget::Id::new(id))
-            .on_input(move |q| msg(on(q)))
+            .on_input(on)
             .padding([tok::S, tok::L])
             .size(text::BODY)
             .font(theme::FONT)
@@ -2603,7 +2696,7 @@ fn pick_search<'a>(
 }
 
 /// One entry of a pick list.
-fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, AppMessage> {
+fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Message> {
     control(label(name, text::BODY, if on { s.accent } else { s.ink }))
         .padding([tok::NONE, tok::L])
         .height(34)
@@ -2611,32 +2704,33 @@ fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Ap
         .radius(tok::R_ROW)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
-        .on_press(msg(m))
+        .on_press(m)
         .into()
 }
 
 /// A row for one Hyprland input option: a switch, a choice, or a slider with its value.
 fn hypr_row<'a>(
-    app: &'a App,
-    s: Scheme,
+    st: &'a State,
+    cx: &Cx<'a>,
     o: crate::hypr_settings::Opt,
-) -> Option<Element<'a, AppMessage>> {
+) -> Option<Element<'a, Message>> {
+    let s = cx.scheme;
     use crate::hypr_settings::{Kind, Value};
-    let v = app.panels.settings.hypr.get(o.option)?;
-    let control_: Element<'_, AppMessage> = match o.kind {
+    let v = st.hypr.get(o.option)?;
+    let control_: Element<'_, Message> = match o.kind {
         Kind::Switch => {
             let on = v.as_bool();
-            ui::switch(s, on, msg(Message::HyprSet(o, Value::Bool(!on), true)))
+            ui::switch(s, on, Message::HyprSet(o, Value::Bool(!on), true))
         }
         Kind::Choice(choices) => {
             let now = v.as_str();
-            let opts: Vec<(&str, bool, AppMessage)> = choices
+            let opts: Vec<(&str, bool, Message)> = choices
                 .iter()
                 .map(|(val, name)| {
                     (
                         *name,
                         *val == now,
-                        msg(Message::HyprSet(o, Value::Str((*val).to_string()), true)),
+                        Message::HyprSet(o, Value::Str((*val).to_string()), true),
                     )
                 })
                 .collect();
@@ -2644,13 +2738,13 @@ fn hypr_row<'a>(
         }
         Kind::Numbers(choices) => {
             let now = v.as_num().round() as i64;
-            let opts: Vec<(&str, bool, AppMessage)> = choices
+            let opts: Vec<(&str, bool, Message)> = choices
                 .iter()
                 .map(|(val, name)| {
                     (
                         *name,
                         *val == now,
-                        msg(Message::HyprSet(o, Value::Num(*val as f32), true)),
+                        Message::HyprSet(o, Value::Num(*val as f32), true),
                     )
                 })
                 .collect();
@@ -2678,10 +2772,10 @@ fn hypr_row<'a>(
                 move |t| {
                     let raw = min + t * (max - min);
                     let v = ((raw / step).round() * step).clamp(min, max);
-                    msg(Message::HyprSet(o, Value::Num(v), false))
+                    Message::HyprSet(o, Value::Num(v), false)
                 },
             )
-            .on_release(msg(Message::HyprKeep(o)));
+            .on_release(Message::HyprKeep(o));
             row![
                 container(bar).width(200),
                 container(label(shown, text::SMALL, s.ink_dim))
@@ -2799,12 +2893,7 @@ pub fn combo(key: &iced::keyboard::Key, m: iced::keyboard::Modifiers) -> Option<
     Some(parts.join(" + "))
 }
 
-/// A control-centre sound action (one implementation of what each does).
 /// A change to the system, asked of the shell.
-fn set(c: crate::app::Change) -> AppMessage {
-    AppMessage::Change(c)
-}
-
-fn snd(m: super::control::Message) -> AppMessage {
-    AppMessage::Panel(PanelMessage::Control(m))
+fn chg(c: crate::app::Change) -> Message {
+    Message::Change(c)
 }

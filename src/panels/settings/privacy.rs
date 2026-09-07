@@ -8,15 +8,15 @@ pub(super) async fn gsettings_privacy(key: &'static str, value: crate::services:
     }
 }
 
-pub(super) fn privacy_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
+pub(super) fn privacy_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     let Some((lock, remember, days)) = st.privacy else {
         return Vec::new();
     };
     let mut out = Vec::new();
     // Camera and microphone: what uses them now and what did in the last 10 minutes.
     {
-        let mut rows: Vec<Option<Element<'_, AppMessage>>> = Vec::new();
+        let mut rows: Vec<Option<Element<'_, Message>>> = Vec::new();
         let now = |device: &'static str, apps: &[String]| {
             if apps.is_empty() {
                 None
@@ -24,9 +24,9 @@ pub(super) fn privacy_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 value_row(s, device, format!("{} (now)", apps.join(", ")))
             }
         };
-        rows.push(now("Camera", &app.camera_apps));
-        rows.push(now("Microphone", &app.audio.recording));
-        for (d, n, t) in &app.privacy_recent {
+        rows.push(now("Camera", cx.camera_apps));
+        rows.push(now("Microphone", &cx.audio.recording));
+        for (d, n, t) in cx.privacy_recent {
             let what = if *d == crate::ui::Icon::Video {
                 "Camera"
             } else {
@@ -55,7 +55,7 @@ pub(super) fn privacy_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 s,
                 "Lock when the laptop sleeps",
                 None,
-                ui::switch(s, on, msg(Message::LockOnSleep(!on))),
+                ui::switch(s, on, Message::LockOnSleep(!on)),
             )],
         ));
     }
@@ -67,24 +67,24 @@ pub(super) fn privacy_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             if armed { s.bad } else { s.ink },
         ))
         .pill(s, crate::ui::control::Pill::Plain)
-        .on_press(msg(Message::Clear(which)))
+        .on_press(Message::Clear(which))
         .into()
     };
     let mut recent = vec![row_of(
         s,
         "Remember files used",
         None,
-        ui::switch(s, remember, msg(Message::RememberRecent(!remember))),
+        ui::switch(s, remember, Message::RememberRecent(!remember)),
     )];
     if remember {
-        let opts: Vec<(&str, bool, AppMessage)> = [
+        let opts: Vec<(&str, bool, Message)> = [
             ("7 days", 7),
             ("30 days", 30),
             ("A year", 365),
             ("Always", -1),
         ]
         .into_iter()
-        .map(|(n, d)| (n, days == d, msg(Message::RecentDays(d))))
+        .map(|(n, d)| (n, days == d, Message::RecentDays(d)))
         .collect();
         recent.push(row_of(s, "Keep them for", None, segments(s, &opts)));
     }

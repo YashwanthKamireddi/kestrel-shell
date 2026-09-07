@@ -53,6 +53,9 @@ pub enum Change {
     DdcBrightness(f32),
     /// Dimming of a screen without a settable backlight, 0 to 1.
     Dim(f32),
+    /// Change settings in config.toml: written, then applied at once (the file watcher's
+    /// reload afterwards finds nothing new), the same way a hand edit is applied.
+    Settings(Vec<config::Edit>),
     /// Join a network (its name, and how), shown in progress until it is so or fails.
     Join(String, network::Command),
     Disconnect,
@@ -129,21 +132,16 @@ impl App {
                 let k = self.config.night_light_temperature;
                 Task::future(toggles::set_night_light(on, k)).discard()
             }
-            Change::NightSchedule(on) => {
-                self.config.night_light_schedule = on;
-                config::set(&[], "night_light_schedule", toml_edit::value(on));
-                self.night_auto = None;
-                self.night_schedule()
-            }
-            Change::NightTemperature(k) => {
-                self.config.night_light_temperature = k;
-                config::set(
-                    &[],
-                    "night_light_temperature",
-                    toml_edit::value(i64::from(k)),
-                );
-                Task::none()
-            }
+            Change::NightSchedule(on) => self.change(Change::Settings(vec![config::Edit::new(
+                &[],
+                "night_light_schedule",
+                toml_edit::value(on),
+            )])),
+            Change::NightTemperature(k) => self.change(Change::Settings(vec![config::Edit::new(
+                &[],
+                "night_light_temperature",
+                toml_edit::value(i64::from(k)),
+            )])),
             Change::Caffeine => {
                 let on = !self.caffeine;
                 self.caffeine = on;
@@ -306,6 +304,19 @@ impl App {
                 self.dim = v.max(toggles::MIN_GAMMA as f32 / 100.0);
                 Task::future(toggles::set_dim(v)).discard()
             }
+            Change::Settings(edits) => {
+                for e in edits {
+                    e.write();
+                }
+                match config::read() {
+                    Ok(c) => {
+                        self.config_error = None;
+                        apply_config(self, c)
+                    }
+                    // A hand-made mistake elsewhere in the file: the watcher says where.
+                    Err(_) => Task::none(),
+                }
+            }
             Change::Join(ssid, cmd) => {
                 self.connecting = Some(panels::cx::Connecting::new(ssid.clone(), true));
                 self.net_error = None;
@@ -358,14 +369,6 @@ impl App {
         }
     }
 
-    /// Whether `key` (a network's name or a device's path) is being connected (Some(true)) or
-    /// disconnected (Some(false)).
-    pub fn in_progress(&self, key: &str) -> Option<bool> {
-        self.connecting
-            .as_ref()?
-            .in_progress(key, &self.bt, &self.net)
-    }
-
     /// A join ended: no more "Connecting…", and why it failed (shown under its name).
     pub(crate) fn net_done(&mut self, ssid: String, r: Result<(), String>) -> Task<Message> {
         if self.connecting.as_ref().is_some_and(|c| c.is(&ssid)) {
@@ -398,6 +401,25 @@ impl App {
             }
         }
         Task::none()
+    }
+}
+
+impl Change {
+    /// Joining `n`: at once when it is saved or open; None when it needs a password first.
+    pub fn join(n: &network::Network) -> Option<Change> {
+        if n.active || !(n.known || !n.secure) {
+            return None;
+        }
+        let cmd = if n.known {
+            network::Command::Connect(n.ssid.clone())
+        } else {
+            network::Command::ConnectNew {
+                ssid: n.ssid.clone(),
+                ap: n.ap.clone(),
+                password: None,
+            }
+        };
+        Some(Change::Join(n.ssid.clone(), cmd))
     }
 }
 

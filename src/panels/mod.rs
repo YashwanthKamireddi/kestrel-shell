@@ -157,6 +157,32 @@ pub struct State {
     pub notifications: notifications::State,
 }
 
+impl State {
+    /// The Wi-Fi networks or nearby devices changed: every list of them keeps its rows in
+    /// place (the control centre's and Settings').
+    pub fn lists_changed(
+        &mut self,
+        net: &crate::services::network::State,
+        bt: &crate::services::bluetooth::State,
+    ) {
+        self.control.lists_changed(net, bt);
+        self.settings.lists_changed(net, bt);
+    }
+}
+
+/// Settings opened: it reads its pages.
+pub fn open_settings(app: &mut App) -> Task<AppMessage> {
+    let (p, cx) = cx::split(app);
+    let a = settings::open(&mut p.settings, &cx);
+    action::perform(app, a, |m| AppMessage::Panel(Message::Settings(m)))
+}
+
+/// Settings' own window.
+pub fn settings_window(app: &App) -> Element<'_, AppMessage> {
+    let (p, cx) = cx::of(app);
+    settings::window(&p.settings, &cx).map(|m| AppMessage::Panel(Message::Settings(m)))
+}
+
 #[derive(Clone, Debug)]
 pub enum Message {
     Calendar(calendar::Message),
@@ -259,7 +285,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             let a = emoji::open(&mut app.panels.emoji);
             return action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)));
         }
-        PanelKind::Settings => return settings::open(app),
+        PanelKind::Settings => return open_settings(app),
         PanelKind::Tray
         | PanelKind::Notifications
         | PanelKind::Privacy
@@ -338,7 +364,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             let a = emoji::update(&mut app.panels.emoji, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)))
         }
-        Message::Settings(m) => settings::update(app, m),
+        Message::Settings(m) => {
+            let (p, cx) = cx::split(app);
+            let a = settings::update(&mut p.settings, m, &cx);
+            action::perform(app, a, |m| AppMessage::Panel(Message::Settings(m)))
+        }
         Message::Files(m) => {
             let a = files::update(&mut app.panels.files, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Files(m)))
@@ -588,7 +618,9 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Emoji => {
             emoji::view(&p.emoji, &cx).map(|m| AppMessage::Panel(Message::Emoji(m)))
         }
-        PanelKind::Settings => settings::view(app, s),
+        PanelKind::Settings => {
+            settings::view(&p.settings, &cx).map(|m| AppMessage::Panel(Message::Settings(m)))
+        }
         PanelKind::Weather => weather::view(&cx).map(AppMessage::Panel),
         PanelKind::Pods => pods::view(&cx).map(|m| AppMessage::Panel(Message::Pods(m))),
         PanelKind::Files => {

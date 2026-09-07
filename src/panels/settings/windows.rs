@@ -5,28 +5,29 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn windows_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
+pub(super) fn windows_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     use crate::hypr_settings::{WINDOW_BEHAVIOUR, WINDOW_LOOK};
     let mut out = Vec::new();
     out.extend(group(
         s,
         Some("Look"),
-        WINDOW_LOOK.iter().map(|o| hypr_row(app, s, *o)).collect(),
+        WINDOW_LOOK.iter().map(|o| hypr_row(st, cx, *o)).collect(),
     ));
     out.extend(group(
         s,
         Some("Behaviour"),
         WINDOW_BEHAVIOUR
             .iter()
-            .map(|o| hypr_row(app, s, *o))
+            .map(|o| hypr_row(st, cx, *o))
             .collect(),
     ));
-    out.extend(group(s, Some("App rules"), rule_rows(app, s)));
+    out.extend(group(s, Some("App rules"), rule_rows(st, cx)));
     out
 }
 
 /// An app by its window class: its icon and its name.
-pub(super) fn class_chip<'a>(s: Scheme, class: &str) -> (Element<'a, AppMessage>, String) {
+pub(super) fn class_chip<'a>(s: Scheme, class: &str) -> (Element<'a, Message>, String) {
     use crate::services::apps;
     let icon_el = ui::app_icon(s, class, 20.0, Icon::AppWindow);
     (icon_el, apps::name_for_class(class))
@@ -34,8 +35,8 @@ pub(super) fn class_chip<'a>(s: Scheme, class: &str) -> (Element<'a, AppMessage>
 
 /// App rules: each app's rule (a click opens it), the open one's choices, and adding one by
 /// choosing an app (open windows first, any installed app by search).
-pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessage>>> {
-    let st = &app.panels.settings;
+pub(super) fn rule_rows<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Option<Element<'a, Message>>> {
+    let s = cx.scheme;
     let mut rows = Vec::new();
     for r in &st.rules {
         let (ic, name) = class_chip(s, &r.class);
@@ -71,11 +72,11 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
             .width(Length::Fill)
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
-            .on_press(msg(Message::RuleOpen((!open).then(|| r.class.clone()))))
+            .on_press(Message::RuleOpen((!open).then(|| r.class.clone())))
             .into(),
         ));
         if open && let Some(e) = &st.rule_edit {
-            rows.extend(rule_editor(app, s, e));
+            rows.extend(rule_editor(st, cx, e));
         }
     }
     // A new rule being made (an app with none yet).
@@ -94,7 +95,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
             .align_y(Alignment::Center)
             .into(),
         ));
-        rows.extend(rule_editor(app, s, e));
+        rows.extend(rule_editor(st, cx, e));
     }
     match &st.rule_pick {
         None => rows.push(row_of(
@@ -103,7 +104,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
             None,
             control(label("Choose…", text::SMALL, s.ink))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::RulePick(Some(String::new()))))
+                .on_press(Message::RulePick(Some(String::new())))
                 .into(),
         )),
         Some(q) => {
@@ -112,7 +113,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                     container(
                         text_input("Search apps", q)
                             .id(iced::widget::Id::new("rule-search"))
-                            .on_input(|t| msg(Message::RulePick(Some(t))))
+                            .on_input(|t| Message::RulePick(Some(t)))
                             .padding([tok::M, tok::L])
                             .size(text::BODY)
                             .font(theme::FONT)
@@ -128,7 +129,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
             let ql = q.trim().to_lowercase();
             let mut classes: Vec<String> = Vec::new();
             let free = |c: &str| !st.rules.iter().any(|r| r.class == c);
-            for w in &app.hypr.windows {
+            for w in &cx.hypr.windows {
                 if !w.class.is_empty() && !classes.contains(&w.class) && free(&w.class) {
                     classes.push(w.class.clone());
                 }
@@ -173,7 +174,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                         .width(Length::Fill)
                         .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()
-                        .on_press(msg(Message::RuleOpen(Some(c))))
+                        .on_press(Message::RuleOpen(Some(c)))
                         .into(),
                 ));
             }
@@ -183,7 +184,7 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
                         iced::widget::Space::new().width(Length::Fill),
                         control(label("Cancel", text::SMALL, s.ink))
                             .pill(s, crate::ui::control::Pill::Plain)
-                            .on_press(msg(Message::RulePick(None))),
+                            .on_press(Message::RulePick(None)),
                     ]
                     .align_y(Alignment::Center),
                 )
@@ -197,15 +198,16 @@ pub(super) fn rule_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
 
 /// The choices of the rule being edited, each applied at once.
 pub(super) fn rule_editor<'a>(
-    app: &'a App,
-    s: Scheme,
+    st: &'a State,
+    cx: &Cx<'a>,
     e: &crate::hypr_settings::WindowRule,
-) -> Vec<Option<Element<'a, AppMessage>>> {
+) -> Vec<Option<Element<'a, Message>>> {
+    let s = cx.scheme;
     use crate::hypr_settings::RULE_SIZES;
     let set = |f: &dyn Fn(&mut crate::hypr_settings::WindowRule)| {
         let mut r = e.clone();
         f(&mut r);
-        msg(Message::RuleSet(r))
+        Message::RuleSet(r)
     };
     let mut rows = vec![row_of(
         s,
@@ -251,8 +253,8 @@ pub(super) fn rule_editor<'a>(
             ui::switch(s, e.pin, set(&|r| r.pin = !e.pin)),
         ));
     }
-    let count = app.config.workspaces.clamp(1, 10);
-    let mut ws: Vec<(&str, bool, AppMessage)> =
+    let count = cx.config.workspaces.clamp(1, 10);
+    let mut ws: Vec<(&str, bool, Message)> =
         vec![("Any", e.workspace.is_none(), set(&|r| r.workspace = None))];
     for n in 1..=count {
         ws.push((
@@ -262,7 +264,7 @@ pub(super) fn rule_editor<'a>(
         ));
     }
     rows.push(row_of(s, "Workspace", None, segments(s, &ws)));
-    let opacity: Vec<(&str, bool, AppMessage)> =
+    let opacity: Vec<(&str, bool, Message)> =
         [("100%", 100u32), ("95%", 95), ("90%", 90), ("80%", 80)]
             .into_iter()
             .map(|(n, v)| {
@@ -274,19 +276,19 @@ pub(super) fn rule_editor<'a>(
             })
             .collect();
     rows.push(row_of(s, "Opacity", None, segments(s, &opacity)));
-    let saved = app.panels.settings.rules.iter().any(|r| r.class == e.class);
+    let saved = st.rules.iter().any(|r| r.class == e.class);
     let mut buttons = row![iced::widget::Space::new().width(Length::Fill)].spacing(tok::M);
     if saved {
         buttons = buttons.push(
             control(label("Remove rule", text::SMALL, s.ink))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::RuleRemove(e.class.clone()))),
+                .on_press(Message::RuleRemove(e.class.clone())),
         );
     }
     buttons = buttons.push(
         control(label("Done", text::SMALL, s.ink))
             .pill(s, crate::ui::control::Pill::Plain)
-            .on_press(msg(Message::RuleOpen(None))),
+            .on_press(Message::RuleOpen(None)),
     );
     rows.push(Some(
         container(buttons.align_y(Alignment::Center))

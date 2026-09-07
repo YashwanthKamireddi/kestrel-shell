@@ -4,8 +4,8 @@ use super::*;
 use crate::theme::tok;
 
 /// The bar's three sections as configured (old names already read in today's terms).
-pub(super) fn layout(app: &App) -> [Vec<String>; 3] {
-    let b = &app.config.bar;
+pub(super) fn layout(cx: &Cx<'_>) -> [Vec<String>; 3] {
+    let b = &cx.config.bar;
     [b.left.clone(), b.center.clone(), b.right.clone()]
 }
 
@@ -16,14 +16,18 @@ pub(super) fn find_in(l: &[Vec<String>; 3], id: &str) -> Option<(usize, usize)> 
         .find_map(|(s, list)| list.iter().position(|m| m == id).map(|p| (s, p)))
 }
 
-pub(super) fn save_layout(l: &[Vec<String>; 3]) {
-    for (name, list) in ["left", "center", "right"].into_iter().zip(l) {
-        config::set(&["bar"], name, config::list(list));
-    }
+pub(super) fn save_layout(l: &[Vec<String>; 3]) -> Act<Message> {
+    Act::Change(Change::Settings(
+        ["left", "center", "right"]
+            .into_iter()
+            .zip(l)
+            .map(|(name, list)| config::Edit::new(&["bar"], name, config::list(list)))
+            .collect(),
+    ))
 }
 
 /// A small round icon button in a layout row.
-pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<AppMessage>) -> Element<'a, AppMessage> {
+pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<Message>) -> Element<'a, Message> {
     let on = m.is_some();
     let mut c = control(icon(i, tok::ICON_S, if on { s.ink } else { s.ink_faint }))
         .padding(tok::S)
@@ -37,31 +41,32 @@ pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<AppMessage>) -> Element<'a,
 
 /// A module's options, under its row.
 pub(super) fn module_options<'a>(
-    app: &'a App,
-    s: Scheme,
+    st: &'a State,
+    cx: &Cx<'a>,
     mi: usize,
     m: &'static crate::modules::Info,
-) -> Vec<Option<Element<'a, AppMessage>>> {
-    let doc = &app.panels.settings.doc;
+) -> Vec<Option<Element<'a, Message>>> {
+    let s = cx.scheme;
+    let doc = &st.doc;
     m.options
         .iter()
         .enumerate()
         .map(|(oi, o)| {
             let v = o.value(doc);
-            let control: Element<'_, AppMessage> = match o.kind {
+            let control: Element<'_, Message> = match o.kind {
                 crate::modules::OptKind::Switch(_) => {
                     let b = v.as_bool().unwrap_or(false);
-                    ui::switch(s, b, msg(Message::Opt(mi, oi, OptValue::Bool(!b))))
+                    ui::switch(s, b, Message::Opt(mi, oi, OptValue::Bool(!b)))
                 }
                 crate::modules::OptKind::Choice(choices) => {
                     let now = v.as_str().unwrap_or(choices[0].0).to_string();
-                    let opts: Vec<(&str, bool, AppMessage)> = choices
+                    let opts: Vec<(&str, bool, Message)> = choices
                         .iter()
                         .map(|(val, label)| {
                             (
                                 *label,
                                 *val == now,
-                                msg(Message::Opt(mi, oi, OptValue::Str(val))),
+                                Message::Opt(mi, oi, OptValue::Str(val)),
                             )
                         })
                         .collect();
@@ -84,11 +89,11 @@ pub(super) fn module_options<'a>(
 /// Settings › Bar: the style, then the layout: Left, Centre and Right, each module in its
 /// order with its controls (up, down, to the next section, remove) and its options under it;
 /// then the modules not in the bar, to add; and the default layout back.
-pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let c = &app.config;
-    let st = &app.panels.settings;
+pub(super) fn bar_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let c = &cx.config;
     let pills = c.bar.style == BarStyle::Pills;
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     out.extend(group(
         s,
         None,
@@ -100,15 +105,15 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 segments(
                     s,
                     &[
-                        ("Pills", pills, msg(Message::Style(BarStyle::Pills))),
-                        ("Full", !pills, msg(Message::Style(BarStyle::Full))),
+                        ("Pills", pills, Message::Style(BarStyle::Pills)),
+                        ("Full", !pills, Message::Style(BarStyle::Full)),
                     ],
                 ),
             ),
             row_of(s, "Workspaces", None, stepper(s, i64::from(c.workspaces))),
         ],
     ));
-    let l = layout(app);
+    let l = layout(cx);
     for (sec, title) in ["Left side", "Centre", "Right side"]
         .into_iter()
         .enumerate()
@@ -122,10 +127,10 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             if !matches(&name) && !matches("bar") {
                 continue;
             }
-            let lead: Element<'_, AppMessage> =
+            let lead: Element<'_, Message> =
                 icon(info.map_or(Icon::Code, |m| m.icon), tok::ICON_M, s.ink).into();
             let idc = id.clone();
-            let mv = |d: i32, ok: bool| ok.then(|| msg(Message::BarMove(idc.clone(), d)));
+            let mv = |d: i32, ok: bool| ok.then(|| Message::BarMove(idc.clone(), d));
             // Where it sits, said in words (three arrows to the sides read as random).
             let place = segments(
                 s,
@@ -133,17 +138,17 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     (
                         "Left",
                         sec == 0,
-                        msg(Message::BarSection(id.clone(), 0 - sec as i32)),
+                        Message::BarSection(id.clone(), 0 - sec as i32),
                     ),
                     (
                         "Centre",
                         sec == 1,
-                        msg(Message::BarSection(id.clone(), 1 - sec as i32)),
+                        Message::BarSection(id.clone(), 1 - sec as i32),
                     ),
                     (
                         "Right",
                         sec == 2,
-                        msg(Message::BarSection(id.clone(), 2 - sec as i32)),
+                        Message::BarSection(id.clone(), 2 - sec as i32),
                     ),
                 ],
             );
@@ -161,7 +166,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         // Order within its side: earlier (left) or later (right).
                         mini(s, Icon::ChevronLeft, mv(-1, at > 0)),
                         mini(s, Icon::ChevronRight, mv(1, at + 1 < list.len())),
-                        mini(s, Icon::X, Some(msg(Message::BarRemove(id.clone())))),
+                        mini(s, Icon::X, Some(Message::BarRemove(id.clone()))),
                     ]
                     .spacing(tok::M)
                     .align_y(Alignment::Center),
@@ -172,13 +177,13 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             ));
             // Its options, always shown under it (they were behind a hidden arrow).
             if let (Some(m), Some(mi)) = (info, mi) {
-                rows.extend(module_options(app, s, mi, m));
+                rows.extend(module_options(st, cx, mi, m));
             }
         }
         out.extend(group(s, Some(title), rows));
     }
     // Modules not in the bar: a click adds one to its usual section.
-    let missing: Vec<Option<Element<'_, AppMessage>>> = crate::modules::MODULES
+    let missing: Vec<Option<Element<'_, Message>>> = crate::modules::MODULES
         .iter()
         .filter(|m| find_in(&l, m.id).is_none())
         .filter(|m| matches(m.name) || matches("bar"))
@@ -202,7 +207,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 .width(Length::Fill)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
-                .on_press(msg(Message::BarAdd(m.id.to_string())))
+                .on_press(Message::BarAdd(m.id.to_string()))
                 .into(),
             )
         })
@@ -225,7 +230,7 @@ pub(super) fn bar_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 if st.bar_reset_armed { s.bad } else { s.ink },
             ))
             .pill(s, crate::ui::control::Pill::Plain)
-            .on_press(msg(Message::BarReset))
+            .on_press(Message::BarReset)
             .into(),
         )],
     ));

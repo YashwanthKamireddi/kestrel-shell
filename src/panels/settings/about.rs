@@ -21,8 +21,9 @@ pub(super) fn system_report(a: &crate::services::about::About) -> String {
     lines.join("\n")
 }
 
-pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let Some(a) = &app.panels.settings.about else {
+pub(super) fn about_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let Some(a) = &st.about else {
         return Vec::new();
     };
     let mut hardware = vec![
@@ -43,12 +44,12 @@ pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     "Name",
                     None,
-                    match &app.panels.settings.rename {
+                    match &st.rename {
                         Some(t) => container(
                             text_input("Name", t)
                                 .id(iced::widget::Id::new("rename"))
-                                .on_input(|t| msg(Message::Rename(Some(t))))
-                                .on_submit(msg(Message::RenameSubmit))
+                                .on_input(|t| Message::Rename(Some(t)))
+                                .on_submit(Message::RenameSubmit)
                                 .padding([tok::S, tok::L])
                                 .size(text::BODY)
                                 .font(theme::FONT)
@@ -59,7 +60,7 @@ pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         .into(),
                         None => control(label(a.hostname.clone(), text::SMALL, s.ink))
                             .pill(s, crate::ui::control::Pill::Plain)
-                            .on_press(msg(Message::Rename(Some(a.hostname.clone()))))
+                            .on_press(Message::Rename(Some(a.hostname.clone())))
                             .into(),
                     },
                 ),
@@ -87,9 +88,7 @@ pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 None,
                 control(label("Copy", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(snd(crate::panels::control::Message::CopyIp(system_report(
-                        a,
-                    ))))
+                    .on_press(Message::Copy(system_report(a)))
                     .into(),
             )],
         ),
@@ -97,9 +96,7 @@ pub(super) fn about_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     .into_iter()
     .flatten()
     .chain(
-        app.panels
-            .settings
-            .error
+        st.error
             .clone()
             .map(|e| label(e, text::SMALL, s.bad).into()),
     )

@@ -5,11 +5,11 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn updates_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let mut out = package_updates(app, s);
+pub(super) fn updates_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let mut out = package_updates(st, cx);
     // Firmware (fwupd, from the LVFS): each update a row; Update runs fwupd's own updater in
     // the terminal (it asks before anything, and says what it needs).
-    let st = &app.panels.settings;
     // Asked only on request: fwupd stays running once asked.
     let Some(fw) = &st.firmware else {
         let check = control(label(
@@ -22,7 +22,7 @@ pub(super) fn updates_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             s.ink,
         ))
         .pill(s, crate::ui::control::Pill::Plain)
-        .on_press_maybe((!st.firmware_checking).then(|| msg(Message::CheckFirmware)));
+        .on_press_maybe((!st.firmware_checking).then(|| Message::CheckFirmware));
         out.extend(group(
             s,
             Some("Firmware"),
@@ -66,7 +66,7 @@ pub(super) fn updates_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                             .width(Length::Fill),
                             control(label("Update…", text::SMALL, s.ink))
                                 .pill(s, crate::ui::control::Pill::Plain)
-                                .on_press(msg(Message::FirmwareUpdate(f.id.clone()))),
+                                .on_press(Message::FirmwareUpdate(f.id.clone())),
                         ]
                         .spacing(tok::L)
                         .align_y(Alignment::Center),
@@ -83,8 +83,8 @@ pub(super) fn updates_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
     out
 }
 
-pub(super) fn package_updates(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
+pub(super) fn package_updates<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     let Some(list) = &st.updates else {
         return vec![crate::ui::waiting(
             s,
@@ -118,12 +118,12 @@ pub(super) fn package_updates(app: &App, s: Scheme) -> Vec<Element<'_, AppMessag
                     theme::SEMIBOLD
                 ))
                 .pill(s, crate::ui::control::Pill::Primary)
-                .on_press(AppMessage::Batch(vec![
-                    msg(Message::InTerminal(
+                .on_press(Message::Batch(vec![
+                    Message::InTerminal(
                         "sh -c 'yay -Syu; echo; read -p \"Done. Press Enter to close.\" _'",
                         "Updates"
-                    )),
-                    AppMessage::Close,
+                    ),
+                    Message::Close,
                 ])),
             ]
             .spacing(tok::L)

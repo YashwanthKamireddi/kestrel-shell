@@ -3,8 +3,9 @@
 use super::*;
 use crate::theme::tok;
 
-pub(super) fn mouse_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    if app.panels.settings.hypr.is_empty() {
+pub(super) fn mouse_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    if st.hypr.is_empty() {
         return Vec::new();
     }
     [
@@ -13,7 +14,7 @@ pub(super) fn mouse_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             Some("Mouse"),
             crate::hypr_settings::MOUSE
                 .iter()
-                .map(|o| hypr_row(app, s, *o))
+                .map(|o| hypr_row(st, cx, *o))
                 .collect(),
         ),
         group(
@@ -21,10 +22,10 @@ pub(super) fn mouse_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             Some("Touchpad"),
             crate::hypr_settings::TOUCHPAD
                 .iter()
-                .map(|o| hypr_row(app, s, *o))
+                .map(|o| hypr_row(st, cx, *o))
                 .collect(),
         ),
-        group(s, Some("Speed of each device"), device_rows(app, s)),
+        group(s, Some("Speed of each device"), device_rows(st, cx)),
     ]
     .into_iter()
     .flatten()
@@ -54,8 +55,8 @@ pub(super) fn device_name(n: &str) -> String {
 }
 
 /// Each pointing device's speed: its own when set, else the global pointer speed.
-pub(super) fn device_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessage>>> {
-    let st = &app.panels.settings;
+pub(super) fn device_rows<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Option<Element<'a, Message>>> {
+    let s = cx.scheme;
     let global = st
         .hypr
         .get("input:sensitivity")
@@ -76,10 +77,10 @@ pub(super) fn device_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMes
                 (s.ink.scale_alpha(tok::FILL * s.opacity), s.accent),
                 move |t| {
                     let v = ((t * 2.0 - 1.0) / 0.05).round() * 0.05;
-                    msg(Message::DeviceSpeed(n1.clone(), v.clamp(-1.0, 1.0), false))
+                    Message::DeviceSpeed(n1.clone(), v.clamp(-1.0, 1.0), false)
                 },
             )
-            .on_release(msg(Message::DeviceSpeed(n2, now, true)));
+            .on_release(Message::DeviceSpeed(n2, now, true));
             row_of(
                 s,
                 kept(device_name(name)),

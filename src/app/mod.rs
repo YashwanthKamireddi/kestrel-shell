@@ -426,7 +426,6 @@ pub enum Message {
     /// The visualiser's own frame clock (60 a second while music plays).
     VisTick(Instant),
     ReloadWallpaper,
-    OpenWallpaper,
 }
 
 impl std::fmt::Debug for Wallpaper {
@@ -628,7 +627,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<Message> {
 
 pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {
     if app.settings_window == Some(id) {
-        return panels::settings::window(app);
+        return panels::settings_window(app);
     }
     let Some(&(output, role)) = app.roles.get(&id) else {
         return iced::widget::Space::new().into();

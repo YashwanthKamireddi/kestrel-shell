@@ -344,17 +344,8 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             if n.active {
                 return Act::None;
             }
-            if n.known || !n.secure {
-                let cmd = if n.known {
-                    network::Command::Connect(n.ssid.clone())
-                } else {
-                    network::Command::ConnectNew {
-                        ssid: n.ssid.clone(),
-                        ap: n.ap,
-                        password: None,
-                    }
-                };
-                return change(Change::Join(n.ssid, cmd));
+            if let Some(c) = Change::join(&n) {
+                return change(c);
             }
             // A new secured network: its password first (typed here).
             st.password = Some((n.ssid, n.ap, String::new()));
@@ -465,7 +456,7 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             Task::future(crate::services::tray::activate(item.bus, item.path, false)).discard(),
         ),
         Message::TrayMenu(item) => Act::TrayMenu(item),
-        Message::Toggle(name) => Act::Toggle(name),
+        Message::Toggle(name) => Act::Command(format!("toggle {name}")),
         Message::Lock => Act::Close.and(Act::Run(
             super::power::run(super::power::Action::Lock).discard(),
         )),

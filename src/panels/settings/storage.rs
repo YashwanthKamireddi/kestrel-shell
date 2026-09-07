@@ -6,12 +6,9 @@ use crate::theme::tok;
 use iced::widget::column;
 
 /// Opens a folder in the file manager and closes Settings.
-pub(super) fn open_folder(path: String) -> Task<AppMessage> {
+pub(super) fn open_folder(path: String) -> Act<Message> {
     // The file manager chosen in Default apps (a terminal one too).
-    Task::batch([
-        Task::done(AppMessage::Ipc(format!("open-default files {path}"))),
-        Task::done(AppMessage::Close),
-    ])
+    Act::Command(format!("open-default files {path}")).and(Act::Close)
 }
 
 /// "131 GB", "980 MB".
@@ -26,9 +23,9 @@ pub(super) fn bytes_text(b: u64) -> String {
     }
 }
 
-pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
-    let volume = |v: &crate::services::disks::Volume| -> Option<Element<'_, AppMessage>> {
+pub(super) fn storage_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let volume = |v: &crate::services::disks::Volume| -> Option<Element<'_, Message>> {
         let used = v.free.map(|f| v.size.saturating_sub(f));
         let share = used.map_or(0.0, |u| u as f32 / v.size.max(1) as f32);
         let line = match (used, v.free) {
@@ -60,7 +57,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             actions = actions.push(
                 control(label_w("Open", text::SMALL, s.ink, theme::MEDIUM))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(msg(Message::VolumeOpen(v.path.clone(), v.mount.clone()))),
+                    .on_press(Message::VolumeOpen(v.path.clone(), v.mount.clone())),
             );
         }
         if v.removable {
@@ -69,7 +66,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     .padding(tok::S)
                     .radius(tok::FULL)
                     .kind(s, crate::ui::control::Kind::Ghost)
-                    .on_press(msg(Message::VolumeEject(v.path.clone(), v.drive.clone()))),
+                    .on_press(Message::VolumeEject(v.path.clone(), v.drive.clone())),
             );
         }
         Some(
@@ -115,7 +112,7 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .filter(|v| v.removable)
         .map(volume)
         .collect();
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     out.extend(group(s, Some("This computer"), fixed));
     out.extend(group(s, Some("Drives"), plugged));
     // The home folder: what fills it, biggest first; a click opens the folder.
@@ -167,10 +164,10 @@ pub(super) fn storage_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         .width(Length::Fill)
                         .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()
-                        .on_press(msg(Message::VolumeOpen(
+                        .on_press(Message::VolumeOpen(
                             String::new(),
                             Some(p.to_string_lossy().into_owned()),
-                        )))
+                        ))
                         .into(),
                     )
                 })

@@ -20,8 +20,20 @@ pub(crate) fn apply_config(app: &mut App, mut c: Config) -> Task<Message> {
     // The accent, or the apps' fonts (Qt gets them with the colours), change the colours
     // written for apps.
     let accent_changed = c.accent != app.config.accent || c.look != app.config.look;
+    // Quiet hours and night light's schedule follow their settings at once, however they
+    // changed (Settings or a hand edit).
+    let quiet_changed = c.quiet_from != app.config.quiet_from || c.quiet_to != app.config.quiet_to;
+    let night_changed = c.night_light_schedule != app.config.night_light_schedule;
     app.config = c;
     let mut tasks = Vec::new();
+    if quiet_changed {
+        app.quiet_auto = None;
+        app.quiet_schedule();
+    }
+    if night_changed {
+        app.night_auto = None;
+        tasks.push(app.night_schedule());
+    }
     if accent_changed {
         tasks.push(app.recolour());
     }

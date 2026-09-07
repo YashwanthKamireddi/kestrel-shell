@@ -6,7 +6,7 @@ use crate::theme::tok;
 use iced::widget::column;
 
 /// Keys ("SUPER + SHIFT + T") as chips.
-pub(super) fn key_chips<'a>(s: Scheme, keys: &str) -> Element<'a, AppMessage> {
+pub(super) fn key_chips<'a>(s: Scheme, keys: &str) -> Element<'a, Message> {
     let mut r = row![].spacing(tok::XS).align_y(Alignment::Center);
     for k in keys.split('+').map(str::trim) {
         let shown = match k {
@@ -41,14 +41,14 @@ pub(super) fn taken_by<'a>(st: &'a State, keys: &str) -> Option<&'a str> {
     })
 }
 
-pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+pub(super) fn shortcuts_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     // Making one: record the keys, name it, say what it runs.
-    let rec: Element<'_, AppMessage> = if st.recording {
+    let rec: Element<'_, Message> = if st.recording {
         control(label("Press the keys…", text::SMALL, s.on_accent))
             .pill(s, crate::ui::control::Pill::Primary)
-            .on_press(msg(Message::Record(false)))
+            .on_press(Message::Record(false))
             .into()
     } else {
         match &st.new_keys {
@@ -56,11 +56,11 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                 .padding([tok::XS, tok::M])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(msg(Message::Record(true)))
+                .on_press(Message::Record(true))
                 .into(),
             None => control(label("Record keys", text::SMALL, s.ink))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::Record(true)))
+                .on_press(Message::Record(true))
                 .into(),
         }
     };
@@ -68,8 +68,8 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         container(
             text_input(ph, v)
                 .id(iced::widget::Id::new(id))
-                .on_input(move |t| msg(on(t)))
-                .on_submit(msg(Message::AddShortcut))
+                .on_input(on)
+                .on_submit(Message::AddShortcut)
                 .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
@@ -114,7 +114,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
         None,
         control(label_w("Add", text::SMALL, s.on_accent, theme::SEMIBOLD))
             .pill(s, crate::ui::control::Pill::Primary)
-            .on_press_maybe(can_add.then(|| msg(Message::AddShortcut)))
+            .on_press_maybe(can_add.then(|| Message::AddShortcut))
             .into(),
     ));
     out.extend(group(s, Some("New shortcut"), make));
@@ -133,7 +133,7 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                         .spacing(tok::HAIR)
                         .width(Length::Fill),
                         key_chips(s, &c.keys),
-                        crate::ui::remove_button(s, msg(Message::RemoveShortcut(c.keys.clone()))),
+                        crate::ui::remove_button(s, Message::RemoveShortcut(c.keys.clone())),
                     ]
                     .spacing(tok::L)
                     .align_y(Alignment::Center),
@@ -156,17 +156,17 @@ pub(super) fn shortcuts_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                 let keys = b.keys.join(" + ");
                 // A click on the keys records new ones for it.
                 let waiting = st.recording && st.rebinding.as_deref() == Some(keys.as_str());
-                let keys_el: Element<'_, AppMessage> = if waiting {
+                let keys_el: Element<'_, Message> = if waiting {
                     control(label("Press the new keys…", text::SMALL, s.on_accent))
                         .pill(s, crate::ui::control::Pill::Primary)
-                        .on_press(msg(Message::Record(false)))
+                        .on_press(Message::Record(false))
                         .into()
                 } else {
                     control(key_chips(s, &keys))
                         .padding([tok::XXS, tok::S])
                         .radius(tok::FULL)
                         .kind(s, crate::ui::control::Kind::Ghost)
-                        .on_press(msg(Message::Rebind(keys.clone())))
+                        .on_press(Message::Rebind(keys.clone()))
                         .into()
                 };
                 Some(

@@ -62,6 +62,7 @@ impl Connecting {
 }
 
 /// The shell, read-only, as panels see it.
+#[derive(Clone, Copy)]
 pub struct Cx<'a> {
     pub scheme: Scheme,
     pub config: &'a Config,
@@ -128,7 +129,12 @@ impl Light {
     }
 }
 
-impl Cx<'_> {
+impl<'a> Cx<'a> {
+    /// The same, in other colours (Settings' window draws solid).
+    pub fn with_scheme(&self, scheme: Scheme) -> Cx<'a> {
+        Cx { scheme, ..*self }
+    }
+
     /// Whether `key` (a network's name or a device's path) is being connected (Some(true)) or
     /// disconnected (Some(false)).
     pub fn in_progress(&self, key: &str) -> Option<bool> {

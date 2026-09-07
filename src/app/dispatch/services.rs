@@ -138,8 +138,14 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::Net(s) => {
             let before = std::mem::replace(&mut app.net, *s);
-            app.panels.control.lists_changed(&app.net, &app.bt);
-            panels::settings::network_changed(app, &before)
+            app.panels.lists_changed(&app.net, &app.bt);
+            // Settings' Network page reads its connection again when it moved (only while
+            // its window is open).
+            if app.settings_window.is_none() {
+                return Task::none();
+            }
+            let a = panels::settings::network_changed(&app.panels.settings, &app.net, &before);
+            panels::action::perform(app, a, |m| Message::Panel(panels::Message::Settings(m)))
         }
         Message::Bt(s) => {
             // A device connecting or leaving gets an OSD (not on the first snapshot, nor when
@@ -178,7 +184,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 }
             }
             app.bt = s;
-            app.panels.control.lists_changed(&app.net, &app.bt);
+            app.panels.lists_changed(&app.net, &app.bt);
             if crate::panels::pods::device(&app.bt).is_none() {
                 app.pods = None;
                 // Their panel goes with them.

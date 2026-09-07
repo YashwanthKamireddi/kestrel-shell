@@ -434,6 +434,31 @@ pub fn set_wallpaper(path: &str) {
 /// Change one setting in config.toml in place (comments and the rest kept as they are).
 /// `table` is the path of tables (`&["bar"]`, or `&[]` for a top-level key). The file is
 /// watched, so the change applies at once.
+/// One change to config.toml: a key in a table (`[]` the top level), and its new value
+/// (`Item::None` removes it).
+#[derive(Clone, Debug)]
+pub struct Edit {
+    pub table: Vec<String>,
+    pub key: String,
+    pub value: toml_edit::Item,
+}
+
+impl Edit {
+    pub fn new(table: &[&str], key: &str, value: toml_edit::Item) -> Self {
+        Self {
+            table: table.iter().map(|t| (*t).to_string()).collect(),
+            key: key.to_string(),
+            value,
+        }
+    }
+
+    /// Writes it to config.toml.
+    pub fn write(self) {
+        let table: Vec<&str> = self.table.iter().map(String::as_str).collect();
+        set(&table, &self.key, self.value);
+    }
+}
+
 pub fn set(table: &[&str], key: &str, value: toml_edit::Item) {
     let p = self::path();
     let text = std::fs::read_to_string(&p).unwrap_or_default();

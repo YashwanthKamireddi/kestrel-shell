@@ -11,10 +11,10 @@ pub(super) fn level<'a>(
     s: Scheme,
     value: f32,
     muted: bool,
-    on_change: impl Fn(f32) -> AppMessage + 'a,
-    on_mute: AppMessage,
+    on_change: impl Fn(f32) -> Message + 'a,
+    on_mute: Message,
     mute_icon: (Icon, Icon),
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     let v = if muted { 0.0 } else { value.clamp(0.0, 1.0) };
     let bar = crate::ui::slider::slider(
         iced::widget::Space::new().width(Length::Fill),
@@ -48,7 +48,7 @@ pub(super) fn level<'a>(
 }
 
 /// A thin live level, the slider's width.
-pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> {
+pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, Message> {
     let v = value.clamp(0.0, 1.0);
     container(row![
         container(iced::widget::Space::new())
@@ -78,12 +78,7 @@ pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, AppMessage> 
 }
 
 /// A chooser: what is chosen now and an arrow; a click lists the choices under its row.
-pub(super) fn chooser<'a>(
-    s: Scheme,
-    now: String,
-    key: &str,
-    open: bool,
-) -> Element<'a, AppMessage> {
+pub(super) fn chooser<'a>(s: Scheme, now: String, key: &str, open: bool) -> Element<'a, Message> {
     control(
         row![
             label(now, text::SMALL, s.ink),
@@ -103,7 +98,7 @@ pub(super) fn chooser<'a>(
     .padding([tok::XS, tok::L])
     .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Ghost)
-    .on_press(msg(Message::SoundPick((!open).then(|| key.to_string()))))
+    .on_press(Message::SoundPick((!open).then(|| key.to_string())))
     .into()
 }
 
@@ -112,8 +107,8 @@ pub(super) fn choice_row<'a>(
     s: Scheme,
     name: String,
     on: bool,
-    m: AppMessage,
-) -> Option<Element<'a, AppMessage>> {
+    m: Message,
+) -> Option<Element<'a, Message>> {
     Some(
         control(
             row![
@@ -131,18 +126,19 @@ pub(super) fn choice_row<'a>(
         .width(Length::Fill)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
-        .on_press(AppMessage::Batch(vec![m, msg(Message::SoundPick(None))]))
+        .on_press(Message::Batch(vec![m, Message::SoundPick(None)]))
         .into(),
     )
 }
 
 /// Settings > Sound, laid out like the other pages (and like Windows' Sound settings): Output,
 /// Input, each app's volume, and apps recording; every row a name and its control.
-pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
+pub(super) fn sound_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     use crate::panels::control::{device_name, mic_name, mode_name, short_names};
-    let au = &app.audio;
-    let pick = app.panels.settings.sound_pick.as_deref();
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+    let au = &cx.audio;
+    let pick = st.sound_pick.as_deref();
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
 
     // Output.
     let sinks: Vec<&crate::services::audio::Device> = au
@@ -174,7 +170,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     n.clone(),
                     x.name == d.name,
-                    set(Change::Sink(x.name.clone())),
+                    chg(Change::Sink(x.name.clone())),
                 ));
             }
         }
@@ -186,8 +182,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 s,
                 d.volume,
                 d.muted,
-                |v| set(Change::SinkVolume(v)),
-                set(Change::SinkMute),
+                |v| chg(Change::SinkVolume(v)),
+                chg(Change::SinkMute),
                 (Icon::Volume2, Icon::VolumeX),
             ),
         ));
@@ -195,7 +191,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             s,
             "Level",
             None,
-            level_meter(s, if d.muted { 0.0 } else { app.meters.output }),
+            level_meter(s, if d.muted { 0.0 } else { cx.meters.output }),
         ));
         // Bluetooth: the codec and mode (music quality or calls with the microphone).
         if let Some(card) = Some(d)
@@ -217,16 +213,16 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         s,
                         mode_name(desc),
                         *name == card.active,
-                        set(Change::CardMode(card.index, name.clone())),
+                        chg(Change::CardMode(card.index, name.clone())),
                     ));
                 }
             }
         }
         // The volume keys: how much a press changes, and whether they may go past 100 %.
-        let cfg = app.config.sound;
-        let steps: Vec<(&str, bool, AppMessage)> = [("2%", 2u32), ("5%", 5), ("10%", 10)]
+        let cfg = cx.config.sound;
+        let steps: Vec<(&str, bool, Message)> = [("2%", 2u32), ("5%", 5), ("10%", 10)]
             .into_iter()
-            .map(|(l, v)| (l, cfg.step == v, msg(Message::SoundStep(v))))
+            .map(|(l, v)| (l, cfg.step == v, Message::SoundStep(v)))
             .collect();
         rows.push(row_of(s, "Volume keys step", None, segments(s, &steps)));
         rows.push(row_of(
@@ -236,7 +232,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             ui::switch(
                 s,
                 cfg.max > 100,
-                msg(Message::SoundMax(if cfg.max > 100 { 100 } else { 150 })),
+                Message::SoundMax(if cfg.max > 100 { 100 } else { 150 }),
             ),
         ));
         if d.channels == 2 {
@@ -254,7 +250,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s.ink.scale_alpha(tok::FILL * s.opacity),
                     s.accent.scale_alpha(0.35 * s.opacity),
                 ),
-                |v| set(Change::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
+                |v| chg(Change::Balance(((v * 2.0 - 1.0) * 20.0).round() / 20.0)),
             );
             let even = d.balance.abs() < 0.03;
             rows.push(row_of(
@@ -282,7 +278,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         }
     }
     // Both speakers, one after the other.
-    let busy = app.panels.settings.speaker_test;
+    let busy = st.speaker_test;
     let mut test = control(label(
         if busy { "Playing…" } else { "Play" },
         text::SMALL,
@@ -290,7 +286,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     ))
     .pill(s, crate::ui::control::Pill::Plain);
     if !busy {
-        test = test.on_press(msg(Message::SpeakerTest));
+        test = test.on_press(Message::SpeakerTest);
     }
     rows.push(row_of(
         s,
@@ -329,7 +325,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     n.clone(),
                     x.name == d.name,
-                    set(Change::Source(x.name.clone())),
+                    chg(Change::Source(x.name.clone())),
                 ));
             }
         }
@@ -341,8 +337,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 s,
                 d.volume,
                 d.muted,
-                |v| set(Change::SourceVolume(v)),
-                set(Change::SourceMute),
+                |v| chg(Change::SourceVolume(v)),
+                chg(Change::SourceMute),
                 (Icon::Mic, Icon::MicOff),
             ),
         ));
@@ -350,10 +346,10 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             s,
             "Level",
             None,
-            level_meter(s, if d.muted { 0.0 } else { app.meters.input }),
+            level_meter(s, if d.muted { 0.0 } else { cx.meters.input }),
         ));
         // Hear yourself: three seconds recorded, then played back.
-        let step = app.panels.settings.mic_test;
+        let step = st.mic_test;
         let mut test = control(label(
             match step {
                 1 => "Recording… speak now",
@@ -365,7 +361,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         ))
         .pill(s, crate::ui::control::Pill::Plain);
         if step == 0 {
-            test = test.on_press(msg(Message::MicTest));
+            test = test.on_press(Message::MicTest);
         }
         rows.push(row_of(s, "Test your microphone", None, test.into()));
     }
@@ -375,7 +371,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     let app_rows = |list: &'_ [crate::services::audio::App], recording: bool| {
         let mut rows = Vec::new();
         for a in list {
-            let ic: Element<'_, AppMessage> = match a.icon_path() {
+            let ic: Element<'_, Message> = match a.icon_path() {
                 Some(p) => ui::image_file_faded(&p, 20.0, s.opacity),
                 None => icon(Icon::AppWindow, tok::ICON_M, s.ink_dim).into(),
             };
@@ -414,8 +410,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     a.volume,
                     a.muted,
-                    move |v| set(Change::RecVolume(ids.clone(), v)),
-                    set(Change::RecMute(ids2)),
+                    move |v| chg(Change::RecVolume(ids.clone(), v)),
+                    chg(Change::RecMute(ids2)),
                     (Icon::Mic, Icon::MicOff),
                 )
             } else {
@@ -423,8 +419,8 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     s,
                     a.volume,
                     a.muted,
-                    move |v| set(Change::AppVolume(ids.clone(), v)),
-                    set(Change::AppMute(ids2)),
+                    move |v| chg(Change::AppVolume(ids.clone(), v)),
+                    chg(Change::AppMute(ids2)),
                     (Icon::Volume2, Icon::VolumeX),
                 )
             };
@@ -454,9 +450,9 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                         n.clone(),
                         d.name == current,
                         if recording {
-                            set(Change::RecTo(ids, d.name.clone()))
+                            chg(Change::RecTo(ids, d.name.clone()))
                         } else {
-                            set(Change::AppTo(ids, d.name.clone()))
+                            chg(Change::AppTo(ids, d.name.clone()))
                         },
                     ));
                 }
@@ -472,14 +468,14 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
     ));
     // Sounds the system makes: notifications (switched in Notifications), the volume keys'
     // click, the screenshot shutter; one volume for all of them.
-    let cfg = app.config.sound;
-    let loud: Vec<(&str, bool, AppMessage)> = [("Quiet", 40i64), ("Normal", 70), ("Loud", 100)]
+    let cfg = cx.config.sound;
+    let loud: Vec<(&str, bool, Message)> = [("Quiet", 40i64), ("Normal", 70), ("Loud", 100)]
         .into_iter()
         .map(|(l, v)| {
             (
                 l,
                 i64::from(cfg.alerts) == v,
-                msg(Message::SoundOpt("alerts", v.into())),
+                Message::SoundOpt("alerts", v.into()),
             )
         })
         .collect();
@@ -495,7 +491,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     segments(s, &loud),
                     control(label("Play", text::SMALL, s.ink))
                         .pill(s, crate::ui::control::Pill::Plain)
-                        .on_press(msg(Message::AlertPlay)),
+                        .on_press(Message::AlertPlay),
                 ]
                 .spacing(tok::M)
                 .align_y(Alignment::Center)
@@ -508,7 +504,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 ui::switch(
                     s,
                     cfg.feedback,
-                    msg(Message::SoundOpt("feedback", (!cfg.feedback).into())),
+                    Message::SoundOpt("feedback", (!cfg.feedback).into()),
                 ),
             ),
             row_of(
@@ -518,7 +514,7 @@ pub(super) fn sound_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 ui::switch(
                     s,
                     cfg.screenshot,
-                    msg(Message::SoundOpt("screenshot", (!cfg.screenshot).into())),
+                    Message::SoundOpt("screenshot", (!cfg.screenshot).into()),
                 ),
             ),
         ],

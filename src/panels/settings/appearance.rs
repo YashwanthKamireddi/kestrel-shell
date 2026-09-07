@@ -5,8 +5,9 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn appearance_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let c = &app.config;
+pub(super) fn appearance_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let c = &cx.config;
     use crate::config::Material;
     let m = c.material;
     group(
@@ -23,46 +24,46 @@ pub(super) fn appearance_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessag
                         (
                             "Black",
                             m == Material::Black,
-                            msg(Message::Material(Material::Black)),
+                            Message::Material(Material::Black),
                         ),
                         (
                             "Frosted",
                             m == Material::Frosted,
-                            msg(Message::Material(Material::Frosted)),
+                            Message::Material(Material::Frosted),
                         ),
                     ],
                 ),
             ),
-            row_of(s, "Accent colour", None, accent_swatches(app, s)),
+            row_of(s, "Accent colour", None, accent_swatches(cx)),
             row_of(
                 s,
                 "Wallpaper",
                 None,
                 control(label("Choose…", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(AppMessage::OpenWallpaper)
+                    .on_press(Message::OpenWallpaper)
                     .into(),
             ),
             row_of(
                 s,
                 "Theme apps",
                 None,
-                ui::switch(s, c.theme_apps, msg(Message::ThemeApps(!c.theme_apps))),
+                ui::switch(s, c.theme_apps, Message::ThemeApps(!c.theme_apps)),
             ),
         ],
     )
     .into_iter()
-    .chain(group(s, Some("Apps"), look_rows(app, s)))
+    .chain(group(s, Some("Apps"), look_rows(st, cx)))
     .collect()
 }
 
 /// Apps' fonts, icon theme and pointer: each a chooser opening a searchable list.
-pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessage>>> {
-    let st = &app.panels.settings;
+pub(super) fn look_rows<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Option<Element<'a, Message>>> {
+    let s = cx.scheme;
     let Some(l) = &st.look else {
         return Vec::new();
     };
-    let look = &app.config.look;
+    let look = &cx.config.look;
     // What apps use now until something is chosen here (not kestrel's defaults).
     let (font, font_size) = match (&look.font, &l.font_now) {
         (None, Some(now)) => (now.0.clone(), look.font_size.unwrap_or(now.1)),
@@ -102,20 +103,14 @@ pub(super) fn look_rows(app: &App, s: Scheme) -> Vec<Option<Element<'_, AppMessa
         .padding([tok::XS, tok::L])
         .radius(tok::FULL)
         .kind(s, crate::ui::control::Kind::Ghost)
-        .on_press(msg(Message::LookOpen((!open).then_some(i))));
+        .on_press(Message::LookOpen((!open).then_some(i)));
         rows.push(row_of(s, names[usize::from(i)], None, chooser.into()));
         // Font sizes beside their fonts.
         if i < 2 {
             let size_now = if i == 0 { font_size } else { mono_size };
-            let opts: Vec<(&str, bool, AppMessage)> = [9u32, 10, 11, 12, 13, 14]
+            let opts: Vec<(&str, bool, Message)> = [9u32, 10, 11, 12, 13, 14]
                 .into_iter()
-                .map(|n| {
-                    (
-                        kept(n.to_string()),
-                        size_now == n,
-                        msg(Message::LookSize(i, n)),
-                    )
-                })
+                .map(|n| (kept(n.to_string()), size_now == n, Message::LookSize(i, n)))
                 .collect();
             rows.push(row_of(
                 s,
@@ -162,10 +157,11 @@ pub(super) const ACCENTS: [&str; 8] = [
 
 /// The accent: the wallpaper's (a picture swatch) or one of a few colours, the chosen one
 /// ringed.
-pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessage> {
-    let now = app.config.accent.clone();
+pub(super) fn accent_swatches<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let now = cx.config.accent.clone();
     // The chosen swatch has a ring in the ink colour; the others the same space, empty.
-    let ringed = move |on: bool, inner: Element<'a, AppMessage>, m: AppMessage| {
+    let ringed = move |on: bool, inner: Element<'a, Message>, m: Message| {
         container(
             control(inner)
                 .padding(tok::XXS)
@@ -193,7 +189,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
                 ..container::Style::default()
             })
             .into(),
-        msg(Message::Accent(None)),
+        Message::Accent(None),
     )]
     .spacing(tok::XS)
     .align_y(Alignment::Center);
@@ -211,7 +207,7 @@ pub(super) fn accent_swatches<'a>(app: &App, s: Scheme) -> Element<'a, AppMessag
                     ..container::Style::default()
                 })
                 .into(),
-            msg(Message::Accent(Some(hex))),
+            Message::Accent(Some(hex)),
         ));
     }
     out.into()

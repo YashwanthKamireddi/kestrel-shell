@@ -5,8 +5,9 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let c = &app.config;
+pub(super) fn notifications_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let c = &cx.config;
     let quiet = c
         .quiet_from
         .clone()
@@ -17,7 +18,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
             s,
             "Do not disturb",
             None,
-            ui::switch(s, app.dnd, AppMessage::Change(crate::app::Change::Dnd)),
+            ui::switch(s, cx.dnd, Message::Change(crate::app::Change::Dnd)),
         ),
         row_of(
             s,
@@ -26,16 +27,15 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
             ui::switch(
                 s,
                 quiet.is_some(),
-                msg(Message::Quiet(if quiet.is_some() {
+                Message::Quiet(if quiet.is_some() {
                     None
                 } else {
                     Some(("22:00".into(), "07:00".into()))
-                })),
+                }),
             ),
         ),
     ];
     if let Some((from, to)) = &quiet {
-        let st = &app.panels.settings;
         for (which, name, now) in [(0u8, "From", from), (1u8, "Until", to)] {
             let open = st.quiet_open == Some(which);
             dnd_rows.push(row_of(
@@ -53,7 +53,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                 .padding([tok::XS, tok::L])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(msg(Message::QuietOpen((!open).then_some(which))))
+                .on_press(Message::QuietOpen((!open).then_some(which)))
                 .into(),
             ));
             if open {
@@ -92,7 +92,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                                 },
                             )
                             .no_press_scale()
-                            .on_press(msg(Message::Quiet(Some(pick)))),
+                            .on_press(Message::Quiet(Some(pick))),
                         );
                     }
                     grid = grid.push(r);
@@ -102,14 +102,14 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
         }
     }
     let dnd = group(s, None, dnd_rows);
-    let rules = &app.config.notifications;
-    let banner_opts: Vec<(&str, bool, AppMessage)> = [("Short", 3i64), ("Normal", 5), ("Long", 10)]
+    let rules = &cx.config.notifications;
+    let banner_opts: Vec<(&str, bool, Message)> = [("Short", 3i64), ("Normal", 5), ("Long", 10)]
         .into_iter()
         .map(|(l, secs)| {
             (
                 l,
                 rules.banner == secs as u64,
-                msg(Message::NotifyOpt("banner", secs.into())),
+                Message::NotifyOpt("banner", secs.into()),
             )
         })
         .collect();
@@ -124,7 +124,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                 ui::switch(
                     s,
                     rules.sound,
-                    msg(Message::NotifyOpt("sound", (!rules.sound).into())),
+                    Message::NotifyOpt("sound", (!rules.sound).into()),
                 ),
             ),
             row_of(s, "Banner time", None, segments(s, &banner_opts)),
@@ -135,10 +135,7 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
                 ui::switch(
                     s,
                     rules.urgent_in_dnd,
-                    msg(Message::NotifyOpt(
-                        "urgent_in_dnd",
-                        (!rules.urgent_in_dnd).into(),
-                    )),
+                    Message::NotifyOpt("urgent_in_dnd", (!rules.urgent_in_dnd).into()),
                 ),
             ),
         ],
@@ -157,9 +154,9 @@ pub(super) fn notifications_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMes
             } else {
                 0
             };
-            let opts: Vec<(&str, bool, AppMessage)> = [("Show", 0u8), ("Quiet", 1), ("Off", 2)]
+            let opts: Vec<(&str, bool, Message)> = [("Show", 0u8), ("Quiet", 1), ("Off", 2)]
                 .into_iter()
-                .map(|(l, r)| (l, now == r, msg(Message::NotifyRule(name.clone(), r))))
+                .map(|(l, r)| (l, now == r, Message::NotifyRule(name.clone(), r)))
                 .collect();
             let ic = ui::app_icon(s, &name, 18.0, Icon::Bell);
             Some(
@@ -194,7 +191,7 @@ pub(super) fn sound_toggle<'a>(
     name: &str,
     rule: u8,
     rules: &config::NotificationRules,
-) -> Element<'a, AppMessage> {
+) -> Element<'a, Message> {
     if rule != 0 || !rules.sound {
         // As wide as the button it stands in for, so rows line up.
         return iced::widget::Space::new()
@@ -210,6 +207,6 @@ pub(super) fn sound_toggle<'a>(
     .padding(tok::S)
     .radius(tok::FULL)
     .kind(s, crate::ui::control::Kind::Ghost)
-    .on_press(msg(Message::NotifySilent(name.to_string(), !on)))
+    .on_press(Message::NotifySilent(name.to_string(), !on))
     .into()
 }

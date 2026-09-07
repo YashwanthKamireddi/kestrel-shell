@@ -51,8 +51,7 @@ pub(super) fn arrange(all: &mut [crate::services::displays::Display], place: Pla
     all[1].y = by;
 }
 
-pub(super) fn change_display(app: &mut App, i: usize, change: DisplayChange) -> Task<AppMessage> {
-    let st = &mut app.panels.settings;
+pub(super) fn change_display(st: &mut State, i: usize, change: DisplayChange) -> Task<Message> {
     if i >= st.displays.len() {
         return Task::none();
     }
@@ -100,22 +99,21 @@ pub(super) fn change_display(app: &mut App, i: usize, change: DisplayChange) -> 
         Task::future(async move { crate::services::displays::apply(&all).await }).discard(),
         Task::perform(
             tokio::time::sleep(std::time::Duration::from_secs(KEEP_SECS)),
-            move |()| msg(Message::DisplayTimeout(n)),
+            move |()| Message::DisplayTimeout(n),
         ),
     ])
 }
 
-pub(super) fn revert_displays(app: &mut App) -> Task<AppMessage> {
-    let st = &mut app.panels.settings;
+pub(super) fn revert_displays(st: &mut State) -> Task<Message> {
     st.pending = None;
     st.displays = st.kept.clone();
     let all = st.kept.clone();
     Task::future(async move { crate::services::displays::apply(&all).await }).discard()
 }
 
-pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+pub(super) fn displays_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     if let Some(left) = display_countdown(st) {
         out.push(
             container(
@@ -133,10 +131,10 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     .width(Length::Fill),
                     control(label_w("Go back", text::SMALL, s.ink, theme::MEDIUM))
                         .pill(s, crate::ui::control::Pill::Plain)
-                        .on_press(msg(Message::DisplayRevert)),
+                        .on_press(Message::DisplayRevert),
                     control(label_w("Keep", text::SMALL, s.on_accent, theme::SEMIBOLD))
                         .pill(s, crate::ui::control::Pill::Primary)
-                        .on_press(msg(Message::DisplayKeep)),
+                        .on_press(Message::DisplayKeep),
                 ]
                 .spacing(tok::M)
                 .align_y(Alignment::Center),
@@ -158,12 +156,12 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             None,
             if d.enabled && on_count <= 1 {
                 // The only one on: it cannot be turned off.
-                ui::switch(s, true, msg(Message::DisplayTick))
+                ui::switch(s, true, Message::DisplayTick)
             } else {
                 ui::switch(
                     s,
                     d.enabled,
-                    msg(Message::Display(i, DisplayChange::On(!d.enabled))),
+                    Message::Display(i, DisplayChange::On(!d.enabled)),
                 )
             },
         )];
@@ -184,7 +182,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .padding([tok::XS, tok::L])
                 .radius(tok::FULL)
                 .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(msg(Message::ModeOpen((!open).then_some(i))))
+                .on_press(Message::ModeOpen((!open).then_some(i)))
                 .into(),
             ));
             if open {
@@ -220,7 +218,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         .width(Length::Fill)
                         .kind(s, crate::ui::control::Kind::Ghost)
                         .no_press_scale()
-                        .on_press(msg(Message::Display(i, DisplayChange::Mode(w, h, hz))))
+                        .on_press(Message::Display(i, DisplayChange::Mode(w, h, hz)))
                         .into(),
                     ));
                 }
@@ -228,41 +226,38 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             // Refresh rates at this size, when there is a choice.
             let rates = d.rates(d.width, d.height);
             if rates.len() > 1 {
-                let opts: Vec<(&str, bool, AppMessage)> = rates
+                let opts: Vec<(&str, bool, Message)> = rates
                     .iter()
                     .map(|r| {
                         (
                             hz_name(*r),
                             (r - d.refresh).abs() < 0.5,
-                            msg(Message::Display(
-                                i,
-                                DisplayChange::Mode(d.width, d.height, *r),
-                            )),
+                            Message::Display(i, DisplayChange::Mode(d.width, d.height, *r)),
                         )
                     })
                     .collect();
                 rows.push(row_of(s, "Refresh rate", None, segments(s, &opts)));
             }
-            let scales: Vec<(&str, bool, AppMessage)> =
+            let scales: Vec<(&str, bool, Message)> =
                 [("100%", 1.0), ("125%", 1.25), ("150%", 1.5), ("200%", 2.0)]
                     .into_iter()
                     .map(|(n, v)| {
                         (
                             n,
                             (d.scale - v).abs() < 0.01,
-                            msg(Message::Display(i, DisplayChange::Scale(v))),
+                            Message::Display(i, DisplayChange::Scale(v)),
                         )
                     })
                     .collect();
             rows.push(row_of(s, "Scale", None, segments(s, &scales)));
-            let turns: Vec<(&str, bool, AppMessage)> =
+            let turns: Vec<(&str, bool, Message)> =
                 [("Normal", 0u8), ("90°", 1), ("180°", 2), ("270°", 3)]
                     .into_iter()
                     .map(|(n, t)| {
                         (
                             n,
                             d.transform == t,
-                            msg(Message::Display(i, DisplayChange::Rotate(t))),
+                            Message::Display(i, DisplayChange::Rotate(t)),
                         )
                     })
                     .collect();
@@ -274,10 +269,10 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .filter(|o| o.name != d.name && o.enabled && o.mirror.is_none())
                 .collect();
             if !others.is_empty() {
-                let mut opts: Vec<(&str, bool, AppMessage)> = vec![(
+                let mut opts: Vec<(&str, bool, Message)> = vec![(
                     "Extend",
                     d.mirror.is_none(),
-                    msg(Message::Display(i, DisplayChange::Mirror(None))),
+                    Message::Display(i, DisplayChange::Mirror(None)),
                 )];
                 for o in others {
                     opts.push((
@@ -287,10 +282,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                             o.label.as_str()
                         },
                         d.mirror.as_deref() == Some(o.name.as_str()),
-                        msg(Message::Display(
-                            i,
-                            DisplayChange::Mirror(Some(o.name.clone())),
-                        )),
+                        Message::Display(i, DisplayChange::Mirror(Some(o.name.clone()))),
                     ));
                 }
                 rows.push(row_of(s, "Show", None, segments(s, &opts)));
@@ -302,20 +294,14 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 && st.displays.iter().all(|d| d.mirror.is_none())
             {
                 let now = place_of(&st.displays);
-                let places: Vec<(&str, bool, AppMessage)> = [
+                let places: Vec<(&str, bool, Message)> = [
                     ("Left", Place::Left),
                     ("Right", Place::Right),
                     ("Above", Place::Above),
                     ("Below", Place::Below),
                 ]
                 .into_iter()
-                .map(|(n, p)| {
-                    (
-                        n,
-                        now == p,
-                        msg(Message::Display(i, DisplayChange::Place(p))),
-                    )
-                })
+                .map(|(n, p)| (n, now == p, Message::Display(i, DisplayChange::Place(p))))
                 .collect();
                 rows.push(row_of(s, "Position", None, segments(s, &places)));
             }
@@ -325,12 +311,8 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
     // Night light: on or off, how warm, and from sunset to sunrise by itself (the same as the
     // control centre's).
     {
-        use crate::panels::control::{COOLEST, Message as C, WARMEST};
-        let k = app
-            .panels
-            .control
-            .kelvin
-            .unwrap_or(app.config.night_light_temperature);
+        use crate::panels::control::{COOLEST, WARMEST};
+        let k = st.kelvin.unwrap_or(cx.config.night_light_temperature);
         let v = ((k as f32 - WARMEST) / (COOLEST - WARMEST)).clamp(0.0, 1.0);
         let warm = Color::from_rgb8(0xFF, 0xA8, 0x55);
         let bar = crate::ui::slider::slider(
@@ -338,15 +320,15 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             v,
             22.0,
             (s.ink.scale_alpha(tok::FILL * s.opacity), s.fade(warm)),
-            |v| snd(C::Warmth(v)),
+            Message::Warmth,
         )
-        .on_release(snd(C::WarmthDone));
+        .on_release(Message::WarmthDone);
         let mut rows = vec![
             row_of(
                 s,
                 "Night light",
                 None,
-                ui::switch(s, app.night_light, set(Change::NightLight)),
+                ui::switch(s, cx.night_light, chg(Change::NightLight)),
             ),
             row_of(
                 s,
@@ -363,8 +345,8 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .into(),
             ),
         ];
-        if let Some(w) = app.weather.as_ref().filter(|w| !w.sunset.is_empty()) {
-            let auto = app.config.night_light_schedule;
+        if let Some(w) = cx.weather.as_ref().filter(|w| !w.sunset.is_empty()) {
+            let auto = cx.config.night_light_schedule;
             rows.push(row_of(
                 s,
                 "Sunset to sunrise",
@@ -375,7 +357,7 @@ pub(super) fn displays_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                         text::SMALL,
                         s.ink_dim
                     ),
-                    ui::switch(s, auto, set(Change::NightSchedule(!auto))),
+                    ui::switch(s, auto, chg(Change::NightSchedule(!auto))),
                 ]
                 .spacing(tok::L)
                 .align_y(Alignment::Center)

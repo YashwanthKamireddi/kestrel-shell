@@ -19,8 +19,12 @@ pub enum Action<M> {
     Change(crate::app::Change),
     /// The same, and `M` back to the panel once it is done (to read the result again).
     ChangeThen(crate::app::Change, M),
-    /// Open (or close) a panel by its name, where the shell puts it ("settings", "capture").
-    Toggle(&'static str),
+    /// One of the shell's own commands, the language `kestrel msg`, keybinds and Lua use
+    /// ("toggle settings", "open-default files ~/Music").
+    Command(String),
+    /// Show the file picker for a question whose answer comes back on its own channel
+    /// (`filechooser::local`).
+    Ask(crate::services::filechooser::Request),
     /// Open a tray app's menu, from the open panel.
     TrayMenu(crate::services::tray::Item),
     /// Show a panel on an output, hanging from `at` (a panel that waited for what it shows).
@@ -108,7 +112,8 @@ pub fn perform<M: Send + 'static>(
         Action::Dispatch(a) => Task::done(AppMessage::Dispatch(a)),
         Action::Change(c) => app.change(c),
         Action::ChangeThen(c, m) => app.change(c).chain(Task::done(wrap(m))),
-        Action::Toggle(name) => app.ipc(&format!("toggle {name}")),
+        Action::Command(c) => app.ipc(&c),
+        Action::Ask(r) => Task::done(AppMessage::FileRequest(r)),
         Action::TrayMenu(item) => match app.panel.as_ref().map(|p| p.output) {
             Some(o) => Task::done(AppMessage::TrayMenu(Some(item), o, None)),
             None => Task::none(),

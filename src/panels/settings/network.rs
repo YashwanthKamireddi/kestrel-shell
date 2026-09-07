@@ -6,28 +6,27 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    use crate::panels::control::Message as C;
-    let st = &app.panels.settings;
-    let n = &app.net;
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+pub(super) fn network_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let n = &cx.net;
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     if !n.available {
         out.push(crate::ui::empty(s, Icon::WifiOff));
         return out;
     }
-    let airplane = !n.wifi_enabled && !app.bt.powered;
+    let airplane = !n.wifi_enabled && !cx.bt.powered;
     let mut top = vec![row_of(
         s,
         "Airplane mode",
         None,
-        ui::switch(s, airplane, set(Change::Airplane)),
+        ui::switch(s, airplane, chg(Change::Airplane)),
     )];
     if n.has_wifi {
         top.push(row_of(
             s,
             "Wi-Fi",
             None,
-            ui::switch(s, n.wifi_enabled, set(Change::Wifi(!n.wifi_enabled))),
+            ui::switch(s, n.wifi_enabled, chg(Change::Wifi(!n.wifi_enabled))),
         ));
     }
     out.extend(group(s, None, top));
@@ -37,8 +36,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         // The network in use (with its details) and the others in range, apart.
         let mut current = Vec::new();
         let mut rows = Vec::new();
-        let pw = &app.panels.control.password;
-        let order = &app.panels.control.wifi_order;
+        let pw = &st.password;
+        let order = &st.wifi_order;
         let mut shown: Vec<_> = n.networks.iter().collect();
         shown.sort_by_key(|net| {
             order
@@ -50,12 +49,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             if !matches(&net.ssid) && !matches("wi-fi") {
                 continue;
             }
-            let busy = app.in_progress(&net.ssid);
-            let failed = app
-                .net_error
-                .as_ref()
-                .filter(|(k, _)| *k == net.ssid)
-                .map(|(_, e)| e.clone());
+            let busy = cx.in_progress(&net.ssid);
+            let failed = cx.net_error(&net.ssid).map(str::to_string);
             let state: String = match busy {
                 Some(true) => "Connecting…".into(),
                 Some(false) => "Disconnecting…".into(),
@@ -69,10 +64,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 16.0,
                 if net.active { s.accent } else { s.ink_dim },
             );
-            let trailing: Element<'_, AppMessage> = if net.active {
+            let trailing: Element<'_, Message> = if net.active {
                 control(label("Disconnect", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(set(Change::Disconnect))
+                    .on_press(chg(Change::Disconnect))
                     .into()
             } else if net.secure && !net.known {
                 icon(Icon::Lock, tok::ICON_S, s.ink_faint).into()
@@ -105,7 +100,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale();
             if !net.active {
-                c = c.on_press(msg(Message::JoinNet(net.clone())));
+                c = c.on_press(Message::JoinNet(net.clone()));
             }
             if net.active {
                 current.push(Some(c.into()));
@@ -148,8 +143,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         "net-password",
                         "Password",
                         typed,
-                        |t| snd(C::Password(t)),
-                        Some(snd(C::SubmitPassword)),
+                        Message::Password,
+                        Some(Message::SubmitPassword),
                         true,
                     ),
                 ));
@@ -160,7 +155,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         }
         // A network that does not announce its name.
         if st.hidden_open {
-            let (name, pass) = &app.panels.control.hidden;
+            let (name, pass) = &st.hidden;
             rows.push(row_of(
                 s,
                 "Network name",
@@ -170,7 +165,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     "hidden-name",
                     "Name",
                     name,
-                    |t| snd(C::HiddenName(t)),
+                    Message::HiddenName,
                     None,
                     false,
                 ),
@@ -184,10 +179,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     "hidden-password",
                     "Password",
                     pass,
-                    |t| snd(C::HiddenPassword(t)),
-                    Some(AppMessage::Batch(vec![
-                        snd(C::JoinHidden),
-                        msg(Message::HiddenOpen(false)),
+                    Message::HiddenPassword,
+                    Some(Message::Batch(vec![
+                        Message::JoinHidden,
+                        Message::HiddenOpen(false),
                     ])),
                     true,
                 ),
@@ -199,7 +194,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 None,
                 control(label("Join", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(msg(Message::HiddenOpen(true)))
+                    .on_press(Message::HiddenOpen(true))
                     .into(),
             ));
         }
@@ -208,7 +203,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
 
         // Saved networks: join by themselves or not, forget. The switches' meaning is said
         // once, over them.
-        let mut saved: Vec<Option<Element<'_, AppMessage>>> = vec![Some(
+        let mut saved: Vec<Option<Element<'_, Message>>> = vec![Some(
             container(
                 row![
                     iced::widget::Space::new().width(Length::Fill),
@@ -225,7 +220,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             })
             .into(),
         )];
-        let rows: Vec<Option<Element<'_, AppMessage>>> = n
+        let rows: Vec<Option<Element<'_, Message>>> = n
             .saved
             .iter()
             .filter(|k| matches(&k.ssid) || matches("saved"))
@@ -235,11 +230,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     container(
                         row![
                             label(k.ssid.clone(), text::BODY, s.ink).width(Length::Fill),
-                            ui::switch(
-                                s,
-                                k.auto,
-                                msg(Message::AutoJoinNet(k.ssid.clone(), !k.auto))
-                            ),
+                            ui::switch(s, k.auto, Message::AutoJoinNet(k.ssid.clone(), !k.auto)),
                             control(label(
                                 if asking { "Forget?" } else { "Forget" },
                                 text::SMALL,
@@ -248,7 +239,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                             .pill(s, crate::ui::control::Pill::Plain)
                             .width(FORGET_W)
                             .center_x()
-                            .on_press(msg(Message::ForgetNet(k.ssid.clone()))),
+                            .on_press(Message::ForgetNet(k.ssid.clone())),
                         ]
                         .spacing(tok::L)
                         .align_y(Alignment::Center),
@@ -307,7 +298,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         let set = |f: &dyn Fn(&mut IpEdit)| {
             let mut x = e.clone();
             f(&mut x);
-            msg(Message::IpEdit(x))
+            Message::IpEdit(x)
         };
         let mut rows = vec![
             copy_row(s, "Connection", name.clone()),
@@ -350,9 +341,9 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     move |t| {
                         let mut x = base.clone();
                         x.address = t;
-                        msg(Message::IpEdit(x))
+                        Message::IpEdit(x)
                     },
-                    Some(msg(Message::IpApply)),
+                    Some(Message::IpApply),
                     false,
                 ),
             ));
@@ -369,9 +360,9 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     move |t| {
                         let mut x = base.clone();
                         x.router = t;
-                        msg(Message::IpEdit(x))
+                        Message::IpEdit(x)
                     },
-                    Some(msg(Message::IpApply)),
+                    Some(Message::IpApply),
                     false,
                 ),
             ));
@@ -402,9 +393,9 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     move |t| {
                         let mut x = base.clone();
                         x.dns = t;
-                        msg(Message::IpEdit(x))
+                        Message::IpEdit(x)
                     },
-                    Some(msg(Message::IpApply)),
+                    Some(Message::IpApply),
                     false,
                 ),
             ));
@@ -416,10 +407,10 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         iced::widget::Space::new().width(Length::Fill),
                         control(label("Revert", text::SMALL, s.ink))
                             .pill(s, crate::ui::control::Pill::Plain)
-                            .on_press(msg(Message::IpEdit(IpEdit::from(&st.ip_saved)))),
+                            .on_press(Message::IpEdit(IpEdit::from(&st.ip_saved))),
                         control(label("Apply", text::SMALL, s.on_accent))
                             .pill(s, crate::ui::control::Pill::Primary)
-                            .on_press(msg(Message::IpApply)),
+                            .on_press(Message::IpApply),
                     ]
                     .spacing(tok::M)
                     .align_y(Alignment::Center),
@@ -441,7 +432,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 s,
                 "Hotspot",
                 None,
-                ui::switch(s, true, msg(Message::HotspotOn(false))),
+                ui::switch(s, true, Message::HotspotOn(false)),
             ));
             if let Some(h) = &st.hotspot {
                 rows.push(copy_row(s, "Name", h.name.clone()));
@@ -452,7 +443,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 s,
                 "Hotspot",
                 None,
-                ui::switch(s, false, msg(Message::HotspotOn(true))),
+                ui::switch(s, false, Message::HotspotOn(true)),
             ));
             let (name, pass) = st.hotspot_edit.clone();
             let p2 = pass.clone();
@@ -465,7 +456,7 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     "hotspot-name",
                     "Name",
                     &name,
-                    move |t| msg(Message::HotspotEdit(t, p2.clone())),
+                    move |t| Message::HotspotEdit(t, p2.clone()),
                     None,
                     false,
                 ),
@@ -479,8 +470,8 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     "hotspot-password",
                     "8 characters or more",
                     &pass,
-                    move |t| msg(Message::HotspotEdit(name.clone(), t)),
-                    Some(msg(Message::HotspotOn(true))),
+                    move |t| Message::HotspotEdit(name.clone(), t),
+                    Some(Message::HotspotOn(true)),
                     false,
                 ),
             ));
@@ -497,20 +488,20 @@ pub(super) fn network_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
 
     // VPNs kestrel knows (installed ones only).
     let mut vpn = Vec::new();
-    if let Some(on) = app.vpn.warp {
+    if let Some(on) = cx.vpn.warp {
         vpn.push(row_of(
             s,
             "Cloudflare WARP",
             None,
-            ui::switch(s, on, set(Change::Warp(!on))),
+            ui::switch(s, on, chg(Change::Warp(!on))),
         ));
     }
-    if let Some(on) = app.vpn.tailscale {
+    if let Some(on) = cx.vpn.tailscale {
         vpn.push(row_of(
             s,
             "Tailscale",
             None,
-            ui::switch(s, on, set(Change::Tailscale(!on))),
+            ui::switch(s, on, chg(Change::Tailscale(!on))),
         ));
     }
     out.extend(group(s, Some("VPN"), vpn));

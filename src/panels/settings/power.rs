@@ -14,12 +14,12 @@ pub(super) fn idle_time(secs: u64) -> String {
     }
 }
 
-pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
+pub(super) fn power_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     use crate::services::idle::Step;
     use crate::services::power::Profile;
-    let st = &app.panels.settings;
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
-    if let Some(p) = app.power.profile {
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
+    if let Some(p) = cx.power.profile {
         out.extend(group(
             s,
             None,
@@ -30,23 +30,23 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 segments(
                     s,
                     &[Profile::PowerSaver, Profile::Balanced, Profile::Performance]
-                        .map(|q| (q.label(), q == p, msg(Message::Profile(q)))),
+                        .map(|q| (q.label(), q == p, Message::Profile(q))),
                 ),
             )],
         ));
     }
-    if app.power.has_battery {
+    if cx.power.has_battery {
         let mut rows = vec![value_row(
             s,
             "Charge",
             format!(
                 "{:.0}%{}",
-                app.power.percent,
-                if app.power.full {
+                cx.power.percent,
+                if cx.power.full {
                     " · Full"
-                } else if app.power.charging {
+                } else if cx.power.charging {
                     " · Charging"
-                } else if app.power.held {
+                } else if cx.power.held {
                     " · Charging on hold"
                 } else {
                     ""
@@ -62,22 +62,22 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         // Charging: the firmware's modes (Stop at 80% keeps a battery that lives on the
         // charger from wearing out).
         if let Some((offered, now)) = &st.charging {
-            let opts: Vec<(&str, bool, AppMessage)> = offered
+            let opts: Vec<(&str, bool, Message)> = offered
                 .iter()
-                .map(|c| (kept(c.label()), c == now, msg(Message::Charging(*c))))
+                .map(|c| (kept(c.label()), c == now, Message::Charging(*c)))
                 .collect();
             rows.push(row_of(s, "Charging", None, segments(s, &opts)));
         }
         // Low battery (UPower's policy): when to warn, and what happens when nearly empty.
         if let Some(l) = &st.low {
             let action = l.action.clone();
-            let warn: Vec<(&str, bool, AppMessage)> = [10u32, 15, 20, 25, 30]
+            let warn: Vec<(&str, bool, Message)> = [10u32, 15, 20, 25, 30]
                 .into_iter()
                 .map(|p| {
                     (
                         kept(format!("{p}%")),
                         l.warn_at == p,
-                        msg(Message::LowSet(p, action.clone())),
+                        Message::LowSet(p, action.clone()),
                     )
                 })
                 .collect();
@@ -93,17 +93,17 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                 (
                     "Power off",
                     poweroff,
-                    msg(Message::LowSet(l.warn_at, "PowerOff".into())),
+                    Message::LowSet(l.warn_at, "PowerOff".into()),
                 ),
                 (
                     "Suspend",
                     suspend,
-                    msg(Message::LowSet(l.warn_at, "Suspend".into())),
+                    Message::LowSet(l.warn_at, "Suspend".into()),
                 ),
             ];
             // An action set elsewhere (hibernate) stays shown as it is.
             if !suspend && !poweroff {
-                ends.push((kept(l.action.clone()), true, msg(Message::DisplayTick)));
+                ends.push((kept(l.action.clone()), true, Message::DisplayTick));
             }
             rows.push(row_of(
                 s,
@@ -140,7 +140,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
             .padding([tok::XS, tok::L])
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(msg(Message::IdleOpen((!open).then_some(*step))))
+            .on_press(Message::IdleOpen((!open).then_some(*step)))
             .into(),
         ));
         if open {
@@ -169,7 +169,7 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
                     .width(Length::Fill)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
-                    .on_press(msg(Message::Idle(*step, t)))
+                    .on_press(Message::Idle(*step, t))
                     .into(),
                 ));
             }
@@ -182,12 +182,12 @@ pub(super) fn power_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
         let pick = |now: A,
                     choices: &[(&'static str, A)],
                     put: fn(&mut crate::services::power::Lid, A)| {
-            let opts: Vec<(&str, bool, AppMessage)> = choices
+            let opts: Vec<(&str, bool, Message)> = choices
                 .iter()
                 .map(|(name, a)| {
                     let mut next = l;
                     put(&mut next, *a);
-                    (*name, now == *a, msg(Message::LidSet(next)))
+                    (*name, now == *a, Message::LidSet(next))
                 })
                 .collect();
             segments(s, &opts)

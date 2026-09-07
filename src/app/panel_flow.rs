@@ -27,7 +27,7 @@ impl App {
             min_size: (760, 480),
         });
         self.settings_window = Some(id);
-        Task::batch([close, task, panels::settings::open(self)])
+        Task::batch([close, task, panels::open_settings(self)])
     }
 
     pub(crate) fn toggle(

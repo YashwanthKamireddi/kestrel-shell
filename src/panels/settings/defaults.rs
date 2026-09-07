@@ -4,8 +4,8 @@ use super::*;
 use crate::theme::tok;
 
 /// An app's icon and name, small (default apps).
-pub(super) fn app_chip<'a>(s: Scheme, a: &crate::services::apps::App) -> Element<'a, AppMessage> {
-    let ic: Element<'a, AppMessage> = match crate::services::icons::lookup(&a.icon) {
+pub(super) fn app_chip<'a>(s: Scheme, a: &crate::services::apps::App) -> Element<'a, Message> {
+    let ic: Element<'a, Message> = match crate::services::icons::lookup(&a.icon) {
         Some(p) => ui::image_file_faded(&p, 18.0, s.opacity),
         None => icon(Icon::AppWindow, tok::ICON, s.ink_dim).into(),
     };
@@ -15,20 +15,20 @@ pub(super) fn app_chip<'a>(s: Scheme, a: &crate::services::apps::App) -> Element
         .into()
 }
 
-pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
+pub(super) fn defaults_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     use crate::services::defaults::{KINDS, candidates};
-    let st = &app.panels.settings;
     if st.apps.is_empty() {
         return Vec::new();
     }
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     let mut rows = Vec::new();
     for (k, kind) in KINDS.iter().enumerate() {
         let now = st.defaults.get(k).cloned().flatten();
         let now_app = now
             .as_ref()
             .and_then(|id| st.apps.iter().find(|a| &a.id == id));
-        let shown: Element<'_, AppMessage> = match now_app {
+        let shown: Element<'_, Message> = match now_app {
             Some(a) => app_chip(s, a),
             None => label("None", text::SMALL, s.ink_dim).into(),
         };
@@ -45,7 +45,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             .padding([tok::XS, tok::L])
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(msg(Message::DefaultOpen((!open).then_some(k))))
+            .on_press(Message::DefaultOpen((!open).then_some(k)))
             .into(),
         ));
         if open {
@@ -70,7 +70,7 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                     .width(Length::Fill)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
-                    .on_press(msg(Message::DefaultSet(k, a.id.clone())))
+                    .on_press(Message::DefaultSet(k, a.id.clone()))
                     .into(),
                 ));
             }
@@ -81,25 +81,19 @@ pub(super) fn defaults_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
     let mut more = Vec::new();
     if !st.terminals.is_empty() {
         let now = st.terminal.clone().unwrap_or_default();
-        let opts: Vec<(&str, bool, AppMessage)> = st
+        let opts: Vec<(&str, bool, Message)> = st
             .terminals
             .iter()
-            .map(|(id, name)| {
-                (
-                    name.as_str(),
-                    *id == now,
-                    msg(Message::TerminalSet(id.clone())),
-                )
-            })
+            .map(|(id, name)| (name.as_str(), *id == now, Message::TerminalSet(id.clone())))
             .collect();
         more.push(row_of(s, "Terminal", None, segments(s, &opts)));
     }
     if !st.editors.is_empty() {
-        let now = app.config.editor.clone().unwrap_or_default();
-        let opts: Vec<(&str, bool, AppMessage)> = st
+        let now = cx.config.editor.clone().unwrap_or_default();
+        let opts: Vec<(&str, bool, Message)> = st
             .editors
             .iter()
-            .map(|e| (*e, now == *e, msg(Message::EditorSet((*e).to_string()))))
+            .map(|e| (*e, now == *e, Message::EditorSet((*e).to_string())))
             .collect();
         more.push(row_of(
             s,

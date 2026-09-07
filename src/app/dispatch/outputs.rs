@@ -128,7 +128,6 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::OpenWallpaper => app.ipc("toggle wallpaper"),
         Message::ReloadWallpaper => load_wallpaper(app.config.wallpaper.clone()),
         Message::IslandMeasured(id, w) => {
             if let Some(o) = app.outputs.iter_mut().find(|o| o.id == id) {

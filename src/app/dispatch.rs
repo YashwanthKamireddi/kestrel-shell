@@ -50,8 +50,7 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::IslandMeasured { .. }
         | Message::Breathe
         | Message::Expire { .. }
-        | Message::ReloadWallpaper
-        | Message::OpenWallpaper) => outputs::handle(app, m),
+        | Message::ReloadWallpaper) => outputs::handle(app, m),
         m @ (Message::Toggle { .. }
         | Message::ControlAt { .. }
         | Message::SettingsAt { .. }

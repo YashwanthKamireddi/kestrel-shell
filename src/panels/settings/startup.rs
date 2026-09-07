@@ -8,7 +8,7 @@ use iced::widget::column;
 /// A file change for Startup apps, off the UI thread, then the list read again.
 pub(super) fn startup_job(
     f: impl FnOnce() -> Result<(), String> + Send + 'static,
-) -> Task<AppMessage> {
+) -> Task<Message> {
     Task::perform(
         async move {
             let r = tokio::task::spawn_blocking(f)
@@ -19,27 +19,22 @@ pub(super) fn startup_job(
                 .unwrap_or_default();
             (r, list)
         },
-        |(r, list)| {
-            AppMessage::Batch(vec![
-                msg(Message::Startup(list, Vec::new())),
-                msg(Message::Done(r)),
-            ])
-        },
+        |(r, list)| Message::Batch(vec![Message::Startup(list, Vec::new()), Message::Done(r)]),
     )
 }
 
-pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
-    let mut rows: Vec<Option<Element<'_, AppMessage>>> = st
+pub(super) fn startup_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let mut rows: Vec<Option<Element<'_, Message>>> = st
         .startup
         .iter()
         .map(|e| {
-            let ic: Element<'_, AppMessage> = match crate::services::icons::lookup(&e.icon) {
+            let ic: Element<'_, Message> = match crate::services::icons::lookup(&e.icon) {
                 Some(p) => ui::image_file_faded(&p, 18.0, s.opacity),
                 None => icon(Icon::AppWindow, tok::ICON, s.ink_dim).into(),
             };
-            let remove: Element<'_, AppMessage> = if e.user_only {
-                crate::ui::remove_button(s, msg(Message::StartupRemove(e.id.clone())))
+            let remove: Element<'_, Message> = if e.user_only {
+                crate::ui::remove_button(s, Message::StartupRemove(e.id.clone()))
             } else {
                 iced::widget::Space::new().into()
             };
@@ -49,11 +44,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                         ic,
                         label(e.name.clone(), text::BODY, s.ink).width(Length::Fill),
                         remove,
-                        ui::switch(
-                            s,
-                            e.enabled,
-                            msg(Message::StartupOn(e.id.clone(), !e.enabled))
-                        ),
+                        ui::switch(s, e.enabled, Message::StartupOn(e.id.clone(), !e.enabled)),
                     ]
                     .spacing(tok::L)
                     .align_y(Alignment::Center),
@@ -80,10 +71,10 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .radius(tok::R_ROW)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
-        .on_press(msg(Message::StartupAddOpen(!st.startup_add)))
+        .on_press(Message::StartupAddOpen(!st.startup_add))
         .into(),
     ));
-    let mut out: Vec<Element<'_, AppMessage>> = group(s, None, rows).into_iter().collect();
+    let mut out: Vec<Element<'_, Message>> = group(s, None, rows).into_iter().collect();
     if st.startup_add {
         let q = st.startup_query.trim().to_lowercase();
         let mut list = column![pick_search(
@@ -108,7 +99,7 @@ pub(super) fn startup_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                     .radius(tok::R_ROW)
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
-                    .on_press(msg(Message::StartupAdd(a.id.clone()))),
+                    .on_press(Message::StartupAdd(a.id.clone())),
             );
         }
         out.push(list.into());

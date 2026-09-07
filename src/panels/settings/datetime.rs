@@ -5,8 +5,8 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
+pub(super) fn datetime_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     let Some(t) = &st.time else {
         return Vec::new();
     };
@@ -18,10 +18,10 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             s,
             "Set time automatically",
             None,
-            ui::switch(s, t.ntp, msg(Message::Ntp(!t.ntp))),
+            ui::switch(s, t.ntp, Message::Ntp(!t.ntp)),
         ));
     }
-    let sunday = app.config.clock.week_starts_sunday;
+    let sunday = cx.config.clock.week_starts_sunday;
     rows.push(row_of(
         s,
         "Week starts on",
@@ -29,8 +29,8 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         segments(
             s,
             &[
-                ("Monday", !sunday, msg(Message::WeekStart(false))),
-                ("Sunday", sunday, msg(Message::WeekStart(true))),
+                ("Monday", !sunday, Message::WeekStart(false)),
+                ("Sunday", sunday, Message::WeekStart(true)),
             ],
         ),
     ));
@@ -40,7 +40,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         None,
         control(label(zone_name, text::SMALL, s.ink))
             .pill(s, crate::ui::control::Pill::Plain)
-            .on_press(msg(Message::ZonesOpen(!st.zones_open)))
+            .on_press(Message::ZonesOpen(!st.zones_open))
             .into(),
     ));
     out.extend(group(s, None, rows));
@@ -50,14 +50,14 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         let search = container(
             text_input("Search", &st.zone_query)
                 .id(iced::widget::Id::new("zone-search"))
-                .on_input(|q| msg(Message::ZoneQuery(q)))
-                .on_submit(msg(Message::Zone(
+                .on_input(Message::ZoneQuery)
+                .on_submit(Message::Zone(
                     t.zones
                         .iter()
                         .find(|z| z.to_lowercase().contains(&q))
                         .cloned()
                         .unwrap_or_else(|| t.timezone.clone()),
-                )))
+                ))
                 .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
@@ -90,7 +90,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
                 .radius(tok::R_ROW)
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
-                .on_press(msg(Message::Zone(z.clone()))),
+                .on_press(Message::Zone(z.clone())),
             );
         }
         out.push(list.into());
@@ -128,7 +128,7 @@ pub(super) fn datetime_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
             .padding([tok::XS, tok::L])
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(msg(Message::RegionOpen(!st.region_open)))
+            .on_press(Message::RegionOpen(!st.region_open))
             .into(),
         )];
         if st.region_open {

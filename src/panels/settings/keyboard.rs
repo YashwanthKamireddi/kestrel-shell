@@ -26,8 +26,7 @@ pub(super) fn current_layouts(st: &State) -> Vec<String> {
 }
 
 /// Adds or removes a keyboard layout (the last one stays).
-pub(super) fn change_layouts(app: &mut App, code: String, add: bool) -> Task<AppMessage> {
-    let st = &mut app.panels.settings;
+pub(super) fn change_layouts(st: &mut State, code: String, add: bool) -> Task<Message> {
     let mut now = current_layouts(st);
     if add {
         if !now.contains(&code) {
@@ -44,8 +43,8 @@ pub(super) fn change_layouts(app: &mut App, code: String, add: bool) -> Task<App
     Task::future(crate::hypr_settings::save(LAYOUTS, v)).discard()
 }
 
-pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
+pub(super) fn keyboard_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     if st.hypr.is_empty() {
         return Vec::new();
     }
@@ -58,10 +57,10 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
     let now = current_layouts(st);
     // Layouts: each by name, removable while there is more than one, more added from the
     // system's list. The first is the one at start.
-    let mut rows: Vec<Option<Element<'_, AppMessage>>> = Vec::new();
+    let mut rows: Vec<Option<Element<'_, Message>>> = Vec::new();
     for code in &now {
-        let remove: Element<'_, AppMessage> = if now.len() > 1 {
-            crate::ui::remove_button(s, msg(Message::LayoutRemove(code.clone())))
+        let remove: Element<'_, Message> = if now.len() > 1 {
+            crate::ui::remove_button(s, Message::LayoutRemove(code.clone()))
         } else {
             iced::widget::Space::new().into()
         };
@@ -94,10 +93,10 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         .radius(tok::R_ROW)
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
-        .on_press(msg(Message::LayoutsOpen(!st.layouts_open)))
+        .on_press(Message::LayoutsOpen(!st.layouts_open))
         .into(),
     ));
-    let mut out: Vec<Element<'_, AppMessage>> = Vec::new();
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
     if matches("keyboard layouts") {
         out.extend(group(s, Some("Layouts"), rows));
     }
@@ -127,9 +126,9 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         }
         out.push(list.into());
     }
-    let mut typing: Vec<Option<Element<'_, AppMessage>>> = crate::hypr_settings::KEYBOARD
+    let mut typing: Vec<Option<Element<'_, Message>>> = crate::hypr_settings::KEYBOARD
         .iter()
-        .map(|o| hypr_row(app, s, *o))
+        .map(|o| hypr_row(st, cx, *o))
         .collect();
     // Keys with a job: Caps Lock, switching layouts (with more than one), a compose key. Each
     // owns its part of the one xkb options list.
@@ -149,10 +148,10 @@ pub(super) fn keyboard_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>
         } else {
             cur
         };
-        let opts: Vec<(&str, bool, AppMessage)> = c
+        let opts: Vec<(&str, bool, Message)> = c
             .values
             .iter()
-            .map(|(v, l)| (*l, *v == cur, msg(Message::Xkb(k, (*v).to_string()))))
+            .map(|(v, l)| (*l, *v == cur, Message::Xkb(k, (*v).to_string())))
             .collect();
         typing.push(row_of(s, c.label, None, segments(s, &opts)));
     }

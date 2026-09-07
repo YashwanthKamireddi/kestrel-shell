@@ -5,8 +5,8 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
+pub(super) fn account_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     let Some((login, full, admin)) = &st.account else {
         return Vec::new();
     };
@@ -15,12 +15,12 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
     } else {
         full.clone()
     };
-    let name_control: Element<'_, AppMessage> = match &st.full_name {
+    let name_control: Element<'_, Message> = match &st.full_name {
         Some(t) => container(
             text_input("Full name", t)
                 .id(iced::widget::Id::new("full-name"))
-                .on_input(|t| msg(Message::FullName(Some(t))))
-                .on_submit(msg(Message::FullNameSubmit))
+                .on_input(|t| Message::FullName(Some(t)))
+                .on_submit(Message::FullNameSubmit)
                 .padding([tok::S, tok::L])
                 .size(text::BODY)
                 .font(theme::FONT)
@@ -31,7 +31,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .into(),
         None => control(label(shown.clone(), text::SMALL, s.ink))
             .pill(s, crate::ui::control::Pill::Plain)
-            .on_press(msg(Message::FullName(Some(full.clone()))))
+            .on_press(Message::FullName(Some(full.clone())))
             .into(),
     };
     let head = container(
@@ -50,7 +50,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
             )
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(msg(Message::PickPicture)),
+            .on_press(Message::PickPicture),
             column![
                 label_w(shown, text::TITLE, s.ink, theme::SEMIBOLD),
                 label(
@@ -69,7 +69,7 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
         .align_y(Alignment::Center),
     )
     .padding([tok::XS, tok::XS]);
-    let mut out: Vec<Element<'_, AppMessage>> = vec![head.into()];
+    let mut out: Vec<Element<'_, Message>> = vec![head.into()];
     out.extend(group(
         s,
         None,
@@ -82,12 +82,12 @@ pub(super) fn account_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>>
                 None,
                 control(label("Change…", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(AppMessage::Batch(vec![
-                        msg(Message::InTerminal(
+                    .on_press(Message::Batch(vec![
+                        Message::InTerminal(
                             "sh -c 'passwd; echo; read -p \"Press Enter to close.\" _'",
                             "Password",
-                        )),
-                        AppMessage::Close,
+                        ),
+                        Message::Close,
                     ]))
                     .into(),
             ),

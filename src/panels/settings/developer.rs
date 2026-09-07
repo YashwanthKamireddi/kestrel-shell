@@ -22,14 +22,14 @@ pub(super) const COMMANDS: [(&str, &str); 10] = [
 /// Panels `kestrel toggle` opens.
 pub(super) const PANELS: &str = "launcher overview control calendar power clipboard emoji wallpaper keys capture monitor weather files media privacy settings";
 
-pub(super) fn developer_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage>> {
-    let st = &app.panels.settings;
+pub(super) fn developer_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
     let cfg = crate::config::path();
     let lua = cfg.with_file_name("init.lua");
-    let open = |p: std::path::PathBuf| -> Element<'_, AppMessage> {
+    let open = |p: std::path::PathBuf| -> Element<'_, Message> {
         control(label("Open", text::SMALL, s.ink))
             .pill(s, crate::ui::control::Pill::Plain)
-            .on_press(msg(Message::OpenFile(p)))
+            .on_press(Message::OpenFile(p))
             .into()
     };
     let mut out = Vec::new();
@@ -45,10 +45,10 @@ pub(super) fn developer_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                 None,
                 control(label("Show", text::SMALL, s.ink))
                     .pill(s, crate::ui::control::Pill::Plain)
-                    .on_press(msg(Message::InTerminal(
+                    .on_press(Message::InTerminal(
                         "journalctl --user -u kestrel -f -n 200",
                         "kestrel log",
-                    )))
+                    ))
                     .into(),
             ),
             row_of(
@@ -65,12 +65,12 @@ pub(super) fn developer_page(app: &App, s: Scheme) -> Vec<Element<'_, AppMessage
                     if st.restart_armed { s.bad } else { s.ink },
                 ))
                 .pill(s, crate::ui::control::Pill::Plain)
-                .on_press(msg(Message::Restart))
+                .on_press(Message::Restart)
                 .into(),
             ),
         ],
     ));
-    let mut rows: Vec<Option<Element<'_, AppMessage>>> = COMMANDS
+    let mut rows: Vec<Option<Element<'_, Message>>> = COMMANDS
         .iter()
         .map(|(what, cmd)| copy_row(s, what, (*cmd).to_string()))
         .collect();
