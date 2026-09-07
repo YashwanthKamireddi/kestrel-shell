@@ -1,0 +1,289 @@
+//! What a query finds: apps, open windows, files, paths, links, emoji, clipboard entries,
+//! processes and the web, in the order they are shown.
+
+use super::*;
+
+/// A pasted path that exists: "/home/…/a.pdf", "~/Videos", "file:///…" (a file manager's copy,
+/// %20 for spaces), in quotes or not. Enter opens it in its default app, a folder in the file
+/// manager (xdg-open). One stat, nothing searched.
+pub(super) fn pasted_path(q: &str) -> Option<PathBuf> {
+    let q = q.trim().trim_matches(|c| c == '\'' || c == '"');
+    let q = q.strip_prefix("file://").unwrap_or(q);
+    if !(q.starts_with('/') || q.starts_with("~/") || q == "~") {
+        return None;
+    }
+    let q = if q.contains('%') {
+        percent_decode(q)
+    } else {
+        q.to_string()
+    };
+    let p = match q.strip_prefix('~') {
+        Some(rest) => PathBuf::from(std::env::var("HOME").ok()?).join(rest.trim_start_matches('/')),
+        None => PathBuf::from(q),
+    };
+    p.exists().then_some(p)
+}
+
+/// "%20" and the like back to their characters (paths copied as file:// URLs).
+pub(super) fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16)
+        {
+            out.push(v);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+pub fn entries(st: &State) -> Vec<Entry<'_>> {
+    let q = st.query.trim();
+    // A pasted path: just that, to open (before "/" means a search by name).
+    if let Some(p) = pasted_path(q) {
+        return vec![Entry::File(p)];
+    }
+    if let Some(expr) = q.strip_prefix('=') {
+        return calc(expr).map(|v| vec![Entry::Calc(v)]).unwrap_or_default();
+    }
+    if let Some(filter) = q.strip_prefix(':') {
+        let filter = filter.trim().to_lowercase();
+        return st
+            .clips
+            .iter()
+            .flatten()
+            .filter(|c| filter.is_empty() || c.preview.to_lowercase().contains(&filter))
+            .take(MAX_RESULTS)
+            .map(Entry::Clip)
+            .collect();
+    }
+    if let Some(f) = q.strip_prefix('.') {
+        let f = f.trim().to_lowercase();
+        return EMOJI
+            .lines()
+            .filter_map(|l| l.split_once(' '))
+            .filter(|(_, name)| {
+                // "smile" finds "smiling" too: a word also matches without its last letter.
+                f.is_empty()
+                    || f.split_whitespace().all(|w| {
+                        name.contains(w) || (w.len() > 3 && name.contains(&w[..w.len() - 1]))
+                    })
+            })
+            .take(MAX_RESULTS)
+            .map(|(e, n)| Entry::Emoji(e, n))
+            .collect();
+    }
+    if let Some(term) = q.strip_prefix('?') {
+        let term = term.trim();
+        return if term.is_empty() {
+            vec![]
+        } else {
+            vec![Entry::Web(term.to_string())]
+        };
+    }
+    if q.starts_with('/') {
+        return if st.files.0 == q {
+            st.files.1.iter().cloned().map(Entry::File).collect()
+        } else {
+            vec![]
+        };
+    }
+    if let Some(name) = q.strip_prefix('!') {
+        return processes(name.trim())
+            .into_iter()
+            .map(|(pid, n, mem)| Entry::Process(pid, n, mem))
+            .collect();
+    }
+    if let Some(cmd) = q.strip_prefix('>') {
+        let cmd = cmd.trim();
+        return if cmd.is_empty() {
+            vec![]
+        } else {
+            vec![Entry::Run(cmd.to_string())]
+        };
+    }
+    let scored: Vec<(i32, &apps::App)> = st
+        .apps
+        .iter()
+        .filter_map(|a| {
+            let count = *st.counts.get(&a.id).unwrap_or(&0) as i32;
+            // Nothing typed: the apps you use most first, then the rest by name, so the list
+            // is never bare (a new install showed only the search field).
+            if q.is_empty() {
+                return Some((count, a));
+            }
+            let best = [
+                // Letters picked out in order only in the name ("vsc" finds Visual Studio
+                // Code); the rest must contain the text as typed.
+                apps::score(q, &a.name).map(|v| v * 3),
+                apps::score_contains(q, &a.generic),
+                apps::score_contains(q, &a.keywords),
+                apps::score_contains(q, &a.id).map(|v| v / 2),
+            ]
+            .into_iter()
+            .flatten()
+            .max()?;
+            Some((best + count.min(50) * 4, a))
+        })
+        .collect();
+    // Settings pages, scored like apps: the page's name like an app's, its everyday words like
+    // an app's keywords ("blu" finds Bluetooth, "wifi" Network). Two letters at least: one
+    // matched too much.
+    let mut found: Vec<(i32, Entry<'_>)> = scored
+        .into_iter()
+        .map(|(v, a)| (v, Entry::App(a)))
+        .collect();
+    if q.chars().count() >= 2 {
+        let mut pages: Vec<(i32, Entry<'_>)> = crate::panels::settings::Page::all()
+            .filter_map(|p| {
+                let best = [
+                    apps::score_contains(q, p.name()).map(|v| v * 3),
+                    apps::score_contains(q, p.words()),
+                ]
+                .into_iter()
+                .flatten()
+                .max()?;
+                Some((best, Entry::Setting(p)))
+            })
+            .collect();
+        pages.sort_by_key(|p| std::cmp::Reverse(p.0));
+        found.extend(pages.into_iter().take(3));
+    }
+    found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| title(&a.1).cmp(title(&b.1))));
+    let mut out: Vec<Entry<'_>> = found
+        .into_iter()
+        .take(MAX_RESULTS)
+        .map(|(_, e)| e)
+        .collect();
+    // Never a dead end: what was typed can always be run (when it names a program) or looked
+    // up on the web, at the bottom, so Enter on a query nothing matched still does something.
+    if q.chars().count() >= 2 {
+        // Not when a result is that program already (btop++ starts btop).
+        let word = q.split_whitespace().next().unwrap_or("");
+        let exe = st.exe
+            && !out.iter().any(|e| {
+                matches!(e, Entry::App(a)
+                    if a.exec.split_whitespace().next().and_then(|c| c.rsplit('/').next()) == Some(word))
+            });
+        let room = MAX_RESULTS - usize::from(exe) - 1;
+        out.truncate(room);
+        if exe {
+            out.push(Entry::Run(q.to_string()));
+        }
+        out.push(Entry::Web(q.to_string()));
+    }
+    // A bare expression like "2+2" also gets an answer.
+    if q.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_digit() || c == '(')
+        && let Some(v) = calc(q)
+    {
+        out.insert(0, Entry::Calc(v));
+    }
+    out
+}
+
+/// An entry's name, for ordering equal scores.
+pub(super) fn title<'a>(e: &'a Entry<'_>) -> &'a str {
+    match e {
+        Entry::App(a) => &a.name,
+        Entry::Setting(p) => p.name(),
+        _ => "",
+    }
+}
+
+/// Whether `word` is a program on PATH.
+pub(super) fn on_path(word: &str) -> bool {
+    !word.is_empty()
+        && !word.contains('/')
+        && std::env::var_os("PATH").is_some_and(|p| {
+            std::env::split_paths(&p).any(|d| {
+                std::fs::metadata(d.join(word)).is_ok_and(|m| {
+                    m.is_file()
+                        && std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o111 != 0
+                })
+            })
+        })
+}
+
+pub(super) fn encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            b' ' => "+".to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+pub(super) async fn find_files(term: String) -> Vec<PathBuf> {
+    use crate::services::search::{Options, find};
+    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    let o = Options {
+        max_results: 8,
+        max_depth: None,
+        files_only: true,
+        hidden: false,
+        one_file_system: false,
+    };
+    tokio::task::spawn_blocking(move || find(&home, &term, o))
+        .await
+        .unwrap_or_default()
+}
+
+/// This user's processes whose name contains `name`, biggest memory first: (pid, name, KiB).
+pub(super) fn processes(name: &str) -> Vec<(u32, String, u64)> {
+    let uid = unsafe { libc::getuid() };
+    let me = std::process::id();
+    let name = name.to_lowercase();
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir("/proc") else {
+        return out;
+    };
+    for e in rd.flatten() {
+        let Some(pid) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else {
+            continue;
+        };
+        if pid == me {
+            continue;
+        }
+        let Ok(status) = std::fs::read_to_string(e.path().join("status")) else {
+            continue;
+        };
+        let field = |k: &str| {
+            status
+                .lines()
+                .find(|l| l.starts_with(k))
+                .map(|l| l[k.len()..].trim().to_string())
+        };
+        let owner = field("Uid:")
+            .and_then(|u| u.split_whitespace().next().map(str::to_string))
+            .and_then(|u| u.parse::<u32>().ok());
+        if owner != Some(uid) {
+            continue;
+        }
+        let comm = field("Name:").unwrap_or_default();
+        if !name.is_empty() && !comm.to_lowercase().contains(&name) {
+            continue;
+        }
+        let rss = field("VmRSS:")
+            .and_then(|v| v.split_whitespace().next().and_then(|n| n.parse().ok()))
+            .unwrap_or(0);
+        if rss == 0 {
+            continue;
+        }
+        out.push((pid, comm, rss));
+    }
+    out.sort_by_key(|p| std::cmp::Reverse(p.2));
+    out.truncate(MAX_RESULTS);
+    out
+}
