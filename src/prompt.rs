@@ -9,7 +9,7 @@
 //! it is answered. It reads the shell's colours from state.toml and never writes there.
 
 use crate::panels::auth;
-use crate::services::{bluetooth, network, polkit};
+use crate::services::{bluetooth, keyring, network, polkit};
 use crate::theme::{Scheme, Seed, tok};
 use iced::task::{destroy_layer_surface, new_layer_surface, set_size};
 use iced::{
@@ -33,6 +33,7 @@ pub enum Message {
     Polkit(polkit::Event),
     Wifi(network::Ask),
     Bt(bluetooth::Ask),
+    Keyring(keyring::Ask),
     Auth(auth::Message),
     Measured(Size),
     Alive,
@@ -89,6 +90,7 @@ fn preview() -> Task<Message> {
         Some(Preview::Polkit(r)) => Task::done(Message::Polkit(polkit::Event::Ask(r))),
         Some(Preview::Wifi(a)) => Task::done(Message::Wifi(a)),
         Some(Preview::Bt(a)) => Task::done(Message::Bt(a)),
+        Some(Preview::Keyring(p)) => Task::done(Message::Keyring(keyring::Ask::Prompt(p))),
         None => Task::none(),
     }
 }
@@ -169,6 +171,18 @@ pub fn update(app: &mut App, m: Message) -> Task<Message> {
                 Task::none()
             }
         }
+        Message::Keyring(keyring::Ask::Done(id)) => {
+            let o = app.auth.ended_keyring(id);
+            app.outcome(o)
+        }
+        Message::Keyring(keyring::Ask::Prompt(p)) => {
+            let typing = p.kind == Some(keyring::Kind::Password);
+            if app.auth.ask_keyring(p) {
+                app.open(typing)
+            } else {
+                Task::none()
+            }
+        }
         Message::Auth(m) => {
             let o = app.auth.update(m);
             app.outcome(o)
@@ -236,6 +250,7 @@ pub fn subscription(_app: &App) -> Subscription<Message> {
             crate::subs::polkit().map(Message::Polkit),
             crate::subs::wifi_agent().map(Message::Wifi),
             crate::subs::bt_agent().map(Message::Bt),
+            crate::subs::keyring().map(Message::Keyring),
         ])
     };
     Subscription::batch([

@@ -36,6 +36,7 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         m @ (Message::Polkit { .. }
         | Message::WifiAsk { .. }
         | Message::BtAsk { .. }
+        | Message::KeyringAsk { .. }
         | Message::FileRequest { .. }
         | Message::WindowClosed { .. }) => agents::handle(app, m),
         m @ (Message::Output { .. }

@@ -144,6 +144,9 @@ impl App {
                     }
                     Some(Preview::Wifi(a)) => Task::done(Message::WifiAsk(a)),
                     Some(Preview::Bt(a)) => Task::done(Message::BtAsk(a)),
+                    Some(Preview::Keyring(p)) => {
+                        Task::done(Message::KeyringAsk(services::keyring::Ask::Prompt(p)))
+                    }
                     None => Task::none(),
                 }
             }

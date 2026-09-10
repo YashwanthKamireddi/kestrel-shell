@@ -7,102 +7,41 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
     match msg {
         Message::Polkit(services::polkit::Event::Ask(r)) => {
             app.panels.auth.ask(r);
-            let ask = panels::auth::focus();
-            if app
-                .panel
-                .as_ref()
-                .is_some_and(|p| p.open && p.kind == PanelKind::Auth)
-            {
-                return ask;
-            }
-            let Some(id) = app.focused_output() else {
-                return ask;
-            };
-            let x = app.output(id).map_or(0.0, |o| o.size.width / 2.0);
-            app.panel_keys = true;
-            let show = app.show(
-                PanelKind::Auth,
-                id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
-            );
-            Task::batch([show, ask])
+            show_prompt(app, true)
         }
         Message::WifiAsk(services::network::Ask::Done(id)) => {
             // Answered, or NetworkManager stopped waiting: the prompt goes.
-            if app.panels.auth.ended_wifi(id) == panels::auth::Outcome::Close
-                && app
-                    .panel
-                    .as_ref()
-                    .is_some_and(|p| p.kind == PanelKind::Auth)
-            {
-                app.panel = None;
-            }
-            Task::none()
+            let o = app.panels.auth.ended_wifi(id);
+            prompt_ended(app, o)
         }
         Message::WifiAsk(a) => {
             if !app.panels.auth.ask_wifi(a) {
                 return Task::none();
             }
-            let ask = panels::auth::focus();
-            if app
-                .panel
-                .as_ref()
-                .is_some_and(|p| p.open && p.kind == PanelKind::Auth)
-            {
-                return ask;
-            }
-            let Some(id) = app.focused_output() else {
-                return ask;
-            };
-            let x = app.output(id).map_or(0.0, |o| o.size.width / 2.0);
-            app.panel_keys = true;
-            let show = app.show(
-                PanelKind::Auth,
-                id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
-            );
-            Task::batch([show, ask])
+            show_prompt(app, true)
         }
         Message::BtAsk(services::bluetooth::Ask::Done(id)) => {
             // The question is over (answered, or the device gave up): its prompt goes.
-            if app.panels.auth.ended_bt(id) == panels::auth::Outcome::Close
-                && app
-                    .panel
-                    .as_ref()
-                    .is_some_and(|p| p.kind == PanelKind::Auth)
-            {
-                app.panel = None;
-            }
-            Task::none()
+            let o = app.panels.auth.ended_bt(id);
+            prompt_ended(app, o)
         }
         Message::BtAsk(a) => {
             let pin = matches!(a, services::bluetooth::Ask::Pin { .. });
             if !app.panels.auth.ask_bt(a) {
                 return Task::none();
             }
-            let ask = if pin {
-                panels::auth::focus()
-            } else {
-                Task::none()
-            };
-            if app
-                .panel
-                .as_ref()
-                .is_some_and(|p| p.open && p.kind == PanelKind::Auth)
-            {
-                return ask;
+            show_prompt(app, pin)
+        }
+        Message::KeyringAsk(services::keyring::Ask::Done(id)) => {
+            let o = app.panels.auth.ended_keyring(id);
+            prompt_ended(app, o)
+        }
+        Message::KeyringAsk(services::keyring::Ask::Prompt(p)) => {
+            let typing = p.kind == Some(services::keyring::Kind::Password);
+            if !app.panels.auth.ask_keyring(p) {
+                return Task::none();
             }
-            let Some(id) = app.focused_output() else {
-                return ask;
-            };
-            let x = app.output(id).map_or(0.0, |o| o.size.width / 2.0);
-            app.panel_keys = true;
-            let show = app.show(
-                PanelKind::Auth,
-                id,
-                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
-            );
-            Task::batch([show, ask])
+            show_prompt(app, typing)
         }
         Message::WindowClosed(w) => {
             if app
@@ -114,15 +53,8 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             Task::none()
         }
         Message::Polkit(services::polkit::Event::Done(cookie)) => {
-            if app.panels.auth.ended_polkit(&cookie) == panels::auth::Outcome::Close
-                && app
-                    .panel
-                    .as_ref()
-                    .is_some_and(|p| p.kind == PanelKind::Auth)
-            {
-                app.panel = None;
-            }
-            Task::none()
+            let o = app.panels.auth.ended_polkit(&cookie);
+            prompt_ended(app, o)
         }
         Message::FileRequest(r) => {
             let a = panels::files::begin(&mut app.panels.files, r);
@@ -142,4 +74,45 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         _ => unreachable!("routed here by app::dispatch"),
     }
+}
+
+/// A question arrived for the prompt: shown under the bar's centre on the focused screen, and
+/// its field takes the keyboard (`focus`); already shown, only the keyboard moves.
+fn show_prompt(app: &mut App, focus: bool) -> Task<Message> {
+    let ask = if focus {
+        panels::auth::focus()
+    } else {
+        Task::none()
+    };
+    if app
+        .panel
+        .as_ref()
+        .is_some_and(|p| p.open && p.kind == PanelKind::Auth)
+    {
+        return ask;
+    }
+    let Some(id) = app.focused_output() else {
+        return ask;
+    };
+    let x = app.output(id).map_or(0.0, |o| o.size.width / 2.0);
+    app.panel_keys = true;
+    let show = app.show(
+        PanelKind::Auth,
+        id,
+        Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
+    );
+    Task::batch([show, ask])
+}
+
+/// A question ended elsewhere: the prompt goes when nothing is left to ask.
+fn prompt_ended(app: &mut App, o: panels::auth::Outcome) -> Task<Message> {
+    if o == panels::auth::Outcome::Close
+        && app
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.kind == PanelKind::Auth)
+    {
+        app.panel = None;
+    }
+    Task::none()
 }

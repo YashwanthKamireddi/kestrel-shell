@@ -420,6 +420,8 @@ pub enum Message {
     BtAsk(services::bluetooth::Ask),
     /// NetworkManager needs a Wi-Fi password (kestrel is its secret agent).
     WifiAsk(services::network::Ask),
+    /// A keyring's password question (or its end), from kestrel's system prompter.
+    KeyringAsk(services::keyring::Ask),
     /// The apps using a camera changed.
     Camera(Vec<String>),
     Level(#[allow(dead_code)] crate::services::level::Bands),

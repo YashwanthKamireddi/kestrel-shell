@@ -26,6 +26,7 @@ pub mod gsettings;
 pub mod hyprland;
 pub mod icons;
 pub mod idle;
+pub mod keyring;
 pub mod level;
 pub mod logind;
 pub mod meters;

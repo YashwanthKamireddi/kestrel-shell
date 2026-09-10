@@ -42,3 +42,10 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 # TLS through ring: aws-lc (reqwest's default) is a large C library whose build script
 # re-ran on every build (~1 min each time).
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+aes = "0.9.4"
+cbc = { version = "0.2.1", features = ["alloc"] }
+hkdf = "0.13.0"
+sha2 = "0.11.1"
+crypto-bigint = "0.7.11"
+getrandom = "0.4.3"
+base64 = "0.23.1"

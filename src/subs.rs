@@ -54,6 +54,11 @@ pub fn bt_visible() -> Subscription<()> {
 pub fn bt_search() -> Subscription<()> {
     Subscription::run(crate::services::bluetooth::search)
 }
+/// GNOME Keyring's password prompts (kestrel is its system prompter).
+pub fn keyring() -> Subscription<crate::services::keyring::Ask> {
+    Subscription::run(|| forever(crate::services::keyring::stream))
+}
+
 pub fn polkit() -> Subscription<crate::services::polkit::Event> {
     Subscription::run(|| forever(crate::services::polkit::stream))
 }

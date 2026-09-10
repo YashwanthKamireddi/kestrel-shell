@@ -13,6 +13,7 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
                 crate::subs::polkit().map(Message::Polkit),
                 crate::subs::bt_agent().map(Message::BtAsk),
                 crate::subs::wifi_agent().map(Message::WifiAsk),
+                crate::subs::keyring().map(Message::KeyringAsk),
             ])
         },
         iced::output_events().map(Message::Output),
