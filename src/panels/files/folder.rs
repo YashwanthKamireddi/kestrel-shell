@@ -101,13 +101,23 @@ pub(super) fn load(st: &mut State, dir: PathBuf) {
     st.listing = listing;
     st.mode = Mode::Folder;
     st.query.clear();
-    st.selected = None;
-    st.top = 0;
-    st.pos = st.top as f32;
+    new_list(st);
     st.scroll = 0.0;
     st.click = None;
     st.new_folder = None;
     st.searching = false;
+}
+
+/// A different list is shown (a folder, recent files, a search, another filter): nothing in it
+/// is selected or picked yet, and it starts at its top. The one place a list starts, so no
+/// choice made in one list is carried into another (a file picked in one folder was sent
+/// with the next one's).
+pub(super) fn new_list(st: &mut State) {
+    st.selected = None;
+    st.picked.clear();
+    st.anchor = None;
+    st.top = 0;
+    st.pos = 0.0;
 }
 
 /// Goes to `dir`, remembering where it came from (Back).

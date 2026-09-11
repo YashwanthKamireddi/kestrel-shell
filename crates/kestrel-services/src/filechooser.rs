@@ -255,3 +255,20 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod folder_tests {
+    use super::*;
+    use zbus::zvariant::{OwnedValue, Value};
+
+    /// `current_folder` as apps send it: a byte array ending in a NUL.
+    #[test]
+    fn reads_current_folder_bytes() {
+        let bytes = b"/tmp\0".to_vec();
+        let v = OwnedValue::try_from(Value::from(bytes)).unwrap();
+        let mut o = HashMap::new();
+        o.insert("current_folder".to_string(), v);
+        let got = get::<Vec<u8>>(&o, "current_folder");
+        assert_eq!(got.as_deref(), Some(&b"/tmp\0"[..]));
+    }
+}

@@ -149,8 +149,14 @@ pub struct State {
     replace: Option<PathBuf>,
     query: String,
     selected: Option<usize>,
-    /// Several chosen (when the app allows more than one).
+    /// Several chosen (when the app allows more than one): of the list shown, as GTK's and
+    /// macOS's pickers keep it (a click picks one, Ctrl adds or takes one away, Shift a run);
+    /// a new list (another folder, a search, the filter) starts with none.
     picked: Vec<PathBuf>,
+    /// Where a Shift-click's run starts (the last plain or Ctrl click).
+    anchor: Option<PathBuf>,
+    /// Ctrl and Shift as held now (for a click).
+    mods: iced::keyboard::Modifiers,
     top: usize,
     scroll: f32,
     /// Where the list is scrolled, in rows (fractional: it moves by the pixel).
@@ -176,6 +182,8 @@ pub enum Message {
     Query(String),
     Name(String),
     Click(usize),
+    /// Ctrl or Shift pressed or let go.
+    Mods(iced::keyboard::Modifiers),
     Accept,
     Cancel,
     Scroll(f32),
@@ -354,5 +362,72 @@ mod tests {
         // "All files": past the app's own.
         st.filter = 1;
         assert!(super::folder::passes(&st, &file("song.mp3")));
+    }
+
+    /// Picking several, as GTK and macOS do: a click picks one, Ctrl adds, Shift picks a run,
+    /// and another folder (or a search) starts with nothing picked: a file picked in one
+    /// folder was sent along with the next folder's.
+    #[test]
+    fn picks_belong_to_the_list_shown() {
+        use crate::services::filechooser::Request;
+        use iced::keyboard::Modifiers;
+        let dir = std::env::temp_dir().join(format!("kestrel-pick-{}", std::process::id()));
+        let other = dir.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        for f in ["a.txt", "b.txt", "c.txt", "d.txt"] {
+            std::fs::write(dir.join(f), "").unwrap();
+        }
+        std::fs::write(other.join("z.txt"), "").unwrap();
+        let mut st = super::State {
+            req: Some(Request {
+                multiple: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        super::folder::load(&mut st, dir.clone());
+        let at = |st: &super::State, n: &str| st.items.iter().position(|i| i.name == n).unwrap();
+        let names = |st: &super::State| {
+            let mut v: Vec<String> = st
+                .picked
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            v.sort();
+            v
+        };
+        let click = |st: &mut super::State, n: &str, m: Modifiers| {
+            let _ = super::update(st, super::Message::Mods(m));
+            let i = at(st, n);
+            // Apart in time: not a double click.
+            st.click = None;
+            let _ = super::update(st, super::Message::Click(i));
+        };
+        click(&mut st, "a.txt", Modifiers::empty());
+        click(&mut st, "b.txt", Modifiers::empty());
+        assert_eq!(names(&st), ["b.txt"], "a plain click picks only that file");
+        click(&mut st, "d.txt", Modifiers::CTRL);
+        assert_eq!(names(&st), ["b.txt", "d.txt"], "Ctrl adds");
+        click(&mut st, "d.txt", Modifiers::CTRL);
+        assert_eq!(names(&st), ["b.txt"], "Ctrl again takes it away");
+        click(&mut st, "a.txt", Modifiers::empty());
+        click(&mut st, "c.txt", Modifiers::SHIFT);
+        assert_eq!(
+            names(&st),
+            ["a.txt", "b.txt", "c.txt"],
+            "Shift picks the run"
+        );
+        // Into another folder: nothing carried over.
+        super::folder::load(&mut st, other.clone());
+        assert!(
+            st.picked.is_empty(),
+            "another folder starts with nothing picked"
+        );
+        click(&mut st, "z.txt", Modifiers::empty());
+        assert_eq!(names(&st), ["z.txt"]);
+        // A search starts a new list too.
+        let _ = super::update(&mut st, super::Message::Query("z".into()));
+        assert!(st.picked.is_empty(), "a search starts with nothing picked");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

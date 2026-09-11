@@ -61,7 +61,7 @@ pub(super) fn pictures(st: &State) -> Task<Message> {
 }
 
 pub fn update(st: &mut State, m: Message) -> Act {
-    let pics = !matches!(m, Message::Pictures);
+    let pics = !matches!(m, Message::Pictures | Message::Mods(_));
     // A click anywhere (a row, a column, a place) leaves the keyboard where typing is expected:
     // the search, or the name when saving. It used to stay on nothing, so typing after a click
     // went nowhere.
@@ -152,14 +152,10 @@ pub(super) fn update_inner(st: &mut State, m: Message) -> Act {
             st.mode = Mode::Recent;
             st.searching = false;
             st.query.clear();
-            st.selected = None;
-            st.top = 0;
-            st.pos = st.top as f32;
+            new_list(st);
         }
         Message::Query(q) => {
-            st.selected = None;
-            st.top = 0;
-            st.pos = st.top as f32;
+            new_list(st);
             st.query = q.clone();
             st.searching = false;
             let t = q.trim();
@@ -242,9 +238,7 @@ pub(super) fn update_inner(st: &mut State, m: Message) -> Act {
         }
         Message::Filter(i) => {
             st.filter = i;
-            st.top = 0;
-            st.pos = st.top as f32;
-            st.selected = None;
+            new_list(st);
         }
         Message::Scroll(lines) => {
             let n = shown(st).len();
@@ -263,12 +257,8 @@ pub(super) fn update_inner(st: &mut State, m: Message) -> Act {
                 return Act::None;
             };
             let multiple = st.req.as_ref().is_some_and(|r| r.multiple);
-            if multiple && !it.dir {
-                if let Some(at) = st.picked.iter().position(|p| *p == it.path) {
-                    st.picked.remove(at);
-                } else {
-                    st.picked.push(it.path.clone());
-                }
+            if multiple {
+                pick(st, &it);
             }
             if st.req.as_ref().is_some_and(|r| r.save) && !it.dir {
                 st.name = it.name.clone();
@@ -277,6 +267,7 @@ pub(super) fn update_inner(st: &mut State, m: Message) -> Act {
                 return open(st, i);
             }
         }
+        Message::Mods(m) => st.mods = m,
         Message::Accept => return accept(st),
         Message::Cancel => {
             closed(st);
@@ -284,6 +275,45 @@ pub(super) fn update_inner(st: &mut State, m: Message) -> Act {
         }
     }
     Act::None
+}
+
+/// A click when several files may be chosen, as GTK's and macOS's pickers do: alone it picks
+/// just that file; with Ctrl it is added or taken away; with Shift every file from the last
+/// click to it (in the order shown) is picked.
+fn pick(st: &mut State, it: &Item) {
+    let m = st.mods;
+    if m.shift()
+        && let Some(from) = st.anchor.clone()
+    {
+        let list: Vec<&Item> = shown(st)
+            .into_iter()
+            .filter_map(|i| st.items.get(i))
+            .collect();
+        let a = list.iter().position(|x| x.path == from);
+        let b = list.iter().position(|x| x.path == it.path);
+        if let (Some(a), Some(b)) = (a, b) {
+            let (lo, hi) = (a.min(b), a.max(b));
+            st.picked = list[lo..=hi]
+                .iter()
+                .filter(|x| !x.dir)
+                .map(|x| x.path.clone())
+                .collect();
+            return;
+        }
+    }
+    st.anchor = Some(it.path.clone());
+    if m.control() {
+        if let Some(at) = st.picked.iter().position(|p| *p == it.path) {
+            st.picked.remove(at);
+        } else if !it.dir {
+            st.picked.push(it.path.clone());
+        }
+        return;
+    }
+    st.picked.clear();
+    if !it.dir {
+        st.picked.push(it.path.clone());
+    }
 }
 
 /// Opens item `i`: into a folder, or chooses the file.

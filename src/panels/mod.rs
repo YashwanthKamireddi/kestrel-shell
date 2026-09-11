@@ -519,6 +519,15 @@ pub fn subscription(app: &App) -> Subscription<Message> {
             _ => None,
         }));
     }
+    // The file picker: Ctrl and Shift change what a click picks.
+    if open == Some(PanelKind::Files) {
+        subs.push(iced::event::listen_with(|e, _, _| match e {
+            iced::event::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(m)) => {
+                Some(Message::Files(files::Message::Mods(m)))
+            }
+            _ => None,
+        }));
+    }
     // Media position is not signalled: read it while the panel shows it.
     if open == Some(PanelKind::Media)
         && media::current(&app.panels.media, &app.media).is_some_and(|p| p.playing)
