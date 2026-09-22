@@ -2120,6 +2120,7 @@ dependencies = [
  "fontconfig",
  "futures",
  "iced_layershell",
+ "iced_runtime",
  "iced_tiny_skia",
  "image",
  "inotify",

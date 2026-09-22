@@ -80,6 +80,8 @@ pub struct Control<'a, M> {
     /// heard entering the new one (closing a notification left the next, now under the
     /// pointer, showing its time instead of its close button).
     identity: Option<u64>,
+    /// The keyboard focus ring's colour (the accent, once a style is chosen).
+    ring: Color,
 }
 
 pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
@@ -104,6 +106,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         center_x: false,
         veil: Color::TRANSPARENT,
         identity: None,
+        ring: Color::WHITE,
     }
 }
 
@@ -203,6 +206,7 @@ impl<'a, M> Control<'a, M> {
         self.rest = Color::TRANSPARENT;
         self.hover = Color::TRANSPARENT;
         self.press = Color::TRANSPARENT;
+        self.ring = s.accent;
         self.veil = if active {
             Color::TRANSPARENT
         } else {
@@ -250,6 +254,7 @@ impl<'a, M> Control<'a, M> {
         self.rest = rest;
         self.hover = hover;
         self.press = press;
+        self.ring = s.accent;
         self
     }
     pub fn border(mut self, c: Color) -> Self {
@@ -281,6 +286,21 @@ struct State {
     hover_t: f32,
     scale: Spring,
     last: Option<Instant>,
+    /// Has the keyboard: Tab or an arrow brought it here. The ring shows only then (GTK's
+    /// focus-visible: a click never shows it, and any click takes the focus away).
+    focused: bool,
+}
+
+impl iced::advanced::widget::operation::Focusable for State {
+    fn is_focused(&self) -> bool {
+        self.focused
+    }
+    fn focus(&mut self) {
+        self.focused = true;
+    }
+    fn unfocus(&mut self) {
+        self.focused = false;
+    }
 }
 
 impl State {
@@ -321,6 +341,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             hover_t: 0.0,
             scale: Spring::new(1.0),
             last: None,
+            focused: false,
         })
     }
 
@@ -397,6 +418,33 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         let state = tree.state.downcast_mut::<State>();
         let over = interactive && cursor.is_over(bounds);
 
+        // Any click takes the keyboard focus away (the ring is for keyboard use only).
+        if state.focused && matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))) {
+            state.focused = false;
+            shell.request_redraw();
+        }
+        // With the keyboard: Enter or Space presses it, as a click would.
+        if state.focused
+            && pressable
+            && !shell.is_event_captured()
+            && let Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(k),
+                modifiers,
+                ..
+            }) = event
+            && matches!(
+                k,
+                iced::keyboard::key::Named::Enter | iced::keyboard::key::Named::Space
+            )
+            && modifiers.is_empty()
+        {
+            if let Some(f) = &self.on_press_at {
+                shell.publish(f(bounds));
+            } else if let Some(m) = &self.on_press {
+                shell.publish(m.clone());
+            }
+            shell.capture_event();
+        }
         if !shell.is_event_captured() {
             match event {
                 // Acts on press, not release: the shell answers the moment the button goes
@@ -579,13 +627,36 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 });
             }
         };
+        // The keyboard's place: a ring just inside its edge, in the accent.
+        let ring = |renderer: &mut iced::Renderer| {
+            if state.focused {
+                renderer.with_layer(*viewport, |renderer| {
+                    renderer.fill_quad(
+                        renderer::Quad {
+                            bounds,
+                            border: Border {
+                                radius: self.shape(bounds.height),
+                                width: crate::theme::tok::FOCUS_RING,
+                                color: self.ring,
+                            },
+                            ..renderer::Quad::default()
+                        },
+                        Color::TRANSPARENT,
+                    );
+                });
+            }
+        };
         if (s - 1.0).abs() > 1e-3 {
             let t = Transformation::translate(center.x, center.y)
                 * Transformation::scale(s)
                 * Transformation::translate(-center.x, -center.y);
-            renderer.with_transformation(t, draw_all);
+            renderer.with_transformation(t, |r| {
+                draw_all(r);
+                ring(r);
+            });
         } else {
             draw_all(renderer);
+            ring(renderer);
         }
     }
 
@@ -622,6 +693,11 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         renderer: &iced::Renderer,
         operation: &mut dyn iced::advanced::widget::Operation,
     ) {
+        // Only what can be pressed takes the keyboard (Tab passes over labels and cards).
+        if self.on_press.is_some() || self.on_press_at.is_some() {
+            let state = tree.state.downcast_mut::<State>();
+            operation.focusable(None, layout.bounds(), state);
+        }
         self.content.as_widget_mut().operate(
             &mut tree.children[0],
             layout.children().next().unwrap(),

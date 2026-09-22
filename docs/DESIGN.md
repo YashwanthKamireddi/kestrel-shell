@@ -57,7 +57,7 @@ colours and icon sizes outside `src/ui` and `src/theme`; the count is zero and m
 
 | Tokens | Values |
 |---|---|
-| Spacing `XXS…XXXL` | 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 (`INDENT` 28, `HAIR` 1) |
+| Spacing `XXS…XXXL` | 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 (`INDENT` 28, `HAIR` 1, `FOCUS_RING` 2: the keyboard focus ring) |
 | Radii | `R_PANEL` 24, `R_CARD` 12 (= 24 − `PANEL_PAD`), `R_ROW` 10, `R_CONTROL` 8, `R_JOIN` 4, `FULL` (a pill) |
 | Heights | `H_SMALL` 28, `H_CONTROL` 32, `H_ROW` 40, `H_ROW2` 48; bar `BAR` 40, its round items `BAR_ITEM` 30 |
 | Panels | widths `PANEL_S` 320, `PANEL_M` 400, `PANEL_L` 560, `PANEL_XL` 860; padding `PANEL_PAD` 12; `JOIN` 16 (the concave curve to the bar) |

@@ -183,6 +183,25 @@ pub fn settings_window(app: &App) -> Element<'_, AppMessage> {
     settings::window(&p.settings, &cx).map(|m| AppMessage::Panel(Message::Settings(m)))
 }
 
+/// The open panel's content: the shared keyboard moves only inside it (never onto the bar's
+/// buttons, which are controls too).
+pub static ROOT: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("kestrel-panel-root"));
+
+/// Tab and Shift+Tab inside `root`: the next or previous control takes the keyboard, as in
+/// GTK (iced's own focus order, scoped to that part of the window).
+pub fn focus_step<M: Send + 'static>(root: iced::widget::Id, k: Key) -> Task<M> {
+    use iced::advanced::widget::operation::{focusable, scope};
+    let action = match k {
+        Key::Tab => iced_runtime::Action::widget(scope(root, focusable::focus_next::<()>())),
+        Key::BackTab => {
+            iced_runtime::Action::widget(scope(root, focusable::focus_previous::<()>()))
+        }
+        _ => return Task::none(),
+    };
+    Task::Iced(iced_runtime::task::effect(action))
+}
+
 #[derive(Clone, Debug)]
 pub enum Message {
     Calendar(calendar::Message),
@@ -205,6 +224,8 @@ pub enum Message {
     Auth(auth::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
+    /// Tab or Shift+Tab in a window of its own (Settings): its id, and which.
+    WindowKey(iced::window::Id, Key),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
 }
@@ -438,10 +459,22 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
                 }
                 Task::none()
             }
-            _ => Task::none(),
+            // Every other panel: the shared keyboard (Tab and Shift+Tab move through its
+            // controls; Enter and Space press the one with the ring).
+            _ => focus_step(ROOT.clone(), k),
         },
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
+        }
+        Message::WindowKey(w, k) => {
+            if app
+                .settings_window
+                .is_some_and(|id| iced::window::Id::from(id) == w)
+            {
+                focus_step(settings::ROOT.clone(), k)
+            } else {
+                Task::none()
+            }
         }
     }
 }
@@ -541,6 +574,27 @@ pub fn subscription(app: &App) -> Subscription<Message> {
             iced::time::every(std::time::Duration::from_millis(100))
                 .map(|_| Message::Media(media::Message::Tick)),
         );
+    }
+    // Settings' window: Tab and Shift+Tab move through its controls.
+    if app.settings_window.is_some() {
+        subs.push(iced::event::listen_with(|e, _status, w| {
+            use iced::keyboard::key::Named as N;
+            match e {
+                iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                    key: iced::keyboard::Key::Named(N::Tab),
+                    modifiers,
+                    ..
+                }) => Some(Message::WindowKey(
+                    w,
+                    if modifiers.shift() {
+                        Key::BackTab
+                    } else {
+                        Key::Tab
+                    },
+                )),
+                _ => None,
+            }
+        }));
     }
     if open.is_some() {
         // Seen even when a text field has the keyboard (it would swallow Delete and Tab).

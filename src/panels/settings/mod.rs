@@ -74,6 +74,10 @@ use windows::*;
 
 type Action = Act<Message>;
 
+/// Settings' window content: Tab moves only inside it.
+pub static ROOT: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("kestrel-settings-root"));
+
 pub const WIDTH: f32 = 720.0;
 const SIDEBAR: f32 = 196.0;
 

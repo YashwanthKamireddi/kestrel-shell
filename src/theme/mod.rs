@@ -265,6 +265,8 @@ pub mod tok {
     pub const INDENT: f32 = 28.0;
     /// A one-pixel frame around a picture.
     pub const HAIR: f32 = 1.0;
+    /// The keyboard focus ring's width.
+    pub const FOCUS_RING: f32 = 2.0;
 
     // Radii, concentric: a panel (24) padded 12 holds cards of 12; rows 10; small controls 8.
     // A pill is half its height (`pill`).

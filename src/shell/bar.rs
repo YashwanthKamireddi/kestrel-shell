@@ -634,6 +634,7 @@ pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let content = panels::view(app, kind, s);
     let material = app.config.material;
     let card = container(content)
+        .id(panels::ROOT.clone())
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: match material {

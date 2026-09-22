@@ -137,6 +137,7 @@ pub fn on_sound(st: &State) -> bool {
 pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme.faded(1.0);
     let body = container(view(st, &cx.with_scheme(s)))
+        .id(ROOT.clone())
         .width(Length::Fill)
         .height(Length::Fill);
     // The shell's look: Black is solid; Frosted is the panels' own glass (the compositor's
