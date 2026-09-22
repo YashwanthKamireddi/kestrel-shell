@@ -57,6 +57,10 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             prompt_ended(app, o)
         }
         Message::FileRequest(r) => {
+            // An app's question replaces kestrel's own: nobody waits on that answer any more.
+            if r.id != services::filechooser::OWN {
+                app.file_answer = None;
+            }
             let a = panels::files::begin(&mut app.panels.files, r);
             let begin =
                 panels::action::perform(app, a, |m| Message::Panel(panels::Message::Files(m)));

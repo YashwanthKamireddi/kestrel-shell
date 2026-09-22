@@ -20,9 +20,9 @@ pub(super) fn finish(st: &mut State, paths: Vec<PathBuf>) -> Act {
             .into_owned();
         crate::state::update(|s| s.files.last_folder = Some(dir));
         if r.id == filechooser::OWN {
-            // kestrel's own question: the answer goes back into the shell.
-            if let (Some(then), Some(p)) = (st.then.take(), paths.into_iter().next()) {
-                return Act::Close.and(Act::Reply(Box::new(then(p))));
+            // kestrel's own question: the shell hands the answer to whoever asked.
+            if let Some(p) = paths.into_iter().next() {
+                return Act::Close.and(Act::Chosen(p));
             }
         } else {
             filechooser::answer(r.id, Answer::Chosen(paths));

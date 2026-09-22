@@ -22,6 +22,8 @@ pub enum Action<M> {
     /// One of the shell's own commands, the language `kestrel msg`, keybinds and Lua use
     /// ("toggle settings", "open-default files ~/Music").
     Command(String),
+    /// kestrel's own file question (`AskFile`) was answered: the file goes to whoever asked.
+    Chosen(std::path::PathBuf),
     /// Show the file picker for a question whose answer comes back on its own channel
     /// (`filechooser::local`).
     Ask(crate::services::filechooser::Request),
@@ -61,9 +63,6 @@ pub enum Action<M> {
     Notice(crate::ui::Icon, String),
     /// Take the OSD's message away.
     HideNotice,
-    /// Deliver the answer to a question the shell itself asked (built by the asker: the panel
-    /// only hands it back, e.g. the file kestrel's Settings asked the file picker for).
-    Reply(Box<AppMessage>),
     /// Change the notification list (the shell's: the bar's banners and history show it).
     Note(Note),
     /// Several, in order.
@@ -113,6 +112,10 @@ pub fn perform<M: Send + 'static>(
         Action::Change(c) => app.change(c),
         Action::ChangeThen(c, m) => app.change(c).chain(Task::done(wrap(m))),
         Action::Command(c) => app.ipc(&c),
+        Action::Chosen(p) => match app.file_answer.take() {
+            Some(reply) => Task::done(reply(p)),
+            None => Task::none(),
+        },
         Action::Ask(r) => Task::done(AppMessage::FileRequest(r)),
         Action::TrayMenu(item) => match app.panel.as_ref().map(|p| p.output) {
             Some(o) => Task::done(AppMessage::TrayMenu(Some(item), o, None)),
@@ -145,7 +148,6 @@ pub fn perform<M: Send + 'static>(
             })
             .discard()
         }
-        Action::Reply(m) => Task::done(*m),
         Action::SetWallpaper(p) => {
             let s = p.to_string_lossy().into_owned();
             crate::config::set_wallpaper(&s);
@@ -163,7 +165,7 @@ pub fn perform<M: Send + 'static>(
             Task::done(AppMessage::Ipc("toggle wallpaper".into()))
         }
         Action::AskFile { request, reply } => {
-            app.panels.files.then = Some(Box::new(move |p| wrap(reply(p))));
+            app.file_answer = Some(Box::new(move |p| wrap(reply(p))));
             Task::done(AppMessage::Close).chain(Task::done(AppMessage::FileRequest(request)))
         }
         Action::Notice(icon, title) => {

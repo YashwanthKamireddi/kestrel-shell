@@ -255,6 +255,8 @@ pub struct App {
     pub device_error: Option<(String, String)>,
     /// The device being paired (its path).
     pub pairing: Option<String>,
+    /// Who asked kestrel's own file question (`Action::AskFile`): the chosen file goes there.
+    pub file_answer: Option<Box<dyn Fn(std::path::PathBuf) -> Message>>,
     /// A network whose last join failed, and why (shown under its name).
     pub net_error: Option<(String, String)>,
     pub power: power::State,
@@ -465,6 +467,7 @@ pub fn boot() -> (App, Task<Message>) {
         connecting: None,
         device_error: None,
         pairing: None,
+        file_answer: None,
         net_error: None,
         power: power::State::default(),
         brightness: None,

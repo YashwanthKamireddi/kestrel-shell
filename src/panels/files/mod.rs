@@ -15,7 +15,6 @@ pub use update::{key, update};
 pub use view::view;
 
 use super::cx::Cx;
-use crate::app::Message as AppMessage;
 use crate::services::filechooser::{self, Answer, Request};
 use crate::theme::tok;
 use crate::theme::{self, Scheme, text};
@@ -169,8 +168,6 @@ pub struct State {
     click: Option<(usize, Instant)>,
     /// A search of the folders below is running.
     searching: bool,
-    /// For kestrel's own requests (`filechooser::OWN`): what the choice becomes.
-    pub then: Option<Box<dyn Fn(PathBuf) -> AppMessage>>,
 }
 
 #[derive(Clone, Debug)]
@@ -219,9 +216,6 @@ pub fn begin(st: &mut State, req: Request) -> Act {
     // One at a time: an earlier request still open is cancelled.
     if let Some(old) = st.req.take() {
         filechooser::answer(old.id, Answer::Cancel);
-    }
-    if req.id != filechooser::OWN {
-        st.then = None;
     }
     let start = req
         .folder
