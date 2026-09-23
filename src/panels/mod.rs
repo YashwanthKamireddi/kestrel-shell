@@ -188,14 +188,25 @@ pub fn settings_window(app: &App) -> Element<'_, AppMessage> {
 pub static ROOT: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("kestrel-panel-root"));
 
-/// Tab and Shift+Tab inside `root`: the next or previous control takes the keyboard, as in
-/// GTK (iced's own focus order, scoped to that part of the window).
+/// The shared keyboard inside `root`: Tab and Shift+Tab take the next or previous control (iced's
+/// own focus order), the arrows the nearest control that way (`ui::focus`), as in GTK; scoped
+/// to that part of the window.
 pub fn focus_step<M: Send + 'static>(root: iced::widget::Id, k: Key) -> Task<M> {
     use iced::advanced::widget::operation::{focusable, scope};
     let action = match k {
         Key::Tab => iced_runtime::Action::widget(scope(root, focusable::focus_next::<()>())),
         Key::BackTab => {
             iced_runtime::Action::widget(scope(root, focusable::focus_previous::<()>()))
+        }
+        Key::Up | Key::Down | Key::Left | Key::Right => {
+            use crate::ui::focus::{Dir, toward};
+            let dir = match k {
+                Key::Up => Dir::Up,
+                Key::Down => Dir::Down,
+                Key::Left => Dir::Left,
+                _ => Dir::Right,
+            };
+            iced_runtime::Action::widget(scope(root, toward(dir)))
         }
         _ => return Task::none(),
     };
@@ -575,25 +586,30 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 .map(|_| Message::Media(media::Message::Tick)),
         );
     }
-    // Settings' window: Tab and Shift+Tab move through its controls.
+    // Settings' window: Tab and Shift+Tab, and the arrows, move through its controls.
     if app.settings_window.is_some() {
-        subs.push(iced::event::listen_with(|e, _status, w| {
+        subs.push(iced::event::listen_with(|e, status, w| {
             use iced::keyboard::key::Named as N;
-            match e {
-                iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                    key: iced::keyboard::Key::Named(N::Tab),
-                    modifiers,
-                    ..
-                }) => Some(Message::WindowKey(
-                    w,
-                    if modifiers.shift() {
-                        Key::BackTab
-                    } else {
-                        Key::Tab
-                    },
-                )),
-                _ => None,
-            }
+            let iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(k),
+                modifiers,
+                ..
+            }) = e
+            else {
+                return None;
+            };
+            let key = match k {
+                N::Tab if modifiers.shift() => Key::BackTab,
+                N::Tab => Key::Tab,
+                // Arrows a text field used (its cursor) stay with it.
+                _ if status == iced::event::Status::Captured => return None,
+                N::ArrowUp => Key::Up,
+                N::ArrowDown => Key::Down,
+                N::ArrowLeft => Key::Left,
+                N::ArrowRight => Key::Right,
+                _ => return None,
+            };
+            Some(Message::WindowKey(w, key))
         }));
     }
     if open.is_some() {

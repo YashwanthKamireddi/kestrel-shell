@@ -80,8 +80,6 @@ pub struct Control<'a, M> {
     /// heard entering the new one (closing a notification left the next, now under the
     /// pointer, showing its time instead of its close button).
     identity: Option<u64>,
-    /// The keyboard focus ring's colour (the accent, once a style is chosen).
-    ring: Color,
 }
 
 pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
@@ -106,7 +104,6 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         center_x: false,
         veil: Color::TRANSPARENT,
         identity: None,
-        ring: Color::WHITE,
     }
 }
 
@@ -206,7 +203,6 @@ impl<'a, M> Control<'a, M> {
         self.rest = Color::TRANSPARENT;
         self.hover = Color::TRANSPARENT;
         self.press = Color::TRANSPARENT;
-        self.ring = s.accent;
         self.veil = if active {
             Color::TRANSPARENT
         } else {
@@ -254,7 +250,6 @@ impl<'a, M> Control<'a, M> {
         self.rest = rest;
         self.hover = hover;
         self.press = press;
-        self.ring = s.accent;
         self
     }
     pub fn border(mut self, c: Color) -> Self {
@@ -286,8 +281,8 @@ struct State {
     hover_t: f32,
     scale: Spring,
     last: Option<Instant>,
-    /// Has the keyboard: Tab or an arrow brought it here. The ring shows only then (GTK's
-    /// focus-visible: a click never shows it, and any click takes the focus away).
+    /// Has the keyboard: Tab or an arrow brought it here. It shows lit as under the pointer;
+    /// a click never focuses it, and any click takes the focus away (GTK's focus-visible).
     focused: bool,
 }
 
@@ -418,7 +413,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         let state = tree.state.downcast_mut::<State>();
         let over = interactive && cursor.is_over(bounds);
 
-        // Any click takes the keyboard focus away (the ring is for keyboard use only).
+        // Any click takes the keyboard focus away (it is the keyboard's place only).
         if state.focused && matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))) {
             state.focused = false;
             shell.request_redraw();
@@ -570,7 +565,17 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         // Only what can be pressed lifts under the pointer.
         let lifts = self.on_press.is_some() || self.on_press_at.is_some();
         let (rest, hover) = fade_pair(self.rest, if lifts { self.hover } else { self.rest });
-        let mut bg = mix(rest, hover, ease(state.hover_t));
+        // The keyboard's place: a fill one step above hover (the pressed tone), shown at once:
+        // keyboard moves never animate (Raycast), and keyboard selection must read at a glance
+        // even on a small button (Material's focus layer sits above hover). The pointer's
+        // hover keeps its ease.
+        let keyboard = state.focused && lifts;
+        let lit = if keyboard { 1.0 } else { ease(state.hover_t) };
+        let mut bg = if keyboard {
+            self.press
+        } else {
+            mix(rest, hover, lit)
+        };
         if state.pressed && state.hovered {
             bg = self.press;
         }
@@ -608,7 +613,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             let veil = if state.pressed && state.hovered {
                 0.0
             } else {
-                self.veil.a * (1.0 - ease(state.hover_t))
+                self.veil.a * (1.0 - lit)
             };
             // Its own layer, so it lies over the content's layer rather than under it.
             if veil > 0.0 {
@@ -627,36 +632,13 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 });
             }
         };
-        // The keyboard's place: a ring just inside its edge, in the accent.
-        let ring = |renderer: &mut iced::Renderer| {
-            if state.focused {
-                renderer.with_layer(*viewport, |renderer| {
-                    renderer.fill_quad(
-                        renderer::Quad {
-                            bounds,
-                            border: Border {
-                                radius: self.shape(bounds.height),
-                                width: crate::theme::tok::FOCUS_RING,
-                                color: self.ring,
-                            },
-                            ..renderer::Quad::default()
-                        },
-                        Color::TRANSPARENT,
-                    );
-                });
-            }
-        };
         if (s - 1.0).abs() > 1e-3 {
             let t = Transformation::translate(center.x, center.y)
                 * Transformation::scale(s)
                 * Transformation::translate(-center.x, -center.y);
-            renderer.with_transformation(t, |r| {
-                draw_all(r);
-                ring(r);
-            });
+            renderer.with_transformation(t, draw_all);
         } else {
             draw_all(renderer);
-            ring(renderer);
         }
     }
 

@@ -2,6 +2,7 @@
 
 pub mod breathe;
 pub mod control;
+pub mod focus;
 pub mod icon;
 pub mod morph;
 mod pictures;
