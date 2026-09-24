@@ -429,12 +429,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             }
             Some(PanelKind::Control) => {
                 let (p, cx) = cx::split(app);
-                let a = control::key(&mut p.control, k, &cx);
-                action::perform(app, a, |m| AppMessage::Panel(Message::Control(m)))
-            }
-            Some(PanelKind::Power) => {
-                let a = power::key(&mut app.panels.power, k);
-                action::perform(app, a, |m| AppMessage::Panel(Message::Power(m)))
+                match control::key(&mut p.control, k, &cx) {
+                    Some(a) => action::perform(app, a, |m| AppMessage::Panel(Message::Control(m))),
+                    None => focus_step(ROOT.clone(), k),
+                }
             }
             Some(PanelKind::Capture) => {
                 let a = capture::key(&mut app.panels.capture, k);

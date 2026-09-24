@@ -238,8 +238,6 @@ pub struct Tile<M> {
     pub press: M,
     /// Its page, if it has one: a click anywhere on the tile but the icon opens it.
     pub details: Option<M>,
-    /// The keyboard is on it.
-    pub focused: bool,
 }
 
 pub const TILE_H: f32 = 60.0;
@@ -258,7 +256,6 @@ pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
         on,
         press,
         details,
-        focused,
     } = t;
     const DOT: f32 = 38.0;
     let text_w = TILE_W - 10.0 - DOT - 12.0 - 12.0;
@@ -312,25 +309,7 @@ pub fn tile<'a, M: Clone + 'static>(s: Scheme, t: Tile<M>) -> Element<'a, M> {
         .colors(fill, s.ink.scale_alpha(0.1 * s.opacity), s.raised_press)
         .no_press_scale()
         .on_press(details.unwrap_or(press));
-    if !focused {
-        return body.into();
-    }
-    // Where the keyboard is: a fine white ring.
-    iced::widget::stack![
-        body,
-        container(Space::new())
-            .width(Length::Fill)
-            .height(TILE_H)
-            .style(move |_| container::Style {
-                border: iced::Border {
-                    color: s.ink.scale_alpha(0.7 * s.opacity),
-                    width: 1.5,
-                    radius: (TILE_H / 2.0).into(),
-                },
-                ..container::Style::default()
-            }),
-    ]
-    .into()
+    body.into()
 }
 
 /// An on/off switch.

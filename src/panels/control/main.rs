@@ -5,7 +5,7 @@ use crate::theme::tok;
 // Explicit: the prelude has a `column!` of its own (the source line).
 use iced::widget::column;
 
-pub(super) fn main_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+pub(super) fn main_page<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     // Header: battery summary and session buttons.
     let p = &cx.power;
@@ -70,11 +70,9 @@ pub(super) fn main_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> 
     })
     .align_y(Alignment::Center);
 
-    let focus = st.focus;
     let tiles: Vec<Element<'_, Message>> = tiles(cx)
         .into_iter()
-        .enumerate()
-        .map(|(i, t)| {
+        .map(|t| {
             tile(
                 s,
                 ui::Tile {
@@ -84,7 +82,6 @@ pub(super) fn main_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> 
                     on: t.on,
                     press: t.press,
                     details: t.details,
-                    focused: focus == Some(i),
                 },
             )
         })

@@ -57,8 +57,6 @@ impl Action {
 #[derive(Default)]
 pub struct State {
     armed: Option<Action>,
-    /// The row the keyboard is on.
-    focus: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -89,41 +87,14 @@ pub fn run(a: Action) -> Task<()> {
     }
 }
 
-/// Up / Down move between the actions, Enter presses (the risky ones still ask a second time,
-/// so Enter twice).
-pub fn key(st: &mut State, k: super::Key) -> Act {
-    use super::Key;
-    let n = Action::ALL.len();
-    let at = st.focus.unwrap_or(0);
-    match k {
-        Key::Down | Key::Tab => st.focus = Some(if st.focus.is_none() { 0 } else { (at + 1) % n }),
-        Key::Up | Key::BackTab => {
-            st.focus = Some(if st.focus.is_none() {
-                n - 1
-            } else {
-                (at + n - 1) % n
-            })
-        }
-        Key::Enter | Key::Space if st.focus.is_some() => {
-            return update(st, Message::Press(Action::ALL[at]));
-        }
-        _ => {}
-    }
-    Act::None
-}
-
 pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let armed = st.armed;
-    let focus = st.focus;
     let rows = Action::ALL.map(|a| {
         let is_armed = armed == Some(a);
-        let focused = focus.is_some_and(|i| Action::ALL[i] == a);
         let fg = if is_armed { s.base } else { s.ink };
         let kind = if is_armed {
             crate::ui::control::Kind::Danger
-        } else if focused {
-            crate::ui::control::Kind::Chosen
         } else {
             crate::ui::control::Kind::Ghost
         };

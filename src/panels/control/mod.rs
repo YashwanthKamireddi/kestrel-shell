@@ -64,8 +64,6 @@ pub struct State {
     pub wifi_order: Vec<String>,
     /// The same for Bluetooth's nearby devices (paths): found ones join at the end.
     pub nearby_order: Vec<String>,
-    /// The tile the keyboard is on (arrows move it, Enter toggles, Right opens its page).
-    pub focus: Option<usize>,
     /// Network waiting for a password: (ssid, access point, typed text).
     pub password: Option<(String, String, String)>,
     /// The tailnet as last read (its page reads it on opening).
@@ -538,7 +536,7 @@ pub fn duration(secs: i64) -> String {
 
 pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let body = match st.page {
-        Page::Main => main_page(st, cx),
+        Page::Main => main_page(cx),
         Page::Wifi => wifi_page(st, cx),
         Page::Bluetooth => bt_page(st, cx),
         Page::Output => output_page(st, cx),
@@ -573,42 +571,11 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     .into()
 }
 
-/// Keys on the main page: arrows move between tiles (two per row), Space flips the tile,
-/// Enter opens its page (or flips it when it has none). On a page, Left goes back.
-pub fn key(st: &mut State, k: super::Key, cx: &Cx<'_>) -> Action {
-    use super::Key;
-    if st.page != Page::Main {
-        if k == Key::Left {
-            return update(st, Message::Page(Page::Main), cx);
-        }
-        return Act::None;
-    }
-    let list = tiles(cx);
-    let n = list.len();
-    if n == 0 {
-        return Act::None;
-    }
-    let cur = st.focus;
-    let at = cur.unwrap_or(0);
-    let to = match k {
-        // Enter goes in (a tile's page), Space flips it.
-        Key::Enter if cur.is_some() => {
-            let t = &list[at];
-            let m = t.details.clone().unwrap_or_else(|| t.press.clone());
-            return update(st, m, cx);
-        }
-        Key::Space if cur.is_some() => return update(st, list[at].press.clone(), cx),
-        _ if cur.is_none() => 0,
-        Key::Right | Key::Tab => (at + 1).min(n - 1),
-        Key::Left | Key::BackTab => at.saturating_sub(1),
-        Key::Down => (at + 2).min(n - 1),
-        Key::Up => at.saturating_sub(2),
-        Key::Home => 0,
-        Key::End => n - 1,
-        _ => return Act::None,
-    };
-    st.focus = Some(to);
-    Act::None
+/// The control centre's own key: Left goes back from a page. Everything else is the shared
+/// keyboard (Tab and arrows between tiles and rows, Enter and Space press): None.
+pub fn key(st: &mut State, k: super::Key, cx: &Cx<'_>) -> Option<Action> {
+    (st.page != Page::Main && k == super::Key::Left)
+        .then(|| update(st, Message::Page(Page::Main), cx))
 }
 
 #[cfg(test)]
