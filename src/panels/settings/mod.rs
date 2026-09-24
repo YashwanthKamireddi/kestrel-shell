@@ -139,6 +139,25 @@ const SYSTEM: [Page; 20] = [
 
 impl Page {
     /// Every page, as the sidebar lists them.
+    /// Its name for `kestrel settings <page>`: lower case, words joined by "-" ("sound",
+    /// "mouse-touchpad", "date-time").
+    pub fn slug(self) -> String {
+        self.name()
+            .to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+
+    /// The page `kestrel settings <name>` names: its slug, or its slug's first word.
+    pub fn from_slug(name: &str) -> Option<Page> {
+        let name = name.to_lowercase();
+        Page::all()
+            .find(|p| p.slug() == name)
+            .or_else(|| Page::all().find(|p| p.slug().split('-').next() == Some(name.as_str())))
+    }
+
     pub fn all() -> impl Iterator<Item = Page> {
         SHELL.into_iter().chain(SYSTEM)
     }

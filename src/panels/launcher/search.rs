@@ -155,6 +155,22 @@ pub fn entries(st: &State) -> Vec<Entry<'_>> {
             .collect();
         pages.sort_by_key(|p| std::cmp::Reverse(p.0));
         found.extend(pages.into_iter().take(3));
+        // The system's switches, the same way: "dnd", "night", "wifi" flip them from here.
+        let mut switches: Vec<(i32, Entry<'_>)> = Switch::ALL
+            .into_iter()
+            .filter_map(|w| {
+                let best = [
+                    apps::score_contains(q, w.name()).map(|v| v * 3),
+                    apps::score_contains(q, w.words()),
+                ]
+                .into_iter()
+                .flatten()
+                .max()?;
+                Some((best, Entry::Switch(w)))
+            })
+            .collect();
+        switches.sort_by_key(|p| std::cmp::Reverse(p.0));
+        found.extend(switches.into_iter().take(2));
     }
     found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| title(&a.1).cmp(title(&b.1))));
     let mut out: Vec<Entry<'_>> = found
@@ -195,6 +211,7 @@ pub(super) fn title<'a>(e: &'a Entry<'_>) -> &'a str {
     match e {
         Entry::App(a) => &a.name,
         Entry::Setting(p) => p.name(),
+        Entry::Switch(w) => w.name(),
         _ => "",
     }
 }
@@ -286,4 +303,80 @@ pub(super) fn processes(name: &str) -> Vec<(u32, String, u64)> {
     out.sort_by_key(|p| std::cmp::Reverse(p.2));
     out.truncate(MAX_RESULTS);
     out
+}
+
+/// A system switch the launcher flips: one of the shell's changes (app::Change), so it acts
+/// exactly as the control centre's tile does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Switch {
+    Wifi,
+    Bluetooth,
+    Airplane,
+    Dnd,
+    NightLight,
+    Caffeine,
+    GameMode,
+}
+
+impl Switch {
+    pub const ALL: [Switch; 7] = [
+        Switch::Wifi,
+        Switch::Bluetooth,
+        Switch::Airplane,
+        Switch::Dnd,
+        Switch::NightLight,
+        Switch::Caffeine,
+        Switch::GameMode,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Switch::Wifi => "Wi-Fi",
+            Switch::Bluetooth => "Bluetooth",
+            Switch::Airplane => "Airplane mode",
+            Switch::Dnd => "Do not disturb",
+            Switch::NightLight => "Night light",
+            Switch::Caffeine => "Caffeine",
+            Switch::GameMode => "Game mode",
+        }
+    }
+
+    /// Everyday words it is found by.
+    pub fn words(self) -> &'static str {
+        match self {
+            Switch::Wifi => "wifi wireless internet network",
+            Switch::Bluetooth => "bt headphones airpods",
+            Switch::Airplane => "flight plane offline radios",
+            Switch::Dnd => "dnd quiet silence focus notifications",
+            Switch::NightLight => "warm blue light eyes evening",
+            Switch::Caffeine => "awake sleep coffee stay on",
+            Switch::GameMode => "games gaming performance",
+        }
+    }
+
+    pub fn icon(self) -> crate::ui::Icon {
+        use crate::ui::Icon;
+        match self {
+            Switch::Wifi => Icon::Wifi,
+            Switch::Bluetooth => Icon::Bluetooth,
+            Switch::Airplane => Icon::Plane,
+            Switch::Dnd => Icon::BellOff,
+            Switch::NightLight => Icon::Sunset,
+            Switch::Caffeine => Icon::Coffee,
+            Switch::GameMode => Icon::Gamepad2,
+        }
+    }
+
+    pub fn change(self) -> crate::app::Change {
+        use crate::app::Change;
+        match self {
+            Switch::Wifi => Change::FlipWifi,
+            Switch::Bluetooth => Change::FlipBluetooth,
+            Switch::Airplane => Change::Airplane,
+            Switch::Dnd => Change::Dnd,
+            Switch::NightLight => Change::NightLight,
+            Switch::Caffeine => Change::Caffeine,
+            Switch::GameMode => Change::GameMode,
+        }
+    }
 }

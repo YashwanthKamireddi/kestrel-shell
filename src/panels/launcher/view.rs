@@ -129,6 +129,13 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 p.name().to_string(),
                 "Settings".into(),
             ),
+            Entry::Switch(w) => (
+                container(icon(w.icon(), tok::ICON_M, s.ink_dim))
+                    .center(28)
+                    .into(),
+                w.name().to_string(),
+                "Switch on or off".into(),
+            ),
         };
         let mut texts =
             column![label_w(title, text::BODY, s.ink, theme::MEDIUM)].spacing(tok::HAIR);

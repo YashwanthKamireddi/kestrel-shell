@@ -11,6 +11,9 @@ use super::*;
 pub enum Change {
     Wifi(bool),
     Bluetooth(bool),
+    /// Wi-Fi or Bluetooth the other way from how they are now (the launcher's switches).
+    FlipWifi,
+    FlipBluetooth,
     /// Every radio off (Wi-Fi and Bluetooth), or back to how they were.
     Airplane,
     /// Do not disturb on or off.
@@ -85,6 +88,8 @@ impl App {
                 self.bt.powered = on;
                 Task::future(bluetooth::command(bluetooth::Command::SetPowered(on))).discard()
             }
+            Change::FlipWifi => self.change(Change::Wifi(!self.net.wifi_enabled)),
+            Change::FlipBluetooth => self.change(Change::Bluetooth(!self.bt.powered)),
             Change::Airplane => {
                 let before = crate::state::get(|s| s.toggles.airplane);
                 let (wifi, bt) = match before {

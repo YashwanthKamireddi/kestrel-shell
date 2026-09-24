@@ -91,6 +91,8 @@ pub enum Entry<'a> {
     Process(u32, String, u64),
     /// A Settings page.
     Setting(crate::panels::settings::Page),
+    /// A system switch to flip (Wi-Fi, Do not disturb, night light…).
+    Switch(Switch),
 }
 
 /// What the launcher asks of the shell (`Action` here is the compositor's).

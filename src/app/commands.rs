@@ -40,6 +40,15 @@ impl App {
             }
             // Settings is a window of its own: opened, or brought forward if open.
             (Some("toggle" | "open"), Some("settings")) => self.open_settings(),
+            // Settings on a page: `kestrel settings sound` (bindable in Settings > Shortcuts).
+            (Some("settings"), Some(name)) => match panels::settings::Page::from_slug(name) {
+                Some(p) => Task::done(Message::SettingsAt(p)),
+                None => {
+                    log::warn!("ipc: unknown Settings page {name}");
+                    Task::none()
+                }
+            },
+            (Some("settings"), None) => self.open_settings(),
             (Some("toggle"), Some(name)) => {
                 let Some(kind) = PanelKind::from_name(name) else {
                     log::warn!("ipc: unknown panel {name}");

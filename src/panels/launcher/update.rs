@@ -114,6 +114,10 @@ pub fn update(st: &mut State, m: Message) -> Act {
                     let p = *p;
                     return Act::Close.and(Act::Settings(p));
                 }
+                Some(Entry::Switch(w)) => {
+                    let w = *w;
+                    return Act::Close.and(Act::Change(w.change()));
+                }
                 Some(Entry::Process(pid, _, _)) => {
                     // Asked once: the first press arms it ("End …?"), the second ends it. One
                     // stray Enter used to end an app on the spot, unsaved work and all.
