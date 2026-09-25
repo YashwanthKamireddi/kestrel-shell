@@ -146,6 +146,14 @@ lag" rule), which made clear-at-rest buttons (Clear all, ×) flash a pill out of
 pointer crossed them: the "cheap and glitchy" hover in the user's recording of 2026-11-15. 70 ms keeps
 it instant to the eye without the pop.
 
+**Disabled.** A button that cannot be pressed is `ui::button(s, words, Pill, None)`: its words at
+`DISABLED` (.38) and a filled button's fill a .12 ink layer (Material 3's disabled state). No
+panel draws its own disabled look.
+
+**Keyboard.** The keyboard's place is the control's pressed tone, shown at once (no ring, no
+animation: keyboard selection in Raycast and Spotlight); Tab and the arrows move it
+(`panels::focus_step`, `ui::focus`), scoped to the open panel or window.
+
 **Components.** Buttons come in four variants only (Primary: accent fill · Tonal: faint ink fill ·
 Ghost: clear at rest · Danger), plus the icon button, chip, row, card, section heading, field,
 switch, slider and segmented control. A screen built from anything else adds it here first.
