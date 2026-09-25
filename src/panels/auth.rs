@@ -385,18 +385,16 @@ pub fn view<M: Clone + 'static>(st: &State, s: Scheme, msg: fn(Message) -> M) ->
         control(label_w("Cancel", text::SMALL, s.ink, theme::MEDIUM))
             .pill(s, crate::ui::control::Pill::Plain)
             .on_press(msg(Message::Cancel)),
-        control(label_w(
+        ui::button(
+            s,
             if st.checking {
                 "Checking…"
             } else {
                 "Authenticate"
             },
-            text::SMALL,
-            s.on_accent,
-            theme::SEMIBOLD
-        ))
-        .pill(s, crate::ui::control::Pill::Primary)
-        .on_press_maybe((!st.password.is_empty() && !st.checking).then(|| msg(Message::Submit))),
+            crate::ui::control::Pill::Primary,
+            (!st.password.is_empty() && !st.checking).then(|| msg(Message::Submit)),
+        ),
     ]
     .spacing(tok::M)
     .align_y(Alignment::Center);
@@ -490,11 +488,12 @@ fn bt_view<'a, M: Clone + 'static>(
     .spacing(tok::M)
     .align_y(Alignment::Center);
     if let Some(p) = primary {
-        buttons = buttons.push(
-            control(label_w(p, text::SMALL, s.on_accent, theme::SEMIBOLD))
-                .pill(s, crate::ui::control::Pill::Primary)
-                .on_press_maybe((!pin || !st.password.is_empty()).then(|| msg(Message::Submit))),
-        );
+        buttons = buttons.push(ui::button(
+            s,
+            p,
+            crate::ui::control::Pill::Primary,
+            (!pin || !st.password.is_empty()).then(|| msg(Message::Submit)),
+        ));
     }
     container(body.push(buttons))
         .padding(tok::XXL)
@@ -548,9 +547,12 @@ fn wifi_view<'a, M: Clone + 'static>(
         control(label_w("Cancel", text::SMALL, s.ink, theme::MEDIUM))
             .pill(s, crate::ui::control::Pill::Plain)
             .on_press(msg(Message::Cancel)),
-        control(label_w("Join", text::SMALL, s.on_accent, theme::SEMIBOLD))
-            .pill(s, crate::ui::control::Pill::Primary)
-            .on_press_maybe((st.password.chars().count() >= 8).then(|| msg(Message::Submit))),
+        ui::button(
+            s,
+            "Join",
+            crate::ui::control::Pill::Primary,
+            (st.password.chars().count() >= 8).then(|| msg(Message::Submit)),
+        ),
     ]
     .spacing(tok::M)
     .align_y(Alignment::Center);
@@ -661,18 +663,16 @@ fn keyring_view<'a, M: Clone + 'static>(
         ))
         .pill(s, crate::ui::control::Pill::Plain)
         .on_press(msg(Message::Cancel)),
-        control(label_w(
+        ui::button(
+            s,
             if st.checking {
                 "Checking…"
             } else {
                 or(&k.continue_label, "Continue")
             },
-            text::SMALL,
-            s.on_accent,
-            theme::SEMIBOLD
-        ))
-        .pill(s, crate::ui::control::Pill::Primary)
-        .on_press_maybe(ready.then(|| msg(Message::Submit))),
+            crate::ui::control::Pill::Primary,
+            ready.then(|| msg(Message::Submit)),
+        ),
     ]
     .spacing(tok::M)
     .align_y(Alignment::Center);

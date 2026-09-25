@@ -171,6 +171,43 @@ pub fn field_style(s: Scheme) -> iced::widget::container::Style {
     }
 }
 
+/// A text button, one of the pill kinds (`Primary` the accent, `Plain` a soft fill, `Quiet`
+/// text only), and its disabled state when `on_press` is None: the words at `tok::DISABLED`,
+/// a filled button's fill a faint ink layer (Material 3's disabled state: content 38 %,
+/// container 12 %), so a button that cannot be pressed never looks pressable. The one place
+/// that look is made (the file picker and the prompts each drew their own, or none).
+pub fn button<'a, M: Clone + 'a>(
+    s: Scheme,
+    words: impl text::IntoFragment<'a>,
+    kind: control::Pill,
+    on_press: Option<M>,
+) -> control::Control<'a, M> {
+    use control::Pill;
+    let on = on_press.is_some();
+    let ink = match (kind, on) {
+        (Pill::Primary, true) => s.on_accent,
+        (Pill::Quiet, true) => s.ink_dim,
+        (_, true) => s.ink,
+        (_, false) => s.ink.scale_alpha(tok::DISABLED * s.opacity),
+    };
+    let words = if kind == Pill::Primary {
+        label_w(words, theme::text::SMALL, ink, theme::SEMIBOLD)
+    } else {
+        label(words, theme::text::SMALL, ink)
+    };
+    let c = control(words).pill(s, kind);
+    let c = if kind == Pill::Primary && !on {
+        let faint = s.ink.scale_alpha(DISABLED_FILL * s.opacity);
+        c.colors(faint, faint, faint)
+    } else {
+        c
+    };
+    c.on_press_maybe(on_press)
+}
+
+/// A disabled filled button's fill (Material 3: 12 % of the ink).
+const DISABLED_FILL: f32 = 0.12;
+
 /// A round icon button for the bar and panel headers. `active` marks an open panel or an
 /// enabled state.
 pub fn icon_button<'a, M: Clone + 'static>(

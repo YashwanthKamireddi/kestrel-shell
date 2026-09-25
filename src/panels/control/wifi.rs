@@ -285,9 +285,12 @@ pub(super) fn hidden_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message
         )
         .style(move |_| ui::field_style(s))
     };
-    let join = crate::ui::control(label_w("Join", text::SMALL, s.on_accent, theme::SEMIBOLD))
-        .pill(s, crate::ui::control::Pill::Primary)
-        .on_press_maybe((!name.trim().is_empty()).then_some(Message::JoinHidden));
+    let join = crate::ui::button(
+        s,
+        "Join",
+        crate::ui::control::Pill::Primary,
+        (!name.trim().is_empty()).then_some(Message::JoinHidden),
+    );
     column![
         header,
         field(

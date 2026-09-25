@@ -237,10 +237,19 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         "Open".into()
     };
     let can = can_accept(st);
-    let ink = if can || replacing {
-        s.on_accent
+    // The kit's button (its disabled look); saving over a file asks with the danger fill.
+    let accept = ui::button(
+        s,
+        accept_label,
+        crate::ui::control::Pill::Primary,
+        can.then_some(Message::Accept),
+    )
+    .padding([tok::S, tok::XL])
+    .radius(tok::FULL);
+    let accept = if replacing && can {
+        accept.kind(s, crate::ui::control::Kind::Danger)
     } else {
-        s.ink_faint
+        accept
     };
     let header = row![
         label_w(
@@ -255,20 +264,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(Message::Cancel),
-        control(label_w(accept_label, text::SMALL, ink, theme::SEMIBOLD))
-            .padding([tok::S, tok::XL])
-            .radius(tok::FULL)
-            .kind(
-                s,
-                if replacing {
-                    crate::ui::control::Kind::Danger
-                } else if can {
-                    crate::ui::control::Kind::Primary
-                } else {
-                    crate::ui::control::Kind::Tonal
-                },
-            )
-            .on_press_maybe(can.then_some(Message::Accept)),
+        accept,
     ]
     .spacing(tok::S)
     .align_y(Alignment::Center);

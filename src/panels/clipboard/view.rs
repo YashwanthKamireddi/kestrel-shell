@@ -17,35 +17,27 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         None,
     );
 
-    let clear = control(
-        container(label(
-            if st.confirm_clear {
-                format!("Delete all {total}?")
-            } else {
-                "Clear all".to_string()
-            },
-            text::SMALL,
-            if st.confirm_clear {
-                s.on_accent
-            } else {
-                s.ink_dim
-            },
-        ))
-        .center_y(28),
-    )
+    // The kit's button (its disabled look while there is nothing to clear); asked once: the
+    // confirm is the danger fill, as everywhere.
+    let clear = if st.confirm_clear {
+        ui::button(
+            s,
+            format!("Delete all {total}?"),
+            crate::ui::control::Pill::Primary,
+            Some(Message::Clear),
+        )
+        .kind(s, crate::ui::control::Kind::Danger)
+    } else {
+        ui::button(
+            s,
+            "Clear all",
+            crate::ui::control::Pill::Quiet,
+            (total > 0).then_some(Message::Clear),
+        )
+    }
     .padding([tok::NONE, tok::L])
     .height(28)
-    .radius(tok::FULL)
-    // Asked once: the confirm is the danger fill, as everywhere.
-    .kind(
-        s,
-        if st.confirm_clear {
-            crate::ui::control::Kind::Danger
-        } else {
-            crate::ui::control::Kind::Ghost
-        },
-    )
-    .on_press_maybe((total > 0).then_some(Message::Clear));
+    .radius(tok::FULL);
     let header = row![
         label_w("Clipboard", text::HEADING, s.ink, theme::SEMIBOLD),
         Space::new().width(Length::Fill),

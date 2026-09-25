@@ -12,17 +12,16 @@ pub(super) fn updates_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Me
     // the terminal (it asks before anything, and says what it needs).
     // Asked only on request: fwupd stays running once asked.
     let Some(fw) = &st.firmware else {
-        let check = control(label(
+        let check = ui::button(
+            s,
             if st.firmware_checking {
                 "Checking…"
             } else {
                 "Check"
             },
-            text::SMALL,
-            s.ink,
-        ))
-        .pill(s, crate::ui::control::Pill::Plain)
-        .on_press_maybe((!st.firmware_checking).then(|| Message::CheckFirmware));
+            crate::ui::control::Pill::Plain,
+            (!st.firmware_checking).then(|| Message::CheckFirmware),
+        );
         out.extend(group(
             s,
             Some("Firmware"),

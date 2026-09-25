@@ -112,10 +112,13 @@ pub(super) fn shortcuts_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, 
         s,
         "",
         None,
-        control(label_w("Add", text::SMALL, s.on_accent, theme::SEMIBOLD))
-            .pill(s, crate::ui::control::Pill::Primary)
-            .on_press_maybe(can_add.then(|| Message::AddShortcut))
-            .into(),
+        ui::button(
+            s,
+            "Add",
+            crate::ui::control::Pill::Primary,
+            can_add.then(|| Message::AddShortcut),
+        )
+        .into(),
     ));
     out.extend(group(s, Some("New shortcut"), make));
     // Added here: each removable.
