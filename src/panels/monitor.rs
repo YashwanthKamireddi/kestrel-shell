@@ -45,7 +45,7 @@ pub fn update(st: &mut State, m: Message) -> super::action::Action<Message> {
                 libc::kill(pid as i32, libc::SIGTERM);
             }
             if let Some(d) = &mut st.detail {
-                d.top.retain(|p| p.0 != pid);
+                d.top.retain(|p| p.pid != pid);
             }
         }
     }
@@ -151,7 +151,8 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         .padding([tok::NONE, tok::L])
     ]
     .spacing(tok::XXS);
-    for (pid, name, cpu, rss) in &d.top {
+    for p in &d.top {
+        let (pid, name, cpu, rss) = (&p.pid, &p.name, &p.cpu, &p.rss);
         let armed = st.armed == Some(*pid);
         // The session itself (the compositor, this shell, sound, the session bus) has no end
         // button: ending one would end the desktop.
@@ -169,8 +170,9 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 | "xdg-desktop-portal"
                 | "xdg-desktop-portal-hyprland"
         );
-        let end: Element<'_, Message> = if vital {
-            // Not ended from here (it would end the desktop): a lock says why the ✕ is missing.
+        let end: Element<'_, Message> = if vital || !p.own {
+            // Not ended from here (it would end the desktop, or it is the system's): a lock
+            // says why the ✕ is missing.
             container(icon(Icon::Lock, tok::ICON_XS, s.ink_faint))
                 .center_x(26)
                 .into()
@@ -194,16 +196,38 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 row![
                     label(crate::ui::ellipsize(name, 28), text::SMALL, s.ink).width(Length::Fill),
                     container(label(format!("{cpu:.0}%"), text::SMALL, s.ink_dim))
-                        .width(54)
-                        .align_right(54),
+                        .width(COL_CPU)
+                        .align_right(COL_CPU),
                     container(label(
                         format!("{:.0} MB", *rss as f64 / 1e6),
                         text::SMALL,
                         s.ink_dim
                     ))
-                    .width(70)
-                    .align_right(70),
+                    .width(COL_MEM)
+                    .align_right(COL_MEM),
                     container(end).width(COL_END).align_right(COL_END),
+                ]
+                .spacing(tok::NONE)
+                .align_y(Alignment::Center),
+            )
+            .padding([tok::NONE, tok::L])
+            .height(tok::H_ROW)
+            .align_y(Alignment::Center),
+        );
+    }
+    // The rest of the cores' work, so the list adds up: the kernel and programs too short-lived
+    // to be read twice (the user's "every core at 10 % but every process at 1 %", 2026-11-17).
+    if d.other >= 1.0 {
+        procs = procs.push(
+            container(
+                row![
+                    label("Other: system and short-lived", text::SMALL, s.ink_dim)
+                        .width(Length::Fill),
+                    container(label(format!("{:.0}%", d.other), text::SMALL, s.ink_dim))
+                        .width(COL_CPU)
+                        .align_right(COL_CPU),
+                    Space::new().width(COL_MEM),
+                    Space::new().width(COL_END),
                 ]
                 .spacing(tok::NONE)
                 .align_y(Alignment::Center),

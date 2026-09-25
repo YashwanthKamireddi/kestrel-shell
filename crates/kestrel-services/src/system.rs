@@ -107,8 +107,25 @@ pub struct Detail {
     /// Bytes: memory used and total, swap used and total.
     pub mem: (u64, u64),
     pub swap: (u64, u64),
-    /// The busiest processes: pid, name, CPU percent of one core, memory bytes.
-    pub top: Vec<(u32, String, f32, u64)>,
+    /// The busiest processes, everyone's (the system's too).
+    pub top: Vec<Proc>,
+    /// CPU no process seen in both readings accounts for (percent of one core): the kernel's
+    /// own work and programs that started and ended between readings (a screenshot's
+    /// helpers, a script's commands). With it the list adds up to the cores' load.
+    pub other: f32,
+}
+
+/// A process as the monitor shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Proc {
+    pub pid: u32,
+    pub name: String,
+    /// Percent of one core.
+    pub cpu: f32,
+    /// Resident memory, bytes.
+    pub rss: u64,
+    /// The user's own (only those can be ended from here).
+    pub own: bool,
 }
 
 /// Per-core (total, idle) jiffies.
@@ -131,8 +148,8 @@ fn core_times() -> Vec<(u64, u64)> {
         .collect()
 }
 
-/// Each process: pid -> (name, CPU jiffies so far, resident bytes). Only the user's own.
-fn processes() -> std::collections::HashMap<u32, (String, u64, u64)> {
+/// Each process, everyone's: pid -> (name, CPU jiffies so far, resident bytes, the user's own).
+fn processes() -> std::collections::HashMap<u32, (String, u64, u64, bool)> {
     let uid = unsafe { libc::getuid() };
     let page = 4096u64;
     let mut out = std::collections::HashMap::new();
@@ -144,9 +161,7 @@ fn processes() -> std::collections::HashMap<u32, (String, u64, u64)> {
             continue;
         };
         use std::os::unix::fs::MetadataExt;
-        if e.metadata().map(|m| m.uid()).ok() != Some(uid) {
-            continue;
-        }
+        let own = e.metadata().map(|m| m.uid()).ok() == Some(uid);
         let Ok(stat) = std::fs::read_to_string(e.path().join("stat")) else {
             continue;
         };
@@ -160,7 +175,7 @@ fn processes() -> std::collections::HashMap<u32, (String, u64, u64)> {
         let ticks = f.get(11).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0)
             + f.get(12).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
         let rss = f.get(21).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) * page;
-        out.insert(pid, (readable(pid, name), ticks, rss));
+        out.insert(pid, (readable(pid, name), ticks, rss, own));
     }
     out
 }
@@ -220,15 +235,25 @@ pub fn detail() -> impl Stream<Item = Detail> {
                 })
                 .collect();
             let secs = STEP.as_secs_f32();
-            let mut top: Vec<(u32, String, f32, u64)> = p2
+            let mut top: Vec<Proc> = p2
                 .iter()
-                .map(|(pid, (name, ticks, rss))| {
+                .map(|(pid, (name, ticks, rss, own))| {
                     let before = procs.get(pid).map_or(*ticks, |p| p.1);
                     let cpu = ticks.saturating_sub(before) as f32 / hz / secs * 100.0;
-                    (*pid, name.clone(), cpu, *rss)
+                    Proc {
+                        pid: *pid,
+                        name: name.clone(),
+                        cpu,
+                        rss: *rss,
+                        own: *own,
+                    }
                 })
                 .collect();
-            top.sort_by(|a, b| b.2.total_cmp(&a.2).then(b.3.cmp(&a.3)));
+            // What the cores did that no process seen twice accounts for.
+            let busy: f32 = load.iter().map(|&l| f32::from(l)).sum();
+            let seen: f32 = top.iter().map(|p| p.cpu).sum();
+            let other = (busy - seen).max(0.0);
+            top.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
             top.truncate(10);
             let (mem, swap) = meminfo();
             cores = c2;
@@ -239,6 +264,7 @@ pub fn detail() -> impl Stream<Item = Detail> {
                     mem,
                     swap,
                     top,
+                    other,
                 })
                 .await
                 .is_err()
