@@ -4,9 +4,12 @@
 //! "Copied" the moment anything copies, a screenshot included, and every copy goes into the
 //! clipboard history (crate::clips) as it is read.
 //!
-//! The same content offered again (wl-clip-persist re-offers it when the source app quits) is
-//! not reported twice. Password managers mark secrets with `x-kde-passwordManagerHint`; those
-//! are reported without their content.
+//! The clipboard is kept when the app it came from quits (as KDE's Klipper does, "prevent empty
+//! clipboard"): what was copied (its text, its picture, or its list of files) is held, and when
+//! the clipboard goes empty kestrel offers it again, so it can still be pasted. That replaced
+//! wl-clip-persist, which took over every copy the moment it was made. Content offered again
+//! is not reported twice. Password managers mark secrets with `x-kde-passwordManagerHint`;
+//! those are reported without their content and never kept.
 
 use futures::Stream;
 use std::collections::HashMap;
@@ -35,6 +38,12 @@ struct Put {
 /// A `wl_display.sync` answered: everything asked before it is done.
 type Ack = Mutex<Option<tokio::sync::oneshot::Sender<()>>>;
 
+/// What is on offer from kestrel: each type it can be pasted as, and its content.
+type Offered = Arc<Vec<(String, Arc<Vec<u8>>)>>;
+
+/// The last copy's content, kept to offer again when its app quits and the clipboard empties.
+type Kept = Arc<Mutex<Option<Offered>>>;
+
 /// The watcher's inbox for `Put`s, and the socket that wakes its loop.
 static PUT: Mutex<Option<(std::sync::mpsc::Sender<Put>, std::os::unix::net::UnixStream)>> =
     Mutex::new(None);
@@ -49,7 +58,7 @@ pub const TEXT_TYPES: &[&str] = &[
 ];
 
 /// Puts `data` on the clipboard, offered as `mimes`. kestrel serves it while it is the
-/// clipboard (and wl-clip-persist keeps it after). The answer comes once the compositor has it
+/// clipboard, and keeps it after. The answer comes once the compositor has it
 /// (dropped unanswered if the clipboard is not connected).
 pub fn copy(mimes: &[&str], data: Vec<u8>) -> tokio::sync::oneshot::Receiver<()> {
     let (done, rx) = tokio::sync::oneshot::channel();
@@ -100,6 +109,9 @@ struct State {
     device: Option<ZwlrDataControlDeviceV1>,
     /// kestrel's own copy while it is the clipboard.
     source: Option<ZwlrDataControlSourceV1>,
+    /// The last copy, to offer again when the clipboard empties (its app quit).
+    kept: Kept,
+    manager_for_keep: Option<ZwlrDataControlManagerV1>,
     /// The selection already present at start is not news.
     seen_first: bool,
     out: futures::channel::mpsc::UnboundedSender<Copied>,
@@ -192,19 +204,26 @@ impl Dispatch<wayland_client::protocol::wl_callback::WlCallback, Ack> for State 
     }
 }
 
-impl Dispatch<ZwlrDataControlSourceV1, Arc<Vec<u8>>> for State {
+impl Dispatch<ZwlrDataControlSourceV1, Offered> for State {
     fn event(
         st: &mut Self,
         source: &ZwlrDataControlSourceV1,
         event: zwlr_data_control_source_v1::Event,
-        data: &Arc<Vec<u8>>,
+        offered: &Offered,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
         match event {
             // An app pastes: the content is written at the app's pace, off the event loop.
-            zwlr_data_control_source_v1::Event::Send { fd, .. } => {
-                let data = data.clone();
+            zwlr_data_control_source_v1::Event::Send { fd, mime_type } => {
+                let Some(data) = offered
+                    .iter()
+                    .find(|(m, _)| *m == mime_type)
+                    .or_else(|| offered.first())
+                    .map(|(_, d)| d.clone())
+                else {
+                    return;
+                };
                 std::thread::spawn(move || {
                     let _ = std::io::Write::write_all(&mut std::fs::File::from(fd), &data);
                 });
@@ -228,7 +247,7 @@ impl Dispatch<ZwlrDataControlDeviceV1, ()> for State {
         event: zwlr_data_control_device_v1::Event,
         _: &(),
         conn: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
         match event {
             zwlr_data_control_device_v1::Event::Selection { id } => {
@@ -237,14 +256,23 @@ impl Dispatch<ZwlrDataControlDeviceV1, ()> for State {
                     old.destroy();
                 }
                 let Some(offer) = id else {
+                    // Empty: the app it came from quit. What it held is offered again.
+                    if st.source.is_none() {
+                        keep_offering(st, qh);
+                    }
                     return;
                 };
                 let mimes = st.offers.get(&offer.id()).cloned().unwrap_or_default();
-                if st.seen_first {
-                    read_offer(&offer, &mimes, conn, st.out.clone());
-                } else {
-                    st.seen_first = true;
-                }
+                // The copy already there at start is kept (its app may quit later) but is not
+                // news: not announced, not added to the history again.
+                read_offer(
+                    &offer,
+                    &mimes,
+                    conn,
+                    st.seen_first.then(|| st.out.clone()),
+                    st.kept.clone(),
+                );
+                st.seen_first = true;
                 st.current = Some(offer);
             }
             zwlr_data_control_device_v1::Event::PrimarySelection { id: Some(offer) } => {
@@ -261,18 +289,67 @@ impl Dispatch<ZwlrDataControlDeviceV1, ()> for State {
     ]);
 }
 
+/// The kept copy offered again (the clipboard emptied: its app quit).
+fn keep_offering(st: &mut State, qh: &QueueHandle<State>) {
+    let kept = st
+        .kept
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let (Some(offered), Some(manager), Some(device)) =
+        (kept, st.manager_for_keep.as_ref(), st.device.as_ref())
+    else {
+        return;
+    };
+    let source = manager.create_data_source(qh, offered.clone());
+    for (m, _) in offered.iter() {
+        source.offer(m.clone());
+    }
+    device.set_selection(Some(&source));
+    if let Some(old) = st.source.replace(source) {
+        old.destroy();
+    }
+}
+
+/// Starts reading `mime` from the offer: the pipe to read it from.
+fn receive(offer: &ZwlrDataControlOfferV1, mime: &str, conn: &Connection) -> Option<OwnedFd> {
+    let mut fds = [0; 2];
+    // Safety: pipe2 fills both descriptors on success; each is owned exactly once below.
+    if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
+        return None;
+    }
+    let (read, write) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
+    offer.receive(mime.to_string(), write.as_fd());
+    let _ = conn.flush();
+    drop(write);
+    Some(read)
+}
+
 /// Ask the source for the best type and describe it on another thread (the source writes to
-/// the pipe at its own pace; the event loop must keep running meanwhile).
+/// the pipe at its own pace; the event loop must keep running meanwhile). What was read is
+/// kept, to offer again if its app quits (secrets never).
 fn read_offer(
     offer: &ZwlrDataControlOfferV1,
     mimes: &[String],
     conn: &Connection,
-    out: futures::channel::mpsc::UnboundedSender<Copied>,
+    out: Option<futures::channel::mpsc::UnboundedSender<Copied>>,
+    kept: Kept,
 ) {
     if mimes.iter().any(|m| m == "x-kde-passwordManagerHint") {
-        let _ = out.unbounded_send(Copied::Other);
+        *kept
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        if let Some(out) = out {
+            let _ = out.unbounded_send(Copied::Other);
+        }
         return;
     }
+    // Copied files (a file manager's copy): their list, kept as it was offered.
+    let files = mimes
+        .iter()
+        .any(|m| m == "text/uri-list")
+        .then(|| receive(offer, "text/uri-list", conn))
+        .flatten();
     let image = mimes
         .iter()
         .find(|m| *m == "image/png")
@@ -285,26 +362,46 @@ fn read_offer(
     ]
     .iter()
     .find_map(|t| mimes.iter().find(|m| m == t));
-    let Some(mime) = image.or(text).cloned() else {
-        let _ = out.unbounded_send(Copied::Other);
-        return;
-    };
-    let mut fds = [0; 2];
-    // Safety: pipe2 fills both descriptors on success; each is owned exactly once below.
-    if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
-        return;
-    }
-    let (read, write) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
-    offer.receive(mime.clone(), write.as_fd());
-    let _ = conn.flush();
-    drop(write);
-    let is_image = mime.starts_with("image/");
-    let mime = mime.clone();
+    let chosen = image.or(text).cloned();
+    let read = chosen.as_ref().and_then(|m| receive(offer, m, conn));
+    let is_image = chosen.as_ref().is_some_and(|m| m.starts_with("image/"));
+    let mime = chosen.unwrap_or_default();
     std::thread::spawn(move || {
-        let mut data = Vec::new();
-        let _ = std::fs::File::from(read)
-            .take(READ_LIMIT as u64)
-            .read_to_end(&mut data);
+        let slurp = |fd: OwnedFd| {
+            let mut data = Vec::new();
+            let _ = std::fs::File::from(fd)
+                .take(READ_LIMIT as u64)
+                .read_to_end(&mut data);
+            data
+        };
+        let files = files.map(slurp).filter(|d| !d.is_empty());
+        let data = read.map(slurp).unwrap_or_default();
+        // Kept to offer again: the files' list, the picture, or the text under every name
+        // text is asked for.
+        let mut offered: Vec<(String, Arc<Vec<u8>>)> = Vec::new();
+        if let Some(f) = files {
+            offered.push(("text/uri-list".into(), Arc::new(f)));
+        }
+        if !data.is_empty() {
+            let data = Arc::new(data.clone());
+            if is_image {
+                offered.push((mime.clone(), data));
+            } else {
+                offered.extend(TEXT_TYPES.iter().map(|t| ((*t).to_string(), data.clone())));
+            }
+        }
+        *kept
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            (!offered.is_empty()).then(|| Arc::new(offered));
+        // Only kept (the copy there at start): nothing to announce.
+        let Some(out) = out else {
+            return;
+        };
+        if mime.is_empty() {
+            let _ = out.unbounded_send(Copied::Other);
+            return;
+        }
         let copied = describe(&data, is_image, &mime);
         // Into the history first, so the list is current when "Copied" arrives.
         match &copied {
@@ -434,6 +531,8 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
         current: None,
         device: None,
         source: None,
+        kept: Arc::default(),
+        manager_for_keep: None,
         seen_first: false,
         out,
     };
@@ -442,6 +541,7 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
         anyhow::bail!("the compositor has no wlr data-control");
     };
     st.device = Some(manager.get_data_device(&seat, &qh, ()));
+    st.manager_for_keep = Some(manager.clone());
     // If nothing is on the clipboard at start, the first copy is news.
     queue.roundtrip(&mut st)?;
     st.seen_first = true;
@@ -492,7 +592,17 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
                 let mut buf = [0u8; 64];
                 while (&wake_rx).read(&mut buf).is_ok_and(|n| n > 0) {}
                 while let Ok(put) = inbox.try_recv() {
-                    let source = manager.create_data_source(&qh, put.data);
+                    let offered: Offered = Arc::new(
+                        put.mimes
+                            .iter()
+                            .map(|m| (m.clone(), put.data.clone()))
+                            .collect(),
+                    );
+                    // kestrel's own copy is kept too (offered again if the clipboard empties).
+                    *st.kept
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(offered.clone());
+                    let source = manager.create_data_source(&qh, offered);
                     for m in &put.mimes {
                         source.offer(m.clone());
                     }
