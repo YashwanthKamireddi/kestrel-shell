@@ -63,7 +63,7 @@ pub fn polkit() -> Subscription<crate::services::polkit::Event> {
     Subscription::run(|| forever(crate::services::polkit::stream))
 }
 pub fn filechooser() -> Subscription<crate::services::filechooser::Request> {
-    Subscription::run(|| forever(crate::services::filechooser::stream))
+    Subscription::run(|| forever(crate::services::portal::stream))
 }
 pub fn power() -> Subscription<power::State> {
     Subscription::run(|| forever(power::stream))

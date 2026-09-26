@@ -1,10 +1,9 @@
 //! kestrel's file picker, as the desktop portal's FileChooser backend: when an app asks to
 //! open or save a file (a browser's Upload, Save as), xdg-desktop-portal forwards the request
-//! here (`org.freedesktop.impl.portal.desktop.kestrel`, announced by
-//! /usr/share/xdg-desktop-portal/portals/kestrel.portal) and the shell shows its own picker.
+//! to kestrel's portal backend (crate::portal, which serves this interface) and the shell
+//! shows its own picker.
 //! The call waits until the picker answers: chosen files, or cancelled.
 
-use futures::{SinkExt, Stream};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,8 +11,6 @@ use std::sync::{LazyLock, Mutex};
 use tokio::sync::{mpsc, oneshot};
 use zbus::interface;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
-
-pub const BUS_NAME: &str = "org.freedesktop.impl.portal.desktop.kestrel";
 
 /// A file type an app offers to filter by: its name and glob patterns ("*.png").
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -94,8 +91,15 @@ pub fn answer(id: u64, a: Answer) {
     }
 }
 
-struct Chooser {
+/// The FileChooser interface; its requests go to `tx` (served by crate::portal).
+pub(crate) struct Chooser {
     tx: mpsc::UnboundedSender<Request>,
+}
+
+impl Chooser {
+    pub(crate) fn new(tx: mpsc::UnboundedSender<Request>) -> Self {
+        Self { tx }
+    }
 }
 
 fn get<T: TryFrom<OwnedValue>>(o: &HashMap<String, OwnedValue>, k: &str) -> Option<T> {
@@ -216,33 +220,6 @@ impl Chooser {
     ) -> (u32, HashMap<String, OwnedValue>) {
         self.ask(true, title, options).await
     }
-}
-
-/// Requests from apps, as they come. Owns the portal backend's name while it runs.
-pub fn stream() -> impl Stream<Item = Request> {
-    crate::stream::channel(4, async |mut out| {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        let conn = async {
-            zbus::connection::Builder::session()?
-                .serve_at("/org/freedesktop/portal/desktop", Chooser { tx })?
-                .name(BUS_NAME)?
-                .build()
-                .await
-        }
-        .await;
-        let _conn = match conn {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("file chooser: {e}");
-                return;
-            }
-        };
-        while let Some(r) = rx.recv().await {
-            if out.send(r).await.is_err() {
-                return;
-            }
-        }
-    })
 }
 
 #[cfg(test)]

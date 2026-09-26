@@ -37,6 +37,7 @@ pub mod open;
 pub mod pacman;
 pub mod pipewire;
 pub mod polkit;
+pub mod portal;
 pub mod power;
 pub mod previews;
 pub mod region;

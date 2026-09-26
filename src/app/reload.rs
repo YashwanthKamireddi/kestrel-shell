@@ -19,7 +19,9 @@ pub(crate) fn apply_config(app: &mut App, mut c: Config) -> Task<Message> {
     let wallpaper_changed = c.wallpaper != app.config.wallpaper;
     // The accent, or the apps' fonts (Qt gets them with the colours), change the colours
     // written for apps.
-    let accent_changed = c.accent != app.config.accent || c.look != app.config.look;
+    let accent_changed = c.accent != app.config.accent
+        || c.look != app.config.look
+        || c.theme_apps != app.config.theme_apps;
     // Quiet hours and night light's schedule follow their settings at once, however they
     // changed (Settings or a hand edit).
     let quiet_changed = c.quiet_from != app.config.quiet_from || c.quiet_to != app.config.quiet_to;

@@ -110,6 +110,17 @@ impl App {
                 source: seed.source,
             };
         });
+        // Apps that follow the desktop (GTK 4, Qt 6, Chromium, Firefox) read this through the
+        // portal: dark, and kestrel's accent while it themes apps.
+        let a = self.scheme.accent;
+        services::portal::set_appearance(services::portal::Appearance {
+            accent: self.config.theme_apps.then_some((
+                f64::from(a.r),
+                f64::from(a.g),
+                f64::from(a.b),
+            )),
+            ..Default::default()
+        });
         if !self.config.theme_apps {
             return Task::none();
         }
