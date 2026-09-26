@@ -506,7 +506,8 @@ pub fn stream() -> impl Stream<Item = Copied> {
         }
         let mut last = None;
         while let Some(c) = rx.next().await {
-            // wl-clip-persist offers the same content again when its source quits.
+            // The same content offered again (kestrel keeping it after its app quit) is not
+            // news.
             let d = digest(&c);
             if last == Some(d) {
                 continue;
