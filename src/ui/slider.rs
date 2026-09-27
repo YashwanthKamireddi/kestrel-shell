@@ -11,6 +11,11 @@ use std::time::Instant;
 
 pub struct Slider<'a, M> {
     content: Element<'a, M>,
+    /// The content again in the colours it has over the fill (the value's words, dark on the
+    /// accent): shown where the fill is, `content` where it is not, so a value the fill's
+    /// edge crosses reads in both halves (as iOS's sliders). Drawn only: `content` takes the
+    /// events. Its left square (the icon's place, always on the fill) is left to `content`.
+    on_fill: Option<Element<'a, M>>,
     value: f32,
     height: f32,
     track: Color,
@@ -32,6 +37,7 @@ pub fn slider<'a, M>(
 ) -> Slider<'a, M> {
     Slider {
         content: content.into(),
+        on_fill: None,
         value: value.clamp(0.0, 1.0),
         height,
         track,
@@ -42,7 +48,12 @@ pub fn slider<'a, M>(
     }
 }
 
-impl<M> Slider<'_, M> {
+impl<'a, M> Slider<'a, M> {
+    /// The content as it looks over the fill (see `on_fill`).
+    pub fn on_fill(mut self, content: impl Into<Element<'a, M>>) -> Self {
+        self.on_fill = Some(content.into());
+        self
+    }
     pub fn on_release(mut self, m: M) -> Self {
         self.on_release = Some(m);
         self
@@ -75,10 +86,17 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
         })
     }
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
+        let mut v = vec![Tree::new(&self.content)];
+        if let Some(f) = &self.on_fill {
+            v.push(Tree::new(f));
+        }
+        v
     }
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
+        match &self.on_fill {
+            Some(f) => tree.diff_children(&[&self.content, f]),
+            None => tree.diff_children(std::slice::from_ref(&self.content)),
+        }
     }
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fill, Length::Fixed(self.height))
@@ -92,13 +110,36 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
     ) -> layout::Node {
         let size = limits.resolve(Length::Fill, Length::Fixed(self.height), Size::ZERO);
         let child_limits = layout::Limits::new(Size::ZERO, size);
-        let child =
-            self.content
-                .as_widget_mut()
-                .layout(&mut tree.children[0], renderer, &child_limits);
+        let mut children = Vec::new();
+        let (first, rest) = tree.children.split_at_mut(1);
+        let child = self
+            .content
+            .as_widget_mut()
+            .layout(&mut first[0], renderer, &child_limits);
         let dy = (size.height - child.size().height) / 2.0;
-        let child = child.move_to((0.0, dy));
-        layout::Node::with_children(size, vec![child])
+        children.push(child.move_to((0.0, dy)));
+        if let (Some(f), Some(t)) = (self.on_fill.as_mut(), rest.first_mut()) {
+            let alt = f.as_widget_mut().layout(t, renderer, &child_limits);
+            let dy = (size.height - alt.size().height) / 2.0;
+            children.push(alt.move_to((0.0, dy)));
+        }
+        layout::Node::with_children(size, children)
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn iced::advanced::widget::Operation,
+    ) {
+        // The controls in it (the mute button) are reached by the keyboard too.
+        self.content.as_widget_mut().operate(
+            &mut tree.children[0],
+            layout.children().next().unwrap(),
+            renderer,
+            operation,
+        );
     }
 
     fn update(
@@ -107,12 +148,29 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
         event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        _renderer: &iced::Renderer,
-        _clipboard: &mut dyn Clipboard,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, M>,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
+        // The controls in it first: a press on the mute button is the button's, not a drag to
+        // that end of the track (it set the level to 0 % instead of muting).
+        self.content.as_widget_mut().update(
+            &mut tree.children[0],
+            event,
+            layout.children().next().unwrap(),
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        );
         let b = layout.bounds();
+        if shell.is_event_captured()
+            && !matches!(event, Event::Window(window::Event::RedrawRequested(_)))
+        {
+            return;
+        }
         let state = tree.state.downcast_mut::<State>();
         let value_at = |x: f32| {
             let knob = b.height / 2.0;
@@ -215,17 +273,38 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
             },
             colour,
         );
-        renderer.with_layer(b, |renderer| {
-            self.content.as_widget().draw(
-                &tree.children[0],
-                renderer,
-                theme,
-                style,
-                layout.children().next().unwrap(),
-                cursor,
-                viewport,
-            );
-        });
+        let mut parts = layout.children();
+        let main = parts.next().unwrap();
+        let draw = |renderer: &mut iced::Renderer, clip: Rectangle, el: &Element<'_, M>, t, l| {
+            renderer.with_layer(clip, |renderer| {
+                el.as_widget()
+                    .draw(t, renderer, theme, style, l, cursor, viewport);
+            });
+        };
+        match (&self.on_fill, parts.next(), tree.children.get(1)) {
+            (Some(alt), Some(alt_layout), Some(alt_tree)) => {
+                // The icon's square from `content` (always on the fill), then the rest split at
+                // the fill's edge: `on_fill` over the fill, `content` past it.
+                let icon = Rectangle {
+                    width: b.height.min(fill_w),
+                    ..b
+                };
+                let over = Rectangle {
+                    x: b.x + icon.width,
+                    width: (fill_w - icon.width).max(0.0),
+                    ..b
+                };
+                let past = Rectangle {
+                    x: b.x + fill_w,
+                    width: (b.width - fill_w).max(0.0),
+                    ..b
+                };
+                draw(renderer, icon, &self.content, &tree.children[0], main);
+                draw(renderer, past, &self.content, &tree.children[0], main);
+                draw(renderer, over, alt, alt_tree, alt_layout);
+            }
+            _ => draw(renderer, b, &self.content, &tree.children[0], main),
+        }
     }
 
     fn mouse_interaction(
@@ -237,8 +316,17 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
         _renderer: &iced::Renderer,
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<State>();
+        let inner = self.content.as_widget().mouse_interaction(
+            &tree.children[0],
+            layout.children().next().unwrap(),
+            cursor,
+            _viewport,
+            _renderer,
+        );
         if state.dragging {
             mouse::Interaction::Grabbing
+        } else if inner != mouse::Interaction::default() {
+            inner
         } else if cursor.is_over(layout.bounds()) {
             mouse::Interaction::Pointer
         } else {

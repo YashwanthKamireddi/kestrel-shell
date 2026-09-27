@@ -185,6 +185,9 @@ pub(super) fn main_page<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
     page.into()
 }
 
+/// The button at a level row's start (mute), and the room its on-fill copy keeps for it.
+const ICON_BOX: f32 = 32.0;
+
 /// What sits at a level row's end: nothing (the Sound page's full-width rows), the room a
 /// button takes (so rows with and without one line up), or the button opening its page.
 pub(super) enum Trail {
@@ -219,20 +222,24 @@ pub(super) fn level_row_to<'a>(
     // track runs to the maximum with the boost in red.
     let top = if value > 1.0 { top.max(1.0) } else { 1.0 };
     let on_track = (value / top).clamp(0.0, 1.0);
-    // Once the fill reaches the value text, the text switches to the on-accent colour.
-    let covered = on_track > 0.86;
+    // The value in two colours, split where the fill's edge crosses it (the slider draws each
+    // half from its own copy): dark on the fill, light past it (red when boosted).
     let boosted = value > 1.0 + 1e-4;
+    let words = format!("{:.0}%", value * 100.0);
     let pct = label(
-        format!("{:.0}%", value * 100.0),
+        words.clone(),
         text::SMALL,
-        match (covered, boosted) {
-            (true, _) => s.on_accent,
-            (false, true) => s.bad,
-            (false, false) => s.ink_dim,
-        },
+        if boosted { s.bad } else { s.ink_dim },
     );
+    let on_fill = row![
+        Space::new().width(ICON_BOX),
+        Space::new().width(Length::Fill),
+        label(words, text::SMALL, s.on_accent),
+        Space::new().width(tok::L),
+    ]
+    .align_y(Alignment::Center);
     let inner = row![
-        ui::control(container(icon(i, tok::ICON, s.on_accent)).center(32))
+        ui::control(container(icon(i, tok::ICON, s.on_accent)).center(ICON_BOX))
             .radius(tok::FULL)
             .kind(s, crate::ui::control::Kind::OnAccent)
             .on_press(on_icon),
@@ -248,6 +255,7 @@ pub(super) fn level_row_to<'a>(
         (s.ink.scale_alpha(tok::TONAL * s.opacity), s.accent),
         move |v| on_change(v * top),
     )
+    .on_fill(on_fill)
     .boost(1.0 / top, s.bad);
     let mut r = row![bar].spacing(tok::XS).align_y(Alignment::Center);
     // Every row keeps the details button's room, so the tracks all end at one line.
