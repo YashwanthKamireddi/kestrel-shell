@@ -62,7 +62,8 @@ pub fn keyring() -> Subscription<crate::services::keyring::Ask> {
 pub fn polkit() -> Subscription<crate::services::polkit::Event> {
     Subscription::run(|| forever(crate::services::polkit::stream))
 }
-pub fn filechooser() -> Subscription<crate::services::filechooser::Request> {
+/// What apps ask through kestrel's portal backend (a file, which app opens something).
+pub fn portal() -> Subscription<crate::services::portal::Event> {
     Subscription::run(|| forever(crate::services::portal::stream))
 }
 pub fn power() -> Subscription<power::State> {

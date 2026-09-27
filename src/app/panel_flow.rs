@@ -75,13 +75,14 @@ impl App {
         output: OutputId,
         button: Rectangle,
     ) -> Task<Message> {
-        if kind != PanelKind::Files
-            && self
-                .panel
-                .as_ref()
-                .is_some_and(|p| p.open && p.kind == PanelKind::Files)
+        // Another panel in a question's place: its question is answered "cancelled".
+        if let Some(old) = self
+            .panel
+            .as_ref()
+            .filter(|p| p.open && p.kind != kind)
+            .map(|p| p.kind)
         {
-            panels::files::closed(&mut self.panels.files);
+            panels::closed(self, old);
         }
         let Some(o) = self.output(output) else {
             return Task::none();
@@ -131,21 +132,10 @@ impl App {
     }
 
     pub(crate) fn close(&mut self) -> Task<Message> {
-        // A file picker closed without choosing: the app waiting on it hears "cancelled".
-        if self
-            .panel
-            .as_ref()
-            .is_some_and(|p| p.open && p.kind == PanelKind::Files)
-        {
-            panels::files::closed(&mut self.panels.files);
-        }
-        // A password prompt closed without an answer: the app hears "cancelled".
-        if self
-            .panel
-            .as_ref()
-            .is_some_and(|p| p.open && p.kind == PanelKind::Auth)
-        {
-            self.panels.auth.closed();
+        // A question closed without an answer (a file, "Open with", a password): whoever
+        // waits on it hears "cancelled".
+        if let Some(kind) = self.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
+            panels::closed(self, kind);
         }
         // Gone on the click (design call 2026-11-13: any delay closing felt slow); its own surface
         // goes with it, and Hyprland animates that out.

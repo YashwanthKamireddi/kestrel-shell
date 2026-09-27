@@ -4,13 +4,14 @@
 //! routes to it what portals.conf names it for (the rest stays with the other backends).
 //!
 //! - FileChooser: kestrel's file picker (crate::filechooser).
+//! - AppChooser: "Open with…" (crate::appchooser).
 //! - Settings: the appearance apps follow (`org.freedesktop.appearance`): dark, kestrel's own
 //!   accent colour (from the wallpaper or chosen), contrast, reduced motion. The frontend asks
 //!   every Settings backend and the first listed wins per key (xdg-desktop-portal 1.22,
 //!   src/settings.c), so GNOME's font, cursor and icon keys still come from the GTK backend
 //!   listed after kestrel.
 
-use crate::filechooser;
+use crate::{appchooser, filechooser};
 use futures::Stream;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -146,14 +147,25 @@ impl Settings {
     ) -> zbus::Result<()>;
 }
 
-/// Apps' requests (files to choose), as they come. Owns the backend's name while it runs.
-pub fn stream() -> impl Stream<Item = filechooser::Request> {
+/// What apps ask the shell through the portal.
+#[derive(Clone, Debug)]
+pub enum Event {
+    /// A file to open or save as.
+    File(filechooser::Request),
+    /// Which app should open something ("Open with…").
+    OpenWith(appchooser::Event),
+}
+
+/// Apps' requests, as they come. Owns the backend's name while it runs.
+pub fn stream() -> impl Stream<Item = Event> {
     use futures::SinkExt;
     crate::stream::channel(4, async |mut out| {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (atx, mut arx) = tokio::sync::mpsc::unbounded_channel();
         let conn = async {
             zbus::connection::Builder::session()?
                 .serve_at(PATH, filechooser::Chooser::new(tx))?
+                .serve_at(PATH, appchooser::Chooser::new(atx))?
                 .serve_at(PATH, Settings)?
                 .name(BUS_NAME)?
                 .build()
@@ -170,8 +182,13 @@ pub fn stream() -> impl Stream<Item = filechooser::Request> {
         *CONN
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(conn.clone());
-        while let Some(r) = rx.recv().await {
-            if out.send(r).await.is_err() {
+        loop {
+            let e = tokio::select! {
+                Some(r) = rx.recv() => Event::File(r),
+                Some(a) = arx.recv() => Event::OpenWith(a),
+                else => break,
+            };
+            if out.send(e).await.is_err() {
                 break;
             }
         }

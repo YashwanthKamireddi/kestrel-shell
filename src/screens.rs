@@ -40,7 +40,7 @@ mod tests {
         size
     }
 
-    const ALL: [PanelKind; 21] = [
+    const ALL: [PanelKind; 22] = [
         PanelKind::Control,
         PanelKind::Media,
         PanelKind::Calendar,
@@ -62,12 +62,16 @@ mod tests {
         PanelKind::Monitor,
         PanelKind::Privacy,
         PanelKind::Notifications,
+        PanelKind::OpenWith,
     ];
 
     /// Shown only while something asks (a password, a file): with nothing asked they are
     /// closed, never drawn empty.
     fn only_when_asked(kind: PanelKind) -> bool {
-        matches!(kind, PanelKind::Auth | PanelKind::Files)
+        matches!(
+            kind,
+            PanelKind::Auth | PanelKind::Files | PanelKind::OpenWith
+        )
     }
 
     /// Every panel of `app`: none panics, none is empty, none fills the room (Settings is a

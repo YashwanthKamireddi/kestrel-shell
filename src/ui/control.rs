@@ -80,6 +80,9 @@ pub struct Control<'a, M> {
     /// heard entering the new one (closing a notification left the next, now under the
     /// pointer, showing its time instead of its close button).
     identity: Option<u64>,
+    /// Its name for iced's focus (`widget::focus(id)` puts the keyboard here: a list's first
+    /// item when it opens).
+    id: Option<iced::widget::Id>,
 }
 
 pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
@@ -104,6 +107,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         center_x: false,
         veil: Color::TRANSPARENT,
         identity: None,
+        id: None,
     }
 }
 
@@ -250,6 +254,11 @@ impl<'a, M> Control<'a, M> {
         self.rest = rest;
         self.hover = hover;
         self.press = press;
+        self
+    }
+    /// Names it for iced's focus (see `id`).
+    pub fn id(mut self, id: iced::widget::Id) -> Self {
+        self.id = Some(id);
         self
     }
     pub fn border(mut self, c: Color) -> Self {
@@ -678,7 +687,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         // Only what can be pressed takes the keyboard (Tab passes over labels and cards).
         if self.on_press.is_some() || self.on_press_at.is_some() {
             let state = tree.state.downcast_mut::<State>();
-            operation.focusable(None, layout.bounds(), state);
+            operation.focusable(self.id.as_ref(), layout.bounds(), state);
         }
         self.content.as_widget_mut().operate(
             &mut tree.children[0],

@@ -261,17 +261,8 @@ impl App {
                 // So a panel takes it only when it is for typing, or was opened from the
                 // keyboard (a shortcut: Esc and the arrows are expected there). Opened with
                 // the mouse, it leaves your app focused; a click outside closes it.
-                let typing = matches!(
-                    kind,
-                    PanelKind::Launcher
-                        | PanelKind::Clipboard
-                        | PanelKind::Emoji
-                        | PanelKind::Overview
-                        | PanelKind::Settings
-                        | PanelKind::Files
-                        | PanelKind::Auth
-                ) || (kind == PanelKind::Control
-                    && panels::control::typing(self_typing));
+                let typing = kind.takes_keyboard()
+                    || (kind == PanelKind::Control && panels::control::typing(self_typing));
                 let keyboard = if typing || keys { 2 } else { 0 };
                 if own {
                     panel_keyboard = Some(keyboard);
@@ -428,17 +419,8 @@ impl App {
         let Some(kind) = self.panel.as_ref().filter(|p| p.open).map(|p| p.kind) else {
             return 0;
         };
-        let typing = matches!(
-            kind,
-            PanelKind::Launcher
-                | PanelKind::Clipboard
-                | PanelKind::Emoji
-                | PanelKind::Overview
-                | PanelKind::Settings
-                | PanelKind::Files
-                | PanelKind::Auth
-        ) || (kind == PanelKind::Control
-            && panels::control::typing(&self.panels.control));
+        let typing = kind.takes_keyboard()
+            || (kind == PanelKind::Control && panels::control::typing(&self.panels.control));
         if typing || self.panel_keys { 2 } else { 0 }
     }
 

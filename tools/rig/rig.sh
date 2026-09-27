@@ -19,6 +19,10 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 WORK=${WORK:-$HOME/.cache/kestrel-rig}
 BIN=${BIN:-$HERE/../../target/release/kestrel}
+# The renderer the installed desktop uses (from its service file), so the rig draws what the user sees
+# (2026-11-17: it drew with the GPU renderer while the desktop used the CPU one, and every
+# picture shown to the user that day came from the wrong renderer). ICED_BACKEND=… overrides it.
+ICED_BACKEND=${ICED_BACKEND:-$(sed -n 's/^Environment=ICED_BACKEND=//p' "$HERE/../../packaging/arch/kestrel.service")}
 mkdir -p "$WORK/home/.config/kestrel"
 
 sig() { cat "$WORK/sig"; }
@@ -84,7 +88,7 @@ run)
 prompt) # the prompt process with a made-up question, no real agents (devtools builds)
     env -i HOME="$WORK/home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
         WAYLAND_DISPLAY="$(display)" LANG=en_US.UTF-8 RUST_LOG="${RUST_LOG:-kestrel=info}" \
-        KESTREL_PREVIEW="${2:?which question}" \
+        KESTREL_PREVIEW="${2:?which question}" ${ICED_BACKEND:+ICED_BACKEND=$ICED_BACKEND} \
         setsid "$BIN" prompt >"$WORK/prompt.log" 2>&1 </dev/null &
     sleep "${WAIT:-1}"
     tail -5 "$WORK/prompt.log"

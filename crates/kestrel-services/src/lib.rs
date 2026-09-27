@@ -6,6 +6,7 @@
 
 pub mod about;
 pub mod airpods;
+pub mod appchooser;
 pub mod apps;
 pub mod audio;
 pub mod autostart;

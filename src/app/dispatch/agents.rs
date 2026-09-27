@@ -56,6 +56,23 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             let o = app.panels.auth.ended_polkit(&cookie);
             prompt_ended(app, o)
         }
+        Message::OpenWith(services::appchooser::Event::Update(id, choices)) => {
+            panels::open_with::update_choices(&mut app.panels.open_with, id, choices);
+            Task::none()
+        }
+        Message::OpenWith(services::appchooser::Event::Ask(a)) => {
+            panels::open_with::begin(&mut app.panels.open_with, a);
+            let Some(id) = app.focused_output() else {
+                return Task::none();
+            };
+            let x = app.output(id).map_or(0.0, |o| o.size.width / 2.0);
+            app.panel_keys = true;
+            app.show(
+                PanelKind::OpenWith,
+                id,
+                Rectangle::new(iced::Point::new(x, 0.0), Size::new(0.0, tok::BAR)),
+            )
+        }
         Message::FileRequest(r) => {
             // An app's question replaces kestrel's own: nobody waits on that answer any more.
             if r.id != services::filechooser::OWN {

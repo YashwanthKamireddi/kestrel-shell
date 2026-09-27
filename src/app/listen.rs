@@ -39,7 +39,10 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
         // What gets copied (screenshots too) shows in the island.
         crate::subs::copied().map(Message::Copied),
         // Apps asking for a file get kestrel's picker.
-        crate::subs::filechooser().map(Message::FileRequest),
+        crate::subs::portal().map(|e| match e {
+            services::portal::Event::File(r) => Message::FileRequest(r),
+            services::portal::Event::OpenWith(e) => Message::OpenWith(e),
+        }),
         // A window the user closed (Settings).
         iced::event::listen_with(|e, _, w| match e {
             iced::event::Event::Window(iced::window::Event::CloseRequested) => {

@@ -413,6 +413,8 @@ pub enum Message {
     DdcLevel(u32, Option<f32>),
     /// A player's new artwork has stayed put long enough to show.
     ArtSettled(String, Option<String>),
+    /// An app asks which program should open something ("Open with…").
+    OpenWith(services::appchooser::Event),
     /// An app asks for a file (the portal's file chooser).
     FileRequest(services::filechooser::Request),
     Polkit(services::polkit::Event),

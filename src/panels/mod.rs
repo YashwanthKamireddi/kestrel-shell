@@ -15,6 +15,7 @@ pub mod launcher;
 pub mod media;
 pub mod monitor;
 pub mod notifications;
+pub mod open_with;
 pub mod overview;
 pub mod pods;
 pub mod power;
@@ -57,6 +58,8 @@ pub enum PanelKind {
     Privacy,
     /// The notifications, at the island (the bell opens it).
     Notifications,
+    /// "Open with…": which app opens a file or link, when an app asks.
+    OpenWith,
 }
 
 impl PanelKind {
@@ -130,6 +133,7 @@ impl PanelKind {
             Self::Weather => weather::WIDTH,
             Self::Pods => pods::WIDTH,
             Self::Files => files::WIDTH,
+            Self::OpenWith => open_with::WIDTH,
             Self::Auth => auth::WIDTH,
         }
     }
@@ -153,6 +157,7 @@ pub struct State {
     pub emoji: emoji::State,
     pub settings: settings::State,
     pub files: files::State,
+    pub open_with: open_with::State,
     pub auth: auth::State,
     pub notifications: notifications::State,
 }
@@ -232,6 +237,7 @@ pub enum Message {
     Emoji(emoji::Message),
     Settings(settings::Message),
     Files(files::Message),
+    OpenWith(open_with::Message),
     Auth(auth::Message),
     /// A navigation key while a panel is open (Esc is the shell's).
     Key(Key),
@@ -274,6 +280,7 @@ pub fn refocus(app: &App, kind: PanelKind) -> Task<AppMessage> {
             files::NAME_ID.clone()
         }
         PanelKind::Files => files::SEARCH_ID.clone(),
+        PanelKind::OpenWith => open_with::FIRST.clone(),
         _ => return Task::none(),
     };
     Task::Iced(iced::widget::focus(id))
@@ -324,6 +331,7 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
         | PanelKind::Weather
         | PanelKind::Pods
         | PanelKind::Files
+        | PanelKind::OpenWith
         | PanelKind::Auth
         | PanelKind::Capture
         | PanelKind::Monitor => {}
@@ -404,6 +412,10 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::Files(m) => {
             let a = files::update(&mut app.panels.files, m);
             action::perform(app, a, |m| AppMessage::Panel(Message::Files(m)))
+        }
+        Message::OpenWith(m) => {
+            let a = open_with::update(&mut app.panels.open_with, m);
+            action::perform(app, a, |m| AppMessage::Panel(Message::OpenWith(m)))
         }
         Message::Auth(m) => match app.panels.auth.update(m) {
             auth::Outcome::Close => Task::done(AppMessage::Close),
@@ -704,5 +716,38 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
             files::view(&p.files, &cx).map(|m| AppMessage::Panel(Message::Files(m)))
         }
         PanelKind::Auth => auth::view(&app.panels.auth, s, |m| AppMessage::Panel(Message::Auth(m))),
+        PanelKind::OpenWith => {
+            open_with::view(&p.open_with, &cx).map(|m| AppMessage::Panel(Message::OpenWith(m)))
+        }
+    }
+}
+
+/// A panel closed (or another took its place) without its question answered: the app or
+/// service waiting on it hears "cancelled". The one place this happens, for every panel that
+/// holds a question (the file picker, "Open with", the password prompt).
+pub fn closed(app: &mut App, kind: PanelKind) {
+    match kind {
+        PanelKind::Files => files::closed(&mut app.panels.files),
+        PanelKind::OpenWith => open_with::closed(&mut app.panels.open_with),
+        PanelKind::Auth => app.panels.auth.closed(),
+        _ => {}
+    }
+}
+
+impl PanelKind {
+    /// Whether it takes the keyboard when it opens: a field to type in, or a question to
+    /// answer with the keys (Esc and the arrows expected there).
+    pub fn takes_keyboard(self) -> bool {
+        matches!(
+            self,
+            PanelKind::Launcher
+                | PanelKind::Clipboard
+                | PanelKind::Emoji
+                | PanelKind::Overview
+                | PanelKind::Settings
+                | PanelKind::Files
+                | PanelKind::Auth
+                | PanelKind::OpenWith
+        )
     }
 }
