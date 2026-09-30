@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::theme::tok;
+use iced::widget::{Space, column, mouse_area};
 
 /// The bar's three sections as configured (old names already read in today's terms).
 pub(super) fn layout(cx: &Cx<'_>) -> [Vec<String>; 3] {
@@ -39,7 +40,7 @@ pub(super) fn mini<'a>(s: Scheme, i: Icon, m: Option<Message>) -> Element<'a, Me
     c.into()
 }
 
-/// A module's options, under its row.
+/// A module's options (in its inspector).
 pub(super) fn module_options<'a>(
     st: &'a State,
     cx: &Cx<'a>,
@@ -73,22 +74,23 @@ pub(super) fn module_options<'a>(
                     segments(s, &opts)
                 }
             };
-            // Indented under the module's name: it belongs to it.
-            row_of(s, o.label, None, control).map(|e| {
-                container(e)
-                    .padding(iced::Padding {
-                        left: tok::INDENT,
-                        ..iced::Padding::ZERO
-                    })
-                    .into()
-            })
+            row_of(s, o.label, None, control)
         })
         .collect()
 }
 
-/// Settings › Bar: the style, then the layout: Left, Centre and Right, each module in its
-/// order with its controls (up, down, to the next section, remove) and its options under it;
-/// then the modules not in the bar, to add; and the default layout back.
+/// The three lanes' names, left to right.
+const LANES: [&str; 3] = ["Left", "Centre", "Right"];
+
+/// A lane's width: the page's reading width shared by three lanes and their gaps.
+const LANE_W: f32 = (READING_W - 2.0 * tok::M) / 3.0;
+
+/// Settings › Bar, as Noctalia's bar editor (src/shell/settings/bar_widget_editor.cpp): the
+/// style, then the three lanes side by side, each a column of compact cards (a grip to drag,
+/// the module, its options ⚙, remove ✕) with "+" for the modules not in the bar; a card is
+/// dragged within or between lanes, an accent line showing where it lands. A module's options
+/// and its place (for the keyboard) show only when it is picked. Design call 2026-11-17: the old
+/// page's Left/Centre/Right, arrows and ✕ on every row were "many clicks, cluttered".
 pub(super) fn bar_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
     let s = cx.scheme;
     let c = &cx.config;
@@ -113,106 +115,36 @@ pub(super) fn bar_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Messag
             row_of(s, "Workspaces", None, stepper(s, i64::from(c.workspaces))),
         ],
     ));
-    let l = layout(cx);
-    for (sec, title) in ["Left side", "Centre", "Right side"]
-        .into_iter()
-        .enumerate()
-    {
-        let list = &l[sec];
-        let mut rows = Vec::new();
-        for (at, id) in list.iter().enumerate() {
-            let info = crate::modules::info(id);
-            let mi = crate::modules::MODULES.iter().position(|m| m.id == id);
-            let name = info.map_or_else(|| format!("{id} (Lua)"), |m| m.name.to_string());
-            if !matches(&name) && !matches("bar") {
-                continue;
-            }
-            let lead: Element<'_, Message> =
-                icon(info.map_or(Icon::Code, |m| m.icon), tok::ICON_M, s.ink).into();
-            let idc = id.clone();
-            let mv = |d: i32, ok: bool| ok.then(|| Message::BarMove(idc.clone(), d));
-            // Where it sits, said in words (three arrows to the sides read as random).
-            let place = segments(
-                s,
-                &[
-                    (
-                        "Left",
-                        sec == 0,
-                        Message::BarSection(id.clone(), 0 - sec as i32),
-                    ),
-                    (
-                        "Centre",
-                        sec == 1,
-                        Message::BarSection(id.clone(), 1 - sec as i32),
-                    ),
-                    (
-                        "Right",
-                        sec == 2,
-                        Message::BarSection(id.clone(), 2 - sec as i32),
-                    ),
-                ],
-            );
-            rows.push(Some(
-                container(
-                    row![
-                        lead,
-                        iced::widget::column![
-                            label(name, text::BODY, s.ink),
-                            label(describe(id), text::SMALL, s.ink_dim),
-                        ]
-                        .spacing(tok::XXS)
-                        .width(Length::Fill),
-                        place,
-                        // Order within its side: earlier (left) or later (right).
-                        mini(s, Icon::ChevronLeft, mv(-1, at > 0)),
-                        mini(s, Icon::ChevronRight, mv(1, at + 1 < list.len())),
-                        mini(s, Icon::X, Some(Message::BarRemove(id.clone()))),
-                    ]
-                    .spacing(tok::M)
-                    .align_y(Alignment::Center),
-                )
-                .padding([tok::M, tok::XL])
-                .align_y(Alignment::Center)
-                .into(),
-            ));
-            // Its options, always shown under it (they were behind a hidden arrow).
-            if let (Some(m), Some(mi)) = (info, mi) {
-                rows.extend(module_options(st, cx, mi, m));
-            }
-        }
-        out.extend(group(s, Some(title), rows));
+    if !matches("bar") && !matches("layout") && !matches("modules") {
+        return out;
     }
-    // Modules not in the bar: a click adds one to its usual section.
-    let missing: Vec<Option<Element<'_, Message>>> = crate::modules::MODULES
-        .iter()
-        .filter(|m| find_in(&l, m.id).is_none())
-        .filter(|m| matches(m.name) || matches("bar"))
-        .map(|m| {
-            Some(
-                control(
-                    row![
-                        icon(m.icon, tok::ICON_M, s.ink),
-                        iced::widget::column![
-                            label(m.name, text::BODY, s.ink),
-                            label(describe(m.id), text::SMALL, s.ink_dim),
-                        ]
-                        .spacing(tok::XXS)
-                        .width(Length::Fill),
-                        icon(Icon::Plus, tok::ICON, s.accent),
-                    ]
-                    .spacing(tok::L)
-                    .align_y(Alignment::Center),
-                )
-                .padding([tok::M, tok::XL])
-                .width(Length::Fill)
-                .kind(s, crate::ui::control::Kind::Ghost)
-                .no_press_scale()
-                .on_press(Message::BarAdd(m.id.to_string()))
-                .into(),
-            )
-        })
-        .collect();
-    out.extend(group(s, Some("Add to the bar"), missing));
+    let l = layout(cx);
+    let lanes = row((0..3).map(|lane| lane_view(st, cx, &l, lane)))
+        .spacing(tok::M)
+        .align_y(Alignment::Start);
+    out.push(
+        column![
+            container(label_w("Layout", text::SMALL, s.ink_dim, theme::SEMIBOLD))
+                .padding([tok::NONE, tok::XS]),
+            lanes,
+            container(label(
+                "Drag a module by its grip to move it. ⚙ shows its options.",
+                text::CAPTION,
+                s.ink_faint,
+            ))
+            .padding([tok::NONE, tok::XS]),
+        ]
+        .spacing(tok::S)
+        .into(),
+    );
+    if let Some(lane) = st.bar_adding {
+        out.extend(group(s, Some(ADD_TITLES[lane]), missing(cx, &l, lane)));
+    }
+    if let Some(id) = st.bar_pick.as_deref()
+        && let Some(sec) = find_in(&l, id).map(|(sec, _)| sec)
+    {
+        out.extend(inspector(st, cx, &l, id, sec));
+    }
     out.extend(group(
         s,
         None,
@@ -235,6 +167,239 @@ pub(super) fn bar_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Messag
         )],
     ));
     out
+}
+
+const ADD_TITLES: [&str; 3] = ["Add to the left", "Add to the centre", "Add to the right"];
+
+/// A thin accent line where a dragged card would land (clear when it would not).
+fn drop_line<'a>(s: Scheme, show: bool) -> Element<'a, Message> {
+    container(Space::new())
+        .width(Length::Fill)
+        .height(tok::XXS)
+        .style(move |_| container::Style {
+            background: show.then(|| s.accent.into()),
+            border: iced::Border::default().rounded(tok::FULL),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// One lane: its name and "+", its cards in order, and room below to drop at its end.
+fn lane_view<'a>(
+    st: &'a State,
+    cx: &Cx<'a>,
+    l: &[Vec<String>; 3],
+    lane: usize,
+) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let dragging = st.bar_drag.is_some();
+    let at = |i: usize| dragging && st.bar_target == Some((lane, i));
+    let adding = st.bar_adding == Some(lane);
+    let head = row![
+        label_w(LANES[lane], text::SMALL, s.ink, theme::SEMIBOLD).width(Length::Fill),
+        control(icon(
+            Icon::Plus,
+            tok::ICON_S,
+            if adding { s.accent } else { s.ink_dim }
+        ))
+        .padding(tok::XS)
+        .radius(tok::FULL)
+        .kind(
+            s,
+            if adding {
+                crate::ui::control::Kind::Chosen
+            } else {
+                crate::ui::control::Kind::Ghost
+            },
+        )
+        .on_press(Message::BarAddOpen((!adding).then_some(lane))),
+    ]
+    .align_y(Alignment::Center)
+    .padding([tok::NONE, tok::XS]);
+    let mut col = column![head].spacing(tok::XXS);
+    let list = &l[lane];
+    for (i, id) in list.iter().enumerate() {
+        col = col.push(drop_line(s, at(i)));
+        col = col.push(card(st, cx, lane, i, id));
+    }
+    col = col.push(drop_line(s, at(list.len())));
+    // Room under the cards: dropped there, it goes to the lane's end.
+    let end = mouse_area(
+        container(Space::new())
+            .width(Length::Fill)
+            .height(tok::H_ROW),
+    )
+    .on_enter(Message::BarOver(lane, list.len()));
+    container(col.push(end))
+        .width(Length::Fill)
+        .padding(tok::S)
+        .style(move |_| container::Style {
+            background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
+            border: iced::Border::default().rounded(tok::R_CARD),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// One module's card: grip, icon, name, ⚙ (when it has options), ✕. While a card is dragged,
+/// each card's upper half places it before and its lower half after.
+fn card<'a>(st: &'a State, cx: &Cx<'a>, lane: usize, i: usize, id: &str) -> Element<'a, Message> {
+    let s = cx.scheme;
+    let info = crate::modules::info(id);
+    let name = info.map_or_else(|| format!("{id} (Lua)"), |m| m.name.to_string());
+    let moving = st.bar_drag.as_deref() == Some(id);
+    let picked = st.bar_pick.as_deref() == Some(id);
+    let ink = if moving { s.ink_faint } else { s.ink };
+    let grip = mouse_area(
+        container(icon(Icon::Grip, tok::ICON_S, s.ink_faint)).padding([tok::XS, tok::XXS]),
+    )
+    .on_press(Message::BarDrag(id.to_string()))
+    .interaction(iced::mouse::Interaction::Grab);
+    let mut r = row![
+        grip,
+        icon(info.map_or(Icon::Code, |m| m.icon), tok::ICON_S, ink),
+        label(
+            ui::fit(&name, text::SMALL, LANE_W - CARD_CHROME),
+            text::SMALL,
+            ink
+        )
+        .width(Length::Fill),
+    ]
+    .spacing(tok::XS)
+    .align_y(Alignment::Center);
+    if info.is_some_and(|m| !m.options.is_empty()) {
+        r = r.push(mini(
+            s,
+            Icon::Settings,
+            Some(Message::BarPick((!picked).then(|| id.to_string()))),
+        ));
+    }
+    r = r.push(mini(s, Icon::X, Some(Message::BarRemove(id.to_string()))));
+    let body = container(r)
+        .padding([tok::XXS, tok::XS])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(
+                s.ink
+                    .scale_alpha(if picked { tok::SELECTED } else { tok::FILL } * s.opacity)
+                    .into(),
+            ),
+            border: iced::Border::default().rounded(tok::R_ROW),
+            ..container::Style::default()
+        });
+    if st.bar_drag.is_none() {
+        return body.into();
+    }
+    let half = |to: usize| {
+        mouse_area(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_enter(Message::BarOver(lane, to))
+    };
+    iced::widget::stack![body, column![half(i), half(i + 1)]].into()
+}
+
+/// Room a card's grip, icon, buttons and gaps take beside its name.
+const CARD_CHROME: f32 = 3.0 * tok::H_SMALL + 2.0 * tok::ICON_S + 4.0 * tok::XS;
+
+/// The modules not in the bar, to add to `lane` (at its end; on the right, before Power).
+fn missing<'a>(
+    cx: &Cx<'a>,
+    l: &[Vec<String>; 3],
+    lane: usize,
+) -> Vec<Option<Element<'a, Message>>> {
+    let s = cx.scheme;
+    crate::modules::MODULES
+        .iter()
+        .filter(|m| find_in(l, m.id).is_none())
+        .map(|m| {
+            Some(
+                control(
+                    row![
+                        icon(m.icon, tok::ICON_M, s.ink),
+                        column![
+                            label(m.name, text::BODY, s.ink),
+                            label(describe(m.id), text::SMALL, s.ink_dim),
+                        ]
+                        .spacing(tok::XXS)
+                        .width(Length::Fill),
+                        icon(Icon::Plus, tok::ICON, s.accent),
+                    ]
+                    .spacing(tok::L)
+                    .align_y(Alignment::Center),
+                )
+                .padding([tok::M, tok::XL])
+                .width(Length::Fill)
+                .kind(s, crate::ui::control::Kind::Ghost)
+                .no_press_scale()
+                .on_press(Message::BarAddTo(lane, m.id.to_string()))
+                .into(),
+            )
+        })
+        .collect()
+}
+
+/// The picked module: what it is, where it sits (moved from here with the keyboard too), and
+/// its options.
+fn inspector<'a>(
+    st: &'a State,
+    cx: &Cx<'a>,
+    l: &[Vec<String>; 3],
+    id: &'a str,
+    sec: usize,
+) -> Option<Element<'a, Message>> {
+    let s = cx.scheme;
+    let info = crate::modules::info(id);
+    let title: &'static str = info.map_or("Lua widget", |m| m.name);
+    let at = l[sec].iter().position(|m| m == id).unwrap_or(0);
+    let len = l[sec].len();
+    let place = segments(
+        s,
+        &[
+            (
+                "Left",
+                sec == 0,
+                Message::BarSection(id.to_string(), -(sec as i32)),
+            ),
+            (
+                "Centre",
+                sec == 1,
+                Message::BarSection(id.to_string(), 1 - sec as i32),
+            ),
+            (
+                "Right",
+                sec == 2,
+                Message::BarSection(id.to_string(), 2 - sec as i32),
+            ),
+        ],
+    );
+    let order = row![
+        mini(
+            s,
+            Icon::ChevronLeft,
+            (at > 0).then(|| Message::BarMove(id.to_string(), -1))
+        ),
+        mini(
+            s,
+            Icon::ChevronRight,
+            (at + 1 < len).then(|| Message::BarMove(id.to_string(), 1))
+        ),
+    ]
+    .spacing(tok::XXS);
+    let mut rows = vec![
+        row_of(s, "What it shows", Some(describe(id)), Space::new().into()),
+        row_of(s, "Side", None, place),
+        row_of(s, "Order", None, order.into()),
+    ];
+    if let (Some(m), Some(mi)) = (
+        info,
+        crate::modules::MODULES.iter().position(|m| m.id == id),
+    ) {
+        rows.extend(module_options(st, cx, mi, m));
+    }
+    group(s, Some(title), rows)
 }
 
 /// What a bar item is, in a few words (its name alone said too little: "Time and island").

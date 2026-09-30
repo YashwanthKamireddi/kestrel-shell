@@ -719,7 +719,8 @@ pub(super) fn own(st: &mut State, m: Message, cx: &Cx<'_>) -> Task<Message> {
         | Message::BarMove(..)
         | Message::BarSection(..)
         | Message::BarRemove(..)
-        | Message::BarAdd(..)
+        | Message::BarAddTo(..)
+        | Message::BarDrop
         | Message::BarReset
         | Message::VolumeOpen(..)
         | Message::Mounted(..)
@@ -746,6 +747,21 @@ pub(super) fn own(st: &mut State, m: Message, cx: &Cx<'_>) -> Task<Message> {
             st.kelvin = Some(k);
             return Task::future(crate::services::toggles::set_temperature(k)).discard();
         }
+        Message::BarPick(id) => st.bar_pick = id,
+        Message::BarDrag(id) => {
+            st.bar_drag = Some(id);
+            st.bar_target = None;
+        }
+        Message::BarOver(lane, at) => {
+            if st.bar_drag.is_some() {
+                st.bar_target = Some((lane, at));
+            }
+        }
+        Message::BarCancel => {
+            st.bar_drag = None;
+            st.bar_target = None;
+        }
+        Message::BarAddOpen(lane) => st.bar_adding = lane,
         Message::ReadDoc => st.doc = read_doc(),
         Message::ReadPlugins => st.plugins = crate::lua::installed(),
     }

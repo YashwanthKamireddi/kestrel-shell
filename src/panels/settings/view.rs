@@ -351,7 +351,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         container(
             container(body)
                 .padding([tok::XXL, tok::XXL])
-                .max_width(760.0 + 2.0 * tok::XXL),
+                .max_width(READING_W + 2.0 * tok::XXL),
         )
         .center_x(Length::Fill),
     )

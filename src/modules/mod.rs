@@ -34,25 +34,16 @@ use crate::ui::{self, Icon, icon};
 use iced::Element;
 use iced::widget::container;
 
-/// Where a module goes when it is added to the bar.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Home {
-    Left,
-    Center,
-    Right,
-}
-
 /// What a module draws: its bar items for output `o` (none when it has nothing to show now).
 pub type View =
     for<'a> fn(&'a App, &'a Output, Scheme, Option<PanelKind>) -> Vec<Element<'a, Message>>;
 
-/// A module: its id (as in config.toml), its name and icon in Settings, where it goes by
-/// default, its own options, and its view. Settings and the bar are both built from this list.
+/// A module: its id (as in config.toml), its name and icon in Settings, its own options, and
+/// its view (which lane it sits in is chosen in Settings' bar editor). Settings and the bar are both built from this list.
 pub struct Info {
     pub id: &'static str,
     pub name: &'static str,
     pub icon: Icon,
-    pub home: Home,
     pub options: &'static [Opt],
     pub view: View,
 }
@@ -134,23 +125,23 @@ const UNITS: Opt = Opt {
 /// Every built-in module, in the order Settings lists them.
 #[rustfmt::skip]
 pub const MODULES: &[Info] = &[
-    Info { id: "workspaces", name: "Workspaces", icon: Icon::LayoutGrid, home: Home::Left, options: &[], view: workspaces::view },
-    Info { id: "app", name: "Focused app", icon: Icon::AppWindow, home: Home::Left, options: &[], view: app_name::view },
-    Info { id: "island", name: "Time and date", icon: Icon::CalendarClock, home: Home::Center, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS, VISUALISER], view: island::view },
-    Info { id: "clock", name: "Clock", icon: Icon::CalendarClock, home: Home::Center, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS], view: clock::view },
-    Info { id: "media", name: "Music", icon: Icon::Music, home: Home::Center, options: &[], view: media::view },
-    Info { id: "weather", name: "Weather", icon: Icon::CloudSun, home: Home::Center, options: &[UNITS], view: weather::view },
-    Info { id: "airpods", name: "AirPods", icon: Icon::Headphones, home: Home::Center, options: &[], view: airpods::view },
-    Info { id: "tray", name: "Tray icons", icon: Icon::Package, home: Home::Right, options: &[], view: tray::view },
-    Info { id: "system", name: "CPU and memory", icon: Icon::Cpu, home: Home::Right, options: &[], view: system::view },
-    Info { id: "updates", name: "Updates", icon: Icon::Cube, home: Home::Right, options: &[], view: updates::view },
-    Info { id: "privacy", name: "Microphone, camera and screen in use", icon: Icon::Mic, home: Home::Right, options: &[], view: privacy::view },
-    Info { id: "network", name: "Network", icon: Icon::Wifi, home: Home::Right, options: &[], view: network::view },
-    Info { id: "bluetooth", name: "Bluetooth", icon: Icon::Bluetooth, home: Home::Right, options: &[], view: bluetooth::view },
-    Info { id: "volume", name: "Sound", icon: Icon::Volume2, home: Home::Right, options: &[], view: volume::view },
-    Info { id: "battery", name: "Battery", icon: Icon::Battery, home: Home::Right, options: &[BATTERY_PERCENT], view: battery::view },
-    Info { id: "notifications", name: "Notifications", icon: Icon::Bell, home: Home::Right, options: &[], view: notifications::view },
-    Info { id: "power", name: "Power", icon: Icon::Power, home: Home::Right, options: &[], view: power::view },
+    Info { id: "workspaces", name: "Workspaces", icon: Icon::LayoutGrid, options: &[], view: workspaces::view },
+    Info { id: "app", name: "Focused app", icon: Icon::AppWindow, options: &[], view: app_name::view },
+    Info { id: "island", name: "Time and date", icon: Icon::CalendarClock, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS, VISUALISER], view: island::view },
+    Info { id: "clock", name: "Clock", icon: Icon::CalendarClock, options: &[CLOCK_FORMAT, CLOCK_DATE, CLOCK_SECONDS], view: clock::view },
+    Info { id: "media", name: "Music", icon: Icon::Music, options: &[], view: media::view },
+    Info { id: "weather", name: "Weather", icon: Icon::CloudSun, options: &[UNITS], view: weather::view },
+    Info { id: "airpods", name: "AirPods", icon: Icon::Headphones, options: &[], view: airpods::view },
+    Info { id: "tray", name: "Tray icons", icon: Icon::Package, options: &[], view: tray::view },
+    Info { id: "system", name: "CPU and memory", icon: Icon::Cpu, options: &[], view: system::view },
+    Info { id: "updates", name: "Updates", icon: Icon::Cube, options: &[], view: updates::view },
+    Info { id: "privacy", name: "Microphone, camera and screen in use", icon: Icon::Mic, options: &[], view: privacy::view },
+    Info { id: "network", name: "Network", icon: Icon::Wifi, options: &[], view: network::view },
+    Info { id: "bluetooth", name: "Bluetooth", icon: Icon::Bluetooth, options: &[], view: bluetooth::view },
+    Info { id: "volume", name: "Sound", icon: Icon::Volume2, options: &[], view: volume::view },
+    Info { id: "battery", name: "Battery", icon: Icon::Battery, options: &[BATTERY_PERCENT], view: battery::view },
+    Info { id: "notifications", name: "Notifications", icon: Icon::Bell, options: &[], view: notifications::view },
+    Info { id: "power", name: "Power", icon: Icon::Power, options: &[], view: power::view },
 ];
 
 /// The old combined status button, read as the separate buttons it held.

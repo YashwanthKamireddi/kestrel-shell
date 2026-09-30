@@ -86,6 +86,7 @@ icons! {
     Gauge => "gauge", '\u{e9e4}',
     GitBranch => "git-branch", '\u{e97a}',
     Globe => "globe", '\u{ea07}',
+    Grip => "grip", '\u{e945}',
     HardDrive => "hard-drive", '\u{f80e}',
     Headphones => "headphones", '\u{f01f}',
     House => "house", '\u{e9b2}',

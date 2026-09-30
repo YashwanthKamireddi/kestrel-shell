@@ -74,12 +74,19 @@ use windows::*;
 
 type Action = Act<Message>;
 
+/// A card of the bar editor is being dragged (its release ends it, wherever it lands).
+pub fn dragging(st: &State) -> bool {
+    st.bar_drag.is_some()
+}
+
 /// Settings' window content: Tab moves only inside it.
 pub static ROOT: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("kestrel-settings-root"));
 
 pub const WIDTH: f32 = 720.0;
 const SIDEBAR: f32 = 196.0;
+/// The pages' reading width, however wide the window (rows stretched over a screen read badly).
+const READING_W: f32 = 760.0;
 
 /// A page of settings, chosen in the sidebar.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -322,6 +329,12 @@ pub struct State {
     device_speeds: Vec<crate::hypr_settings::DeviceSpeed>,
     /// Bar: Reset was pressed once.
     bar_reset_armed: bool,
+    /// The bar editor: the module whose options show, the one being dragged and where it
+    /// would land (lane, place), and the lane whose "+" list is open.
+    bar_pick: Option<String>,
+    bar_drag: Option<String>,
+    bar_target: Option<(usize, usize)>,
+    bar_adding: Option<usize>,
     /// Mono audio (None: WirePlumber did not say).
     mono: Option<bool>,
     /// Sound tests under way: the speakers; the microphone (1 recording, 2 playing back).
@@ -523,8 +536,16 @@ pub enum Message {
     BarMove(String, i32),
     BarSection(String, i32),
     BarRemove(String),
-    BarAdd(String),
     BarReset,
+    /// The bar editor: a module's options shown (or hidden), a card picked up by its grip, the
+    /// pointer over a place it would land, let go (or Esc), a lane's "+" list, adding there.
+    BarPick(Option<String>),
+    BarDrag(String),
+    BarOver(usize, usize),
+    BarDrop,
+    BarCancel,
+    BarAddOpen(Option<usize>),
+    BarAddTo(usize, String),
     Plugin(String, bool),
     /// A module's option (module and option index in `modules::MODULES`) to a value.
     Opt(usize, usize, OptValue),

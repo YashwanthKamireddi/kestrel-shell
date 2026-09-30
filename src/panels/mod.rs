@@ -596,6 +596,19 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 .map(|_| Message::Media(media::Message::Tick)),
         );
     }
+    // The bar editor's drag: let go anywhere (in or out of a lane) ends it; Esc cancels.
+    if app.settings_window.is_some() && settings::dragging(&app.panels.settings) {
+        subs.push(iced::event::listen_with(|e, _, _| match e {
+            iced::event::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )) => Some(Message::Settings(settings::Message::BarDrop)),
+            iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                ..
+            }) => Some(Message::Settings(settings::Message::BarCancel)),
+            _ => None,
+        }));
+    }
     // Settings' window: Tab and Shift+Tab, and the arrows, move through its controls.
     if app.settings_window.is_some() {
         subs.push(iced::event::listen_with(|e, status, w| {

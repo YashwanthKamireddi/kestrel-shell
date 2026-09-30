@@ -312,29 +312,50 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             Act::None
         }
         Message::BarRemove(id) => {
+            if st.bar_pick.as_deref() == Some(id.as_str()) {
+                st.bar_pick = None;
+            }
             let mut l = layout(cx);
             for list in &mut l {
                 list.retain(|m| *m != id);
             }
             save_layout(&l)
         }
-        Message::BarAdd(id) => {
+        Message::BarAddTo(lane, id) => {
+            st.bar_adding = None;
             let mut l = layout(cx);
-            let sec = match crate::modules::info(&id).map(|m| m.home) {
-                Some(crate::modules::Home::Left) => 0,
-                Some(crate::modules::Home::Center) => 1,
-                _ => 2,
-            };
-            if find_in(&l, &id).is_some() {
+            if find_in(&l, &id).is_some() || lane > 2 {
                 return Act::None;
             }
-            // The right section's end is the power button's place: added before it.
-            let at = if sec == 2 {
+            // The right side's end is the power button's place: added before it.
+            let at = if lane == 2 {
                 l[2].iter().position(|m| m == "power").unwrap_or(l[2].len())
             } else {
-                l[sec].len()
+                l[lane].len()
             };
-            l[sec].insert(at, id);
+            l[lane].insert(at, id);
+            save_layout(&l)
+        }
+        Message::BarDrop => {
+            let (Some(id), target) = (st.bar_drag.take(), st.bar_target.take()) else {
+                return Act::None;
+            };
+            let Some((lane, mut to)) = target else {
+                return Act::None;
+            };
+            let mut l = layout(cx);
+            let Some((sec, from)) = find_in(&l, &id) else {
+                return Act::None;
+            };
+            // Back where it was: nothing to save.
+            if sec == lane && (to == from || to == from + 1) {
+                return Act::None;
+            }
+            l[sec].remove(from);
+            if sec == lane && from < to {
+                to -= 1;
+            }
+            l[lane].insert(to.min(l[lane].len()), id);
             save_layout(&l)
         }
         Message::BarReset => {
