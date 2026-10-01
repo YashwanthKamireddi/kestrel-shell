@@ -6,7 +6,7 @@
 
 use super::dbus;
 use futures::{SinkExt, Stream, StreamExt};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, MatchRule, MessageStream};
 
@@ -74,10 +74,10 @@ fn s(m: &HashMap<String, OwnedValue>, k: &str) -> Option<String> {
     m.get(k).and_then(|v| String::try_from(v.clone()).ok())
 }
 
-/// What is known of one player: its properties as it last said them. Read whole once when it
-/// appears, then kept current from its own PropertiesChanged signals, which carry the new
-/// values (as playerctl and GNOME Shell keep their player proxies). A signal from one player
-/// no longer makes every player be read again: that was ~6 calls per player per signal.
+/// What is known of one player, as read from it. Read whole when it appears and again, whole,
+/// whenever it signals a change (the signal only says "look again": truth over events,
+/// docs/ROADMAP-v2.md rule 1). Only the player that signalled is read: before, any signal from
+/// any player re-listed the bus and re-read every player (~6 calls per player per signal).
 #[derive(Clone, Debug, Default)]
 struct Known {
     /// Its unique name (`:1.42`): its signals come from it.
@@ -392,34 +392,19 @@ fn followed(name: &str) -> bool {
     name.starts_with(PREFIX) && !name.ends_with(".playerctld")
 }
 
-/// One signal applied to what is known: a player's changed properties (the values are in the
-/// signal; only ones it says are invalid are read), or a player appearing or leaving.
-async fn apply(c: &Connection, known: &mut HashMap<String, Known>, m: &zbus::Message) {
+/// One signal: a player that said something changed is marked to be read again (`dirty`, its
+/// unique name); a player appearing is read, one leaving goes.
+async fn apply(
+    c: &Connection,
+    known: &mut HashMap<String, Known>,
+    dirty: &mut HashSet<String>,
+    m: &zbus::Message,
+) {
     let h = m.header();
     match h.member().map(|m| m.as_str()) {
         Some("PropertiesChanged") => {
-            let Some(sender) = h.sender().map(|s| s.to_string()) else {
-                return;
-            };
-            type Body = (String, HashMap<String, OwnedValue>, Vec<String>);
-            let Ok((iface, changed, invalid)) = m.body().deserialize::<Body>() else {
-                return;
-            };
-            for (bus, k) in known.iter_mut().filter(|(_, k)| k.owner == sender) {
-                let map = match iface.as_str() {
-                    PLAYER => &mut k.player,
-                    ROOT => &mut k.root,
-                    _ => continue,
-                };
-                for (p, v) in &changed {
-                    map.insert(p.clone(), v.clone());
-                }
-                for p in &invalid {
-                    match dbus::get::<OwnedValue>(c, bus, PATH, &iface, p).await {
-                        Ok(v) => map.insert(p.clone(), v),
-                        Err(_) => map.remove(p),
-                    };
-                }
+            if let Some(sender) = h.sender() {
+                dirty.insert(sender.to_string());
             }
         }
         Some("NameOwnerChanged") => {
@@ -515,10 +500,23 @@ pub fn stream() -> impl Stream<Item = State> {
                 }
             }
             let Some(m) = first else { continue };
-            apply(&c, &mut known, &m).await;
+            let mut dirty = HashSet::new();
+            apply(&c, &mut known, &mut dirty, &m).await;
             while let Ok(m) = tokio::time::timeout(QUIET, events.next()).await {
                 let Some(m) = m else { return };
-                apply(&c, &mut known, &m).await;
+                apply(&c, &mut known, &mut dirty, &m).await;
+            }
+            // Each player that signalled, read again whole (once, however many signals).
+            let stale: Vec<String> = known
+                .iter()
+                .filter(|(_, k)| dirty.contains(&k.owner))
+                .map(|(bus, _)| bus.clone())
+                .collect();
+            for bus in stale {
+                match learn(&c, &bus).await {
+                    Some(k) => known.insert(bus, k),
+                    None => known.remove(&bus),
+                };
             }
         }
     })
