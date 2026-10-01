@@ -64,7 +64,7 @@ fn split_service(service: &str, sender: &str) -> (String, String) {
 
 struct Watcher {
     items: Arc<Mutex<Vec<String>>>,
-    tx: mpsc::UnboundedSender<()>,
+    tx: mpsc::UnboundedSender<String>,
 }
 
 #[interface(name = "org.kde.StatusNotifierWatcher")]
@@ -89,7 +89,7 @@ impl Watcher {
             items.push(key.clone());
         }
         let _ = Self::status_notifier_item_registered(&emitter, &key).await;
-        let _ = self.tx.send(());
+        let _ = self.tx.send(key);
     }
 
     fn register_status_notifier_host(&self, _service: String) {}
@@ -218,7 +218,7 @@ async fn read_item(c: &Connection, key: &str) -> Option<Item> {
 
 pub async fn activate(bus: String, path: String, secondary: bool) {
     let r = async {
-        let c = Connection::session().await?;
+        let c = dbus::session().await?;
         let p = dbus::proxy(&c, &bus, &path, ITEM).await?;
         p.call::<_, _, ()>(
             if secondary {
@@ -277,7 +277,7 @@ fn parse_layout(v: &Value) -> Option<MenuItem> {
 }
 
 pub async fn menu(bus: String, path: String) -> Option<MenuItem> {
-    let c = Connection::session().await.ok()?;
+    let c = dbus::session().await.ok()?;
     let p = dbus::proxy(&c, &bus, &path, MENU).await.ok()?;
     let _: Result<bool, _> = p.call("AboutToShow", &(0i32,)).await;
     let props: Vec<&str> = Vec::new();
@@ -305,7 +305,7 @@ pub async fn menu(bus: String, path: String) -> Option<MenuItem> {
 
 pub async fn menu_event(bus: String, path: String, id: i32) {
     let r = async {
-        let c = Connection::session().await?;
+        let c = dbus::session().await?;
         let p = dbus::proxy(&c, &bus, &path, MENU).await?;
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -320,54 +320,189 @@ pub async fn menu_event(bus: String, path: String, id: i32) {
     }
 }
 
+/// One tray item as last read, with the unique name its signals come from.
+struct Known {
+    item: Item,
+    owner: String,
+}
+
+/// Reads an item and who owns its name (signals carry the unique name, items often register a
+/// well-known one: `org.kde.StatusNotifierItem-PID-N`).
+async fn learn(c: &Connection, key: &str) -> Option<Known> {
+    let item = read_item(c, key).await?;
+    let owner = if item.bus.starts_with(':') {
+        item.bus.clone()
+    } else {
+        let name = zbus::names::BusName::try_from(item.bus.clone()).ok()?;
+        zbus::fdo::DBusProxy::new(c)
+            .await
+            .ok()?
+            .get_name_owner(name)
+            .await
+            .ok()?
+            .to_string()
+    };
+    Some(Known { item, owner })
+}
+
+/// What reached the tray.
+enum Ev {
+    /// An app registered an item with kestrel's watcher.
+    Registered(String),
+    Bus(zbus::Message),
+}
+
+/// Items kept current from their own signals, as KDE's and GNOME's hosts keep them: an item's
+/// New* signal re-reads that item only; an item goes when its owner leaves the bus or the
+/// watcher says it went. Before, any item's signal, and any program at all connecting to or
+/// leaving the bus (each `notify-send`, each short-lived client), re-read every item and the
+/// watcher's list: ~10 calls per item each time.
+struct Tray {
+    c: Connection,
+    /// The watcher's list (its RegisteredStatusNotifierItems, in order).
+    items: Arc<Mutex<Vec<String>>>,
+    known: HashMap<String, Known>,
+    /// kestrel is the watcher (else a host of another watcher, following its signals).
+    watcher: bool,
+}
+
+impl Tray {
+    fn list(&self) -> Vec<String> {
+        self.items
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn state(&self) -> State {
+        State {
+            items: self
+                .list()
+                .iter()
+                .filter_map(|k| self.known.get(k).map(|n| n.item.clone()))
+                .collect(),
+        }
+    }
+
+    async fn add(&mut self, key: String) {
+        match learn(&self.c, &key).await {
+            Some(k) => {
+                let mut list = self
+                    .items
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !list.contains(&key) {
+                    list.push(key.clone());
+                }
+                drop(list);
+                self.known.insert(key, k);
+            }
+            // It does not answer (it quit already, or never was an item).
+            None => self.remove(&[key]).await,
+        }
+    }
+
+    /// Items gone: out of the list, and (as the watcher) announced gone.
+    async fn remove(&mut self, keys: &[String]) {
+        self.items
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|k| !keys.contains(k));
+        for k in keys {
+            self.known.remove(k);
+        }
+        if self.watcher
+            && let Ok(w) = self
+                .c
+                .object_server()
+                .interface::<_, Watcher>("/StatusNotifierWatcher")
+                .await
+        {
+            for k in keys {
+                let _ = Watcher::status_notifier_item_unregistered(w.signal_emitter(), k).await;
+            }
+        }
+    }
+
+    async fn apply(&mut self, ev: Ev) {
+        let m = match ev {
+            Ev::Registered(key) => return self.add(key).await,
+            Ev::Bus(m) => m,
+        };
+        let h = m.header();
+        let iface = h.interface().map(|i| i.to_string()).unwrap_or_default();
+        let member = h.member().map(|m| m.to_string()).unwrap_or_default();
+        let sender = h.sender().map(|s| s.to_string()).unwrap_or_default();
+        if iface == ITEM {
+            // NewIcon, NewTitle, NewStatus…: that item read again.
+            let path = h.path().map(|p| p.to_string()).unwrap_or_default();
+            let keys: Vec<String> = self
+                .known
+                .iter()
+                .filter(|(_, k)| k.owner == sender && k.item.path == path)
+                .map(|(key, _)| key.clone())
+                .collect();
+            for key in keys {
+                self.add(key).await;
+            }
+        } else if member == "NameOwnerChanged" {
+            let Ok((name, _old, new)) = m.body().deserialize::<(String, String, String)>() else {
+                return;
+            };
+            if !new.is_empty() {
+                return;
+            }
+            let gone: Vec<String> = self
+                .list()
+                .into_iter()
+                .filter(|key| {
+                    key.split_once('/').map(|(b, _)| b) == Some(name.as_str())
+                        || self.known.get(key).is_some_and(|k| k.owner == name)
+                })
+                .collect();
+            if !gone.is_empty() {
+                self.remove(&gone).await;
+            }
+        } else if iface == WATCHER && !self.watcher {
+            // The other watcher's news.
+            let Ok(service) = m.body().deserialize::<String>() else {
+                return;
+            };
+            let (bus, path) = split_service(&service, &sender);
+            let key = format!("{bus}{path}");
+            match member.as_str() {
+                "StatusNotifierItemRegistered" => self.add(key).await,
+                "StatusNotifierItemUnregistered" => self.remove(&[key]).await,
+                _ => {}
+            }
+        }
+    }
+}
+
 /// The service's state stream: a snapshot on start and after every change.
 pub fn stream() -> impl Stream<Item = State> {
     crate::stream::channel(4, async |mut out| {
         let Ok(c) = Connection::session().await else {
             return;
         };
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::unbounded_channel();
         let items = Arc::new(Mutex::new(Vec::<String>::new()));
         let watcher = Watcher {
             items: items.clone(),
-            tx: tx.clone(),
+            tx,
         };
-        let own = async {
-            c.object_server()
-                .at("/StatusNotifierWatcher", watcher)
-                .await?;
-            c.request_name(WATCHER).await
-        }
-        .await;
-        if let Err(e) = own {
-            // Someone else is the watcher: be a host and read its list.
-            log::info!("tray: using the existing watcher ({e})");
-            if let Ok(p) = dbus::proxy(&c, WATCHER, "/StatusNotifierWatcher", WATCHER).await {
-                let _: Result<(), _> = p
-                    .call(
-                        "RegisterStatusNotifierHost",
-                        &(c.unique_name().map(|n| n.to_string()).unwrap_or_default(),),
-                    )
-                    .await;
-                if let Ok(list) = p
-                    .get_property::<Vec<String>>("RegisteredStatusNotifierItems")
-                    .await
-                {
-                    *items
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) = list;
-                }
-            }
-        }
-        // Any item signal (new icon, status, title) or a vanished owner means re-read.
+        // Listening before anything is read: nothing said in between is missed.
         let sig_rule = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
             .interface(ITEM)
             .map(|b| b.build());
+        // Only names leaving (arg2 empty): an item's owner quitting.
         let owner_rule = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
-            .interface("org.freedesktop.DBus")
+            .sender("org.freedesktop.DBus")
+            .and_then(|b| b.interface("org.freedesktop.DBus"))
             .and_then(|b| b.member("NameOwnerChanged"))
+            .and_then(|b| b.arg(2, ""))
             .map(|b| b.build());
         let watcher_rule = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
@@ -384,56 +519,64 @@ pub fn stream() -> impl Stream<Item = State> {
         let (Ok(a), Ok(b), Ok(w)) = streams else {
             return;
         };
-        let local = futures::stream::poll_fn(move |cx| rx.poll_recv(cx));
-        let merged = futures::stream::select(
-            futures::stream::select(a.map(|_| ()), b.map(|_| ())),
-            futures::stream::select(w.map(|_| ()), local),
-        );
-        let mut changes = Box::pin(dbus::debounce(
-            merged,
-            std::time::Duration::from_millis(100),
-        ));
-        let mut last = None;
-        loop {
-            // Drop items whose owner has gone.
-            let keys = items
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            let mut alive = Vec::new();
-            let mut state = State::default();
-            for k in keys {
-                if let Some(it) = read_item(&c, &k).await {
-                    alive.push(k);
-                    state.items.push(it);
-                }
-            }
-            if let Ok(p) = dbus::proxy(&c, WATCHER, "/StatusNotifierWatcher", WATCHER).await
-                && let Ok(list) = p
+        let own = async {
+            c.object_server()
+                .at("/StatusNotifierWatcher", watcher)
+                .await?;
+            c.request_name(WATCHER).await
+        }
+        .await;
+        let mut tray = Tray {
+            c: c.clone(),
+            items,
+            known: HashMap::new(),
+            watcher: own.is_ok(),
+        };
+        if let Err(e) = own {
+            // Someone else is the watcher: be a host and read its list.
+            log::info!("tray: using the existing watcher ({e})");
+            if let Ok(p) = dbus::proxy(&c, WATCHER, "/StatusNotifierWatcher", WATCHER).await {
+                let _: Result<(), _> = p
+                    .call(
+                        "RegisterStatusNotifierHost",
+                        &(c.unique_name().map(|n| n.to_string()).unwrap_or_default(),),
+                    )
+                    .await;
+                if let Ok(list) = p
                     .get_property::<Vec<String>>("RegisteredStatusNotifierItems")
                     .await
-                && list != alive
-            {
-                // Host mode: follow the external watcher's list.
-                for k in list {
-                    if !alive.contains(&k)
-                        && let Some(it) = read_item(&c, &k).await
-                    {
-                        alive.push(k);
-                        state.items.push(it);
+                {
+                    for key in list {
+                        tray.add(key).await;
                     }
                 }
             }
-            *items
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = alive;
+        }
+        let local = tokio_stream_unbounded(rx).map(Ev::Registered);
+        let bus = futures::stream::select(futures::stream::select(a, b), w)
+            .filter_map(|m| async { m.ok().map(Ev::Bus) });
+        let mut events = Box::pin(futures::stream::select(local, bus));
+        // Signals that come together (an icon and its title) are shown together.
+        const QUIET: std::time::Duration = std::time::Duration::from_millis(100);
+        let mut last = None;
+        loop {
+            let state = tray.state();
             if last.as_ref() != Some(&state) {
                 last = Some(state.clone());
                 let _ = out.send(state).await;
             }
-            if changes.next().await.is_none() {
+            let Some(ev) = events.next().await else {
                 return;
+            };
+            tray.apply(ev).await;
+            while let Ok(ev) = tokio::time::timeout(QUIET, events.next()).await {
+                let Some(ev) = ev else { return };
+                tray.apply(ev).await;
             }
         }
     })
+}
+
+fn tokio_stream_unbounded<T>(mut rx: mpsc::UnboundedReceiver<T>) -> impl Stream<Item = T> {
+    futures::stream::poll_fn(move |cx| rx.poll_recv(cx))
 }

@@ -6,6 +6,14 @@ use std::time::Duration;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, MatchRule, MessageStream, proxy::CacheProperties};
 
+/// The session bus, one connection kept for the shell's one-off calls (a media key, a tray
+/// click, the media position, a unit restarted). A connection per call cost a handshake each
+/// time and told every program watching the bus about a name coming and going.
+pub async fn session() -> zbus::Result<Connection> {
+    static CONN: tokio::sync::OnceCell<Connection> = tokio::sync::OnceCell::const_new();
+    CONN.get_or_try_init(Connection::session).await.cloned()
+}
+
 pub async fn proxy<'a>(
     c: &Connection,
     dest: &'a str,

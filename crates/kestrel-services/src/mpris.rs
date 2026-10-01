@@ -31,8 +31,9 @@ pub struct Player {
     pub can_next: bool,
     pub can_prev: bool,
     pub can_seek: bool,
-    /// The process behind it: a browser's own player ends its bus name in `.instance<PID>`,
-    /// the browser-integration player carries `kde:pid`. Used to join the two.
+    /// The browser behind it: a browser's own player ends its bus name in `.instance<PID>`,
+    /// the integration players carry it in their metadata (`kestrel:pid`, `kde:pid`). Used to
+    /// join the two.
     pub pid: Option<u32>,
 }
 
@@ -73,12 +74,46 @@ fn s(m: &HashMap<String, OwnedValue>, k: &str) -> Option<String> {
     m.get(k).and_then(|v| String::try_from(v.clone()).ok())
 }
 
-async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
-    let p = dbus::proxy(c, bus, PATH, PLAYER).await?;
-    let meta: HashMap<String, OwnedValue> = p.get_property("Metadata").await.unwrap_or_default();
-    let status: String = p.get_property("PlaybackStatus").await.unwrap_or_default();
-    let identity: String = dbus::get(c, bus, PATH, ROOT, "Identity")
+/// What is known of one player: its properties as it last said them. Read whole once when it
+/// appears, then kept current from its own PropertiesChanged signals, which carry the new
+/// values (as playerctl and GNOME Shell keep their player proxies). A signal from one player
+/// no longer makes every player be read again: that was ~6 calls per player per signal.
+#[derive(Clone, Debug, Default)]
+struct Known {
+    /// Its unique name (`:1.42`): its signals come from it.
+    owner: String,
+    player: HashMap<String, OwnedValue>,
+    root: HashMap<String, OwnedValue>,
+}
+
+/// Reads a player that appeared: who owns the name, and every property, in one call each.
+async fn learn(c: &Connection, bus: &str) -> Option<Known> {
+    let name = zbus::names::BusName::try_from(bus.to_string()).ok()?;
+    let owner = zbus::fdo::DBusProxy::new(c)
         .await
+        .ok()?
+        .get_name_owner(name)
+        .await
+        .ok()?
+        .to_string();
+    Some(Known {
+        owner,
+        player: dbus::get_all(c, bus, PATH, PLAYER).await.ok()?,
+        root: dbus::get_all(c, bus, PATH, ROOT).await.unwrap_or_default(),
+    })
+}
+
+fn flag(m: &HashMap<String, OwnedValue>, k: &str) -> bool {
+    m.get(k)
+        .and_then(|v| bool::try_from(v.clone()).ok())
+        .unwrap_or(false)
+}
+
+fn player(bus: &str, k: &Known) -> Player {
+    let meta: HashMap<String, OwnedValue> = k
+        .player
+        .get("Metadata")
+        .and_then(|v| HashMap::try_from(v.clone()).ok())
         .unwrap_or_default();
     let artist = meta
         .get("xesam:artist")
@@ -95,8 +130,10 @@ async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
         })
         .unwrap_or(0);
     let art = s(&meta, "mpris:artUrl").and_then(|u| u.strip_prefix("file://").map(str::to_string));
+    // kestrel's own browser host says it (`kestrel:pid`), as KDE's integration does (`kde:pid`).
     let pid = meta
-        .get("kde:pid")
+        .get("kestrel:pid")
+        .or_else(|| meta.get("kde:pid"))
         .and_then(|v| {
             i64::try_from(v.clone())
                 .ok()
@@ -104,21 +141,21 @@ async fn read_player(c: &Connection, bus: &str) -> zbus::Result<Player> {
         })
         .and_then(|p| u32::try_from(p).ok())
         .or_else(|| bus.rsplit(".instance").next().and_then(|p| p.parse().ok()));
-    Ok(Player {
+    Player {
         bus: bus.to_string(),
-        identity,
+        identity: s(&k.root, "Identity").unwrap_or_default(),
         // Pages put invisible direction marks and non-breaking spaces in titles.
         title: clean(&s(&meta, "xesam:title").unwrap_or_default()),
         artist,
         album: s(&meta, "xesam:album").unwrap_or_default(),
         art,
-        playing: status == "Playing",
+        playing: s(&k.player, "PlaybackStatus").as_deref() == Some("Playing"),
         length,
-        can_next: p.get_property("CanGoNext").await.unwrap_or(false),
-        can_prev: p.get_property("CanGoPrevious").await.unwrap_or(false),
-        can_seek: p.get_property("CanSeek").await.unwrap_or(false),
+        can_next: flag(&k.player, "CanGoNext"),
+        can_prev: flag(&k.player, "CanGoPrevious"),
+        can_seek: flag(&k.player, "CanSeek"),
         pid,
-    })
+    }
 }
 
 /// One browser tab can be reported twice: by the browser itself (true playback state,
@@ -264,26 +301,9 @@ fn richness(p: &Player) -> u8 {
     u8::from(p.art.is_some()) * 2 + u8::from(!p.artist.is_empty()) + u8::from(p.length > 0)
 }
 
-async fn read(c: &Connection) -> zbus::Result<State> {
-    let names: Vec<String> = dbus::proxy(
-        c,
-        "org.freedesktop.DBus",
-        "/org/freedesktop/DBus",
-        "org.freedesktop.DBus",
-    )
-    .await?
-    .call("ListNames", &())
-    .await?;
-    let mut all: Vec<Player> = Vec::new();
-    for n in names.iter().filter(|n| n.starts_with(PREFIX)) {
-        // playerctld mirrors other players.
-        if n.ends_with(".playerctld") {
-            continue;
-        }
-        if let Ok(p) = read_player(c, n).await {
-            all.push(p);
-        }
-    }
+/// The players to show, from what is known of each.
+fn build(known: &HashMap<String, Known>) -> State {
+    let mut all: Vec<Player> = known.iter().map(|(bus, k)| player(bus, k)).collect();
     join_browser_players(&mut all);
     let mut players: Vec<Player> = Vec::new();
     for p in all {
@@ -307,7 +327,7 @@ async fn read(c: &Connection) -> zbus::Result<State> {
         .collect();
     players.retain(|p| richness(p) > 0 || !real.contains(&p.identity));
     players.sort_by(|a, b| b.playing.cmp(&a.playing).then(a.bus.cmp(&b.bus)));
-    Ok(State { players })
+    State { players }
 }
 
 fn same_media(a: &Player, b: &Player) -> bool {
@@ -322,7 +342,7 @@ fn same_media(a: &Player, b: &Player) -> bool {
 
 pub async fn command(cmd: Command) {
     let r = async {
-        let c = Connection::session().await?;
+        let c = dbus::session().await?;
         match &cmd {
             Command::PlayPause(b) => {
                 dbus::proxy(&c, b, PATH, PLAYER)
@@ -363,8 +383,59 @@ pub async fn command(cmd: Command) {
 
 /// Current position (microseconds); MPRIS does not signal it, so it is read on demand.
 pub async fn position(bus: String) -> Option<i64> {
-    let c = Connection::session().await.ok()?;
+    let c = dbus::session().await.ok()?;
     dbus::get(&c, &bus, PATH, PLAYER, "Position").await.ok()
+}
+
+/// A player's name worth following (playerctld only mirrors the others).
+fn followed(name: &str) -> bool {
+    name.starts_with(PREFIX) && !name.ends_with(".playerctld")
+}
+
+/// One signal applied to what is known: a player's changed properties (the values are in the
+/// signal; only ones it says are invalid are read), or a player appearing or leaving.
+async fn apply(c: &Connection, known: &mut HashMap<String, Known>, m: &zbus::Message) {
+    let h = m.header();
+    match h.member().map(|m| m.as_str()) {
+        Some("PropertiesChanged") => {
+            let Some(sender) = h.sender().map(|s| s.to_string()) else {
+                return;
+            };
+            type Body = (String, HashMap<String, OwnedValue>, Vec<String>);
+            let Ok((iface, changed, invalid)) = m.body().deserialize::<Body>() else {
+                return;
+            };
+            for (bus, k) in known.iter_mut().filter(|(_, k)| k.owner == sender) {
+                let map = match iface.as_str() {
+                    PLAYER => &mut k.player,
+                    ROOT => &mut k.root,
+                    _ => continue,
+                };
+                for (p, v) in &changed {
+                    map.insert(p.clone(), v.clone());
+                }
+                for p in &invalid {
+                    match dbus::get::<OwnedValue>(c, bus, PATH, &iface, p).await {
+                        Ok(v) => map.insert(p.clone(), v),
+                        Err(_) => map.remove(p),
+                    };
+                }
+            }
+        }
+        Some("NameOwnerChanged") => {
+            let Ok((name, _old, new)) = m.body().deserialize::<(String, String, String)>() else {
+                return;
+            };
+            if !followed(&name) {
+                return;
+            }
+            match (new.is_empty(), learn(c, &name).await) {
+                (false, Some(k)) => known.insert(name, k),
+                _ => known.remove(&name),
+            };
+        }
+        _ => {}
+    }
 }
 
 /// The service's state stream: a snapshot on start and after every change.
@@ -376,6 +447,7 @@ pub fn stream() -> impl Stream<Item = State> {
         let props = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
             .interface("org.freedesktop.DBus.Properties")
+            .and_then(|b| b.member("PropertiesChanged"))
             .and_then(|b| b.path(PATH))
             .map(|b| b.build());
         let owners = MatchRule::builder()
@@ -387,14 +459,26 @@ pub fn stream() -> impl Stream<Item = State> {
         let (Ok(props), Ok(owners)) = (props, owners) else {
             return;
         };
+        // Listening before the first read: nothing said in between is missed.
         let (Ok(a), Ok(b)) = (
             MessageStream::for_match_rule(props, &c, Some(64)).await,
             MessageStream::for_match_rule(owners, &c, Some(16)).await,
         ) else {
             return;
         };
-        let merged = futures::stream::select(a.map(|_| ()), b.map(|_| ()));
-        let mut changes = Box::pin(dbus::debounce(merged, std::time::Duration::from_millis(60)));
+        let mut events = Box::pin(futures::stream::select(a, b).filter_map(|m| async { m.ok() }));
+        let mut known: HashMap<String, Known> = HashMap::new();
+        let names = match zbus::fdo::DBusProxy::new(&c).await {
+            Ok(d) => d.list_names().await.unwrap_or_default(),
+            Err(_) => Vec::new(),
+        };
+        for n in names.iter().map(|n| n.to_string()).filter(|n| followed(n)) {
+            if let Some(k) = learn(&c, &n).await {
+                known.insert(n, k);
+            }
+        }
+        // Signals that come together (a new track: title, art, length) are shown together.
+        const QUIET: std::time::Duration = std::time::Duration::from_millis(60);
         let mut last: Option<State> = None;
         // A browser drops its player and makes a new one on every switch (the next Short, the
         // next video); shown as is, the music bubble vanished and came back each time. A
@@ -402,29 +486,39 @@ pub fn stream() -> impl Stream<Item = State> {
         const GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
         let mut hold_until: Option<tokio::time::Instant> = None;
         loop {
-            let s = read(&c).await.unwrap_or_default();
+            let s = build(&known);
             let lost = last
                 .as_ref()
                 .is_some_and(|l| !l.players.is_empty() && s.players.len() < l.players.len());
+            let mut first = None;
             if lost {
                 let deadline =
                     *hold_until.get_or_insert_with(|| tokio::time::Instant::now() + GRACE);
                 if tokio::time::Instant::now() < deadline {
-                    match tokio::time::timeout_at(deadline, changes.next()).await {
+                    match tokio::time::timeout_at(deadline, events.next()).await {
                         Ok(None) => return,
-                        // Something changed (a player came back) or the moment passed:
-                        // look again.
-                        Ok(Some(())) | Err(_) => continue,
+                        Ok(Some(m)) => first = Some(m),
+                        // The moment passed: look again.
+                        Err(_) => continue,
                     }
                 }
             }
-            hold_until = None;
-            if last.as_ref() != Some(&s) {
-                last = Some(s.clone());
-                let _ = out.send(s).await;
+            if first.is_none() {
+                hold_until = None;
+                if last.as_ref() != Some(&s) {
+                    last = Some(s.clone());
+                    let _ = out.send(s).await;
+                }
+                match events.next().await {
+                    Some(m) => first = Some(m),
+                    None => return,
+                }
             }
-            if changes.next().await.is_none() {
-                return;
+            let Some(m) = first else { continue };
+            apply(&c, &mut known, &m).await;
+            while let Ok(m) = tokio::time::timeout(QUIET, events.next()).await {
+                let Some(m) = m else { return };
+                apply(&c, &mut known, &m).await;
             }
         }
     })

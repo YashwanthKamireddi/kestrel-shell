@@ -154,9 +154,7 @@ pub async fn set(schema: &str, key: &str, v: Set) -> Result<(), String> {
     let value =
         typed(&v, &default).ok_or_else(|| format!("{schema} {key}: {v:?} is not its type"))?;
     let blob = changeset(&format!("{path}{key}"), Some(value))?;
-    let conn = zbus::Connection::session()
-        .await
-        .map_err(|e| e.to_string())?;
+    let conn = crate::dbus::session().await.map_err(|e| e.to_string())?;
     conn.call_method(
         Some("ca.desrt.dconf"),
         "/ca/desrt/dconf/Writer/user",

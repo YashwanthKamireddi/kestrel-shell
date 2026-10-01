@@ -3,7 +3,7 @@
 
 /// Restarts a user unit (`kestrel.service`), as `systemctl --user restart` does.
 pub async fn restart_user_unit(name: &str) -> zbus::Result<()> {
-    let c = zbus::Connection::session().await?;
+    let c = crate::dbus::session().await?;
     let _: zbus::zvariant::OwnedObjectPath = crate::dbus::proxy(
         &c,
         "org.freedesktop.systemd1",
@@ -32,7 +32,7 @@ async fn manager(c: &zbus::Connection) -> zbus::Result<zbus::Proxy<'static>> {
 /// crash leaves it running.
 pub async fn run_service(name: &str, description: &str, argv: &[&str]) -> zbus::Result<()> {
     use zbus::zvariant::Value;
-    let c = zbus::Connection::session().await?;
+    let c = crate::dbus::session().await?;
     let exec: Vec<(String, Vec<String>, bool)> = vec![(
         argv.first().copied().unwrap_or_default().to_string(),
         argv.iter().map(|a| (*a).to_string()).collect(),
@@ -58,7 +58,7 @@ pub async fn run_service(name: &str, description: &str, argv: &[&str]) -> zbus::
 
 /// Stops a user unit (nothing if it is not running).
 pub async fn stop_user_unit(name: &str) -> zbus::Result<()> {
-    let c = zbus::Connection::session().await?;
+    let c = crate::dbus::session().await?;
     let r: zbus::Result<zbus::zvariant::OwnedObjectPath> = manager(&c)
         .await?
         .call("StopUnit", &(name, "replace"))

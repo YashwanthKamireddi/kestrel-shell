@@ -334,8 +334,13 @@ pub fn run() {
                         state: state.clone(),
                     },
                 )?
+                // Its own process's id, as MPRIS names go: one name per host, so the hosts of
+                // several browser profiles never take one another's name (they did, each taking
+                // the name the others held, a new host every few seconds: 2026-11-17). The
+                // browser's own id is in the metadata (`kestrel:pid`).
                 .name(format!(
-                    "org.mpris.MediaPlayer2.kestrel_browser.instance{pid}"
+                    "org.mpris.MediaPlayer2.kestrel_browser.instance{}",
+                    std::process::id()
                 ))?
                 .build()
                 .await
@@ -350,26 +355,10 @@ pub fn run() {
         let Ok(root) = conn.object_server().interface::<_, Root>(PATH).await else {
             return;
         };
-        // A newer host for the same browser (the extension reconnected) takes the bus name
-        // over; this one is then stale and ends, instead of living on beside it.
-        let mut lost = match zbus::fdo::DBusProxy::new(&conn).await {
-            Ok(p) => p.receive_name_lost().await.ok(),
-            Err(_) => None,
-        };
+        // It ends when the browser closes its end (the extension's port went away).
         let mut pages = frames();
-        loop {
-            let page = tokio::select! {
-                p = pages.next() => match p {
-                    Some(p) => p,
-                    None => return,
-                },
-                Some(_) = async {
-                    match lost.as_mut() {
-                        Some(l) => l.next().await,
-                        None => std::future::pending().await,
-                    }
-                } => return,
-            };
+        while let Some(page) = pages.next().await {
+            let before = state.lock().map(|s| s.page.clone()).ok();
             let art_url = page.art.clone();
             let need_art = state
                 .lock()
@@ -385,16 +374,41 @@ pub fn run() {
                     s.art = file.map(|f| (art_url.clone(), f));
                 }
             }
+            // Only what changed is announced: the extension's reports come every few seconds
+            // whether or not anything did, and each announcement makes every player reader
+            // (the shell, playerctl) read the player again.
+            let Ok(now) = state.lock().map(|s| s.page.clone()) else {
+                continue;
+            };
+            let old = before.unwrap_or_default();
             let e: &SignalEmitter<'_> = player.signal_emitter();
             let p = player.get().await;
-            let _ = p.metadata_changed(e).await;
-            let _ = p.playback_status_changed(e).await;
-            let _ = p.can_go_next_changed(e).await;
-            let _ = p.can_go_previous_changed(e).await;
-            let _ = p.can_seek_changed(e).await;
+            if need_art
+                || old.title != now.title
+                || old.artist != now.artist
+                || old.album != now.album
+                || old.duration != now.duration
+                || old.tab != now.tab
+            {
+                let _ = p.metadata_changed(e).await;
+            }
+            if old.playing != now.playing {
+                let _ = p.playback_status_changed(e).await;
+            }
+            if old.can_next != now.can_next {
+                let _ = p.can_go_next_changed(e).await;
+            }
+            if old.can_prev != now.can_prev {
+                let _ = p.can_go_previous_changed(e).await;
+            }
+            if (old.duration > 0.0) != (now.duration > 0.0) {
+                let _ = p.can_seek_changed(e).await;
+            }
             drop(p);
-            let r = root.get().await;
-            let _ = r.identity_changed(root.signal_emitter()).await;
+            if old.site != now.site {
+                let r = root.get().await;
+                let _ = r.identity_changed(root.signal_emitter()).await;
+            }
         }
     });
 }
