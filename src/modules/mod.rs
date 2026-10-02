@@ -173,14 +173,17 @@ pub struct Needs {
 
 pub fn needs(bar: &BarConfig) -> Needs {
     let on = |id: &str| bar.contains(id);
-    // The island shows what is live (music, games) and opens the dashboard (weather, system).
+    // The island shows what is live (music, games) and the weather.
     let island = on("island");
     Needs {
         media: on("media") || island,
         tray: on("tray"),
         // Wi-Fi and Bluetooth (and the VPNs in the control centre they open).
         network: on("network") || on("bluetooth"),
-        system: on("system") || island,
+        // Only the bar's CPU module shows these (the island's dashboard rings that also did
+        // were removed 2026-11-16, and kept polling /proc every 3 s for nothing); the system
+        // monitor reads its own while open (services::system::detail).
+        system: on("system"),
         updates: on("updates"),
         weather: on("weather") || island,
         airpods: on("airpods"),
