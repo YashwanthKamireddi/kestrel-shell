@@ -56,6 +56,7 @@ pub struct Application<State, Message> {
     fonts: Vec<Cow<'static, [u8]>>,
     default_font: Font,
     antialiasing: bool,
+    clipboard: Option<Box<dyn iced_core::clipboard::Clipboard>>,
 }
 
 impl<State, Message> Application<State, Message>
@@ -124,6 +125,14 @@ where
         self
     }
 
+    /// The clipboard text fields copy to and paste from (kestrel patch). Without one, a
+    /// smithay-clipboard of its own (a second Wayland connection and thread) is made; an app
+    /// that already keeps the clipboard hands its own instead, so there is one.
+    pub fn clipboard(mut self, c: impl iced_core::clipboard::Clipboard + 'static) -> Self {
+        self.clipboard = Some(Box::new(c));
+        self
+    }
+
     /// Run the application, blocking until it exits.
     pub fn run(self) -> Result<(), Error> {
         run(self)
@@ -156,6 +165,7 @@ where
         fonts: Vec::new(),
         default_font: Font::DEFAULT,
         antialiasing: false,
+        clipboard: None,
     }
 }
 
@@ -165,7 +175,7 @@ where
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss
 )]
-fn run<State, Message>(app: Application<State, Message>) -> Result<(), Error>
+fn run<State, Message>(mut app: Application<State, Message>) -> Result<(), Error>
 where
     State: 'static,
     Message: std::fmt::Debug + Send + Clone + 'static,
@@ -184,10 +194,14 @@ where
 
     let conn = Connection::connect_to_env()?;
     let display_ptr = conn.backend().display_ptr().cast::<std::ffi::c_void>();
-    // Create clipboard early — smithay-clipboard spawns its own worker thread
-    // with its own wayland connection that needs to receive selection events
-    // Safety: display_ptr is valid for the lifetime of the Wayland connection
-    let mut clipboard = unsafe { WaylandClipboard::new(display_ptr) };
+    // kestrel patch: the app's own clipboard when it gives one. Otherwise created early:
+    // smithay-clipboard spawns its own worker thread with its own wayland connection that
+    // needs to receive selection events.
+    let mut clipboard: Box<dyn iced_core::clipboard::Clipboard> = match app.clipboard.take() {
+        Some(c) => c,
+        // Safety: display_ptr is valid for the lifetime of the Wayland connection
+        None => Box::new(unsafe { WaylandClipboard::new(display_ptr) }),
+    };
 
     let (globals, mut event_queue) = registry_queue_init::<WaylandState>(&conn)?;
     let qh = event_queue.handle();
@@ -464,7 +478,7 @@ where
             run_action(
                 action,
                 &mut runtime_messages,
-                &mut clipboard,
+                clipboard.as_mut(),
                 &mut user_interfaces,
                 &mut renderer,
                 &mut compositor,
@@ -602,7 +616,7 @@ where
                 &events,
                 cursor,
                 &mut renderer,
-                &mut clipboard,
+                clipboard.as_mut(),
                 &mut all_messages,
             );
 
@@ -678,7 +692,7 @@ where
                 run_action(
                     action,
                     &mut runtime_messages,
-                    &mut clipboard,
+                    clipboard.as_mut(),
                     &mut user_interfaces,
                     &mut renderer,
                     &mut compositor,
@@ -810,7 +824,7 @@ where
                     &redraw_event,
                     cursor,
                     &mut renderer,
-                    &mut clipboard,
+                    clipboard.as_mut(),
                     &mut all_messages,
                 );
                 // kestrel patch: the redraw produced messages (a panel reporting the height
@@ -1006,7 +1020,7 @@ where
                 run_action(
                     action,
                     &mut runtime_messages,
-                    &mut clipboard,
+                    clipboard.as_mut(),
                     &mut user_interfaces,
                     &mut renderer,
                     &mut compositor,
@@ -1049,7 +1063,7 @@ where
 fn run_action<Message: std::fmt::Debug>(
     action: Action<Message>,
     messages: &mut Vec<Message>,
-    clipboard: &mut WaylandClipboard,
+    clipboard: &mut dyn iced_core::clipboard::Clipboard,
     user_interfaces: &mut HashMap<
         SurfaceId,
         UserInterface<'_, Message, Theme, iced_renderer::Renderer>,
@@ -1064,18 +1078,15 @@ fn run_action<Message: std::fmt::Debug>(
         Action::Output(msg) => {
             messages.push(msg);
         }
-        Action::Clipboard(action) => {
-            use iced_core::clipboard::Clipboard as _;
-            match action {
-                iced_runtime::clipboard::Action::Read { target, channel } => {
-                    let contents = clipboard.read(target);
-                    let _ = channel.send(contents);
-                }
-                iced_runtime::clipboard::Action::Write { target, contents } => {
-                    clipboard.write(target, contents);
-                }
+        Action::Clipboard(action) => match action {
+            iced_runtime::clipboard::Action::Read { target, channel } => {
+                let contents = clipboard.read(target);
+                let _ = channel.send(contents);
             }
-        }
+            iced_runtime::clipboard::Action::Write { target, contents } => {
+                clipboard.write(target, contents);
+            }
+        },
         Action::Widget(mut operation) => loop {
             for ui in user_interfaces.values_mut() {
                 ui.operate(renderer, operation.as_mut());

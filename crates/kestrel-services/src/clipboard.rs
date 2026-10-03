@@ -35,6 +35,13 @@ struct Put {
     done: tokio::sync::oneshot::Sender<()>,
 }
 
+/// What kestrel asks the clipboard's thread: to put something on it, or to open what is on it
+/// as text (the pipe it arrives through; None when there is no text).
+enum Ask {
+    Put(Put),
+    Paste(std::sync::mpsc::Sender<Option<OwnedFd>>),
+}
+
 /// A `wl_display.sync` answered: everything asked before it is done.
 type Ack = Mutex<Option<tokio::sync::oneshot::Sender<()>>>;
 
@@ -44,9 +51,25 @@ type Offered = Arc<Vec<(String, Arc<Vec<u8>>)>>;
 /// The last copy's content, kept to offer again when its app quits and the clipboard empties.
 type Kept = Arc<Mutex<Option<Offered>>>;
 
-/// The watcher's inbox for `Put`s, and the socket that wakes its loop.
-static PUT: Mutex<Option<(std::sync::mpsc::Sender<Put>, std::os::unix::net::UnixStream)>> =
+/// The watcher's inbox, and the socket that wakes its loop.
+static PUT: Mutex<Option<(std::sync::mpsc::Sender<Ask>, std::os::unix::net::UnixStream)>> =
     Mutex::new(None);
+
+/// Hands the clipboard's thread a request and wakes it; false when it is not running.
+fn ask(a: Ask) -> bool {
+    let g = PUT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((tx, wake)) = g.as_ref() else {
+        log::warn!("clipboard: not connected");
+        return false;
+    };
+    if tx.send(a).is_err() {
+        return false;
+    }
+    let _ = std::io::Write::write(&mut &*wake, &[1]);
+    true
+}
 
 /// The types text is offered as (what apps ask for, newest names first).
 pub const TEXT_TYPES: &[&str] = &[
@@ -62,22 +85,55 @@ pub const TEXT_TYPES: &[&str] = &[
 /// (dropped unanswered if the clipboard is not connected).
 pub fn copy(mimes: &[&str], data: Vec<u8>) -> tokio::sync::oneshot::Receiver<()> {
     let (done, rx) = tokio::sync::oneshot::channel();
-    let g = PUT
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let Some((tx, wake)) = g.as_ref() else {
-        log::warn!("clipboard: not connected");
-        return rx;
-    };
-    let put = Put {
+    ask(Ask::Put(Put {
         mimes: mimes.iter().map(|m| (*m).to_string()).collect(),
         data: Arc::new(data),
         done,
-    };
-    if tx.send(put).is_ok() {
-        let _ = std::io::Write::write(&mut &*wake, &[1]);
-    }
+    }));
     rx
+}
+
+/// The longest a paste waits for the app that copied to hand its text over (a frozen app must
+/// not freeze the shell). smithay-clipboard, which iced used before, waits the same way.
+const PASTE_WAIT: std::time::Duration = std::time::Duration::from_millis(500);
+/// The most text a paste takes.
+const PASTE_LIMIT: usize = 16 << 20;
+
+/// What is on the clipboard, as text, for pasting into kestrel's own text fields (iced's
+/// clipboard, served by this one connection: there is no second clipboard). Blocks until the
+/// copying app has written it, at most `PASTE_WAIT`.
+pub fn paste_text() -> Option<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    if !ask(Ask::Paste(tx)) {
+        return None;
+    }
+    let deadline = std::time::Instant::now() + PASTE_WAIT;
+    let fd = rx.recv_timeout(PASTE_WAIT).ok()??;
+    let mut file = std::fs::File::from(fd);
+    let mut data = Vec::new();
+    let mut buf = [0u8; 64 << 10];
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        let mut p = libc::pollfd {
+            fd: file.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let ms = i32::try_from(left.as_millis()).unwrap_or(i32::MAX);
+        // Safety: one descriptor that lives through the call.
+        if ms == 0 || unsafe { libc::poll(&raw mut p, 1, ms) } <= 0 {
+            log::warn!("clipboard: the copying app did not hand over its text in time");
+            return None;
+        }
+        match file.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) if data.len() + n <= PASTE_LIMIT => data.extend_from_slice(&buf[..n]),
+            Ok(_) => return None,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+    Some(String::from_utf8_lossy(&data).into_owned()).filter(|t| !t.is_empty())
 }
 
 /// Largest copy that is read to describe it (bigger images are still reported, unread).
@@ -546,7 +602,7 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
     // If nothing is on the clipboard at start, the first copy is news.
     queue.roundtrip(&mut st)?;
     st.seen_first = true;
-    let (puts, inbox) = std::sync::mpsc::channel::<Put>();
+    let (puts, inbox) = std::sync::mpsc::channel::<Ask>();
     let (wake_rx, wake_tx) = std::os::unix::net::UnixStream::pair()?;
     wake_rx.set_nonblocking(true)?;
     *PUT.lock()
@@ -592,7 +648,21 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
             if fds[1].revents != 0 {
                 let mut buf = [0u8; 64];
                 while (&wake_rx).read(&mut buf).is_ok_and(|n| n > 0) {}
-                while let Ok(put) = inbox.try_recv() {
+                while let Ok(a) = inbox.try_recv() {
+                    let put = match a {
+                        Ask::Put(put) => put,
+                        Ask::Paste(reply) => {
+                            // The current copy's best text type, opened for reading.
+                            let fd = st.current.as_ref().and_then(|offer| {
+                                let mimes = st.offers.get(&offer.id())?;
+                                let mime =
+                                    TEXT_TYPES.iter().find(|t| mimes.iter().any(|m| m == *t))?;
+                                receive(offer, mime, &conn)
+                            });
+                            let _ = reply.send(fd);
+                            continue;
+                        }
+                    };
                     let offered: Offered = Arc::new(
                         put.mimes
                             .iter()

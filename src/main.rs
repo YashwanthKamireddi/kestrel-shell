@@ -71,6 +71,7 @@ fn main() -> anyhow::Result<()> {
         .subscription(app::subscription)
         .theme(app::theme)
         .redraw_key(app::redraw_key)
+        .clipboard(Clipboard)
         .default_font(theme::FONT)
         .font(ui::icon::BYTES)
         // Rubik's fixed weights: the installed Rubik is a variable font, and the text renderer
@@ -90,6 +91,30 @@ fn main() -> anyhow::Result<()> {
         })
         .run()?;
     Ok(())
+}
+
+/// Text fields copy and paste through kestrel's one clipboard connection
+/// (services::clipboard), not a second one of iced's own (smithay-clipboard: another Wayland
+/// connection and thread, woken by every key and pointer event). Only the regular clipboard:
+/// iced's text fields never use the primary selection.
+struct Clipboard;
+
+impl iced::core::clipboard::Clipboard for Clipboard {
+    fn read(&self, kind: iced::core::clipboard::Kind) -> Option<String> {
+        match kind {
+            iced::core::clipboard::Kind::Standard => services::clipboard::paste_text(),
+            iced::core::clipboard::Kind::Primary => None,
+        }
+    }
+
+    fn write(&mut self, kind: iced::core::clipboard::Kind, contents: String) {
+        if kind == iced::core::clipboard::Kind::Standard {
+            drop(services::clipboard::copy(
+                services::clipboard::TEXT_TYPES,
+                contents.into_bytes(),
+            ));
+        }
+    }
 }
 
 /// Minimal stderr logger honouring RUST_LOG's level for kestrel.

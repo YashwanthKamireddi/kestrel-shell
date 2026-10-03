@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with eleven
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with twelve
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -60,3 +60,7 @@ commit, so a panel never shows one frame of blurred empty area before its conten
 11. `RedrawRequest::At(t)` from a widget is honoured: the loop sleeps until the earliest such time
 and redraws only those surfaces (it was dropped, so a widget pacing itself never drew again).
 Used by `ui::breathe` (2026-11-15).
+12. `Application::clipboard`: the app hands the clipboard text fields copy to and paste from.
+kestrel gives its own (services::clipboard, wlr data-control), so iced's smithay-clipboard (a
+second Wayland connection and thread, woken by every input event) is not started. Without one
+the smithay clipboard is made as before (the separate prompt process keeps it) (2026-11-17).
