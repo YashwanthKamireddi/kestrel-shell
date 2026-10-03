@@ -45,6 +45,11 @@ kill_kestrel() {
 
 case "${1:-}" in
 start)
+    # One rig: a second start left two nested compositors running (found 2026-11-17).
+    if [ -s "$WORK/pid" ] && [ "$(cat /proc/"$(cat "$WORK/pid")"/comm 2>/dev/null)" = Hyprland ]; then
+        echo "rig already up on $(display)"
+        exit 0
+    fi
     hyprctl eval 'hl.window_rule({name="kestrel-rig", match={class="^aquamarine$"}, workspace="special:rig silent", float=true, size="1920 1080"})' >/dev/null
     before=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort)
     : >"$WORK/sig"
@@ -53,6 +58,7 @@ start)
     # in the user's running Chromium (2026-11-16) and captures landed in the user's Pictures.
     HOME="$WORK/home" setsid Hyprland -c "$HERE/hyprland.lua" >"$WORK/hypr.log" 2>&1 </dev/null &
     pid=$!
+    echo "$pid" >"$WORK/pid"
     # Its instance is the one whose lock file names its process (not simply the newest).
     for _ in $(seq 40); do
         for d in "$XDG_RUNTIME_DIR"/hypr/*/; do
@@ -113,7 +119,11 @@ bus) # run a command on kestrel's private session bus (e.g. notify-send)
 msg) shift; KESTREL_SOCKET="$WORK/kestrel.sock" "$BIN" "$@" ;;
 stop)
     kill_kestrel
-    pkill -f "Hyprland -c $HERE/hyprland.lua" || true
+    # The pid kept at start (a pattern match could hit any shell whose command names it).
+    if [ -s "$WORK/pid" ] && [ "$(cat /proc/"$(cat "$WORK/pid")"/comm 2>/dev/null)" = Hyprland ]; then
+        kill "$(cat "$WORK/pid")"
+    fi
+    : >"$WORK/pid"
     : >"$WORK/sig"
     hyprctl reload >/dev/null
     ;;
