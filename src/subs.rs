@@ -1,7 +1,7 @@
 //! Service streams as iced subscriptions. Each subscription exists only while the app asks for
-//! it, so a module that is switched off never starts its service. Every long-lived one runs
-//! under `forever`: if its stream ever ends it is made again, so nothing freezes on its last
-//! answer (docs/ROADMAP-v2.md, rule 1).
+//! it, so a module that is switched off never starts its service. Every one but the one-shot
+//! `at` runs under `forever`: if its stream ends or panics it is made again, so nothing freezes
+//! on its last answer (docs/ROADMAP-v2.md, rule 1).
 
 use crate::services::stream::forever;
 use crate::services::{
@@ -14,10 +14,10 @@ pub fn hyprland() -> Subscription<hyprland::State> {
     Subscription::run(|| forever(hyprland::stream))
 }
 pub fn clock() -> Subscription<()> {
-    Subscription::run(clock::stream)
+    Subscription::run(|| forever(clock::stream))
 }
 pub fn seconds() -> Subscription<()> {
-    Subscription::run(clock::seconds)
+    Subscription::run(|| forever(clock::seconds))
 }
 pub fn camera() -> Subscription<Vec<String>> {
     Subscription::run(|| forever(crate::services::camera::stream))
@@ -39,7 +39,10 @@ pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods
         .and_then(|d| d.strip_prefix("dev_"))
         .unwrap_or_default()
         .replace('_', ":");
-    Subscription::run_with(address, crate::services::airpods::stream)
+    Subscription::run_with(address, |a: &String| {
+        let a = a.clone();
+        forever(move || crate::services::airpods::stream(&a))
+    })
 }
 pub fn bt_agent() -> Subscription<crate::services::bluetooth::Ask> {
     Subscription::run(|| forever(crate::services::bluetooth::agent))
@@ -48,11 +51,11 @@ pub fn wifi_agent() -> Subscription<crate::services::network::Ask> {
     Subscription::run(|| forever(crate::services::network::agent))
 }
 pub fn bt_visible() -> Subscription<()> {
-    Subscription::run(crate::services::bluetooth::visible)
+    Subscription::run(|| forever(crate::services::bluetooth::visible))
 }
 
 pub fn bt_search() -> Subscription<()> {
-    Subscription::run(crate::services::bluetooth::search)
+    Subscription::run(|| forever(crate::services::bluetooth::search))
 }
 /// GNOME Keyring's password prompts (kestrel is its system prompter).
 pub fn keyring() -> Subscription<crate::services::keyring::Ask> {
@@ -106,7 +109,10 @@ pub fn weather(
                 name: c.to_string(),
                 coords,
             },
-            web::weather_stream,
+            |p: &web::Place| {
+                let p = p.clone();
+                forever(move || web::weather_stream(&p))
+            },
         ),
         _ => Subscription::none(),
     }
@@ -122,7 +128,7 @@ pub enum ConfigFile {
 /// Changes to config.toml and init.lua, so edits apply without a restart. The directory is
 /// watched (not the files) because editors save by replacing the file.
 pub fn config_files() -> Subscription<ConfigFile> {
-    Subscription::run(config_stream)
+    Subscription::run(|| forever(config_stream))
 }
 
 fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
@@ -185,18 +191,19 @@ fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
 }
 
 pub fn lua() -> Subscription<crate::lua::Event> {
-    Subscription::run(crate::lua::stream)
+    Subscription::run(|| forever(crate::lua::stream))
 }
 
 /// Live levels for the Sound page: output, microphone, and `apps` (stream index, its output).
 pub fn meters(apps: Vec<(u32, String)>) -> Subscription<crate::services::meters::Meters> {
     Subscription::run_with(apps, |a: &Vec<(u32, String)>| {
-        crate::services::meters::stream(a.clone())
+        let a = a.clone();
+        forever(move || crate::services::meters::stream(a.clone()))
     })
 }
 
 pub fn level() -> Subscription<crate::services::level::Bands> {
-    Subscription::run(crate::services::level::stream)
+    Subscription::run(|| forever(crate::services::level::stream))
 }
 
 /// One message at `at` (then nothing): a deadline, instead of polling for it.

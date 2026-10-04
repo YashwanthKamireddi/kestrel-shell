@@ -70,8 +70,7 @@ pub async fn list() -> Vec<Volume> {
         if prop::<bool>(block, "HintIgnore").unwrap_or(false) {
             continue;
         }
-        let drive: OwnedObjectPath =
-            prop(block, "Drive").unwrap_or_else(|| OwnedObjectPath::try_from("/").unwrap());
+        let drive: OwnedObjectPath = prop(block, "Drive").unwrap_or_default();
         let d = objects
             .get(&drive)
             .and_then(|i| i.get("org.freedesktop.UDisks2.Drive"));

@@ -254,8 +254,7 @@ async fn read(c: &Connection) -> zbus::Result<State> {
     let w = dbus::get_all(c, NM, dev.as_str(), WIFI).await?;
     // NM_802_11_MODE_AP
     s.hotspot = prop::<u32>(&w, "Mode") == Some(3);
-    let active: OwnedObjectPath =
-        prop(&w, "ActiveAccessPoint").unwrap_or_else(|| OwnedObjectPath::try_from("/").unwrap());
+    let active: OwnedObjectPath = prop(&w, "ActiveAccessPoint").unwrap_or_default();
     let aps: Vec<OwnedObjectPath> = prop(&w, "AccessPoints").unwrap_or_default();
     let saved = saved_all(c).await.unwrap_or_default();
     let mut best: HashMap<String, Network> = HashMap::new();

@@ -13,7 +13,7 @@ pub(super) fn pasted_path(q: &str) -> Option<PathBuf> {
         return None;
     }
     let q = if q.contains('%') {
-        percent_decode(q)
+        crate::services::open::percent_decode(q)
     } else {
         q.to_string()
     };
@@ -22,26 +22,6 @@ pub(super) fn pasted_path(q: &str) -> Option<PathBuf> {
         None => PathBuf::from(q),
     };
     p.exists().then_some(p)
-}
-
-/// "%20" and the like back to their characters (paths copied as file:// URLs).
-pub(super) fn percent_decode(s: &str) -> String {
-    let b = s.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'%'
-            && i + 2 < b.len()
-            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16)
-        {
-            out.push(v);
-            i += 3;
-        } else {
-            out.push(b[i]);
-            i += 1;
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 pub fn entries(st: &State) -> Vec<Entry<'_>> {

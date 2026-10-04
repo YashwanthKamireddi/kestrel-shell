@@ -502,8 +502,10 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // The system monitor's readings while it is open.
     if open == Some(PanelKind::Monitor) {
         subs.push(
-            iced::Subscription::run(crate::services::system::detail)
-                .map(|d| Message::Monitor(monitor::Message::Detail(d))),
+            iced::Subscription::run(|| {
+                crate::services::stream::forever(crate::services::system::detail)
+            })
+            .map(|d| Message::Monitor(monitor::Message::Detail(d))),
         );
     }
     // Recording a shortcut's keys in Settings: the next combination pressed.
@@ -551,7 +553,8 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if open == Some(PanelKind::Overview) {
         subs.push(
             Subscription::run_with(overview::live_jobs(&app.hypr), |j| {
-                crate::services::previews::live(j.clone())
+                let j = j.clone();
+                crate::services::stream::forever(move || crate::services::previews::live(j.clone()))
             })
             .map(|f| Message::Overview(overview::Message::Live(f))),
         );

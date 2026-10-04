@@ -35,7 +35,8 @@ pub(super) async fn run_command(cmd: Command) -> zbus::Result<()> {
             let known = saved_all(&c).await?;
             let conn = known.iter().find(|(k, _, _)| *k == ssid).map(|(_, p, _)| p);
             if let (Some(conn), Some(dev)) = (conn, wifi_device(&c).await?) {
-                let root = OwnedObjectPath::try_from("/").unwrap();
+                // "/" (zvariant's default path): no specific object.
+                let root = OwnedObjectPath::default();
                 let ac: OwnedObjectPath = dbus::proxy(&c, NM, NM_PATH, NM)
                     .await?
                     .call("ActivateConnection", &(conn, &dev, &root))

@@ -221,16 +221,24 @@ pub fn is_a(file_type: &str, wanted: &str) -> bool {
     }
 }
 
-fn percent_decode(s: &str) -> String {
+/// "%20" and the like back to their characters (file:// URLs). Reads the two hex digits as
+/// bytes: cutting the text at byte positions panicked when a "%" was followed by a letter and
+/// then an accented one ("%aé": the cut fell inside the "é").
+pub fn percent_decode(s: &str) -> String {
+    fn hex(b: u8) -> Option<u8> {
+        char::from(b)
+            .to_digit(16)
+            .and_then(|d| u8::try_from(d).ok())
+    }
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%'
-            && i + 2 < b.len()
-            && let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16)
+            && let (Some(&h), Some(&l)) = (b.get(i + 1), b.get(i + 2))
+            && let (Some(h), Some(l)) = (hex(h), hex(l))
         {
-            out.push(v);
+            out.push(h * 16 + l);
             i += 3;
         } else {
             out.push(b[i]);
@@ -334,6 +342,11 @@ mod tests {
         assert_eq!(scheme("/home/x:y"), None);
         assert_eq!(scheme("C:"), None);
         assert_eq!(percent_decode("/a%20b/%C3%A9"), "/a b/é");
+        // A "%" not followed by two hex digits stays; an accented letter right after it
+        // (where a byte cut would fall inside it) does not panic.
+        assert_eq!(percent_decode("%aé"), "%aé");
+        assert_eq!(percent_decode("50%"), "50%");
+        assert_eq!(percent_decode("%é"), "%é");
     }
 }
 

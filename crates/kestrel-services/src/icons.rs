@@ -115,7 +115,7 @@ pub fn lookup(name: &str) -> Option<PathBuf> {
     let found = search(name).or_else(|| search(&name.to_lowercase()));
     cache
         .lock()
-        .unwrap()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(name.to_string(), found.clone());
     found
 }

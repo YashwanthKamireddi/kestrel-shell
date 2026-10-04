@@ -155,7 +155,8 @@ mod tests {
 
 #[cfg(test)]
 mod path_tests {
-    use super::{pasted_path, percent_decode};
+    use super::pasted_path;
+    use crate::services::open::percent_decode;
 
     #[test]
     fn pasted_paths_open() {

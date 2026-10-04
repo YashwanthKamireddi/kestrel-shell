@@ -30,19 +30,65 @@ where
         use futures::{SinkExt, StreamExt};
         // Waits 1 s before making it again, doubling to at most 30 s while it keeps ending at
         // once (a service that is not there at all costs nothing), back to 1 s once it works.
+        // A panic in the service ends its stream like a dropped connection does (logged), and
+        // it is made again: before, the panic unwound through here and killed the
+        // subscription's task, freezing that indicator until kestrel restarted, unlogged.
         let mut wait = 1u64;
         loop {
-            let s = make();
-            futures::pin_mut!(s);
-            let mut worked = false;
-            while let Some(v) = s.next().await {
-                worked = true;
-                if out.send(v).await.is_err() {
-                    return;
+            let worked = std::sync::atomic::AtomicBool::new(false);
+            let run = async {
+                let s = std::panic::catch_unwind(std::panic::AssertUnwindSafe(&make))?;
+                let s = std::panic::AssertUnwindSafe(s).catch_unwind();
+                futures::pin_mut!(s);
+                while let Some(v) = s.next().await {
+                    worked.store(true, std::sync::atomic::Ordering::Relaxed);
+                    if out.send(v?).await.is_err() {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            };
+            let r: Result<bool, Box<dyn std::any::Any + Send>> = run.await;
+            match r {
+                Ok(false) => return,
+                Ok(true) => {}
+                Err(e) => {
+                    let why = e
+                        .downcast_ref::<&str>()
+                        .map(|s| (*s).to_string())
+                        .or_else(|| e.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "unknown error".into());
+                    log::error!(
+                        "{} failed and is started again: {why}",
+                        std::any::type_name::<T>()
+                    );
                 }
             }
+            let worked = worked.load(std::sync::atomic::Ordering::Relaxed);
             wait = if worked { 1 } else { (wait * 2).min(30) };
             tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// A service that panics is made again (and its panic does not end the stream).
+    #[tokio::test]
+    async fn a_panicking_service_is_started_again() {
+        static MADE: AtomicU32 = AtomicU32::new(0);
+        let s = forever(|| {
+            let n = MADE.fetch_add(1, Ordering::SeqCst);
+            futures::stream::once(async move {
+                assert!(n > 0, "the first run fails");
+                n
+            })
+        });
+        futures::pin_mut!(s);
+        let first = tokio::time::timeout(std::time::Duration::from_secs(5), s.next()).await;
+        assert_eq!(first.ok().flatten(), Some(1));
+    }
 }
