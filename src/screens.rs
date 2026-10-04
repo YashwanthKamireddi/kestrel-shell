@@ -40,7 +40,7 @@ mod tests {
         size
     }
 
-    const ALL: [PanelKind; 22] = [
+    const ALL: [PanelKind; 21] = [
         PanelKind::Control,
         PanelKind::Media,
         PanelKind::Calendar,
@@ -53,7 +53,6 @@ mod tests {
         PanelKind::Overview,
         PanelKind::Clipboard,
         PanelKind::Emoji,
-        PanelKind::Settings,
         PanelKind::Weather,
         PanelKind::Pods,
         PanelKind::Files,
@@ -74,8 +73,7 @@ mod tests {
         )
     }
 
-    /// Every panel of `app`: none panics, none is empty, none fills the room (Settings is a
-    /// window of its own, which it fills).
+    /// Every panel of `app`: none panics, none is empty, none fills the room.
     fn check_all(app: &App, state: &str) {
         let mut bad = Vec::new();
         for kind in ALL {
@@ -85,7 +83,7 @@ mod tests {
             }));
             match size {
                 Err(_) => bad.push(format!("{kind:?} ({state}): panicked")),
-                Ok(s) if s.height >= ROOM && kind != PanelKind::Settings => {
+                Ok(s) if s.height >= ROOM => {
                     bad.push(format!("{kind:?} ({state}): takes all the height offered"));
                 }
                 Ok(s) if (s.height <= 0.0 || s.width <= 0.0) && !only_when_asked(kind) => {

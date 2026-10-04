@@ -136,7 +136,8 @@ pub fn paste_text() -> Option<String> {
     Some(String::from_utf8_lossy(&data).into_owned()).filter(|t| !t.is_empty())
 }
 
-/// Largest copy that is read to describe it (bigger images are still reported, unread).
+/// Largest copy kestrel holds (kept after its app quits, put in the history). A bigger one is
+/// reported as copied but not held: apps still paste it from the app it came from.
 const READ_LIMIT: usize = 64 << 20;
 const THUMB: (u32, u32) = (112, 64);
 
@@ -423,15 +424,33 @@ fn read_offer(
     let is_image = chosen.as_ref().is_some_and(|m| m.starts_with("image/"));
     let mime = chosen.unwrap_or_default();
     std::thread::spawn(move || {
+        // The whole copy, or None when it is over READ_LIMIT: never its first part (a cut
+        // copy offered again after its app quit would paste cut, with no sign of it).
         let slurp = |fd: OwnedFd| {
             let mut data = Vec::new();
             let _ = std::fs::File::from(fd)
-                .take(READ_LIMIT as u64)
+                .take(READ_LIMIT as u64 + 1)
                 .read_to_end(&mut data);
-            data
+            (data.len() <= READ_LIMIT).then_some(data)
         };
-        let files = files.map(slurp).filter(|d| !d.is_empty());
-        let data = read.map(slurp).unwrap_or_default();
+        let (files, data) = match (files.map(slurp), read.map(slurp)) {
+            (Some(None), _) | (_, Some(None)) => {
+                // Too big to hold: not kept (the previous copy is not the clipboard any more
+                // either), not in the history; announced as copied, nothing to show.
+                *kept
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+                log::info!("clipboard: a copy over {} MB is not kept", READ_LIMIT >> 20);
+                if let Some(out) = out {
+                    let _ = out.unbounded_send(Copied::Other);
+                }
+                return;
+            }
+            (f, d) => (
+                f.flatten().filter(|d| !d.is_empty()),
+                d.flatten().unwrap_or_default(),
+            ),
+        };
         // Kept to offer again: the files' list, the picture, or the text under every name
         // text is asked for.
         let mut offered: Vec<(String, Arc<Vec<u8>>)> = Vec::new();

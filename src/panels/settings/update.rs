@@ -432,7 +432,8 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
         },
         Message::Change(c) => Act::Change(c),
         Message::Batch(v) => Act::Many(v.into_iter().map(|m| update(st, m, cx)).collect()),
-        Message::Close => Act::Close,
+        // The Settings window, not a panel (Settings is no panel).
+        Message::Close => Act::Command("close settings".into()),
         Message::OpenWallpaper => Act::Command("toggle wallpaper".into()),
         Message::Copy(text) => {
             run(Task::future(crate::panels::clipboard::copy_text(text)).discard())

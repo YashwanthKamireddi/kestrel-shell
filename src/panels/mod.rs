@@ -44,7 +44,6 @@ pub enum PanelKind {
     Overview,
     Clipboard,
     Emoji,
-    Settings,
     Weather,
     Pods,
     Files,
@@ -80,7 +79,6 @@ impl PanelKind {
             "overview" => Self::Overview,
             "clipboard" => Self::Clipboard,
             "emoji" => Self::Emoji,
-            "settings" => Self::Settings,
             "weather" => Self::Weather,
             "airpods" | "pods" => Self::Pods,
             "files" => Self::Files,
@@ -129,7 +127,6 @@ impl PanelKind {
             Self::Overview => overview::WIDTH,
             Self::Clipboard => clipboard::WIDTH,
             Self::Emoji => emoji::WIDTH,
-            Self::Settings => settings::WIDTH,
             Self::Weather => weather::WIDTH,
             Self::Pods => pods::WIDTH,
             Self::Files => files::WIDTH,
@@ -324,7 +321,6 @@ pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
             let a = emoji::open(&mut app.panels.emoji);
             return action::perform(app, a, |m| AppMessage::Panel(Message::Emoji(m)));
         }
-        PanelKind::Settings => return open_settings(app),
         PanelKind::Tray
         | PanelKind::Notifications
         | PanelKind::Privacy
@@ -720,9 +716,6 @@ fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessa
         PanelKind::Emoji => {
             emoji::view(&p.emoji, &cx).map(|m| AppMessage::Panel(Message::Emoji(m)))
         }
-        PanelKind::Settings => {
-            settings::view(&p.settings, &cx).map(|m| AppMessage::Panel(Message::Settings(m)))
-        }
         PanelKind::Weather => weather::view(&cx).map(AppMessage::Panel),
         PanelKind::Pods => pods::view(&cx).map(|m| AppMessage::Panel(Message::Pods(m))),
         PanelKind::Files => {
@@ -757,7 +750,6 @@ impl PanelKind {
                 | PanelKind::Clipboard
                 | PanelKind::Emoji
                 | PanelKind::Overview
-                | PanelKind::Settings
                 | PanelKind::Files
                 | PanelKind::Auth
                 | PanelKind::OpenWith

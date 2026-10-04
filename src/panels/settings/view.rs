@@ -158,7 +158,7 @@ pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     }
 }
 
-pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
+fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let page = st.page;
     let shell_pages: Vec<Page> = SHELL

@@ -83,7 +83,6 @@ pub fn dragging(st: &State) -> bool {
 pub static ROOT: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("kestrel-settings-root"));
 
-pub const WIDTH: f32 = 720.0;
 const SIDEBAR: f32 = 196.0;
 /// The pages' reading width, however wide the window (rows stretched over a screen read badly).
 const READING_W: f32 = 760.0;

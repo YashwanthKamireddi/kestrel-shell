@@ -38,8 +38,15 @@ impl App {
                     }
                 }
             }
-            // Settings is a window of its own: opened, or brought forward if open.
+            // Settings is a window of its own: opened, or brought forward if open. A toggle
+            // closes it when it is the window in front (as every other toggle closes its panel).
+            (Some("toggle"), Some("settings"))
+                if self.settings_window.is_some() && self.hypr.window_class == SETTINGS_CLASS =>
+            {
+                self.close_settings()
+            }
             (Some("toggle" | "open"), Some("settings")) => self.open_settings(),
+            (Some("close"), Some("settings")) => self.close_settings(),
             // Settings on a page: `kestrel settings sound` (bindable in Settings > Shortcuts).
             (Some("settings"), Some(name)) => match panels::settings::Page::from_slug(name) {
                 Some(p) => Task::done(Message::SettingsAt(p)),
@@ -73,7 +80,6 @@ impl App {
                     | PanelKind::Overview
                     | PanelKind::Clipboard
                     | PanelKind::Emoji
-                    | PanelKind::Settings
                     | PanelKind::Weather
                     | PanelKind::Files
                     | PanelKind::Auth

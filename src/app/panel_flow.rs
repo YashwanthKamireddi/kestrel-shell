@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The Settings window's app id (Hyprland's class for it).
+pub const SETTINGS_CLASS: &str = "kestrel-settings";
+
 impl App {
     /// Opens Settings as an ordinary window, or brings the open one forward.
     pub fn open_settings(&mut self) -> Task<Message> {
@@ -14,20 +17,30 @@ impl App {
         if self.settings_window.is_some() {
             return Task::batch([
                 close,
-                Task::future(services::hyprland::dispatch(
-                    "hl.dsp.focus({ window = \"class:^(kestrel-settings)$\" })".into(),
-                ))
+                Task::future(services::hyprland::dispatch(format!(
+                    "hl.dsp.focus({{ window = \"class:^({SETTINGS_CLASS})$\" }})"
+                )))
                 .discard(),
             ]);
         }
         let (id, task) = iced::new_window(iced::WindowSettings {
             title: "Settings".into(),
-            app_id: "kestrel-settings".into(),
+            app_id: SETTINGS_CLASS.into(),
             size: (980, 660),
             min_size: (760, 480),
         });
         self.settings_window = Some(id);
         Task::batch([close, task, panels::open_settings(self)])
+    }
+
+    /// Closes the Settings window: a toggle while it is in front, `kestrel close settings`, or
+    /// one of its buttons that hands over to a terminal. (Its ✕ closes it in the compositor;
+    /// `WindowClosed` then forgets it.)
+    pub fn close_settings(&mut self) -> Task<Message> {
+        match self.settings_window.take() {
+            Some(id) => iced::destroy_layer_surface(id),
+            None => Task::none(),
+        }
     }
 
     pub(crate) fn toggle(
