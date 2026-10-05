@@ -106,3 +106,31 @@ pub(super) fn record(
         reply,
     })
 }
+
+/// The microphone test is over: its stream closed and what it heard handed back.
+pub(super) fn finish_recording(r: Recording) {
+    let mut s = r.stream.borrow_mut();
+    s.set_read_callback(None);
+    s.set_state_callback(None);
+    let _ = s.disconnect();
+    drop(s);
+    let mut heard = r.heard.borrow_mut();
+    heard.truncate(r.wanted);
+    let pcm = crate::sounds::Pcm {
+        file: "microphone-test".into(),
+        rate: RECORD_RATE,
+        channels: 1,
+        samples: heard
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
+            .collect(),
+        keep: false,
+    };
+    r.reply.send(if pcm.samples.is_empty() {
+        Err("The microphone could not be recorded".into())
+    } else {
+        Ok(Arc::new(pcm))
+    });
+}

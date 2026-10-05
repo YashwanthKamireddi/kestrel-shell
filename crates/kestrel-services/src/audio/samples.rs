@@ -104,3 +104,57 @@ pub(super) fn upload(
     st.borrow_mut().connect_upload(len).ok()?;
     Some(st)
 }
+
+impl Samples {
+    /// Plays a sound: at once when the server has it cached, after its upload otherwise (plays
+    /// asked while it uploads wait for it).
+    pub(super) fn play(
+        &mut self,
+        ctx: &mut Context,
+        pcm: &crate::sounds::Pcm,
+        volume: f32,
+        tx: &mpsc::Sender<Command>,
+    ) {
+        let name = sample_name(pcm);
+        if pcm.keep && self.cached.contains(&name) {
+            play_sample(ctx, &name, volume, tx);
+        } else if let Some(u) = self.uploading.get_mut(&name) {
+            u.waiting.push(volume);
+        } else if let Some(stream) = upload(ctx, pcm, tx) {
+            let u = Upload {
+                stream,
+                waiting: vec![volume],
+                keep: pcm.keep,
+            };
+            self.uploading.insert(name, u);
+        }
+    }
+
+    /// An upload finished: the plays waiting for it go, and a sound to keep is cached.
+    pub(super) fn uploaded(
+        &mut self,
+        ctx: &mut Context,
+        name: String,
+        ok: bool,
+        tx: &mpsc::Sender<Command>,
+    ) {
+        if let Some(u) = self.uploading.remove(&name) {
+            // Its callbacks hold the stream: cleared, so it is freed.
+            let mut s = u.stream.borrow_mut();
+            s.set_write_callback(None);
+            s.set_state_callback(None);
+            drop(s);
+            if ok {
+                for v in u.waiting {
+                    play_sample(ctx, &name, v, tx);
+                }
+                // A recording is uploaded afresh each time (same name, replaced).
+                if u.keep {
+                    self.cached.insert(name);
+                }
+            } else {
+                log::warn!("sound {name}: the server did not take it");
+            }
+        }
+    }
+}

@@ -15,6 +15,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
+mod read;
 mod record;
 mod samples;
 use record::*;
@@ -194,29 +195,63 @@ fn level(cv: &ChannelVolumes) -> f32 {
     cv.avg().0 as f32 / Volume::NORMAL.0 as f32
 }
 
-#[derive(Default)]
-struct Partial {
-    state: State,
-    pending: u8,
-    mics: Vec<u32>,
-    outputs: Vec<(u32, String)>,
-    /// Sink index → name, to say where each stream plays.
-    sink_names: Vec<(u32, String)>,
-    /// (stream index, app name, icon, volume, muted, channels, sink index)
-    streams: Vec<(u32, String, String, f32, bool, u8, u32)>,
-    /// The same for recording streams (source index last).
-    recordings: Vec<(u32, String, String, f32, bool, u8, u32)>,
-    /// Source index → name.
-    source_names: Vec<(u32, String)>,
-    /// Each output's channel levels and map, for setting its balance.
-    sink_volumes: std::collections::HashMap<String, (ChannelVolumes, pulse::channelmap::Map)>,
-}
-
 fn run(out: tokio::sync::mpsc::UnboundedSender<State>) -> Option<()> {
     let (tx, rx) = mpsc::channel::<Command>();
     *COMMANDS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx.clone());
+    let (mut ml, mut ctx) = connect(&tx)?;
+    let _ = tx.send(Command::Refresh);
+
+    // The newest refresh round's replies (each round has its own: replies of an older round
+    // that arrive after a new one started fill their own and can't miscount the new one's).
+    let mut partial = Arc::new(Mutex::new(read::Partial::default()));
+    let mut samples = Samples::default();
+    let mut recording: Option<Recording> = None;
+    // Commands read while skipping a burst of refreshes, carried out next in their order.
+    let mut held = std::collections::VecDeque::new();
+    while let Some(cmd) = held.pop_front().or_else(|| rx.recv().ok()) {
+        // A burst of refresh requests is one refresh. Anything else read meanwhile is kept:
+        // before, the first other command ended the skip and was lost (a volume or mute
+        // change made while the server was busy with events did nothing).
+        if matches!(cmd, Command::Refresh) {
+            while let Ok(next) = rx.try_recv() {
+                if !matches!(next, Command::Refresh) {
+                    held.push_back(next);
+                }
+            }
+        }
+        ml.lock();
+        let mut intro = ctx.introspect();
+        match cmd {
+            Command::Record(secs, reply) => {
+                if recording.is_some() {
+                    reply.send(Err("The microphone is already being tested".into()));
+                } else {
+                    recording = record(&mut ctx, secs, reply, &tx);
+                }
+            }
+            Command::RecordEnd => {
+                if let Some(r) = recording.take() {
+                    finish_recording(r);
+                }
+            }
+            Command::Play(pcm, volume) => samples.play(&mut ctx, &pcm, volume, &tx),
+            Command::Uploaded(name, ok) => samples.uploaded(&mut ctx, name, ok, &tx),
+            Command::Forget(name) => {
+                samples.cached.remove(&name);
+            }
+            Command::Refresh => partial = read::refresh(&intro, &out),
+            other => apply(other, &mut ctx, &mut intro, &partial),
+        }
+        ml.unlock();
+    }
+    Some(())
+}
+
+/// Connects to the sound server (PipeWire's Pulse side) and asks to hear of every change: each
+/// one becomes a refresh.
+fn connect(tx: &mpsc::Sender<Command>) -> Option<(Mainloop, Context)> {
     let mut ml = Mainloop::new()?;
     let mut ctx = Context::new(&ml, "kestrel")?;
     ctx.connect(None, FlagSet::NOFAIL, None).ok()?;
@@ -260,382 +295,90 @@ fn run(out: tokio::sync::mpsc::UnboundedSender<State>) -> Option<()> {
         |_| {},
     );
     ml.unlock();
-    let _ = tx.send(Command::Refresh);
+    Some((ml, ctx))
+}
 
-    // The newest refresh round's replies (each round has its own: replies of an older round
-    // that arrive after a new one started fill their own and can't miscount the new one's).
-    let mut partial = Arc::new(Mutex::new(Partial::default()));
-    let mut samples = Samples::default();
-    let mut recording: Option<Recording> = None;
-    while let Ok(cmd) = rx.recv() {
-        // Collapse a burst of refresh requests into one.
-        if matches!(cmd, Command::Refresh) {
-            while let Ok(Command::Refresh) = rx.try_recv() {}
+/// A change asked of the sound server (a volume, a mute, a default, where an app plays, a
+/// card's profile). Sent and not waited for: the server's change events refresh the state.
+fn apply(
+    cmd: Command,
+    ctx: &mut Context,
+    intro: &mut pulse::context::introspect::Introspector,
+    partial: &Arc<Mutex<read::Partial>>,
+) {
+    match cmd {
+        Command::SinkVolume(n, ch, v) => {
+            intro.set_sink_volume_by_name(&n, &volumes(ch, v), None);
         }
-        ml.lock();
-        let mut intro = ctx.introspect();
-        match cmd {
-            Command::SinkVolume(n, ch, v) => {
-                intro.set_sink_volume_by_name(&n, &volumes(ch, v), None);
-            }
-            Command::SinkMute(n, m) => {
-                intro.set_sink_mute_by_name(&n, m, None);
-            }
-            Command::SourceVolume(n, ch, v) => {
-                intro.set_source_volume_by_name(&n, &volumes(ch, v), None);
-            }
-            Command::SourceMute(n, m) => {
-                intro.set_source_mute_by_name(&n, m, None);
-            }
-            Command::DefaultSink(n) => {
-                ctx.set_default_sink(&n, |_| {});
-            }
-            Command::DefaultSource(n) => {
-                ctx.set_default_source(&n, |_| {});
-            }
-            Command::AppVolume(ids, ch, v) => {
-                for i in ids {
-                    intro.set_sink_input_volume(i, &volumes(ch, v), None);
-                }
-            }
-            Command::AppMute(ids, m) => {
-                for i in ids {
-                    intro.set_sink_input_mute(i, m, None);
-                }
-            }
-            Command::AppMove(ids, sink) => {
-                for i in ids {
-                    intro.move_sink_input_by_name(i, &sink, None);
-                }
-            }
-            Command::RecorderVolume(ids, ch, v) => {
-                for i in ids {
-                    intro.set_source_output_volume(i, &volumes(ch, v), None);
-                }
-            }
-            Command::RecorderMute(ids, m) => {
-                for i in ids {
-                    intro.set_source_output_mute(i, m, None);
-                }
-            }
-            Command::RecorderMove(ids, source) => {
-                for i in ids {
-                    intro.move_source_output_by_name(i, &source, None);
-                }
-            }
-            Command::SinkBalance(name, b) => {
-                let known = partial
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .sink_volumes
-                    .get(&name)
-                    .copied();
-                if let Some((mut cv, map)) = known
-                    && cv.set_balance(&map, b.clamp(-1.0, 1.0)).is_some()
-                {
-                    intro.set_sink_volume_by_name(&name, &cv, None);
-                }
-            }
-            Command::CardProfile(card, profile) => {
-                intro.set_card_profile_by_index(card, &profile, None);
-            }
-            Command::Record(secs, reply) => {
-                if recording.is_some() {
-                    reply.send(Err("The microphone is already being tested".into()));
-                } else {
-                    recording = record(&mut ctx, secs, reply, &tx);
-                }
-            }
-            Command::RecordEnd => {
-                if let Some(r) = recording.take() {
-                    let mut s = r.stream.borrow_mut();
-                    s.set_read_callback(None);
-                    s.set_state_callback(None);
-                    let _ = s.disconnect();
-                    drop(s);
-                    let mut heard = r.heard.borrow_mut();
-                    heard.truncate(r.wanted);
-                    let pcm = crate::sounds::Pcm {
-                        file: "microphone-test".into(),
-                        rate: RECORD_RATE,
-                        channels: 1,
-                        samples: heard
-                            .as_chunks::<2>()
-                            .0
-                            .iter()
-                            .map(|b| i16::from_le_bytes(*b))
-                            .collect(),
-                        keep: false,
-                    };
-                    r.reply.send(if pcm.samples.is_empty() {
-                        Err("The microphone could not be recorded".into())
-                    } else {
-                        Ok(Arc::new(pcm))
-                    });
-                }
-            }
-            Command::Play(pcm, volume) => {
-                let name = sample_name(&pcm);
-                if pcm.keep && samples.cached.contains(&name) {
-                    play_sample(&mut ctx, &name, volume, &tx);
-                } else if let Some(u) = samples.uploading.get_mut(&name) {
-                    u.waiting.push(volume);
-                } else if let Some(stream) = upload(&mut ctx, &pcm, &tx) {
-                    let u = Upload {
-                        stream,
-                        waiting: vec![volume],
-                        keep: pcm.keep,
-                    };
-                    samples.uploading.insert(name, u);
-                }
-            }
-            Command::Uploaded(name, ok) => {
-                if let Some(u) = samples.uploading.remove(&name) {
-                    // Its callbacks hold the stream: cleared, so it is freed.
-                    let mut s = u.stream.borrow_mut();
-                    s.set_write_callback(None);
-                    s.set_state_callback(None);
-                    drop(s);
-                    if ok {
-                        for v in u.waiting {
-                            play_sample(&mut ctx, &name, v, &tx);
-                        }
-                        // A recording is uploaded afresh each time (same name, replaced).
-                        if u.keep {
-                            samples.cached.insert(name);
-                        }
-                    } else {
-                        log::warn!("sound {name}: the server did not take it");
-                    }
-                }
-            }
-            Command::Forget(name) => {
-                samples.cached.remove(&name);
-            }
-            Command::Refresh => {
-                partial = Arc::new(Mutex::new(Partial {
-                    pending: 6,
-                    ..Partial::default()
-                }));
-                let finish = {
-                    let partial = partial.clone();
-                    let out = out.clone();
-                    move || {
-                        let mut p = partial
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        p.pending -= 1;
-                        if p.pending == 0 {
-                            let mut rec: Vec<String> = p
-                                .outputs
-                                .iter()
-                                .filter(|(src, _)| p.mics.contains(src))
-                                .map(|(_, app)| app.clone())
-                                .collect();
-                            rec.sort();
-                            rec.dedup();
-                            p.state.recording = rec;
-                            p.state.apps = group_apps(&p.streams, &p.sink_names);
-                            p.state.recorders = group_apps(&p.recordings, &p.source_names);
-                            let _ = out.send(p.state.clone());
-                        }
-                    }
-                };
-                let (p1, f1) = (partial.clone(), finish.clone());
-                intro.get_server_info(move |info| {
-                    let mut p = p1.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                    p.state.default_sink = info.default_sink_name.as_deref().unwrap_or("").into();
-                    p.state.default_source =
-                        info.default_source_name.as_deref().unwrap_or("").into();
-                    drop(p);
-                    f1();
-                });
-                let (p2, f2) = (partial.clone(), finish.clone());
-                intro.get_sink_info_list(move |r| match r {
-                    ListResult::Item(i) => {
-                        let name = i.name.as_deref().unwrap_or("").to_string();
-                        let port = i
-                            .active_port
-                            .as_ref()
-                            .and_then(|p| p.name.as_deref())
-                            .unwrap_or("")
-                            .to_lowercase();
-                        let plugged = i
-                            .active_port
-                            .as_ref()
-                            .is_none_or(|p| p.available != pulse::def::PortAvailable::No);
-                        let mut g = p2.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                        g.sink_names.push((i.index, name.clone()));
-                        g.sink_volumes
-                            .insert(name.clone(), (i.volume, i.channel_map));
-                        let balance = if i.volume.len() == 2 {
-                            i.volume.get_balance(&i.channel_map)
-                        } else {
-                            0.0
-                        };
-                        drop(g);
-                        p2.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .state
-                            .sinks
-                            .push(Device {
-                                plugged,
-                                card: i.card,
-                                balance,
-                                bluetooth: name.starts_with("bluez_"),
-                                headphones: port.contains("headphone")
-                                    || name.starts_with("bluez_"),
-                                description: i.description.as_deref().unwrap_or(&name).to_string(),
-                                name,
-                                volume: level(&i.volume),
-                                muted: i.mute,
-                                channels: i.volume.len(),
-                            });
-                    }
-                    ListResult::End | ListResult::Error => f2(),
-                });
-                let (p4, f4) = (partial.clone(), finish.clone());
-                intro.get_source_output_info_list(move |r| match r {
-                    ListResult::Item(i) => {
-                        let prop = |k: &str| i.proplist.get_str(k).unwrap_or_default();
-                        let raw = Some(prop("application.name"))
-                            .filter(|n| !n.is_empty())
-                            .unwrap_or_else(|| "An app".into());
-                        // kestrel's own level meters and visualiser are not "recording".
-                        if raw.starts_with("kestrel") {
-                            return;
-                        }
-                        // The app's own name: no stream suffix ("Chromium input"), and its
-                        // desktop entry's name for a program name ("vesktop").
-                        let bare = raw
-                            .trim_end_matches(" input")
-                            .trim_end_matches(" capture")
-                            .to_string();
-                        let app = crate::apps::name_for_class(&bare);
-                        let icon = Some(prop("application.icon_name"))
-                            .filter(|n| !n.is_empty())
-                            .unwrap_or_else(|| prop("application.process.binary"));
-                        let mut g = p4.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                        g.outputs.push((i.source, app.clone()));
-                        g.recordings.push((
-                            i.index,
-                            app,
-                            icon,
-                            level(&i.volume),
-                            i.mute,
-                            i.volume.len(),
-                            i.source,
-                        ));
-                    }
-                    ListResult::End | ListResult::Error => f4(),
-                });
-                let (p5, f5) = (partial.clone(), finish.clone());
-                intro.get_sink_input_info_list(move |r| match r {
-                    ListResult::Item(i) => {
-                        let prop = |k: &str| i.proplist.get_str(k).unwrap_or_default();
-                        // System sounds (a notification's ding) and level meters are not apps.
-                        if prop("media.role") == "event"
-                            || prop("application.id") == "org.PulseAudio.pavucontrol"
-                        {
-                            return;
-                        }
-                        let name = Some(prop("application.name"))
-                            .filter(|n| !n.is_empty())
-                            .or_else(|| {
-                                Some(prop("application.process.binary")).filter(|n| !n.is_empty())
-                            })
-                            .unwrap_or_else(|| "An app".into());
-                        let icon = Some(prop("application.icon_name"))
-                            .filter(|n| !n.is_empty())
-                            .unwrap_or_else(|| prop("application.process.binary"));
-                        p5.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .streams
-                            .push((
-                                i.index,
-                                name,
-                                icon,
-                                level(&i.volume),
-                                i.mute,
-                                i.volume.len(),
-                                i.sink,
-                            ));
-                    }
-                    ListResult::End | ListResult::Error => f5(),
-                });
-                let (p6, f6) = (partial.clone(), finish.clone());
-                intro.get_card_info_list(move |r| match r {
-                    ListResult::Item(i) => {
-                        let name = |p: &pulse::context::introspect::CardProfileInfo| {
-                            p.name.as_deref().unwrap_or("").to_string()
-                        };
-                        p6.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .state
-                            .cards
-                            .push(Card {
-                                index: i.index,
-                                name: i.name.as_deref().unwrap_or("").to_string(),
-                                active: i.active_profile.as_deref().map(name).unwrap_or_default(),
-                                profiles: i
-                                    .profiles
-                                    .iter()
-                                    .filter(|p| p.available && name(p) != "off")
-                                    .map(|p| {
-                                        (
-                                            name(p),
-                                            p.description.as_deref().unwrap_or("").to_string(),
-                                        )
-                                    })
-                                    .collect(),
-                            });
-                    }
-                    ListResult::End | ListResult::Error => f6(),
-                });
-                let (p3, f3) = (partial.clone(), finish);
-                intro.get_source_info_list(move |r| match r {
-                    ListResult::Item(i) => {
-                        // Monitors of outputs are not microphones.
-                        if i.monitor_of_sink.is_some() {
-                            return;
-                        }
-                        let name = i.name.as_deref().unwrap_or("").to_string();
-                        let plugged = i
-                            .active_port
-                            .as_ref()
-                            .is_none_or(|p| p.available != pulse::def::PortAvailable::No);
-                        p3.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .mics
-                            .push(i.index);
-                        p3.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .source_names
-                            .push((i.index, name.clone()));
-                        p3.lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .state
-                            .sources
-                            .push(Device {
-                                plugged,
-                                card: i.card,
-                                balance: 0.0,
-                                bluetooth: name.starts_with("bluez_"),
-                                headphones: false,
-                                description: i.description.as_deref().unwrap_or(&name).to_string(),
-                                name,
-                                volume: level(&i.volume),
-                                muted: i.mute,
-                                channels: i.volume.len(),
-                            });
-                    }
-                    ListResult::End | ListResult::Error => f3(),
-                });
+        Command::SinkMute(n, m) => {
+            intro.set_sink_mute_by_name(&n, m, None);
+        }
+        Command::SourceVolume(n, ch, v) => {
+            intro.set_source_volume_by_name(&n, &volumes(ch, v), None);
+        }
+        Command::SourceMute(n, m) => {
+            intro.set_source_mute_by_name(&n, m, None);
+        }
+        Command::DefaultSink(n) => {
+            ctx.set_default_sink(&n, |_| {});
+        }
+        Command::DefaultSource(n) => {
+            ctx.set_default_source(&n, |_| {});
+        }
+        Command::AppVolume(ids, ch, v) => {
+            for i in ids {
+                intro.set_sink_input_volume(i, &volumes(ch, v), None);
             }
         }
-        ml.unlock();
+        Command::AppMute(ids, m) => {
+            for i in ids {
+                intro.set_sink_input_mute(i, m, None);
+            }
+        }
+        Command::AppMove(ids, sink) => {
+            for i in ids {
+                intro.move_sink_input_by_name(i, &sink, None);
+            }
+        }
+        Command::RecorderVolume(ids, ch, v) => {
+            for i in ids {
+                intro.set_source_output_volume(i, &volumes(ch, v), None);
+            }
+        }
+        Command::RecorderMute(ids, m) => {
+            for i in ids {
+                intro.set_source_output_mute(i, m, None);
+            }
+        }
+        Command::RecorderMove(ids, source) => {
+            for i in ids {
+                intro.move_source_output_by_name(i, &source, None);
+            }
+        }
+        Command::SinkBalance(name, b) => {
+            let known = partial
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .sink_volumes
+                .get(&name)
+                .copied();
+            if let Some((mut cv, map)) = known
+                && cv.set_balance(&map, b.clamp(-1.0, 1.0)).is_some()
+            {
+                intro.set_sink_volume_by_name(&name, &cv, None);
+            }
+        }
+        Command::CardProfile(card, profile) => {
+            intro.set_card_profile_by_index(card, &profile, None);
+        }
+        // Handled by the loop itself.
+        Command::Record(..)
+        | Command::RecordEnd
+        | Command::Play(..)
+        | Command::Uploaded(..)
+        | Command::Forget(_)
+        | Command::Refresh => {}
     }
-    Some(())
 }
 
 /// Streams gathered into one row per app, in a steady order.
