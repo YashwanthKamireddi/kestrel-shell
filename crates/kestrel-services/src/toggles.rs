@@ -31,18 +31,9 @@ pub const MIN_GAMMA: u32 = 30;
 
 /// This session's hyprsunset (another Hyprland's, a test compositor's, is not ours to touch).
 fn hyprsunset_pid() -> Option<u32> {
-    let ours = format!(
-        "HYPRLAND_INSTANCE_SIGNATURE={}",
-        std::env::var("HYPRLAND_INSTANCE_SIGNATURE").unwrap_or_default()
-    );
-    std::fs::read_dir("/proc").ok()?.flatten().find_map(|e| {
-        let pid = e.file_name().to_str()?.parse::<u32>().ok()?;
-        let named =
-            std::fs::read_to_string(e.path().join("comm")).is_ok_and(|c| c.trim() == "hyprsunset");
-        let env = std::fs::read(e.path().join("environ")).ok()?;
-        let same = env.split(|b| *b == 0).any(|kv| kv == ours.as_bytes());
-        (named && same).then_some(pid)
-    })
+    crate::session::processes("hyprsunset")
+        .first()
+        .map(|(pid, _)| *pid)
 }
 
 fn hyprsunset_running() -> bool {

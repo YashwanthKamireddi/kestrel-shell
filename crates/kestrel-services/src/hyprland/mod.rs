@@ -272,35 +272,29 @@ async fn read_state() -> anyhow::Result<State> {
     })
 }
 
-/// A running wf-recorder: its process id and the file it writes (`-f`).
+/// This session's running wf-recorder: its process id and the file it writes (`-f`).
 fn recorder_running() -> Option<(u32, String, Option<std::time::SystemTime>)> {
-    for e in std::fs::read_dir("/proc").ok()?.flatten() {
-        let Some(pid) = e.file_name().to_str().and_then(|n| n.parse::<u32>().ok()) else {
-            continue;
-        };
-        let comm = std::fs::read_to_string(e.path().join("comm")).unwrap_or_default();
-        if comm.trim() != "wf-recorder" {
-            continue;
-        }
-        let cmd = std::fs::read(e.path().join("cmdline")).unwrap_or_default();
-        let args: Vec<String> = cmd
-            .split(|b| *b == 0)
-            .map(|a| String::from_utf8_lossy(a).into_owned())
-            .collect();
-        let file = args
-            .iter()
-            .position(|a| a == "-f" || a == "--file")
-            .and_then(|i| args.get(i + 1).cloned())
-            .or_else(|| {
-                args.iter()
-                    .find_map(|a| a.strip_prefix("--file=").map(String::from))
-            })
-            .unwrap_or_default();
-        // The process directory appears when the process starts.
-        let since = std::fs::metadata(e.path()).and_then(|m| m.modified()).ok();
-        return Some((pid, file, since));
-    }
-    None
+    // This session's recorder only (another session's is not this screen being recorded).
+    let (pid, dir) = crate::session::processes("wf-recorder")
+        .into_iter()
+        .next()?;
+    let cmd = std::fs::read(dir.join("cmdline")).unwrap_or_default();
+    let args: Vec<String> = cmd
+        .split(|b| *b == 0)
+        .map(|a| String::from_utf8_lossy(a).into_owned())
+        .collect();
+    let file = args
+        .iter()
+        .position(|a| a == "-f" || a == "--file")
+        .and_then(|i| args.get(i + 1).cloned())
+        .or_else(|| {
+            args.iter()
+                .find_map(|a| a.strip_prefix("--file=").map(String::from))
+        })
+        .unwrap_or_default();
+    // The process directory appears when the process starts.
+    let since = std::fs::metadata(&dir).and_then(|m| m.modified()).ok();
+    Some((pid, file, since))
 }
 
 /// How long a capture lasts before the bar says the screen is being recorded.

@@ -150,26 +150,10 @@ pub async fn set(step: Step, secs: u64) -> Result<(), String> {
 /// (as at login). Only the hypridle of this Hyprland session (another session's, a nested
 /// test compositor's, are left alone: `pkill -x hypridle` stopped every one).
 async fn restart_hypridle() {
-    let ours = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").unwrap_or_default();
-    if let Ok(rd) = std::fs::read_dir("/proc") {
-        for e in rd.flatten() {
-            let Ok(pid) = e.file_name().to_string_lossy().parse::<i32>() else {
-                continue;
-            };
-            let comm = std::fs::read_to_string(e.path().join("comm")).unwrap_or_default();
-            if comm.trim() != "hypridle" {
-                continue;
-            }
-            let env = std::fs::read(e.path().join("environ")).unwrap_or_default();
-            let same = env
-                .split(|b| *b == 0)
-                .any(|kv| kv == format!("HYPRLAND_INSTANCE_SIGNATURE={ours}").as_bytes());
-            if same {
-                // Safety: SIGTERM to this session's hypridle (matched above).
-                unsafe {
-                    libc::kill(pid as libc::pid_t, libc::SIGTERM);
-                }
-            }
+    for (pid, _) in crate::session::processes("hypridle") {
+        // Safety: SIGTERM to this session's hypridle (matched by name and session).
+        unsafe {
+            libc::kill(pid as libc::pid_t, libc::SIGTERM);
         }
     }
     crate::hyprland::dispatch("hl.dsp.exec_cmd(\"hypridle\")".into()).await;
