@@ -178,7 +178,7 @@ Nothing is installed that fails it. GUI changes are tested in the rig (`tools/ri
 - 2026-11-13: the bar surface is only the bar's strip (+ room for the frame's corners); panels,
   toasts and pop-ups draw on a separate full-output overlay surface (Noctalia: every panel its
   own surface). Both are created once and never resized. The bar's motion (visualiser,
-  workspaces) repaints a strip, and the idle overlay repaints nothing. See docs/RESEARCH.md.
+  workspaces) repaints a strip, and the idle overlay repaints nothing.
 - 2026-11-13: the shell asks the compositor for things as typed actions
   (`services::compositor::Action`: focus workspace / window, cycle, exec); the Hyprland backend
   turns them into its Lua dispatchers. Another compositor is one new backend there.
@@ -190,7 +190,7 @@ Nothing is installed that fails it. GUI changes are tested in the rig (`tools/ri
   possible later as a backend change (panels are written against iced, not tiny-skia).
 - 2026-11-15: one design kit, enforced by a lint ratchet (docs/DESIGN.md).
 
-## The core after Phase 2 (2026-11-16, docs/ROADMAP-v2.md)
+## The core after Phase 2 (2026-11-16)
 
 `src/app/` holds the shell's state and its flow, one concern per file:
 

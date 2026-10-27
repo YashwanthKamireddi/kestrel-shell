@@ -9,10 +9,7 @@ license=('MIT')
 depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-rubik-vf' 'ttf-twemoji'
          'pipewire' 'sound-theme-freedesktop')
 optdepends=('hyprsunset: night light'
-            'cliphist: clipboard history in the launcher'
-            'wl-clipboard: copying from clipboard history'
-            'hyprlock: lock screen'
-            'polkit-kde-agent: authentication dialogs')
+            'hyprlock: lock screen')
 conflicts=('kestrel')
 makedepends=('cargo' 'clang')
 options=('!lto' '!debug')
