@@ -1,6 +1,6 @@
 //! Date and time through systemd's timedated on the system bus: the time zone and whether the
-//! clock sets itself from the network (NTP). Changing either asks polkit (the user's rule allows it in
-//! the user's session without a prompt; otherwise kestrel's own password prompt appears).
+//! clock sets itself from the network (NTP). Changing either asks polkit (a local rule may allow
+//! it without a prompt; otherwise kestrel's own password prompt appears).
 
 use super::dbus;
 use zbus::Connection;

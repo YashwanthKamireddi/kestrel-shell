@@ -4,7 +4,7 @@
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct About {
-    /// "Dell Inc. Latitude 3440".
+    /// The maker and model ("LENOVO ThinkPad X1 Carbon").
     pub device: String,
     pub hostname: String,
     /// "Arch Linux".

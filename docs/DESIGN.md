@@ -46,7 +46,7 @@ is nearly grey, the hue falls back to 255 (blue) at low chroma.
 
 ### Type
 
-Rubik (the typeface the user liked in ii; chosen 2026-11-12). Sizes 11 (caption), 12 (bar, secondary), 13 (body), 14 (titles), 16 (panel headings),
+Rubik (chosen 2026-11-12). Sizes 11 (caption), 12 (bar, secondary), 13 (body), 14 (titles), 16 (panel headings),
 32 (display). Weights Regular 400, Medium 500, SemiBold 600. No bold, no letter-spacing tricks.
 
 ### Space and shape
@@ -141,9 +141,9 @@ card). Fields, keycaps and app icons are one kit function each (`ui::input_style
 (`top: 10.0`), spacer gaps (`Space::new().height(8)`) and ink alphas, so none of them drift
 back.
 
-The motion table above said hover fades in over 110 ms; it later snapped on instantly (the user's "no
+The motion table above said hover fades in over 110 ms; it later snapped on instantly (the "no
 lag" rule), which made clear-at-rest buttons (Clear all, ×) flash a pill out of nothing as the
-pointer crossed them: the "cheap and glitchy" hover in the user's recording of 2026-11-15. 70 ms keeps
+pointer crossed them: the "cheap and glitchy" hover seen in a recording of 2026-11-15. 70 ms keeps
 it instant to the eye without the pop.
 
 **Disabled.** A button that cannot be pressed is `ui::button(s, words, Pill, None)`: its words at
@@ -167,6 +167,6 @@ which only goes down as panels move onto the kit.
 A list that is open keeps its rows where they are: Wi-Fi networks and nearby Bluetooth devices
 are sorted when their page opens, then found ones join at the end and lost ones drop out
 (`control::keep_order` / `in_order`); a rescan used to reorder them by signal or name under
-the pointer. A change the user started holds the picture the user chose until it lands: switching a
+the pointer. A change the user started holds the picture they chose until it lands: switching a
 Bluetooth mode keeps the device and the new mode shown while PipeWire rebuilds the output
 (`App::mode_switch`), instead of flashing the speaker for a second.

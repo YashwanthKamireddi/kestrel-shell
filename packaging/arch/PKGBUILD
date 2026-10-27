@@ -5,7 +5,7 @@ pkgver=0.1.0.r338.gc019254
 pkgrel=1
 pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
-license=('GPL-3.0-or-later')
+license=('MIT')
 depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-rubik-vf' 'ttf-twemoji'
          'pipewire' 'sound-theme-freedesktop')
 optdepends=('hyprsunset: night light'

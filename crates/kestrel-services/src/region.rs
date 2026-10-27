@@ -4,7 +4,7 @@
 //! locale that does not exist breaks apps (it happened here once).
 
 /// One region: its locale name ("en_IN", "en_GB.UTF-8"), the locale.gen line that makes it,
-/// and what people call it ("English (India)").
+/// and what people call it ("English (New Zealand)").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Region {
     pub locale: String,
@@ -21,7 +21,7 @@ const KEYS: [&str; 6] = [
     "LC_ADDRESS",
 ];
 
-/// "English (India)" from glibc's locale source; the locale name when it has none.
+/// "English (New Zealand)" from glibc's locale source; the locale name when it has none.
 fn name_of(locale: &str) -> String {
     let base = locale.split(['.', '@']).next().unwrap_or(locale);
     let text =
@@ -192,8 +192,8 @@ mod tests {
 
     #[test]
     fn names_from_glibc() {
-        if std::path::Path::new("/usr/share/i18n/locales/en_IN").exists() {
-            assert_eq!(name_of("en_IN"), "English (India)");
+        if std::path::Path::new("/usr/share/i18n/locales/en_NZ").exists() {
+            assert_eq!(name_of("en_NZ"), "English (New Zealand)");
         }
     }
 }

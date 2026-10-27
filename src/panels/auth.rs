@@ -701,7 +701,7 @@ pub fn preview(which: &str) -> Option<Preview> {
         cookie: "kestrel-preview".into(),
         message: "Authentication is required to install packages".into(),
         action: "org.archlinux.pkexec.pacman".into(),
-        user: "yash".into(),
+        user: "user".into(),
         retry,
     };
     let id = 0xfeed;

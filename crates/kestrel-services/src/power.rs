@@ -460,9 +460,9 @@ pub async fn set_brightness(v: f32) {
 // --- Lid and power button ----------------------------------------------------------------------
 //
 // What closing the lid and pressing the power button do, as logind decides it. Read from logind
-// itself (so the user's own drop-ins show as they are); a change goes into
-// /etc/systemd/logind.conf.d/50-kestrel-power.conf (after the user's 20-lid-clamshell.conf, so it
-// wins) through pkexec, then logind is reloaded (never restarted: a restart ends sessions).
+// itself (so the system's own drop-ins show as they are); a change goes into
+// /etc/systemd/logind.conf.d/50-kestrel-power.conf (late in the order, so it wins over other
+// drop-ins) through pkexec, then logind is reloaded (never restarted: a restart ends sessions).
 
 /// What an event does: one of logind's actions kestrel offers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

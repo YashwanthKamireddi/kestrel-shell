@@ -3,7 +3,7 @@ name = "kestrel-services"
 description = "kestrel's system integration: state streams and commands, no UI"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-or-later"
+license = "MIT"
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "fs", "time", "process", "sync"] }

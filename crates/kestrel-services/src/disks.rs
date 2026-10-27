@@ -15,7 +15,7 @@ pub struct Volume {
     pub path: String,
     /// "Windows", "root", "SanDisk Ultra".
     pub name: String,
-    /// Where it is open ("/run/media/yash/USB"), if mounted.
+    /// Where it is open ("/run/media/user/USB"), if mounted.
     pub mount: Option<String>,
     pub size: u64,
     /// Bytes free while mounted.
