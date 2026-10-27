@@ -1,111 +1,159 @@
+<div align="center">
+
 # kestrel
 
-A desktop shell for Hyprland written in Rust: bar, dynamic island, control centre, launcher,
-notifications, clipboard, settings and the system agents a desktop needs, in one native
-program. No QML, GTK, Electron or JavaScript runtime.
+**A native desktop shell for Hyprland, written in Rust.**
 
-kestrel is used every day on the machine it was built on. It is young, opinionated and
-currently made for one setup (Hyprland 0.56+ with its Lua config, Arch Linux); see
-[Status](#status) before installing.
+Bar, island, control centre, launcher, notifications, clipboard, settings and the system
+prompts a desktop needs, in one program. No QML, GTK, Electron or JavaScript runtime.
 
-## Why another shell
+[Screenshots](#screenshots) · [Features](#features) · [Under the hood](#under-the-hood) · [Install](#install) · [Docs](#docs)
 
-Most popular Hyprland shells (illogical-impulse, Caelestia, DankMaterialShell, HyprPanel) are
-built on QML or a JavaScript runtime. They look great and move fast, but every surface pays
-for a scene graph and an interpreter, and the pieces that make a desktop work (notifications,
-password prompts, Wi-Fi secrets, Bluetooth pairing, the file picker) usually come from other
-programs with other looks.
+<br>
 
-kestrel tries the other way round:
+<img src="docs/screenshots/hero.webp" alt="kestrel: the bar and the control centre over a mountain lake" width="100%">
 
-- **One native process.** Rust with [iced](https://github.com/iced-rs/iced) on layer-shell,
-  drawn on the CPU with tiny-skia. Surfaces redraw only the pixels that changed; a static
-  surface is never redrawn.
-- **The system agents are part of the shell.** kestrel is the notification daemon, the polkit
-  authentication agent, NetworkManager's secret agent, BlueZ's pairing agent and the
-  xdg-desktop-portal file chooser, so every prompt looks and behaves like the rest of it.
-- **One design system.** Every panel is built from the same small kit (spacing, corners,
-  rows, sliders, controls); a lint in `make check` fails the build when a panel uses a literal
-  size instead of a token.
-- **Settings instead of config files.** A settings app covers the bar, appearance, displays,
-  input, sound, network, Bluetooth, power, notifications, shortcuts and window rules, and
-  writes Hyprland's Lua config for you. Everything is also plain TOML for those who prefer it.
+</div>
 
-## What it does
+<br>
 
-- **Bar** with floating pills or a full band: workspaces with app icons, the island, music,
-  weather, AirPods battery, tray, privacy indicator, network, Bluetooth, sound, battery, power.
-  Modules are configured per side and can be written in Lua.
-- **Dynamic island** at the centre: the time, music with a live visualiser, volume and
-  brightness, devices connecting, recordings, copies. A notification grows the island into
-  its card and shrinks it back.
-- **Notifications** with stacked cards per app, actions, swipe to dismiss, per-app rules
-  (quiet, muted, silent) and Do not disturb.
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/media.webp" alt="Music"><br><sub><b>Music</b>: cover, progress, controls, and a live visualiser in the bar</sub></td>
+    <td width="50%"><img src="docs/screenshots/notifications.webp" alt="Notifications"><br><sub><b>Notifications</b>: grouped, actionable, kept as history</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/clipboard.webp" alt="Clipboard"><br><sub><b>Clipboard</b>: text, links and images, searchable, kept when the app closes</sub></td>
+    <td><img src="docs/screenshots/launcher.webp" alt="Launcher"><br><sub><b>Launcher</b>: apps, files, a calculator, settings and switches</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/weather.webp" alt="Weather"><br><sub><b>Weather</b>: today, the next hours and the week</sub></td>
+    <td><img src="docs/screenshots/emoji.webp" alt="Emoji"><br><sub><b>Emoji</b>: search, categories, recent</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/capture.webp" alt="Screenshots and recording"><br><sub><b>Capture</b>: region, window or screen; screenshot or recording</sub></td>
+    <td><img src="docs/screenshots/calendar.webp" alt="Calendar"><br><sub><b>Calendar</b></sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/settings-appearance.webp" alt="Settings: Appearance"><br><sub><b>Settings</b>: one app for the shell, Hyprland and the system</sub></td>
+    <td><img src="docs/screenshots/settings-bar.webp" alt="Settings: Bar"><br><sub><b>Bar editor</b>: drag modules between three lanes</sub></td>
+  </tr>
+</table>
+
+<br>
+
+## Features
+
+- **Bar**: floating pills or a full band. Workspaces with app icons, music, weather, AirPods
+  battery, tray, privacy indicator, network, Bluetooth, sound, battery, power. Arranged by
+  dragging in Settings, or written in Lua.
+- **Island**: the time at the centre of the bar, with music and a live visualiser, volume and
+  brightness, devices connecting, recordings and copies.
 - **Control centre**: Wi-Fi and Bluetooth with their own pages, airplane mode, night light,
-  caffeine, power profiles, game mode, VPN toggles, sound mixer per app and per device.
-- **Launcher**: apps, a calculator, clipboard history, emoji, file search, settings pages,
-  running processes; paste a path and press Enter to open it.
-- **Clipboard history, emoji picker, screenshots and recording, wallpaper picker with
-  colours from the wallpaper, system monitor, weather, calendar, window overview, keyboard
-  shortcut sheet.**
-- **Theming of other apps**: the accent and fonts are written into GTK, Qt, kitty, hyprlock
-  and starship.
+  caffeine, power profiles, game mode, VPNs, and a sound mixer per app and per device.
+- **Notifications**: grouped per app, actions, swipe to dismiss, per-app rules, Do not disturb,
+  history.
+- **Launcher**: apps, file search, a calculator, settings pages and quick switches. Paste a path
+  and press Enter to open it.
+- **Clipboard, emoji, screenshots and recording, wallpapers with colours taken from them,
+  system monitor, weather, calendar, window overview, keyboard shortcut sheet.**
+- **The system prompts are its own**: polkit passwords, Wi-Fi secrets, Bluetooth pairing and
+  GNOME Keyring unlocks, in a separate process that keeps running if the shell restarts.
+- **A desktop portal backend**: the file picker, "Open with" and the appearance apps follow
+  (dark mode, accent colour) are kestrel's, for every app that asks through xdg-desktop-portal.
+- **Theming other apps**: the accent and fonts reach GTK, Qt, kitty, hyprlock and starship.
+- **Keyboard first**: every panel works without a mouse; Tab and the arrows move between
+  controls, Enter presses.
 
-## Performance
+<br>
 
-Measured on the development laptop (Intel Core i5-1245U, 16 GB, 1920×1080, Arch Linux,
-Hyprland 0.56), release build, in November 2026:
+## Under the hood
 
-| What | Measured | How |
-|---|---|---|
-| CPU at idle (bar, island, nothing animating) | 0.3 % of one core | `/proc/<pid>/stat` utime+stime over 20 s |
-| CPU while music plays with the visualiser | 3.6 % of one core | same, live session |
-| Resident memory in normal use | 85–105 MB | `VmRSS` |
-| Panel opened to first frame on screen | 7–9 ms | `KESTREL_TRACE=1` timestamps, 8 panels |
+```
+┌────────────────────────────────────────────────────────────────┐
+│ You             ~/.config/kestrel   config.toml, init.lua (Lua) │
+├────────────────────────────────────────────────────────────────┤
+│ Modules         src/modules         bar items, one file each    │
+│ Shell           src/shell, panels   surfaces, panels, Settings  │
+│ Design kit      src/ui, src/theme   one token set, one control  │
+├────────────────────────────────────────────────────────────────┤
+│ Services        kestrel-services    no UI: D-Bus, PipeWire,     │
+│                                     Hyprland, Wayland protocols │
+└────────────────────────────────────────────────────────────────┘
+   + kestrel prompt   a second process for passwords and pairing
+```
 
-These are one machine's numbers, not a benchmark against other shells. `KESTREL_TRACE=1`
-prints every frame's build, draw and raster time if you want to measure your own.
+- **Talks to the system directly.** NetworkManager, BlueZ, UPower, logind, MPRIS, polkit and the
+  portal over D-Bus (zbus); audio through PipeWire (its Pulse protocol and native API); Hyprland
+  over its socket; the clipboard over wlr data-control. No `nmcli`, `bluetoothctl` or `playerctl` behind the scenes.
+- **Truth over events.** Every indicator is read from its source; a change signal only says
+  "look again", so a missed event can never leave something false on screen.
+- **Failures stay small.** A panel or module that panics is switched off on its own; a service
+  that ends or panics is started again; the prompts live in their own process.
+- **Draws only what changed.** iced 0.14 on a vendored, patched layer-shell runtime, rendered on
+  the CPU with tiny-skia. A surface whose content did not change is not redrawn. Each patch and
+  its reason is in [`vendor/README.md`](vendor/README.md).
+- **One design system, enforced.** Spacing, radii, colours and motion come from one token set; a
+  lint in `make check` fails the build when a panel uses a literal size.
+- **Tested off the desktop.** `tools/rig` runs kestrel in a nested Hyprland with its own home and
+  session bus, to try changes and take screenshots without touching the real session.
+
+**Measured** on a 1080p laptop (Intel Core i5-1245U, Arch Linux, Hyprland 0.56), release build:
+
+| | |
+|---|---|
+| Memory | ~90 MB (PSS) |
+| Wake-ups at rest | 3–5 per second |
+| CPU at rest | ~0.3 % of one core |
+| CPU with music and the visualiser | ~3.6 % of one core |
+| Panel opened to first frame | 7–9 ms |
+
+One machine's numbers, not a benchmark against other shells. `KESTREL_TRACE=1` prints every
+frame's timings if you want to measure your own.
+
+<br>
+
+## Install
+
+kestrel needs **Hyprland 0.56 or newer with the Lua config** (`~/.config/hypr/*.lua`). It is
+packaged for Arch Linux; other distributions need a manual build.
+
+```sh
+git clone https://github.com/YashwanthKamireddi/kestrel
+cd kestrel
+make install                                  # checks, builds, packages, installs
+systemctl --user enable --now kestrel kestrel-prompt
+```
+
+Requires `hyprland`, `pipewire`, `libpulse`, `dbus`, `ttf-rubik-vf` and `ttf-twemoji`. Optional:
+`hyprsunset` (night light), `hyprlock` (lock screen).
+
+<br>
+
+## Docs
+
+| | |
+|---|---|
+| [Customize](docs/CUSTOMIZE.md) | `config.toml`, Lua, commands (`kestrel toggle launcher`, …) |
+| [Bar](docs/BAR.md) | modules and their options |
+| [Architecture](docs/ARCHITECTURE.md) | how the code is organised, and its rules |
+| [Design](docs/DESIGN.md) | the token set and the component kit |
+| [Research](docs/research/SHELLS.md) | what other shells do, read from their source |
+
+```sh
+make check                                    # rustfmt, design lint, clippy -D warnings, tests
+tools/rig/rig.sh start && tools/rig/rig.sh run  # try a change in a nested Hyprland
+```
+
+<br>
 
 ## Status
 
-- Hyprland 0.56 or newer with the **Lua** config (`~/.config/hypr/*.lua`). Other compositors
-  are not supported yet.
-- Packaged for Arch Linux (`packaging/arch/PKGBUILD`); other distributions need a manual
-  build.
-- English only. Expect breaking changes to the config.
-
-## Install (Arch Linux)
-
-```sh
-git clone https://github.com/<you>/kestrel
-cd kestrel
-make install        # checks, release build, makepkg, pacman -U, restarts kestrel
-systemctl --user enable --now kestrel
-```
-
-Requires `hyprland`, `pipewire`, `libpulse`, `dbus`, `ttf-rubik-vf` and `ttf-twemoji`.
-Optional: `cliphist` and `wl-clipboard` (clipboard history), `hyprsunset` (night light),
-`hyprlock` (lock screen).
-
-## Configure
-
-Open Settings (the gear in the control centre, or `kestrel open settings`), or edit
-`~/.config/kestrel/config.toml`; saving applies at once. Lua scripts in
-`~/.config/kestrel/init.lua` can add bar widgets and react to events, each call under a time
-limit so a broken script cannot stall the shell. See [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md)
-and [docs/BAR.md](docs/BAR.md).
-
-## Develop
-
-```sh
-make check          # rustfmt, the design-kit lint, clippy -D warnings, tests
-tools/rig/rig.sh start && tools/rig/rig.sh run    # a nested Hyprland to try changes safely
-```
-
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the code is organised and
-[docs/DESIGN.md](docs/DESIGN.md) the design kit. `vendor/README.md` lists every change made to
-the vendored iced layer-shell, tiny-skia and softbuffer, and why.
+A personal shell, used daily on the machine it was built on, and young. Hyprland only, English
+only, and the config may still change. Issues and ideas are welcome.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+[MIT](LICENSE)
