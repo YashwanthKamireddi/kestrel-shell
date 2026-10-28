@@ -120,8 +120,8 @@ Requires **Hyprland 0.56 or newer with the Lua config** (`~/.config/hypr/*.lua`)
 Arch Linux; elsewhere, build with Cargo.
 
 ```sh
-git clone https://github.com/YashwanthKamireddi/kestrel
-cd kestrel
+git clone https://github.com/YashwanthKamireddi/kestrel-shell
+cd kestrel-shell
 make install
 systemctl --user enable --now kestrel kestrel-prompt
 ```
