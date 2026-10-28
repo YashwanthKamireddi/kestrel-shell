@@ -212,63 +212,88 @@ fn meminfo() -> ((u64, u64), (u64, u64)) {
     ((mt.saturating_sub(ma), mt), (st.saturating_sub(sf), st))
 }
 
-/// The monitor's readings every 1.5 s while polled (the system monitor is open).
+type Cores = Vec<(u64, u64)>;
+type Procs = std::collections::HashMap<u32, (String, u64, u64, bool)>;
+
+/// What happened between two readings `secs` apart: each core's load, the busiest processes,
+/// what the cores did that no process seen twice accounts for.
+fn between(cores: &Cores, procs: &Procs, c2: &Cores, p2: &Procs, secs: f32) -> Detail {
+    let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as f32;
+    let load: Vec<u8> = cores
+        .iter()
+        .zip(c2)
+        .map(|((t0, i0), (t1, i1))| {
+            let dt = t1.saturating_sub(*t0).max(1) as f32;
+            ((1.0 - i1.saturating_sub(*i0) as f32 / dt) * 100.0)
+                .round()
+                .clamp(0.0, 100.0) as u8
+        })
+        .collect();
+    let mut top: Vec<Proc> = p2
+        .iter()
+        .map(|(pid, (name, ticks, rss, own))| {
+            let before = procs.get(pid).map_or(*ticks, |p| p.1);
+            let cpu = ticks.saturating_sub(before) as f32 / hz / secs * 100.0;
+            Proc {
+                pid: *pid,
+                name: name.clone(),
+                cpu,
+                rss: *rss,
+                own: *own,
+            }
+        })
+        .collect();
+    let busy: f32 = load.iter().map(|&l| f32::from(l)).sum();
+    let seen: f32 = top.iter().map(|p| p.cpu).sum();
+    let other = (busy - seen).max(0.0);
+    top.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
+    top.truncate(10);
+    let (mem, swap) = meminfo();
+    Detail {
+        cores: load,
+        mem,
+        swap,
+        top,
+        other,
+    }
+}
+
+/// How far apart the first two readings are: short, so the monitor opens complete at once
+/// (it waited 1.5 s on "Reading…"); one clock tick is 10 ms, so a process's share is already
+/// within a few percent.
+const FIRST: Duration = Duration::from_millis(100);
+/// Then a reading every so often while it is open.
+const STEP: Duration = Duration::from_millis(1500);
+
+/// A reading now, over the last `FIRST`: what the monitor opens with.
+pub async fn first_detail() -> Detail {
+    let (c, p) = tokio::task::spawn_blocking(|| (core_times(), processes()))
+        .await
+        .unwrap_or_default();
+    tokio::time::sleep(FIRST).await;
+    tokio::task::spawn_blocking(move || {
+        let (c2, p2) = (core_times(), processes());
+        between(&c, &p, &c2, &p2, FIRST.as_secs_f32())
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// Readings every `STEP` while polled.
 pub fn detail() -> impl Stream<Item = Detail> {
     crate::stream::channel(1, async |mut out| {
-        const STEP: Duration = Duration::from_millis(1500);
-        let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as f32;
-        let mut cores = core_times();
-        let mut procs = processes();
+        let (mut cores, mut procs) = tokio::task::spawn_blocking(|| (core_times(), processes()))
+            .await
+            .unwrap_or_default();
         loop {
             tokio::time::sleep(STEP).await;
             let (c2, p2) = tokio::task::spawn_blocking(|| (core_times(), processes()))
                 .await
                 .unwrap_or_default();
-            let load: Vec<u8> = cores
-                .iter()
-                .zip(&c2)
-                .map(|((t0, i0), (t1, i1))| {
-                    let dt = t1.saturating_sub(*t0).max(1) as f32;
-                    ((1.0 - i1.saturating_sub(*i0) as f32 / dt) * 100.0)
-                        .round()
-                        .clamp(0.0, 100.0) as u8
-                })
-                .collect();
-            let secs = STEP.as_secs_f32();
-            let mut top: Vec<Proc> = p2
-                .iter()
-                .map(|(pid, (name, ticks, rss, own))| {
-                    let before = procs.get(pid).map_or(*ticks, |p| p.1);
-                    let cpu = ticks.saturating_sub(before) as f32 / hz / secs * 100.0;
-                    Proc {
-                        pid: *pid,
-                        name: name.clone(),
-                        cpu,
-                        rss: *rss,
-                        own: *own,
-                    }
-                })
-                .collect();
-            // What the cores did that no process seen twice accounts for.
-            let busy: f32 = load.iter().map(|&l| f32::from(l)).sum();
-            let seen: f32 = top.iter().map(|p| p.cpu).sum();
-            let other = (busy - seen).max(0.0);
-            top.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
-            top.truncate(10);
-            let (mem, swap) = meminfo();
+            let d = between(&cores, &procs, &c2, &p2, STEP.as_secs_f32());
             cores = c2;
             procs = p2;
-            if out
-                .send(Detail {
-                    cores: load,
-                    mem,
-                    swap,
-                    top,
-                    other,
-                })
-                .await
-                .is_err()
-            {
+            if out.send(d).await.is_err() {
                 return;
             }
         }
