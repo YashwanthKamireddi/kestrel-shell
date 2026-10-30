@@ -323,6 +323,61 @@ fn relevant(event: &str) -> bool {
     )
 }
 
+/// What the event socket knows and Hyprland's state requests do not: a recorder, a capture,
+/// the keyboard layout. Every state sent carries all of it. Before, each send set its own
+/// subset: the quick workspace update re-sent a state kept from before any of it was set, so
+/// every workspace switch blanked the layout and dropped the recording indicator for a frame,
+/// and the recorder's end and the capture timer forgot the last screenshot's time.
+#[derive(Default)]
+struct Extra {
+    casting: bool,
+    recorder: Option<(u32, String, Option<std::time::SystemTime>)>,
+    captured: Option<std::time::SystemTime>,
+    layout: String,
+}
+
+impl Extra {
+    fn decorate(&self, mut s: State) -> State {
+        s.screencast = self.casting;
+        s.recording = self.recorder.as_ref().map(|r| r.1.clone());
+        s.recording_pid = self.recorder.as_ref().map(|r| r.0);
+        s.recording_since = self.recorder.as_ref().and_then(|r| r.2);
+        s.captured_at = self.captured;
+        s.layout.clone_from(&self.layout);
+        s
+    }
+}
+
+/// Reads the state, sends it with what only the events know, and keeps what was sent as
+/// `last` (the quick workspace update starts from it).
+async fn publish(
+    out: &mut futures::channel::mpsc::Sender<State>,
+    extra: &Extra,
+    last: &mut Option<State>,
+) {
+    match read_state().await {
+        Ok(s) => {
+            let s = extra.decorate(s);
+            *last = Some(s.clone());
+            let _ = out.send(s).await;
+        }
+        Err(e) => log::warn!("hyprland state: {e}"),
+    }
+}
+
+/// A workspace switch ("workspacev2>>ID,NAME") applied to the last state sent: the focused
+/// monitor shows workspace ID. False when the event says no workspace.
+fn switched(last: &mut State, data: &str) -> bool {
+    let Some(id) = data.split(',').next().and_then(|i| i.parse::<i32>().ok()) else {
+        return false;
+    };
+    let mon = last.focused_monitor.clone();
+    if let Some(a) = last.active.iter_mut().find(|(m, _)| *m == mon) {
+        a.1 = id;
+    }
+    true
+}
+
 /// The service's state stream: a snapshot on start and after every change.
 pub fn stream() -> impl Stream<Item = State> {
     crate::stream::channel(16, async |mut out| {
@@ -340,23 +395,17 @@ pub fn stream() -> impl Stream<Item = State> {
                     // been off for CAST_OFF: captures flip on and off as the screen changes.
                     let mut cast_since: Option<tokio::time::Instant> = None;
                     let mut cast_off: Option<tokio::time::Instant> = None;
-                    let mut casting = false;
-                    let mut captured: Option<std::time::SystemTime> = None;
-                    // The layout in use: the main keyboard's now, then each `activelayout`.
-                    let mut layout = main_layout().await.unwrap_or_default();
-                    let mut recorder = recorder_running();
-                    if let Ok(mut s) = read_state().await {
-                        casting = recorder.is_some();
-                        s.screencast = casting;
-                        s.recording = recorder.as_ref().map(|r| r.1.clone());
-                        s.recording_pid = recorder.as_ref().map(|r| r.0);
-                        s.recording_since = recorder.as_ref().and_then(|r| r.2);
-                        s.captured_at = captured;
-                        s.layout.clone_from(&layout);
-                        let _ = out.send(s).await;
-                    }
-                    // The last full state, for the quick workspace update.
-                    let mut quick: Option<State> = None;
+                    let recorder = recorder_running();
+                    let mut ex = Extra {
+                        casting: recorder.is_some(),
+                        recorder,
+                        captured: None,
+                        // The main keyboard's layout now, then each `activelayout`.
+                        layout: main_layout().await.unwrap_or_default(),
+                    };
+                    // The last state sent, for the quick workspace update.
+                    let mut last: Option<State> = None;
+                    publish(&mut out, &ex, &mut last).await;
                     let mut lines = BufReader::new(stream).lines();
                     // The recorder's end, as the kernel reports it (its pidfd turns readable).
                     let mut exit_watch: Option<(u32, Exit)> = None;
@@ -364,16 +413,16 @@ pub fn stream() -> impl Stream<Item = State> {
                     // after its first event, while the rest of the burst keeps being read.
                     let mut dirty: Option<tokio::time::Instant> = None;
                     loop {
-                        match &recorder {
+                        match &ex.recorder {
                             Some((pid, _, _)) if exit_watch.as_ref().map(|w| w.0) != Some(*pid) => {
                                 exit_watch = Some((*pid, Box::pin(process_exit(*pid))));
                             }
                             None => exit_watch = None,
                             _ => {}
                         }
-                        let deadline = if recorder.is_some() {
+                        let deadline = if ex.recorder.is_some() {
                             None
-                        } else if casting {
+                        } else if ex.casting {
                             cast_off.map(|t| t + CAST_OFF)
                         } else {
                             cast_since.map(|t| t + CAST_AFTER)
@@ -390,19 +439,7 @@ pub fn stream() -> impl Stream<Item = State> {
                                 }
                             } => {
                                 dirty = None;
-                                match read_state().await {
-                                    Ok(mut s) => {
-                                        quick = Some(s.clone());
-                                        s.screencast = casting;
-                                        s.recording = recorder.as_ref().map(|r| r.1.clone());
-                                        s.recording_pid = recorder.as_ref().map(|r| r.0);
-                                        s.recording_since = recorder.as_ref().and_then(|r| r.2);
-                                        s.captured_at = captured;
-                                        s.layout.clone_from(&layout);
-                                        let _ = out.send(s).await;
-                                    }
-                                    Err(e) => log::warn!("hyprland state: {e}"),
-                                }
+                                publish(&mut out, &ex, &mut last).await;
                                 continue;
                             }
                             // The recorder ended.
@@ -412,15 +449,11 @@ pub fn stream() -> impl Stream<Item = State> {
                                     None => std::future::pending().await,
                                 }
                             } => {
-                                    recorder = None;
-                                    casting = false;
-                                    cast_since = None;
-                                    cast_off = None;
-                                    if let Ok(mut s) = read_state().await {
-                                        s.screencast = false;
-                                        s.layout.clone_from(&layout);
-                                        let _ = out.send(s).await;
-                                    }
+                                ex.recorder = None;
+                                ex.casting = false;
+                                cast_since = None;
+                                cast_off = None;
+                                publish(&mut out, &ex, &mut last).await;
                                 continue;
                             }
                             () = async {
@@ -429,16 +462,12 @@ pub fn stream() -> impl Stream<Item = State> {
                                     None => std::future::pending().await,
                                 }
                             } => {
-                                casting = !casting;
+                                ex.casting = !ex.casting;
                                 cast_off = None;
-                                if !casting {
+                                if !ex.casting {
                                     cast_since = None;
                                 }
-                                if let Ok(mut s) = read_state().await {
-                                    s.screencast = casting;
-                                    s.layout.clone_from(&layout);
-                                    let _ = out.send(s).await;
-                                }
+                                publish(&mut out, &ex, &mut last).await;
                                 continue;
                             }
                         };
@@ -458,18 +487,10 @@ pub fn stream() -> impl Stream<Item = State> {
                                     now.trim()
                                 }
                                 .to_string();
-                            log::debug!("activelayout: {now:?} (was {layout:?})");
-                            if !now.is_empty() && now != layout {
-                                layout = now;
-                                if let Ok(mut st) = read_state().await {
-                                    st.screencast = casting;
-                                    st.recording = recorder.as_ref().map(|r| r.1.clone());
-                                    st.recording_pid = recorder.as_ref().map(|r| r.0);
-                                    st.recording_since = recorder.as_ref().and_then(|r| r.2);
-                                    st.captured_at = captured;
-                                    st.layout = layout.clone();
-                                    let _ = out.send(st).await;
-                                }
+                            log::debug!("activelayout: {now:?} (was {:?})", ex.layout);
+                            if !now.is_empty() && now != ex.layout {
+                                ex.layout = now;
+                                publish(&mut out, &ex, &mut last).await;
                             }
                             continue;
                         }
@@ -480,39 +501,27 @@ pub fn stream() -> impl Stream<Item = State> {
                             }
                             let on = data.starts_with('1');
                             if on
-                                && recorder.is_none()
+                                && ex.recorder.is_none()
                                 && let Some(r) = recorder_running()
                             {
-                                recorder = Some(r);
-                                casting = true;
+                                ex.recorder = Some(r);
+                                ex.casting = true;
                                 cast_since = None;
                                 cast_off = None;
-                                if let Ok(mut s) = read_state().await {
-                                    s.screencast = true;
-                                    s.recording = recorder.as_ref().map(|r| r.1.clone());
-                                    s.recording_pid = recorder.as_ref().map(|r| r.0);
-                                    s.recording_since = recorder.as_ref().and_then(|r| r.2);
-                                    s.captured_at = captured;
-                                    s.layout.clone_from(&layout);
-                                    let _ = out.send(s).await;
-                                }
+                                publish(&mut out, &ex, &mut last).await;
                                 continue;
                             }
-                            if recorder.is_some() {
+                            if ex.recorder.is_some() {
                                 continue;
                             }
                             if on {
                                 cast_since.get_or_insert_with(tokio::time::Instant::now);
                                 cast_off = None;
-                                if !casting {
-                                    captured = Some(std::time::SystemTime::now());
-                                    if let Ok(mut s) = read_state().await {
-                                        s.captured_at = captured;
-                                        s.layout.clone_from(&layout);
-                                        let _ = out.send(s).await;
-                                    }
+                                if !ex.casting {
+                                    ex.captured = Some(std::time::SystemTime::now());
+                                    publish(&mut out, &ex, &mut last).await;
                                 }
-                            } else if casting {
+                            } else if ex.casting {
                                 cast_off.get_or_insert_with(tokio::time::Instant::now);
                             } else {
                                 cast_since = None;
@@ -523,14 +532,9 @@ pub fn stream() -> impl Stream<Item = State> {
                         // read below takes tens of milliseconds): the overview closes and the
                         // bar's highlight moves while the switch begins, not after it.
                         if name == "workspacev2"
-                            && let Some(st) = quick.as_mut()
-                            && let Some(id) =
-                                data.split(',').next().and_then(|i| i.parse::<i32>().ok())
+                            && let Some(st) = last.as_mut()
+                            && switched(st, data)
                         {
-                            let mon = st.focused_monitor.clone();
-                            if let Some(a) = st.active.iter_mut().find(|(m, _)| *m == mon) {
-                                a.1 = id;
-                            }
                             let _ = out.send(st.clone()).await;
                         }
                         if relevant(name) {
@@ -545,6 +549,36 @@ pub fn stream() -> impl Stream<Item = State> {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     })
+}
+
+#[cfg(test)]
+mod quick_tests {
+    use super::*;
+
+    #[test]
+    fn a_quick_workspace_switch_keeps_what_only_the_events_know() {
+        let ex = Extra {
+            casting: true,
+            recorder: Some((42, "/tmp/r.mp4".into(), None)),
+            captured: Some(std::time::UNIX_EPOCH),
+            layout: "English (US)".into(),
+        };
+        let read = State {
+            active: vec![("eDP-1".into(), 1)],
+            focused_monitor: "eDP-1".into(),
+            ..State::default()
+        };
+        let mut last = ex.decorate(read);
+        assert!(switched(&mut last, "3,3"));
+        assert_eq!(last.active_on("eDP-1"), Some(3));
+        // Before, this state was the bare read: no layout, no recording, no capture.
+        assert_eq!(last.layout, "English (US)");
+        assert!(last.screencast);
+        assert_eq!(last.recording.as_deref(), Some("/tmp/r.mp4"));
+        assert_eq!(last.recording_pid, Some(42));
+        assert_eq!(last.captured_at, Some(std::time::UNIX_EPOCH));
+        assert!(!switched(&mut last, "special:x"));
+    }
 }
 
 #[cfg(test)]
