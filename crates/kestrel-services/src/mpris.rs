@@ -502,7 +502,8 @@ pub fn stream() -> impl Stream<Item = State> {
             let Some(m) = first else { continue };
             let mut dirty = HashSet::new();
             apply(&c, &mut known, &mut dirty, &m).await;
-            while let Ok(m) = tokio::time::timeout(QUIET, events.next()).await {
+            let start = tokio::time::Instant::now();
+            while let Some(m) = crate::stream::in_burst(&mut events, start, QUIET).await {
                 let Some(m) = m else { return };
                 apply(&c, &mut known, &mut dirty, &m).await;
             }

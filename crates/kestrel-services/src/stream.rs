@@ -16,6 +16,23 @@ where
     futures::stream::select(rx, producer)
 }
 
+/// The longest a burst of change signals is gathered before the state is read anyway.
+pub const BURST_MOST: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// The next signal of a burst that began at `start`: Some(item) when one comes within `quiet`
+/// (Some(None): the stream ended), None when the burst is over, because it went quiet or has
+/// lasted `BURST_MOST`. Before the cap, a source that never paused for `quiet` (Bluetooth
+/// signal strengths while searching, an animated tray icon) was never read at all: the state
+/// stayed on its old answer for as long as the signals kept coming.
+pub async fn in_burst<S: Stream + Unpin>(
+    s: &mut S,
+    start: tokio::time::Instant,
+    quiet: std::time::Duration,
+) -> Option<Option<S::Item>> {
+    let until = (tokio::time::Instant::now() + quiet).min(start + BURST_MOST);
+    tokio::time::timeout_at(until, s.next()).await.ok()
+}
+
 /// A stream that never stays dead: when the one `make` returns ends (a connection dropped, a
 /// service gone), a new one is made a second later and carries on. Every long-lived service
 /// stream runs under this, so an indicator can never freeze on its last answer
@@ -75,6 +92,25 @@ where
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Signals that never pause still let the state be read, at most `BURST_MOST` apart.
+    #[tokio::test]
+    async fn a_burst_that_never_pauses_still_ends() {
+        let every = std::time::Duration::from_millis(10);
+        let mut s = Box::pin(futures::stream::unfold((), move |()| async move {
+            tokio::time::sleep(every).await;
+            Some(((), ()))
+        }));
+        let start = tokio::time::Instant::now();
+        let mut n = 0;
+        while let Some(item) = in_burst(&mut s, start, every * 5).await {
+            assert!(item.is_some());
+            n += 1;
+        }
+        assert!(n > 1, "the burst was followed");
+        let took = start.elapsed();
+        assert!(took >= BURST_MOST && took < BURST_MOST * 2, "{took:?}");
+    }
 
     /// A service that panics is made again (and its panic does not end the stream).
     #[tokio::test]

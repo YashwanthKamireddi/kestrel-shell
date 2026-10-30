@@ -113,16 +113,34 @@ pub async fn changes(
     Ok(Box::pin(debounce(all, Duration::from_millis(80))))
 }
 
-/// Emits once after a burst of items has been quiet for `quiet`.
+/// Emits once after a burst of items has been quiet for `quiet`, or has lasted
+/// `stream::BURST_MOST`.
 pub fn debounce<S: Stream<Item = ()> + Unpin>(s: S, quiet: Duration) -> impl Stream<Item = ()> {
     futures::stream::unfold(s, move |mut s| async move {
         s.next().await?;
+        let start = tokio::time::Instant::now();
         loop {
-            match tokio::time::timeout(quiet, s.next()).await {
-                Ok(Some(())) => continue,
-                Ok(None) => return None,
-                Err(_) => return Some(((), s)),
+            match crate::stream::in_burst(&mut s, start, quiet).await {
+                Some(Some(())) => continue,
+                Some(None) => return None,
+                None => return Some(((), s)),
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn a_never_quiet_sender_is_still_answered() {
+        use futures::StreamExt;
+        // A signal every 20 ms, against 80 ms of quiet asked for: before, no answer ever.
+        let signals = Box::pin(futures::stream::unfold((), |()| async {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            Some(((), ()))
+        }));
+        let mut d = Box::pin(super::debounce(signals, super::Duration::from_millis(80)));
+        let got = tokio::time::timeout(std::time::Duration::from_secs(2), d.next()).await;
+        assert_eq!(got.ok().flatten(), Some(()));
+    }
 }
