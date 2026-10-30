@@ -627,6 +627,19 @@ pub fn update(app: &mut App, msg: Message) -> Task<Message> {
     if app.toasts.len() != before || app.toasts.is_empty() {
         app.settle_toasts();
     }
+    // The list of notifications is never shown empty: with the last one gone, however it went
+    // (dismissed here, or closed by its app: that path left the open list empty), it closes in
+    // this same update (a frame later drew it empty first: a flicker).
+    let empty_list = app.notifications.is_empty()
+        && app
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.open && p.kind == PanelKind::Notifications);
+    let task = if empty_list {
+        Task::batch([task, app.close()])
+    } else {
+        task
+    };
     // The open panel's own surface follows the state after every update, whatever path opened,
     // moved or ended the panel (paths that set `panel = None` left their surface behind).
     let panel_surface = app.sync_panel_surface();

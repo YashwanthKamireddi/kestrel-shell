@@ -168,15 +168,7 @@ impl App {
             }
         };
         self.notes_changed();
-        // The last one gone while the list is open: the list closes at once, in this same
-        // update (closing a frame later drew it empty first: a flicker).
-        let open = self
-            .panel
-            .as_ref()
-            .is_some_and(|p| p.open && p.kind == PanelKind::Notifications);
-        if self.notifications.is_empty() && open {
-            return Task::batch([task, self.close()]);
-        }
+        // The last one gone while the list is open: the list closes (`app::update`).
         task
     }
 
