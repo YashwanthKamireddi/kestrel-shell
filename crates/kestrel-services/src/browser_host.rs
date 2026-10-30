@@ -39,11 +39,22 @@ struct Shared {
     page: Page,
     /// When `page.position` was true.
     at: Instant,
-    /// The cover, downloaded: (its URL, the local file).
-    art: Option<(String, String)>,
+    /// The cover: the URL last asked for, and the file it gave (None: no picture, a `data:`
+    /// URL, or the download failed). Before, only a success was remembered, so a page with no
+    /// cover, or one that could not be fetched, was fetched again and its metadata announced
+    /// changed on every report (every few seconds), making every player reader read it again.
+    art: (String, Option<String>),
     /// The browser's process id, so the shell can tell this player and the browser's own
     /// (`…chromium.instance<PID>`) apart from other browsers.
     pid: u32,
+}
+
+impl Shared {
+    /// The page's cover `url` has not been asked for yet (each URL is fetched once, whether or
+    /// not it gives a picture).
+    fn wants_art(&self, url: &str) -> bool {
+        self.art.0 != url
+    }
 }
 
 type State = Arc<Mutex<Shared>>;
@@ -134,7 +145,8 @@ impl Player {
     }
     /// Relative, in microseconds.
     async fn seek(&self, offset: i64) {
-        let at = position(&self.state) + offset;
+        // Any program can send any offset: saturating, not wrapping to the far end.
+        let at = position(&self.state).saturating_add(offset);
         send("seek", Some(at.max(0) as f64 / 1e6));
     }
     async fn set_position(&self, _track: ObjectPath<'_>, at: i64) {
@@ -173,8 +185,9 @@ impl Player {
         if p.duration > 0.0 {
             put("mpris:length", Value::from((p.duration * 1e6) as i64));
         }
-        if let Some((url, file)) = art.filter(|(u, _)| *u == p.art) {
-            let _ = url;
+        if let (url, Some(file)) = art
+            && url == p.art
+        {
             put("mpris:artUrl", Value::from(format!("file://{file}")));
         }
         if let Ok(id) = ObjectPath::try_from(format!("/dev/kestrel/track/t{:x}", hash(&p.title))) {
@@ -291,7 +304,16 @@ async fn fetch_art(url: &str) -> Option<String> {
             return Some(f.to_string_lossy().into_owned());
         }
     }
-    let bytes = reqwest::get(url).await.ok()?.bytes().await.ok()?;
+    // The shared client, with its timeout: the frame loop waits for this, and a server that
+    // never answered (reqwest::get has no timeout) froze the player on its old page for good.
+    let bytes = crate::web::client()
+        .get(url)
+        .send()
+        .await
+        .ok()?
+        .bytes()
+        .await
+        .ok()?;
     // Named by what it is (readers go by the extension); anything else is not kept.
     let ext = match image::guess_format(&bytes).ok()? {
         image::ImageFormat::Jpeg => "jpg",
@@ -317,7 +339,7 @@ pub fn run() {
         let state: State = Arc::new(Mutex::new(Shared {
             page: Page::default(),
             at: Instant::now(),
-            art: None,
+            art: (String::new(), None),
             pid,
         }));
         let conn = async {
@@ -360,10 +382,7 @@ pub fn run() {
         while let Some(page) = pages.next().await {
             let before = state.lock().map(|s| s.page.clone()).ok();
             let art_url = page.art.clone();
-            let need_art = state
-                .lock()
-                .map(|s| s.art.as_ref().map(|(u, _)| u.as_str()) != Some(art_url.as_str()))
-                .unwrap_or(false);
+            let need_art = state.lock().map(|s| s.wants_art(&art_url)).unwrap_or(false);
             if let Ok(mut s) = state.lock() {
                 s.page = page;
                 s.at = Instant::now();
@@ -371,7 +390,7 @@ pub fn run() {
             if need_art {
                 let file = fetch_art(&art_url).await;
                 if let Ok(mut s) = state.lock() {
-                    s.art = file.map(|f| (art_url.clone(), f));
+                    s.art = (art_url.clone(), file);
                 }
             }
             // Only what changed is announced: the extension's reports come every few seconds
@@ -411,4 +430,24 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_cover_is_asked_for_once_even_when_there_is_none() {
+        let mut s = super::Shared {
+            page: super::Page::default(),
+            at: std::time::Instant::now(),
+            art: (String::new(), None),
+            pid: 1,
+        };
+        // A page with no cover: nothing to fetch (before: fetched, and announced, every report).
+        assert!(!s.wants_art(""));
+        assert!(s.wants_art("https://example.com/a.avif"));
+        // Fetched and failed (a format not kept): not fetched again for the same URL.
+        s.art = ("https://example.com/a.avif".into(), None);
+        assert!(!s.wants_art("https://example.com/a.avif"));
+        assert!(s.wants_art("https://example.com/b.jpg"));
+    }
 }
