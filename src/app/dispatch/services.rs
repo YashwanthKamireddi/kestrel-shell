@@ -391,7 +391,9 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         Message::Notification(e) => app.notify(e),
         Message::VolumeStep(lines) => {
             if let Some(d) = app.audio.sink().cloned() {
-                let v = (d.volume + lines.signum() * 0.05).clamp(0.0, 1.0);
+                // 5 % a notch, up to Settings > Sound's maximum like the volume keys (capped at
+                // 100 %, scrolling up from a boosted 130 % dropped it to 100 %).
+                let v = stepped(d.volume, lines.signum() * 5.0, app.volume_max());
                 audio::command(audio::Command::SinkVolume(d.name, d.channels, v));
             }
             Task::none()

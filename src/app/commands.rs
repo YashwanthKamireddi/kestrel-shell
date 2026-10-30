@@ -186,10 +186,7 @@ impl App {
                         "down" => Some(-(self.config.sound.step.clamp(1, 25) as f32)),
                         a => a.trim_end_matches('%').parse::<f32>().ok(),
                     } {
-                        // As high as Settings > Sound allows (past 100 % boosts quiet sound).
-                        let max = self.config.sound.max.clamp(100, 150) as f32 / 100.0;
-                        let unit = step.abs() / 100.0;
-                        let v = (((d.volume + step / 100.0) / unit).round() * unit).clamp(0.0, max);
+                        let v = stepped(d.volume, step, self.volume_max());
                         audio::command(audio::Command::SinkVolume(d.name.clone(), d.channels, v));
                         if d.muted {
                             audio::command(audio::Command::SinkMute(d.name, false));
@@ -248,6 +245,23 @@ impl App {
     }
 }
 
+impl App {
+    /// The highest the volume goes by steps: Settings > Sound's maximum (past 100 % boosts
+    /// quiet sound).
+    pub(crate) fn volume_max(&self) -> f32 {
+        self.config.sound.max.clamp(100, 150) as f32 / 100.0
+    }
+}
+
+/// The volume one step of `step` percent from `cur`, on whole steps, from silent to `max`. A
+/// step never moves the other way: up from a level above `max` (boosted, then the maximum
+/// lowered) stays where it is instead of dropping to `max`.
+pub(crate) fn stepped(cur: f32, step: f32, max: f32) -> f32 {
+    let unit = step.abs().max(0.01) / 100.0;
+    let v = (((cur + step / 100.0) / unit).round() * unit).clamp(0.0, max);
+    if step > 0.0 { v.max(cur) } else { v.min(cur) }
+}
+
 /// Opens a file with its default app.
 pub(crate) fn open_file(path: &str) -> Message {
     Message::Dispatch(crate::services::compositor::Action::Open(path.into()))
@@ -277,5 +291,24 @@ pub fn remember_game_mode(on: bool) {
     };
     if let Err(e) = r {
         log::warn!("game mode flag {}: {e}", flag.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stepped;
+
+    #[test]
+    fn a_volume_step_never_goes_the_wrong_way() {
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-4;
+        // Whole steps, up to the maximum.
+        assert!(near(stepped(0.5, 5.0, 1.5), 0.55));
+        assert!(near(stepped(1.48, 5.0, 1.5), 1.5));
+        assert!(near(stepped(0.01, -5.0, 1.5), 0.0));
+        // Boosted past the bar's old 100 % cap: up goes on up.
+        assert!(near(stepped(1.2, 5.0, 1.5), 1.25));
+        // Above a maximum lowered since: up stays, down comes down.
+        assert!(near(stepped(1.3, 2.0, 1.0), 1.3));
+        assert!(near(stepped(1.3, -2.0, 1.0), 1.0));
     }
 }
