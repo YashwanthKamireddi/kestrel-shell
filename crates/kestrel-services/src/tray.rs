@@ -135,23 +135,43 @@ fn best_pixmap(v: OwnedValue) -> Option<TrayIcon> {
         let Ok(data) = Vec::<u8>::try_from(f[2].try_clone().ok()?) else {
             continue;
         };
+        // The sizes come from the app: a negative or overflowing one is not a picture (it
+        // panicked here, or wrapped to a size the data seemed to cover).
+        let Some(len) = pixmap_len(w, h) else {
+            continue;
+        };
         // Closest to 32 px, preferring larger.
         let better = best
             .as_ref()
             .is_none_or(|(bw, _, _)| (w - 32).abs() < (bw - 32).abs() || (w >= 32 && *bw < 32));
-        if better && data.len() >= (w * h * 4) as usize {
+        if better && data.len() >= len {
             best = Some((w, h, data));
         }
     }
     let (w, h, data) = best?;
-    // ARGB32 in network byte order → RGBA.
+    Some(TrayIcon::Rgba(argb_to_rgba(w, h, &data)?))
+}
+
+/// The bytes a `w` x `h` ARGB32 pixmap takes; None for a size that is not one.
+fn pixmap_len(w: i32, h: i32) -> Option<usize> {
+    let (w, h) = (usize::try_from(w).ok()?, usize::try_from(h).ok()?);
+    (w > 0 && h > 0).then_some(())?;
+    w.checked_mul(h)?.checked_mul(4)
+}
+
+/// ARGB32 in network byte order → RGBA, exactly `w` x `h` pixels (an app sending more bytes
+/// than its size made a picture whose data did not match its size).
+fn argb_to_rgba(w: i32, h: i32, data: &[u8]) -> Option<super::notifications::Pixels> {
+    let data = data.get(..pixmap_len(w, h)?)?;
     let mut rgba = Vec::with_capacity(data.len());
     for px in data.as_chunks::<4>().0 {
         rgba.extend_from_slice(&[px[1], px[2], px[3], px[0]]);
     }
-    Some(TrayIcon::Rgba(super::notifications::Pixels::new(
-        w as u32, h as u32, rgba,
-    )))
+    Some(super::notifications::Pixels::new(
+        w.unsigned_abs(),
+        h.unsigned_abs(),
+        rgba,
+    ))
 }
 
 async fn read_item(c: &Connection, key: &str) -> Option<Item> {
@@ -238,7 +258,12 @@ pub async fn activate(bus: String, path: String, secondary: bool) {
 
 fn parse_layout(v: &Value) -> Option<MenuItem> {
     let s = Structure::try_from(v.try_clone().ok()?).ok()?;
+    // (id, props, children): an app's menu can hold anything, and a shorter structure
+    // panicked on the missing fields.
     let f = s.fields();
+    if f.len() != 3 {
+        return None;
+    }
     let id = i32::try_from(&f[0]).ok()?;
     let props: HashMap<String, OwnedValue> =
         HashMap::try_from(f[1].try_clone().ok()?).unwrap_or_default();
@@ -364,6 +389,10 @@ struct Tray {
     known: HashMap<String, Known>,
     /// kestrel is the watcher (else a host of another watcher, following its signals).
     watcher: bool,
+    /// Items that signalled during the current burst, read again once it ends: an app changing
+    /// its icon, title and tooltip together was read whole three times, an animated icon on
+    /// every frame of the animation.
+    stale: std::collections::HashSet<String>,
 }
 
 impl Tray {
@@ -410,6 +439,7 @@ impl Tray {
             .retain(|k| !keys.contains(k));
         for k in keys {
             self.known.remove(k);
+            self.stale.remove(k);
         }
         if self.watcher
             && let Ok(w) = self
@@ -424,6 +454,15 @@ impl Tray {
         }
     }
 
+    /// Each item that signalled during the burst, read again (once).
+    async fn refresh(&mut self) {
+        for key in std::mem::take(&mut self.stale) {
+            if self.known.contains_key(&key) {
+                self.add(key).await;
+            }
+        }
+    }
+
     async fn apply(&mut self, ev: Ev) {
         let m = match ev {
             Ev::Registered(key) => return self.add(key).await,
@@ -434,17 +473,14 @@ impl Tray {
         let member = h.member().map(|m| m.to_string()).unwrap_or_default();
         let sender = h.sender().map(|s| s.to_string()).unwrap_or_default();
         if iface == ITEM {
-            // NewIcon, NewTitle, NewStatus…: that item read again.
+            // NewIcon, NewTitle, NewStatus…: that item read again when the burst ends.
             let path = h.path().map(|p| p.to_string()).unwrap_or_default();
-            let keys: Vec<String> = self
+            let keys = self
                 .known
                 .iter()
                 .filter(|(_, k)| k.owner == sender && k.item.path == path)
-                .map(|(key, _)| key.clone())
-                .collect();
-            for key in keys {
-                self.add(key).await;
-            }
+                .map(|(key, _)| key.clone());
+            self.stale.extend(keys);
         } else if member == "NameOwnerChanged" {
             let Ok((name, _old, new)) = m.body().deserialize::<(String, String, String)>() else {
                 return;
@@ -531,6 +567,7 @@ pub fn stream() -> impl Stream<Item = State> {
             items,
             known: HashMap::new(),
             watcher: own.is_ok(),
+            stale: std::collections::HashSet::new(),
         };
         if let Err(e) = own {
             // Someone else is the watcher: be a host and read its list.
@@ -569,14 +606,55 @@ pub fn stream() -> impl Stream<Item = State> {
                 return;
             };
             tray.apply(ev).await;
-            while let Ok(ev) = tokio::time::timeout(QUIET, events.next()).await {
+            let start = tokio::time::Instant::now();
+            while let Some(ev) = crate::stream::in_burst(&mut events, start, QUIET).await {
                 let Some(ev) = ev else { return };
                 tray.apply(ev).await;
             }
+            tray.refresh().await;
         }
     })
 }
 
 fn tokio_stream_unbounded<T>(mut rx: mpsc::UnboundedReceiver<T>) -> impl Stream<Item = T> {
     futures::stream::poll_fn(move |cx| rx.poll_recv(cx))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pixmap_sizes_from_an_app_are_checked() {
+        let p = argb_to_rgba(1, 1, &[9, 1, 2, 3, 7, 7, 7, 7]).unwrap();
+        assert_eq!((p.width, p.height), (1, 1));
+        assert_eq!(*p.data, [1, 2, 3, 9], "only the pixels its size covers");
+        // Negative sizes made a 4-byte "picture" of 4 billion pixels; an overflowing one
+        // panicked or wrapped to a size the data seemed to cover.
+        assert!(argb_to_rgba(-1, -1, &[0; 4]).is_none());
+        assert!(argb_to_rgba(65536, 65536, &[0; 4]).is_none());
+        assert!(argb_to_rgba(2, 2, &[0; 15]).is_none());
+    }
+
+    #[test]
+    fn a_malformed_menu_item_is_skipped_not_a_panic() {
+        // A menu whose one child is a structure of a single field.
+        let child = Value::Value(Box::new(Value::Structure(
+            zbus::zvariant::StructureBuilder::new()
+                .add_field(5i32)
+                .build()
+                .unwrap(),
+        )));
+        let children = zbus::zvariant::Array::from(vec![child]);
+        let root = Value::Structure(
+            zbus::zvariant::StructureBuilder::new()
+                .add_field(0i32)
+                .add_field(HashMap::<String, Value>::new())
+                .append_field(Value::Array(children))
+                .build()
+                .unwrap(),
+        );
+        let menu = parse_layout(&root).unwrap();
+        assert!(menu.children.is_empty());
+    }
 }
