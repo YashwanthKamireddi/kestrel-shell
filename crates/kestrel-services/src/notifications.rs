@@ -111,6 +111,39 @@ fn sound_from_hints(hints: &HashMap<String, OwnedValue>) -> crate::sounds::Sound
     }
 }
 
+/// The spec's `image-data` pixels (rows `stride` bytes apart, 3 or 4 bytes a pixel) as RGBA.
+/// Every number comes from whichever program sent the notification: a negative or huge size,
+/// a stride shorter than a row, or 1 or 2 channels made the old loop allocate exabytes or
+/// slice past the data and panic. Now each is checked and such an image is simply not shown.
+fn decode_rgba(w: i32, h: i32, stride: i32, channels: i32, data: &[u8]) -> Option<Pixels> {
+    let (w, h, stride) = (
+        usize::try_from(w).ok()?,
+        usize::try_from(h).ok()?,
+        usize::try_from(stride).ok()?,
+    );
+    if w == 0 || h == 0 || !matches!(channels, 3 | 4) {
+        return None;
+    }
+    let channels = channels as usize;
+    // Every row must fit its stride, and every row the data (the last may end short of it).
+    let row = w.checked_mul(channels)?;
+    if stride < row || data.len() < stride.checked_mul(h - 1)?.checked_add(row)? {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(w.checked_mul(h)?.checked_mul(4)?);
+    for line in (0..h).map(|y| &data[y * stride..y * stride + row]) {
+        for px in line.chunks_exact(channels) {
+            rgba.extend_from_slice(&px[..3]);
+            rgba.push(if channels == 4 { px[3] } else { 255 });
+        }
+    }
+    Some(Pixels::new(
+        u32::try_from(w).ok()?,
+        u32::try_from(h).ok()?,
+        rgba,
+    ))
+}
+
 fn image_from_hints(hints: &HashMap<String, OwnedValue>) -> Option<Image> {
     for key in ["image-data", "image_data", "icon_data"] {
         if let Some(v) = hints.get(key)
@@ -127,18 +160,7 @@ fn image_from_hints(hints: &HashMap<String, OwnedValue>) -> Option<Image> {
                 let Ok(data) = Vec::<u8>::try_from(f[6].try_clone().ok()?) else {
                     continue;
                 };
-                let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-                for y in 0..h {
-                    for x in 0..w {
-                        let i = (y * stride + x * channels) as usize;
-                        if i + channels as usize > data.len() {
-                            return None;
-                        }
-                        rgba.extend_from_slice(&data[i..i + 3]);
-                        rgba.push(if channels == 4 { data[i + 3] } else { 255 });
-                    }
-                }
-                return Some(Image::Rgba(Pixels::new(w as u32, h as u32, rgba)));
+                return decode_rgba(w, h, stride, channels, &data).map(Image::Rgba);
             }
         }
     }
@@ -335,6 +357,32 @@ pub fn stream() -> impl Stream<Item = Event> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn image_data_from_any_sender_cannot_panic() {
+        use super::decode_rgba;
+        // 2x2 RGB, rows padded to 8 bytes; the last row may end without its padding.
+        let data = [1, 2, 3, 4, 5, 6, 0, 0, 7, 8, 9, 10, 11, 12];
+        let p = decode_rgba(2, 2, 8, 3, &data).unwrap();
+        assert_eq!((p.width, p.height), (2, 2));
+        assert_eq!(
+            *p.data,
+            [1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255]
+        );
+        // Each of these panicked or tried to allocate more memory than exists.
+        assert!(decode_rgba(-1, 1, 4, 4, &[0; 4]).is_none());
+        assert!(decode_rgba(i32::MAX, i32::MAX, i32::MAX, 4, &[0; 16]).is_none());
+        assert!(decode_rgba(1, 1, 4, 1, &[0; 4]).is_none());
+        assert!(decode_rgba(2, 2, -8, 4, &[0; 16]).is_none());
+        assert!(
+            decode_rgba(2, 2, 4, 4, &[0; 16]).is_none(),
+            "stride under a row"
+        );
+        assert!(
+            decode_rgba(2, 2, 8, 4, &[0; 15]).is_none(),
+            "data too short"
+        );
+    }
+
     #[test]
     fn bodies_are_plain_text() {
         assert_eq!(
