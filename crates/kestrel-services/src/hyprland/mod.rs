@@ -599,21 +599,18 @@ mod pointer_tests {
     #[test]
     fn real_devices_only() {
         let names: Vec<String> = [
-            "dell-kb216-wired-keyboard-consumer-control-1",
-            "pixart-dell-ms116-usb-optical-mouse",
-            "ven_04f3:00-04f3:32b3-mouse",
-            "ven_04f3:00-04f3:32b3-touchpad",
+            "usb-keyboard-consumer-control-1",
+            "usb-optical-mouse",
+            "elan0000:00-04f3:0000-mouse",
+            "elan0000:00-04f3:0000-touchpad",
             "ps/2-generic-mouse",
-            "keyd-virtual-pointer",
+            "remapper-virtual-pointer",
         ]
         .map(String::from)
         .to_vec();
         assert_eq!(
             super::pointers_of(&names),
-            [
-                "pixart-dell-ms116-usb-optical-mouse",
-                "ven_04f3:00-04f3:32b3-touchpad"
-            ]
+            ["usb-optical-mouse", "elan0000:00-04f3:0000-touchpad"]
         );
     }
 }

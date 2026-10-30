@@ -1,5 +1,5 @@
 //! Cloudflare WARP and Tailscale, both started only on demand: the toggle starts the system
-//! service (allowed without a password by the machine's polkit rule) and stops it again.
+//! service (a local polkit rule may allow that without a password) and stops it again.
 
 use super::dbus;
 use futures::{SinkExt, Stream, StreamExt};

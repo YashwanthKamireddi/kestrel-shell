@@ -1,8 +1,8 @@
 //! Bluetooth through BlueZ on the system bus: the adapter, paired devices and the ones nearby
 //! while searching; connect, disconnect, pair (trusted and connected after), forget. Pairing
 //! codes go through kestrel's own BlueZ agent (`agent`), which asks the shell to show them.
-//! Forgetting is always confirmed in the shell first (AirPods share keys with Windows on this
-//! machine: forgetting them means pairing again on both systems).
+//! Forgetting is always confirmed in the shell first (on a machine that also runs
+//! another system, a device can share its keys with it: forgetting means pairing again on both).
 
 use super::dbus;
 use futures::{SinkExt, Stream, StreamExt};

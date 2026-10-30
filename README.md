@@ -101,7 +101,7 @@ settings, and for the system prompts a desktop depends on.
 
 ### Measurements
 
-1080p laptop, Intel Core i5-1245U, Arch Linux, Hyprland 0.56, release build.
+A mid-range 1080p laptop, Arch Linux, Hyprland 0.56, release build.
 
 | | |
 |---|---|
