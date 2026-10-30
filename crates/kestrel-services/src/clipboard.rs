@@ -49,7 +49,37 @@ type Ack = Mutex<Option<tokio::sync::oneshot::Sender<()>>>;
 type Offered = Arc<Vec<(String, Arc<Vec<u8>>)>>;
 
 /// The last copy's content, kept to offer again when its app quits and the clipboard empties.
-type Kept = Arc<Mutex<Option<Offered>>>;
+type Kept = Arc<Mutex<KeptCopy>>;
+
+/// The kept content and the number of the copy it belongs to. Each copy is read on a thread of
+/// its own, so a slow one (a large picture) could finish after a later copy's and put the older
+/// content back: the clipboard, emptied, then came back with what was copied before.
+#[derive(Default)]
+struct KeptCopy {
+    copy: u64,
+    offered: Option<Offered>,
+}
+
+impl KeptCopy {
+    /// A new copy has arrived: its number. Anything still being read for an older one is not
+    /// kept when it is done.
+    fn next(&mut self) -> u64 {
+        self.copy += 1;
+        self.copy
+    }
+
+    /// Keeps `offered` as copy `n`'s content, unless a newer copy has arrived since.
+    fn set(&mut self, n: u64, offered: Option<Offered>) {
+        if n == self.copy {
+            self.offered = offered;
+        }
+    }
+}
+
+fn lock(kept: &Kept) -> std::sync::MutexGuard<'_, KeptCopy> {
+    kept.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// The watcher's inbox, and the socket that wakes its loop.
 static PUT: Mutex<Option<(std::sync::mpsc::Sender<Ask>, std::os::unix::net::UnixStream)>> =
@@ -348,11 +378,7 @@ impl Dispatch<ZwlrDataControlDeviceV1, ()> for State {
 
 /// The kept copy offered again (the clipboard emptied: its app quit).
 fn keep_offering(st: &mut State, qh: &QueueHandle<State>) {
-    let kept = st
-        .kept
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone();
+    let kept = lock(&st.kept).offered.clone();
     let (Some(offered), Some(manager), Some(device)) =
         (kept, st.manager_for_keep.as_ref(), st.device.as_ref())
     else {
@@ -392,10 +418,9 @@ fn read_offer(
     out: Option<futures::channel::mpsc::UnboundedSender<Copied>>,
     kept: Kept,
 ) {
+    let n = lock(&kept).next();
     if mimes.iter().any(|m| m == "x-kde-passwordManagerHint") {
-        *kept
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        lock(&kept).set(n, None);
         if let Some(out) = out {
             let _ = out.unbounded_send(Copied::Other);
         }
@@ -437,9 +462,7 @@ fn read_offer(
             (Some(None), _) | (_, Some(None)) => {
                 // Too big to hold: not kept (the previous copy is not the clipboard any more
                 // either), not in the history; announced as copied, nothing to show.
-                *kept
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+                lock(&kept).set(n, None);
                 log::info!("clipboard: a copy over {} MB is not kept", READ_LIMIT >> 20);
                 if let Some(out) = out {
                     let _ = out.unbounded_send(Copied::Other);
@@ -465,10 +488,7 @@ fn read_offer(
                 offered.extend(TEXT_TYPES.iter().map(|t| ((*t).to_string(), data.clone())));
             }
         }
-        *kept
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            (!offered.is_empty()).then(|| Arc::new(offered));
+        lock(&kept).set(n, (!offered.is_empty()).then(|| Arc::new(offered)));
         // Only kept (the copy there at start): nothing to announce.
         let Some(out) = out else {
             return;
@@ -689,9 +709,11 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
                             .collect(),
                     );
                     // kestrel's own copy is kept too (offered again if the clipboard empties).
-                    *st.kept
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(offered.clone());
+                    {
+                        let mut k = lock(&st.kept);
+                        let n = k.next();
+                        k.set(n, Some(offered.clone()));
+                    }
                     let source = manager.create_data_source(&qh, offered);
                     for m in &put.mimes {
                         source.offer(m.clone());
@@ -716,6 +738,27 @@ fn watch(out: futures::channel::mpsc::UnboundedSender<Copied>) -> anyhow::Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_slow_read_of_an_older_copy_does_not_replace_a_newer_one() {
+        let text = |t: &[u8]| -> Option<Offered> {
+            Some(Arc::new(vec![("text/plain".into(), Arc::new(t.to_vec()))]))
+        };
+        let mut k = KeptCopy::default();
+        let picture = k.next();
+        let newer = k.next();
+        k.set(newer, text(b"newer"));
+        // The picture's thread finishes last.
+        k.set(picture, text(b"older"));
+        assert_eq!(*k.offered.unwrap()[0].1, b"newer");
+        // A newer copy that is not kept (a secret) is not undone by an older one either.
+        let mut k = KeptCopy::default();
+        let older = k.next();
+        let secret = k.next();
+        k.set(secret, None);
+        k.set(older, text(b"older"));
+        assert!(k.offered.is_none());
+    }
 
     #[test]
     fn text_is_collapsed_and_cut() {
