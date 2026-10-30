@@ -40,7 +40,7 @@ pub enum Message {
 }
 
 /// The shell's colours and material as they are now.
-fn look() -> (Scheme, bool) {
+pub(crate) fn look() -> (Scheme, bool) {
     let l = crate::state::read_fresh().look;
     let seed = if l.chroma == 0.0 && l.source.is_none() {
         Seed::default()

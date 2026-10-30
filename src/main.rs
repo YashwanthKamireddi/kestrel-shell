@@ -7,6 +7,7 @@ mod guard;
 mod history;
 mod hypr_settings;
 mod ipc;
+mod lock;
 mod look;
 mod lua;
 #[cfg(feature = "memtrace")]
@@ -47,6 +48,15 @@ fn main() -> anyhow::Result<()> {
         env_logger();
         return prompt::run();
     }
+    // The lock screen: its own process (src/lock), started by hypridle's lock_cmd.
+    if args.first().is_some_and(|a| a == "lock") {
+        if std::env::var_os("RUST_LOG").is_none() {
+            // Safety: single-threaded at this point.
+            unsafe { std::env::set_var("RUST_LOG", "kestrel=info,warn") };
+        }
+        env_logger();
+        return lock::run();
+    }
     if !args.is_empty() {
         if args[0] == "--help" || args[0] == "-h" {
             println!("kestrel                 run the shell");
@@ -54,6 +64,7 @@ fn main() -> anyhow::Result<()> {
                 "kestrel toggle <panel>  launcher | control | media | calendar | notifications | power"
             );
             println!("kestrel close           close the open panel");
+            println!("kestrel lock            lock the session (the lock screen, docs/LOCK.md)");
             return Ok(());
         }
         if !ipc::send(&args.join(" ")) {

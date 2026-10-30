@@ -25,15 +25,17 @@ pub const NOT_READY: u64 = u64::MAX;
 pub use application::application;
 pub use blur::{BlurContainer, blur, blur_container};
 pub use error::Error;
+pub use handlers::keyboard::caps_lock;
+pub use handlers::session_lock::{LockEvent, session_lock_events};
 pub use output_subscription::output_events;
 pub use settings::{
     Anchor, KeyboardInteractivity, Layer, LayerShellSettings, OutputEvent, OutputId, OutputInfo,
     SurfaceId, WindowSettings,
 };
 pub use task_impl::{
-    InputRegionRect, destroy_layer_surface, new_layer_surface, new_window, set_anchor,
-    set_exclusive_zone, set_input_region, set_keyboard_interactivity, set_layer, set_margin,
-    set_size,
+    InputRegionRect, destroy_layer_surface, lock_session, new_layer_surface, new_lock_surface,
+    new_window, set_anchor, set_exclusive_zone, set_input_region, set_keyboard_interactivity,
+    set_layer, set_margin, set_size, unlock_session,
 };
 
 // === Full iced public API re-export ===
@@ -134,9 +136,9 @@ pub mod widget {
 
 pub mod task {
     pub use crate::task_impl::{
-        InputRegionRect, Task, destroy_layer_surface, new_layer_surface, set_anchor,
-        set_exclusive_zone, set_input_region, set_keyboard_interactivity, set_layer, set_margin,
-        set_size,
+        InputRegionRect, Task, destroy_layer_surface, lock_session, new_layer_surface,
+        new_lock_surface, set_anchor, set_exclusive_zone, set_input_region,
+        set_keyboard_interactivity, set_layer, set_margin, set_size, unlock_session,
     };
     pub use iced_runtime::task::Handle;
 }

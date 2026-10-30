@@ -1,7 +1,10 @@
 -- kestrel test rig: a plain nested Hyprland on a fixed 1920x1080 headless output.
 hl.config({
     animations = { enabled = false },
-    misc = { disable_hyprland_logo = true, disable_splash_rendering = true },
+    -- allow_session_lock_restore: a lock screen tried here (`rig.sh lock`) that crashes can be
+    -- started again over the dead lock (docs/LOCK.md).
+    misc = { disable_hyprland_logo = true, disable_splash_rendering = true,
+             allow_session_lock_restore = true },
     -- This compositor runs on the user's session bus with the user's HOME: syncing its cursor to gsettings
     -- wrote the rig's cursor theme into the user's real settings (2026-11-14). Never.
     cursor = { sync_gsettings_theme = false },

@@ -47,7 +47,7 @@ is nearly grey, the hue falls back to 255 (blue) at low chroma.
 ### Type
 
 Rubik (chosen 2026-11-12). Sizes 11 (caption), 12 (bar, secondary), 13 (body), 14 (titles), 16 (panel headings),
-32 (display). Weights Regular 400, Medium 500, SemiBold 600. No bold, no letter-spacing tricks.
+32 (display), 88 (`text::HERO`: the lock screen's clock, docs/LOCK.md). Weights Regular 400, Medium 500, SemiBold 600. No bold, no letter-spacing tricks.
 
 ### Space and shape
 

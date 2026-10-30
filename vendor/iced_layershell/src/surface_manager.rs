@@ -39,6 +39,9 @@ pub(crate) struct IcedSurface {
 pub(crate) struct PendingCreations {
     surfaces: Vec<(SurfaceId, LayerShellSettings)>,
     windows: Vec<(SurfaceId, crate::settings::WindowSettings)>,
+    /// kestrel patch: a session lock asked for, then lock surfaces (made after the lock).
+    lock: bool,
+    lock_surfaces: Vec<(SurfaceId, crate::settings::OutputId)>,
     commands: Vec<LayerShellCommand>,
 }
 
@@ -46,6 +49,8 @@ impl PendingCreations {
     pub(crate) fn clear(&mut self) {
         self.surfaces.clear();
         self.windows.clear();
+        self.lock = false;
+        self.lock_surfaces.clear();
         self.commands.clear();
     }
 
@@ -54,6 +59,7 @@ impl PendingCreations {
     fn defer(&mut self, id: SurfaceId, cmd: LayerShellCommand) -> Option<LayerShellCommand> {
         if self.surfaces.iter().any(|(pending, _)| *pending == id)
             || self.windows.iter().any(|(pending, _)| *pending == id)
+            || self.lock_surfaces.iter().any(|(pending, _)| *pending == id)
         {
             self.commands.push(cmd);
             None
@@ -78,6 +84,15 @@ pub(crate) fn apply_layer_shell_command(
         }
         return;
     }
+    // kestrel patch: layer properties mean nothing to a lock surface, and the bare commit each
+    // of them makes would be a protocol error there (a lock surface commits only with a buffer).
+    if let Some(id) = cmd.property_target()
+        && let Some(wl) = state.surface_id_map.get(&id)
+        && state.surfaces.get(wl).is_some_and(|d| d.role.is_lock())
+    {
+        log::warn!("Ignoring {cmd:?}: surface {id:?} is a lock surface");
+        return;
+    }
 
     match cmd {
         LayerShellCommand::NewSurface(id, settings) => {
@@ -89,6 +104,13 @@ pub(crate) fn apply_layer_shell_command(
         LayerShellCommand::DestroySurface(id) => {
             state.closed_surfaces.push(id);
         }
+        LayerShellCommand::LockSession => {
+            pending_creations.lock = true;
+        }
+        LayerShellCommand::NewLockSurface(id, output) => {
+            pending_creations.lock_surfaces.push((id, output));
+        }
+        LayerShellCommand::UnlockSession => unlock_session(state),
         LayerShellCommand::SetAnchor(id, anchor) => {
             if let Some(wl) = state.surface_id_map.get(&id)
                 && let Some(data) = state.surfaces.get(wl)
@@ -295,10 +317,94 @@ pub(crate) fn flush_pending_creations(
         window.commit();
         wl.register_role(id, crate::state::Role::Window(window), 1, settings.size);
     }
+    // kestrel patch: the lock first, so lock surfaces asked for in the same update have it.
+    if std::mem::take(&mut pending.lock) {
+        lock_session(wl, qh);
+    }
+    for (id, output) in std::mem::take(&mut pending.lock_surfaces) {
+        create_lock_surface(wl, qh, id, output);
+    }
     // Every held command's surface exists now, so none is deferred again.
     for cmd in std::mem::take(&mut pending.commands) {
         apply_layer_shell_command(cmd, wl, pending);
     }
+}
+
+/// kestrel patch: ask for the session lock. A second request while one is held is ignored;
+/// where the compositor has no session lock the app hears `Finished` at once.
+fn lock_session(wl: &mut WaylandState, qh: &QueueHandle<WaylandState>) {
+    if wl.session_lock.is_some() {
+        log::warn!("session lock already requested");
+        return;
+    }
+    if let Some(Ok(lock)) = wl.session_lock_state.as_ref().map(|s| s.lock(qh)) {
+        crate::ktrace!("session lock requested");
+        wl.session_lock = Some(lock);
+    } else {
+        log::error!("the compositor has no session lock (ext-session-lock-v1)");
+        crate::handlers::session_lock::push(crate::LockEvent::Finished);
+    }
+}
+
+/// kestrel patch: a lock surface on `output`. The compositor configures it to the output's
+/// size; it is drawn (and committed) only once configured.
+fn create_lock_surface(
+    wl: &mut WaylandState,
+    qh: &QueueHandle<WaylandState>,
+    id: SurfaceId,
+    output: crate::settings::OutputId,
+) {
+    let Some(lock) = wl.session_lock.clone() else {
+        log::warn!("lock surface {id:?} not created: no session lock");
+        return;
+    };
+    let Some((wl_output, scale)) = wl
+        .outputs
+        .iter()
+        .find(|(_, info)| info.id == output)
+        .map(|(o, info)| (o.clone(), info.scale_factor))
+    else {
+        log::warn!("lock surface {id:?} not created: output {output} is gone");
+        return;
+    };
+    let surface = wl.compositor.create_surface(qh);
+    if scale > 1 {
+        surface.set_buffer_scale(scale);
+    }
+    let lock_surface = lock.create_lock_surface(surface, &wl_output, qh);
+    wl.register_role(
+        id,
+        crate::state::Role::Lock(lock_surface),
+        scale.max(1),
+        (0, 0),
+    );
+}
+
+/// kestrel patch: unlock, then send it to the compositor at once (the process usually ends
+/// right after, and an unlock still in the buffer would leave the session locked).
+fn unlock_session(wl: &mut WaylandState) {
+    let Some(lock) = wl.session_lock.take() else {
+        log::warn!("unlock asked with no session lock");
+        return;
+    };
+    if !lock.is_locked() {
+        // Unlocking before `locked` is a protocol error; keep the lock (the app waits).
+        log::error!("unlock asked before the session was locked: ignored");
+        wl.session_lock = Some(lock);
+        return;
+    }
+    lock.unlock();
+    let lock_surfaces: Vec<_> = wl
+        .surfaces
+        .values()
+        .filter(|d| d.role.is_lock())
+        .map(|d| d.id)
+        .collect();
+    wl.closed_surfaces.extend(lock_surfaces);
+    if let Err(e) = wl.conn.flush() {
+        log::error!("flushing the unlock failed: {e}");
+    }
+    crate::ktrace!("session unlocked");
 }
 
 /// Create a new Wayland layer surface from settings, targeting a specific output if configured.

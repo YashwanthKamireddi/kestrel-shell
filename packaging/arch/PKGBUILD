@@ -7,7 +7,7 @@ pkgdesc="A native desktop shell for Hyprland"
 arch=('x86_64')
 license=('MIT')
 depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-rubik-vf' 'ttf-twemoji'
-         'pipewire' 'sound-theme-freedesktop')
+         'pipewire' 'sound-theme-freedesktop' 'pam')
 optdepends=('hyprsunset: night light'
             'hyprlock: lock screen')
 conflicts=('kestrel')

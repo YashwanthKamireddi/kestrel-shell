@@ -33,6 +33,12 @@ pub enum LayerShellCommand {
     SetMargin(SurfaceId, (i32, i32, i32, i32)),
     /// Restrict pointer/touch input to specific rectangles. `None` resets to full surface.
     SetInputRegion(SurfaceId, Option<Vec<InputRegionRect>>),
+    /// kestrel patch: ask the compositor to lock the session (ext-session-lock-v1).
+    LockSession,
+    /// kestrel patch: a lock surface on one output, while the session lock is held.
+    NewLockSurface(SurfaceId, crate::settings::OutputId),
+    /// kestrel patch: end the session lock. Ignored unless the compositor has sent `locked`.
+    UnlockSession,
 }
 
 impl LayerShellCommand {
@@ -40,7 +46,12 @@ impl LayerShellCommand {
     /// destruction, which don't need the surface to exist yet.
     pub(crate) fn property_target(&self) -> Option<SurfaceId> {
         match self {
-            Self::NewSurface(..) | Self::NewWindow(..) | Self::DestroySurface(_) => None,
+            Self::NewSurface(..)
+            | Self::NewWindow(..)
+            | Self::DestroySurface(_)
+            | Self::LockSession
+            | Self::NewLockSurface(..)
+            | Self::UnlockSession => None,
             Self::SetAnchor(id, _)
             | Self::SetLayer(id, _)
             | Self::SetExclusiveZone(id, _)
@@ -205,6 +216,32 @@ pub fn new_window<M>(settings: crate::settings::WindowSettings) -> (SurfaceId, T
         id,
         Task::LayerShell(LayerShellCommand::NewWindow(id, settings)),
     )
+}
+
+/// kestrel patch: ask the compositor to lock the session. The answer comes as a
+/// [`LockEvent`](crate::LockEvent) from [`session_lock_events`](crate::session_lock_events):
+/// `Locked`, or `Finished` if it refused (another locker, or no session lock protocol).
+#[must_use]
+pub fn lock_session<M>() -> Task<M> {
+    Task::LayerShell(LayerShellCommand::LockSession)
+}
+
+/// kestrel patch: a lock surface covering one output, while the session lock is held. The
+/// compositor sizes it to the whole output. Returns its ID and a task.
+#[must_use]
+pub fn new_lock_surface<M>(output: crate::settings::OutputId) -> (SurfaceId, Task<M>) {
+    let id = SurfaceId::unique();
+    (
+        id,
+        Task::LayerShell(LayerShellCommand::NewLockSurface(id, output)),
+    )
+}
+
+/// kestrel patch: unlock the session and let the lock go. Only call this after the user has
+/// authenticated: it is the one thing that ends the lock. Does nothing before `Locked`.
+#[must_use]
+pub fn unlock_session<M>() -> Task<M> {
+    Task::LayerShell(LayerShellCommand::UnlockSession)
 }
 
 /// Destroy a layer shell surface.

@@ -39,6 +39,8 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 libpulse-binding = { version = "2.30", features = ["pa_v15"] }
 inotify = { version = "0.11", default-features = false, features = ["stream"] }
 libc = "0.2"
+# The lock screen's typed password is wiped from memory when cleared, checked or dropped.
+zeroize = "1"
 ttf-parser = "0.25"
 # Installed fonts from fontconfig itself (its library, loaded when first needed): no fc-list or
 # fc-match. fontdb disagreed with it on bitmap and Nerd monospace fonts.

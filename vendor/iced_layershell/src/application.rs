@@ -244,6 +244,10 @@ where
     wl_state.cursor_shape_manager = cursor_shape_manager;
     // kestrel patch: ordinary windows where the compositor has xdg-shell (every desktop one).
     wl_state.xdg_shell = smithay_client_toolkit::shell::xdg::XdgShell::bind(&globals, &qh).ok();
+    // kestrel patch: the session lock manager (bound only; nothing is locked until asked).
+    wl_state.session_lock_state = Some(
+        smithay_client_toolkit::session_lock::SessionLockState::new(&globals, &qh),
+    );
     wl_state.bg_effect_manager = bg_effect_manager;
 
     // Create initial layer surface (SurfaceId::MAIN)

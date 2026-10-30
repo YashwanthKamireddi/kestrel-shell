@@ -98,8 +98,10 @@ not enabled, and its subscription is never created.
 - What must never die lives apart (Phase 3): the system prompts (polkit passwords, Wi-Fi
   secrets, Bluetooth pairing) are `kestrel prompt` (`src/prompt.rs`, kestrel-prompt.service),
   showing the same `panels::auth` component in a window of its own; the shell registers those
-  agents only when `KESTREL_SEPARATE_PROMPTS` is unset (the rig). The lock screen is hyprlock,
-  started by hypridle on session lock. Night light (hyprsunset) runs as a transient user
+  agents only when `KESTREL_SEPARATE_PROMPTS` is unset (the rig). The lock screen in use is
+  hyprlock, started by hypridle on session lock; kestrel's own, `kestrel lock` (`src/lock/`,
+  docs/LOCK.md), is built and unit-tested but not switched to yet: a process of its own on
+  ext-session-lock-v1 (the compositor keeps the session locked if it dies) with PAM. Night light (hyprsunset) runs as a transient user
   service of its own (`services::systemd::run_service`), never as kestrel's child.
 - Talk, don't spawn (Phase 4): services are reached through their own APIs. Hyprland's
   sockets (and hyprsunset's), D-Bus (systemd, dconf, fwupd, logind, UDisks…), PipeWire

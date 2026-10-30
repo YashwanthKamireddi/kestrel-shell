@@ -13,6 +13,9 @@
 #   tools/rig/rig.sh msg ARGS       send an IPC command to the rig's kestrel
 #   tools/rig/rig.sh prompt WHICH   the prompt process (`kestrel prompt`, devtools build) asking a
 #                                   made-up question: password|password-wrong|wifi|wifi-wrong|pair-*
+#   tools/rig/rig.sh lock           the lock screen (`kestrel lock`) in the nested compositor; in a
+#                                   devtools build it takes the password "kestrel", not PAM
+#                                   (KESTREL_LOCK_PAM=1 for the real check). docs/LOCK.md
 #   tools/rig/rig.sh bus CMD...     run CMD on the rig's private session bus
 #   tools/rig/rig.sh stop
 set -euo pipefail
@@ -99,6 +102,25 @@ prompt) # the prompt process with a made-up question, no real agents (devtools b
     sleep "${WAIT:-1}"
     tail -5 "$WORK/prompt.log"
     ;;
+lock) # the lock screen, locking only the nested compositor (never the desktop's)
+    nested version >/dev/null # refuses when there is no nested compositor
+    # Never the desktop's display: an empty or wrong one would lock the real session.
+    d=$(display)
+    if [ -z "$d" ] || [ "$d" = "${WAYLAND_DISPLAY:-}" ] || [ ! -S "$XDG_RUNTIME_DIR/$d" ]; then
+        echo "rig: no nested display (refusing to lock the desktop)" >&2
+        exit 1
+    fi
+    preview=lock
+    [ -n "${KESTREL_LOCK_PAM:-}" ] && preview=
+    env -i HOME="$WORK/home" PATH=/usr/bin:/usr/sbin XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+        WAYLAND_DISPLAY="$d" LANG=en_US.UTF-8 RUST_LOG="${RUST_LOG:-kestrel=info}" \
+        ${preview:+KESTREL_PREVIEW=$preview} ${KESTREL_TRACE:+KESTREL_TRACE=1} \
+        ${ICED_BACKEND:+ICED_BACKEND=$ICED_BACKEND} \
+        setsid "$BIN" lock >"$WORK/lock.log" 2>&1 </dev/null &
+    echo $! >"$WORK/lock.pid"
+    sleep "${WAIT:-1}"
+    tail -5 "$WORK/lock.log"
+    ;;
 shot)
     out=${2:-$WORK/shot.png}
     WAYLAND_DISPLAY=$(display) timeout 10 grim -o KRIG "$out"
@@ -127,5 +149,5 @@ stop)
     : >"$WORK/sig"
     hyprctl reload >/dev/null
     ;;
-*) sed -n '2,15p' "$0"; exit 1 ;;
+*) sed -n '2,20p' "$0"; exit 1 ;;
 esac

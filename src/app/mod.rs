@@ -32,7 +32,7 @@ mod panel_flow;
 mod reload;
 mod surfaces;
 mod system;
-mod wallpaper;
+pub(crate) mod wallpaper;
 #[allow(unused_imports)]
 use alerts::*;
 pub use change::Change;

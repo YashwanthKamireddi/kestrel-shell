@@ -1,6 +1,6 @@
 # Vendored dependencies
 
-`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with twelve
+`iced_layershell/` is MalpenZibo's iced_layershell v0.6.2 (MIT, see its LICENSE), with thirteen
 kestrel patches (search for "kestrel patch"):
 
 1. Frames that cannot be presented yet (frame callback pending) are not rasterised; the
@@ -64,3 +64,14 @@ Used by `ui::breathe` (2026-11-15).
 kestrel gives its own (services::clipboard, wlr data-control), so iced's smithay-clipboard (a
 second Wayland connection and thread, woken by every input event) is not started. Without one
 the smithay clipboard is made as before (the separate prompt process keeps it) (2026-11-17).
+13. The session lock (ext-session-lock-v1), for kestrel's lock screen (`kestrel lock`,
+src/lock, docs/LOCK.md), on SCTK 0.20's own `session_lock` module: `lock_session()`,
+`new_lock_surface(output)`, `unlock_session()` and `session_lock_events()` (`Locked`,
+`Finished`); surfaces get a third `Role::Lock`. A lock surface is never committed without a
+buffer (Hyprland treats that as a protocol error and drops the client, leaving the session
+locked and unusable): its configure always draws a new frame, and layer property commands
+(each of which commits) are refused for it. `unlock_session()` does nothing before `Locked`
+(unlocking earlier is a protocol error) and flushes the connection at once, so the process may
+end right after. Also `caps_lock()`: Caps Lock as the compositor last reported it (iced's
+`Modifiers` has no Caps Lock), read on `ModifiersChanged`. Upstream's CLAUDE.md lists session
+lock as not supported; this is the smallest addition (2026-11-18).
