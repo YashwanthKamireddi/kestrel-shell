@@ -136,6 +136,8 @@ pub enum Command {
     Uploaded(String, bool),
     /// The server no longer has this sample.
     Forget(String),
+    /// The connection's state changed: the loop looks at it, and ends when it is gone.
+    Connection,
 }
 
 /// An answer the audio thread sends back once (commands stay cloneable).
@@ -200,7 +202,7 @@ fn run(out: tokio::sync::mpsc::UnboundedSender<State>) -> Option<()> {
     *COMMANDS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx.clone());
-    let (mut ml, mut ctx) = connect(&tx)?;
+    let (mut ml, mut ctx) = connect(&tx, &rx)?;
     let _ = tx.send(Command::Refresh);
 
     // The newest refresh round's replies (each round has its own: replies of an older round
@@ -241,6 +243,18 @@ fn run(out: tokio::sync::mpsc::UnboundedSender<State>) -> Option<()> {
             Command::Forget(name) => {
                 samples.cached.remove(&name);
             }
+            // The sound server went away (restarted, crashed): this connection is dead for
+            // good, and nothing else would ever say so. The loop ends, the stream with it, and
+            // stream::forever connects again. Before, the loop waited on for commands, kept
+            // alive by its own senders, and the volume, outputs and apps stayed on their last
+            // answer until kestrel restarted.
+            Command::Connection if !matches!(ctx.get_state(), CtxState::Ready) => {
+                log::warn!("audio: the sound server went away; connecting again");
+                ml.unlock();
+                ml.stop();
+                return Some(());
+            }
+            Command::Connection => {}
             Command::Refresh => partial = read::refresh(&intro, &out),
             other => apply(other, &mut ctx, &mut intro, &partial),
         }
@@ -251,9 +265,19 @@ fn run(out: tokio::sync::mpsc::UnboundedSender<State>) -> Option<()> {
 
 /// Connects to the sound server (PipeWire's Pulse side) and asks to hear of every change: each
 /// one becomes a refresh.
-fn connect(tx: &mpsc::Sender<Command>) -> Option<(Mainloop, Context)> {
+fn connect(
+    tx: &mpsc::Sender<Command>,
+    rx: &mpsc::Receiver<Command>,
+) -> Option<(Mainloop, Context)> {
     let mut ml = Mainloop::new()?;
     let mut ctx = Context::new(&ml, "kestrel")?;
+    // Each change of the connection's state is said: waited for while connecting (it was
+    // looked at 100 times a second, for as long as no server came), and its end watched for
+    // after (the loop in `run`).
+    let state_tx = tx.clone();
+    ctx.set_state_callback(Some(Box::new(move || {
+        let _ = state_tx.send(Command::Connection);
+    })));
     ctx.connect(None, FlagSet::NOFAIL, None).ok()?;
     ml.lock();
     ml.start().ok()?;
@@ -265,7 +289,10 @@ fn connect(tx: &mpsc::Sender<Command>) -> Option<(Mainloop, Context)> {
         match st {
             CtxState::Ready => break,
             CtxState::Failed | CtxState::Terminated => return None,
-            _ => std::thread::sleep(std::time::Duration::from_millis(10)),
+            // The next change (a command sent before there is a connection has nowhere to go).
+            _ => {
+                rx.recv().ok()?;
+            }
         }
     }
     ml.lock();
@@ -377,6 +404,7 @@ fn apply(
         | Command::Play(..)
         | Command::Uploaded(..)
         | Command::Forget(_)
+        | Command::Connection
         | Command::Refresh => {}
     }
 }
@@ -421,15 +449,24 @@ fn group_apps(
 pub fn stream() -> impl Stream<Item = State> {
     crate::stream::channel(8, async |mut out| {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        // The thread's end ends the stream, whoever still holds a sender (a callback of a
+        // request the dead connection never answered).
+        let (ended, mut end) = tokio::sync::oneshot::channel::<()>();
         std::thread::Builder::new()
             .name("kestrel-audio".into())
             .spawn(move || {
                 if run(tx).is_none() {
                     log::warn!("audio: could not connect to the sound server");
                 }
+                drop(ended);
             })
             .ok();
-        while let Some(s) = rx.recv().await {
+        loop {
+            let s = tokio::select! {
+                s = rx.recv() => s,
+                _ = &mut end => None,
+            };
+            let Some(s) = s else { return };
             if out.send(s).await.is_err() {
                 return;
             }
