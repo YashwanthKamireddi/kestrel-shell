@@ -7,6 +7,17 @@ pub(super) fn setting(table: &[&str], key: &str, value: toml_edit::Item) -> Acti
     Act::Change(Change::Settings(vec![config::Edit::new(table, key, value)]))
 }
 
+/// Settings is a window, not a panel: its "close" closes that window. `Act::Close` means the
+/// open panel to the shell, so a page that closed Settings after handing over to another app
+/// (Storage's Open) closed whatever panel was open instead, and Settings stayed.
+pub fn own_window(a: Action) -> Action {
+    match a {
+        Act::Close => Act::Command("close settings".into()),
+        Act::Many(v) => Act::Many(v.into_iter().map(own_window).collect()),
+        a => a,
+    }
+}
+
 /// What a message asks of the shell (settings, the power mode, joining, files, terminals),
 /// and everything else as Settings' own work.
 pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {

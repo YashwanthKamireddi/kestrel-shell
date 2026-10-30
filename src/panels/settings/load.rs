@@ -36,6 +36,25 @@ pub fn open(st: &mut State, cx: &Cx<'_>) -> Action {
     Act::Run(Task::batch(tasks))
 }
 
+/// Settings' window went (its ✕, a toggle, `kestrel close settings`): what was half done in it
+/// ends with it. A shortcut being recorded stopped listening (it heard the keys typed into the
+/// next panel and rebound the user's shortcut to them), and a button pressed once to arm it asks
+/// again next time (an armed Restart restarted the shell on the next open's first click).
+/// What was read for the pages stays, so the next open is full at once; a display change
+/// waiting to be kept still goes back by itself.
+pub fn closed(st: &mut State) {
+    st.recording = false;
+    st.rebinding = None;
+    st.restart_armed = false;
+    st.bar_reset_armed = false;
+    st.clear_armed = None;
+    st.forget = None;
+    st.forget_net = None;
+    st.bar_drag = None;
+    st.bar_target = None;
+    st.password = None;
+}
+
 /// The page scrolled to its end (where a rule opened from the overview is).
 pub fn to_end<M: Send + 'static>() -> Task<M> {
     Task::Iced(iced::widget::snap_to(

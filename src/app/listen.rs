@@ -176,11 +176,11 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
     }
     if app.panel.as_ref().is_some_and(|p| p.open) {
         // Escape closes the panel even while a text field has the keyboard.
-        subs.push(iced::event::listen_with(|e, _status, _id| match e {
+        subs.push(iced::event::listen_with(|e, _status, w| match e {
             iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
-            }) => Some(Message::Close),
+            }) => Some(Message::Escape(w)),
             _ => None,
         }));
     }

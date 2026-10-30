@@ -37,10 +37,20 @@ impl App {
     /// one of its buttons that hands over to a terminal. (Its ✕ closes it in the compositor;
     /// `WindowClosed` then forgets it.)
     pub fn close_settings(&mut self) -> Task<Message> {
-        match self.settings_window.take() {
-            Some(id) => iced::destroy_layer_surface(id),
+        match self.settings_window {
+            Some(id) => {
+                self.settings_gone();
+                iced::destroy_layer_surface(id)
+            }
             None => Task::none(),
         }
+    }
+
+    /// The Settings window is gone, however it went (closed here or by the compositor): it is
+    /// forgotten and what was half done in it ends (`settings::closed`).
+    pub(crate) fn settings_gone(&mut self) {
+        self.settings_window = None;
+        panels::settings::closed(&mut self.panels.settings);
     }
 
     pub(crate) fn toggle(
@@ -161,5 +171,83 @@ impl App {
         // goes with it, and Hyprland animates that out.
         self.panel = None;
         self.drop_panel_surface()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::panels::settings;
+
+    /// Records new keys for one of the user's shortcuts in Settings › Shortcuts.
+    fn rebinding(app: &mut App) {
+        let _ = app.open_settings();
+        for m in [
+            settings::Message::Page(settings::Page::Shortcuts),
+            settings::Message::Rebind("SUPER + T".into()),
+        ] {
+            let _ = panels::update(app, panels::Message::Settings(m));
+        }
+        assert!(settings::recording(&app.panels.settings));
+    }
+
+    #[test]
+    fn closing_settings_stops_recording_a_shortcut() {
+        // Closed by a toggle or `kestrel close settings`.
+        let (mut app, _) = crate::app::boot();
+        rebinding(&mut app);
+        let _ = app.close_settings();
+        assert!(app.settings_window.is_none());
+        assert!(!settings::recording(&app.panels.settings));
+
+        // Closed by its ✕ (the compositor).
+        rebinding(&mut app);
+        let id = app.settings_window.map(iced::window::Id::from);
+        let _ = crate::app::update(&mut app, Message::WindowClosed(id.unwrap()));
+        assert!(app.settings_window.is_none());
+        assert!(!settings::recording(&app.panels.settings));
+    }
+
+    #[test]
+    fn settings_closes_itself_not_the_panel() {
+        // Storage › a drive's Open hands over to the file manager and closes Settings.
+        let (mut app, _) = crate::app::boot();
+        let _ = app.open_settings();
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Settings(settings::Message::VolumeOpen(
+                "/dev/null".into(),
+                Some("/tmp".into()),
+            )),
+        );
+        assert!(app.settings_window.is_none());
+    }
+
+    #[test]
+    fn control_centre_gear_keeps_settings_open() {
+        // Settings is the window in front; the gear in the control centre brings it forward.
+        let (mut app, _) = crate::app::boot();
+        let _ = app.open_settings();
+        app.hypr.window_class = SETTINGS_CLASS.into();
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Control(panels::control::Message::Toggle("settings")),
+        );
+        assert!(app.settings_window.is_some());
+    }
+
+    #[test]
+    fn keys_typed_in_settings_are_its_own() {
+        // The open panel's keys (and Esc) ignore what is typed in Settings' window.
+        let (mut app, _) = crate::app::boot();
+        let other = iced::window::Id::from(SurfaceId::unique());
+        assert!(!panels::in_settings(&app, other));
+        let _ = app.open_settings();
+        let settings = app.settings_window.map(iced::window::Id::from).unwrap();
+        assert!(panels::in_settings(&app, settings));
+        assert!(!panels::in_settings(&app, other));
+        // Esc there leaves Settings and everything else as it was.
+        let _ = crate::app::update(&mut app, Message::Escape(settings));
+        assert!(app.settings_window.is_some());
     }
 }

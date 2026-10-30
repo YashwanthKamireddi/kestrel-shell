@@ -359,6 +359,8 @@ pub enum Message {
     /// Opens Settings > Windows on the rule for an app (its window class).
     RuleFor(String),
     Close,
+    /// Esc, in this window: closes the open panel, unless typed in Settings (its own).
+    Escape(iced::window::Id),
     Measured(PanelKind, Size),
     Dispatch(crate::services::compositor::Action),
     /// A device connected, disconnected, paired or forgotten as asked, or why not.

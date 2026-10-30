@@ -58,6 +58,7 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::SettingsAt { .. }
         | Message::RuleFor { .. }
         | Message::Close
+        | Message::Escape { .. }
         | Message::TrayExpand
         | Message::TrayMenu { .. }
         | Message::Panel { .. }

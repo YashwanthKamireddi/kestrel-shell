@@ -63,6 +63,10 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             });
             Task::batch([app.close(), trim])
         }
+        // Esc in Settings' window is Settings' (a list to close, a drag to cancel), never the
+        // open panel's.
+        Message::Escape(w) if panels::in_settings(app, w) => Task::none(),
+        Message::Escape(_) => handle(app, Message::Close),
         Message::Dispatch(a) => Task::future(async move {
             crate::services::compositor::run(a).await;
         })

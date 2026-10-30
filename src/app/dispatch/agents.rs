@@ -48,7 +48,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 .settings_window
                 .is_some_and(|id| iced::window::Id::from(id) == w)
             {
-                app.settings_window = None;
+                app.settings_gone();
             }
             Task::none()
         }

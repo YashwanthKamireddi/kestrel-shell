@@ -236,8 +236,9 @@ pub enum Message {
     Files(files::Message),
     OpenWith(open_with::Message),
     Auth(auth::Message),
-    /// A navigation key while a panel is open (Esc is the shell's).
-    Key(Key),
+    /// A navigation key while a panel is open (Esc is the shell's), and the window it was
+    /// typed in.
+    Key(iced::window::Id, Key),
     /// Tab or Shift+Tab in a window of its own (Settings): its id, and which.
     WindowKey(iced::window::Id, Key),
     /// Left click on a tray icon.
@@ -438,7 +439,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         }
         Message::Settings(m) => {
             let (p, cx) = cx::split(app);
-            let a = settings::update(&mut p.settings, m, &cx);
+            let a = settings::own_window(settings::update(&mut p.settings, m, &cx));
             action::perform(app, a, |m| AppMessage::Panel(Message::Settings(m)))
         }
         Message::Files(m) => {
@@ -453,7 +454,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             auth::Outcome::Close => Task::done(AppMessage::Close),
             auth::Outcome::Stay => Task::none(),
         },
-        Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
+        // Typed in Settings' window: its own (a panel opened with the mouse leaves the keyboard
+        // with the app in front; Space in Settings' search played or paused the music panel,
+        // the arrows changed its track).
+        Message::Key(w, _) if in_settings(app, w) => Task::none(),
+        Message::Key(_, k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => {
                 let a = launcher::key(&mut app.panels.launcher, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)))
@@ -520,16 +525,19 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
         Message::WindowKey(w, k) => {
-            if app
-                .settings_window
-                .is_some_and(|id| iced::window::Id::from(id) == w)
-            {
+            if in_settings(app, w) {
                 focus_step(settings::ROOT.clone(), k)
             } else {
                 Task::none()
             }
         }
     }
+}
+
+/// Whether window `w` is Settings' (its keys are its own, never the open panel's).
+pub fn in_settings(app: &App, w: iced::window::Id) -> bool {
+    app.settings_window
+        .is_some_and(|id| iced::window::Id::from(id) == w)
 }
 
 pub fn subscription(app: &App) -> Subscription<Message> {
@@ -672,7 +680,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     if open.is_some() {
         // Seen even when a text field has the keyboard (it would swallow Delete and Tab).
-        subs.push(iced::event::listen_with(|e, _status, _id| {
+        subs.push(iced::event::listen_with(|e, _status, w| {
             use iced::keyboard::key::Named as N;
             let iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(k),
@@ -700,7 +708,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::Space => Key::Space,
                 _ => return None,
             };
-            Some(Message::Key(key))
+            Some(Message::Key(w, key))
         }));
     }
     Subscription::batch(subs)
