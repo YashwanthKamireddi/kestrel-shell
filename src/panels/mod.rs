@@ -62,6 +62,10 @@ pub enum PanelKind {
 }
 
 impl PanelKind {
+    /// The panel `kestrel toggle <name>` opens. The file picker, "Open with" and the password
+    /// prompt have no name: they show only while an app or the system asks something (a
+    /// `toggle files` opened the picker with no question in it, an empty panel that took the
+    /// keyboard until Esc).
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
             "control" | "control-centre" | "control-center" | "sound" | "mixer" | "bluetooth"
@@ -81,7 +85,6 @@ impl PanelKind {
             "emoji" => Self::Emoji,
             "weather" => Self::Weather,
             "airpods" | "pods" => Self::Pods,
-            "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
             _ => return None,

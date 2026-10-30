@@ -119,6 +119,30 @@ mod tests {
         }
     }
 
+    /// Every panel docs/CUSTOMIZE.md says `kestrel toggle <panel>` opens is one, and one with
+    /// something in it on its own (not a question that shows only when an app asks).
+    #[test]
+    fn documented_panels_open() {
+        let doc = include_str!("../docs/CUSTOMIZE.md");
+        let list = doc
+            .split("Panels: `")
+            .nth(1)
+            .and_then(|rest| rest.split('`').next())
+            .expect("CUSTOMIZE.md lists the panels");
+        let mut bad = Vec::new();
+        for name in list
+            .split_whitespace()
+            .chain(["wifi", "bluetooth", "sound"])
+        {
+            match PanelKind::from_name(name) {
+                _ if name == "settings" => {}
+                Some(kind) if !only_when_asked(kind) => {}
+                other => bad.push(format!("{name}: {other:?}")),
+            }
+        }
+        assert!(bad.is_empty(), "{}", bad.join("\n"));
+    }
+
     #[test]
     fn every_panel_lays_out_and_draws() {
         let (mut app, _) = crate::app::boot();

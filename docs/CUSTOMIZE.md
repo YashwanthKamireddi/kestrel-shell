@@ -100,5 +100,5 @@ Placeholders (`#rrggbb`, or `r, g, b` with `.rgb`): `{{base}} {{surface}} {{surf
 `toggle <panel>`, `close`, `volume up|down|mute|+N|-N`, `mic mute`, `brightness +N|-N`,
 `osd caps|num`, `game-mode`, `open-default <kind> [path]`, `settings <page>` (Settings on a
 page: `sound`, `bluetooth`, `mouse-touchpad`, `date-time`…, or a page's first word). Panels: `launcher overview
-control calendar power clipboard emoji wallpaper keys capture monitor weather files media privacy
+control calendar power clipboard emoji wallpaper keys capture monitor weather media privacy
 settings` (also `wifi`, `bluetooth`, `sound` for the control centre).
