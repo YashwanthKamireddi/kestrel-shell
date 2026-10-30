@@ -1,7 +1,10 @@
 //! System monitor: each core's load, memory and swap, and the busiest of your processes, each
 //! with a way to end it (asked once: "End?"). Live every 1.5 s while open, nothing when closed.
-//! Opened from the CPU and memory pill or `kestrel toggle system`.
+//! Opened from the CPU and memory pill or `kestrel toggle system`: it opens once its first
+//! reading is in (100 ms), so it shows complete on its first frame.
 
+use super::PanelKind;
+use super::action::Action;
 use super::cx::Cx;
 use crate::services::system::Detail;
 use crate::theme::tok;
@@ -22,21 +25,59 @@ pub struct State {
     pub detail: Option<Detail>,
     /// The process whose end button was pressed once.
     armed: Option<u32>,
+    /// Asked to open, waiting for the first reading: where it will open.
+    waiting: Option<(iced::OutputId, iced::Rectangle)>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Message {
+    /// The first reading, taken when it was asked to open.
+    First(Detail),
+    /// One of the readings every 1.5 s while it is open.
     Detail(Detail),
     End(u32),
 }
 
-pub fn update(st: &mut State, m: Message) -> super::action::Action<Message> {
+/// Asked to open under `at`: takes the first reading and opens once it is in (`First`). Asked
+/// again meanwhile, it opens at the latest place without reading twice.
+pub fn prepare(st: &mut State, output: iced::OutputId, at: iced::Rectangle) -> Action<Message> {
+    let reading = st.waiting.is_none();
+    st.waiting = Some((output, at));
+    if !reading {
+        return Action::None;
+    }
+    Action::Run(iced::Task::perform(
+        crate::services::system::first_detail(),
+        Message::First,
+    ))
+}
+
+/// Not opening after all (closed, or another panel asked for first): a reading still on its
+/// way is dropped when it comes.
+pub fn cancel(st: &mut State) {
+    st.waiting = None;
+}
+
+pub fn update(st: &mut State, m: Message) -> Action<Message> {
     match m {
+        Message::First(d) => {
+            let Some((output, at)) = st.waiting.take() else {
+                return Action::None;
+            };
+            // A reading that found no cores (/proc unreadable) is no reading: "Reading…" until
+            // the next one, rather than empty cards.
+            st.detail = (!d.cores.is_empty()).then_some(d);
+            return Action::Open {
+                kind: PanelKind::Monitor,
+                output,
+                at,
+            };
+        }
         Message::Detail(d) => st.detail = Some(d),
         Message::End(pid) => {
             if st.armed != Some(pid) {
                 st.armed = Some(pid);
-                return super::action::Action::None;
+                return Action::None;
             }
             st.armed = None;
             // Safety: kill(2) with SIGTERM on one of the user's own processes (only those are
@@ -49,7 +90,7 @@ pub fn update(st: &mut State, m: Message) -> super::action::Action<Message> {
             }
         }
     }
-    super::action::Action::None
+    Action::None
 }
 
 fn gib(b: u64) -> String {
@@ -85,7 +126,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme;
     let title = label_w("System", text::HEADING, s.ink, theme::SEMIBOLD);
     let Some(d) = &st.detail else {
-        // The first reading is 1.5 s away: the cores from the dashboard's own numbers meanwhile.
+        // Only if the first reading failed (it opens with one): the next comes within 1.5 s.
         return container(
             column![title, crate::ui::waiting(s, Icon::Activity, "Reading…")].spacing(tok::L),
         )
@@ -249,4 +290,60 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     .padding(crate::theme::tok::PANEL_PAD)
     .width(Length::Fill)
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Action, Detail, Message, PanelKind, State, prepare, update};
+
+    fn output() -> iced::OutputId {
+        // Safety: an output id is a plain number (a u32 inside); zero is a valid one. The
+        // shell gets real ones only from the compositor, which tests have not got.
+        unsafe { std::mem::zeroed() }
+    }
+
+    fn reading() -> Detail {
+        Detail {
+            cores: vec![12, 40],
+            ..Detail::default()
+        }
+    }
+
+    #[test]
+    fn the_first_reading_opens_it_with_the_reading_in() {
+        let mut st = State::default();
+        let at = iced::Rectangle::new(iced::Point::new(900.0, 0.0), iced::Size::new(80.0, 44.0));
+        assert!(matches!(prepare(&mut st, output(), at), Action::Run(_)));
+        // Asked again while reading: no second reading.
+        assert!(matches!(prepare(&mut st, output(), at), Action::None));
+        let a = update(&mut st, Message::First(reading()));
+        assert!(matches!(
+            a,
+            Action::Open { kind: PanelKind::Monitor, output: o, at: r } if o == output() && r == at
+        ));
+        assert_eq!(st.detail, Some(reading()));
+        // The reading came: the next request reads again.
+        assert!(matches!(prepare(&mut st, output(), at), Action::Run(_)));
+    }
+
+    #[test]
+    fn a_reading_for_a_cancelled_open_is_dropped() {
+        let mut st = State::default();
+        let _ = prepare(&mut st, output(), iced::Rectangle::default());
+        super::cancel(&mut st);
+        assert!(matches!(
+            update(&mut st, Message::First(reading())),
+            Action::None
+        ));
+        assert_eq!(st.detail, None);
+    }
+
+    #[test]
+    fn a_failed_first_reading_opens_on_reading() {
+        let mut st = State::default();
+        let _ = prepare(&mut st, output(), iced::Rectangle::default());
+        let a = update(&mut st, Message::First(Detail::default()));
+        assert!(matches!(a, Action::Open { .. }));
+        assert_eq!(st.detail, None);
+    }
 }

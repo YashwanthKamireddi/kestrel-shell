@@ -71,18 +71,23 @@ impl App {
         self.show(kind, output, button)
     }
 
-    /// Open `kind` under `button`, or move the open panel there.
-    /// Opens `kind` under `at` (for panels that open themselves once their content is in).
-    pub fn open_panel(
+    /// Asked to open `kind` under `button`, or move the open panel there: at once, or, for a
+    /// panel that waits for what it shows (`panels::prepare`), once that is in.
+    pub(crate) fn show(
         &mut self,
         kind: PanelKind,
         output: OutputId,
-        at: Rectangle,
+        button: Rectangle,
     ) -> Task<Message> {
-        self.show(kind, output, at)
+        match panels::prepare(self, kind, output, button) {
+            Some(waiting) => waiting,
+            None => self.open_panel(kind, output, button),
+        }
     }
 
-    pub(crate) fn show(
+    /// Opens `kind` under `button` now (a waiting panel's `Action::Open` comes here), or moves
+    /// the open panel there.
+    pub fn open_panel(
         &mut self,
         kind: PanelKind,
         output: OutputId,
@@ -150,6 +155,8 @@ impl App {
         if let Some(kind) = self.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             panels::closed(self, kind);
         }
+        // One asked for but still waiting for its content stays closed too.
+        panels::cancel(self);
         // Gone on the click (design call 2026-11-13: any delay closing felt slow); its own surface
         // goes with it, and Hyprland animates that out.
         self.panel = None;

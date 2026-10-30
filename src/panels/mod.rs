@@ -283,8 +283,44 @@ pub fn refocus(app: &App, kind: PanelKind) -> Task<AppMessage> {
     Task::Iced(iced::widget::focus(id))
 }
 
+/// A panel was asked to open. One that opens only once what it shows is in (the monitor's
+/// first reading) starts reading it here and opens itself when it arrives (`Action::Open`):
+/// `Some` is that work. `None`: open it now.
+pub fn prepare(
+    app: &mut App,
+    kind: PanelKind,
+    output: iced::OutputId,
+    at: iced::Rectangle,
+) -> Option<Task<AppMessage>> {
+    // Others open at once; the monitor too when it is open already (moved to another screen):
+    // it has its reading.
+    if kind != PanelKind::Monitor
+        || app
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.open && p.kind == PanelKind::Monitor)
+    {
+        return None;
+    }
+    let a = monitor::prepare(&mut app.panels.monitor, output, at);
+    Some(action::perform(app, a, |m| {
+        AppMessage::Panel(Message::Monitor(m))
+    }))
+}
+
+/// A panel asked for but still waiting for its content does not open after all (closed, or
+/// another panel opened meanwhile).
+pub fn cancel(app: &mut App) {
+    monitor::cancel(&mut app.panels.monitor);
+}
+
 /// A panel was just opened: reset its transient state and load what it needs.
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
+    // Another panel opened (by any route): a monitor still waiting for its reading does not
+    // open over it.
+    if kind != PanelKind::Monitor {
+        cancel(app);
+    }
     match kind {
         PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
         PanelKind::Island => app.panels.calendar = calendar::State::default(),
@@ -739,6 +775,8 @@ pub fn closed(app: &mut App, kind: PanelKind) {
         PanelKind::Files => files::closed(&mut app.panels.files),
         PanelKind::OpenWith => open_with::closed(&mut app.panels.open_with),
         PanelKind::Auth => app.panels.auth.closed(),
+        // Its numbers go with it: opened again, it reads afresh, never shows old ones.
+        PanelKind::Monitor => app.panels.monitor = monitor::State::default(),
         _ => {}
     }
 }
