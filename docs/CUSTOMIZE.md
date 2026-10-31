@@ -102,3 +102,18 @@ Placeholders (`#rrggbb`, or `r, g, b` with `.rgb`): `{{base}} {{surface}} {{surf
 page: `sound`, `bluetooth`, `mouse-touchpad`, `date-time`…, or a page's first word). Panels: `launcher overview
 control calendar power clipboard emoji wallpaper keys capture monitor weather media privacy
 settings` (also `wifi`, `bluetooth`, `sound` for the control centre).
+
+`kestrel health` prints what every running service is doing: its name (`network`, `audio`,
+`mpris`, …), its state, how often it was started again, and its last error with the time:
+
+```
+service     state       restarts  last error
+audio       running            0
+network     restarting         2  14:02:11 ended before its first reading
+tray        failed             6  14:01:40 panicked: …
+```
+
+`running`: its stream is up. `restarting`: it ended or panicked and is made again after 1 s
+(doubling to 30 s while it keeps failing). `failed`: it failed (panicked, or ended before its
+first reading) more than 5 times in 60 s, so it is tried only once every 2 minutes until it
+works again. A service whose module is switched off has no row.

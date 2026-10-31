@@ -93,6 +93,10 @@ not enabled, and its subscription is never created.
   a notification; the rest of the shell continues.
 - No `unwrap()`/`expect()` on anything that can fail at runtime. Errors are values; services log
   and retry with backoff.
+- Every service stream runs under `stream::forever`, a small supervisor with a stable name per
+  service: more than 5 failures in 60 s and it is marked failed and tried every 2 minutes
+  instead of spinning. Its state, restarts and last error are in `services::health`, printed by
+  `kestrel health`.
 - The process runs under systemd (`Restart=on-failure`) with a watchdog: the update loop pings
   every 10 s (`src/watchdog.rs`); a freeze of 20 s ends it and systemd starts it again.
 - What must never die lives apart (Phase 3): the system prompts (polkit passwords, Wi-Fi

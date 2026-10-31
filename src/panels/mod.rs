@@ -550,7 +550,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if open == Some(PanelKind::Monitor) {
         subs.push(
             iced::Subscription::run(|| {
-                crate::services::stream::forever(crate::services::system::detail)
+                crate::services::stream::forever("monitor", crate::services::system::detail)
             })
             .map(|d| Message::Monitor(monitor::Message::Detail(d))),
         );
@@ -601,7 +601,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         subs.push(
             Subscription::run_with(overview::live_jobs(&app.hypr), |j| {
                 let j = j.clone();
-                crate::services::stream::forever(move || crate::services::previews::live(j.clone()))
+                crate::services::stream::forever("previews", move || {
+                    crate::services::previews::live(j.clone())
+                })
             })
             .map(|f| Message::Overview(overview::Message::Live(f))),
         );

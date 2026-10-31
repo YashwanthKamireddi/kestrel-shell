@@ -11,25 +11,25 @@ use crate::services::{
 use iced::Subscription;
 
 pub fn hyprland() -> Subscription<hyprland::State> {
-    Subscription::run(|| forever(hyprland::stream))
+    Subscription::run(|| forever("hyprland", hyprland::stream))
 }
 pub fn clock() -> Subscription<()> {
-    Subscription::run(|| forever(clock::stream))
+    Subscription::run(|| forever("clock", clock::stream))
 }
 pub fn seconds() -> Subscription<()> {
-    Subscription::run(|| forever(clock::seconds))
+    Subscription::run(|| forever("seconds", clock::seconds))
 }
 pub fn camera() -> Subscription<Vec<String>> {
-    Subscription::run(|| forever(crate::services::camera::stream))
+    Subscription::run(|| forever("camera", crate::services::camera::stream))
 }
 pub fn audio() -> Subscription<audio::State> {
-    Subscription::run(|| forever(audio::stream))
+    Subscription::run(|| forever("audio", audio::stream))
 }
 pub fn network() -> Subscription<network::State> {
-    Subscription::run(|| forever(network::stream))
+    Subscription::run(|| forever("network", network::stream))
 }
 pub fn bluetooth() -> Subscription<bluetooth::State> {
-    Subscription::run(|| forever(bluetooth::stream))
+    Subscription::run(|| forever("bluetooth", bluetooth::stream))
 }
 /// The AirPods at BlueZ object `path` (…/dev_B4_59_…): charge and fit.
 pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods>> {
@@ -41,57 +41,57 @@ pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods
         .replace('_', ":");
     Subscription::run_with(address, |a: &String| {
         let a = a.clone();
-        forever(move || crate::services::airpods::stream(&a))
+        forever("airpods", move || crate::services::airpods::stream(&a))
     })
 }
 pub fn bt_agent() -> Subscription<crate::services::bluetooth::Ask> {
-    Subscription::run(|| forever(crate::services::bluetooth::agent))
+    Subscription::run(|| forever("bluetooth-agent", crate::services::bluetooth::agent))
 }
 pub fn wifi_agent() -> Subscription<crate::services::network::Ask> {
-    Subscription::run(|| forever(crate::services::network::agent))
+    Subscription::run(|| forever("wifi-agent", crate::services::network::agent))
 }
 pub fn bt_visible() -> Subscription<()> {
-    Subscription::run(|| forever(crate::services::bluetooth::visible))
+    Subscription::run(|| forever("bluetooth-visible", crate::services::bluetooth::visible))
 }
 
 pub fn bt_search() -> Subscription<()> {
-    Subscription::run(|| forever(crate::services::bluetooth::search))
+    Subscription::run(|| forever("bluetooth-search", crate::services::bluetooth::search))
 }
 /// GNOME Keyring's password prompts (kestrel is its system prompter).
 pub fn keyring() -> Subscription<crate::services::keyring::Ask> {
-    Subscription::run(|| forever(crate::services::keyring::stream))
+    Subscription::run(|| forever("keyring", crate::services::keyring::stream))
 }
 
 pub fn polkit() -> Subscription<crate::services::polkit::Event> {
-    Subscription::run(|| forever(crate::services::polkit::stream))
+    Subscription::run(|| forever("polkit", crate::services::polkit::stream))
 }
 /// What apps ask through kestrel's portal backend (a file, which app opens something).
 pub fn portal() -> Subscription<crate::services::portal::Event> {
-    Subscription::run(|| forever(crate::services::portal::stream))
+    Subscription::run(|| forever("portal", crate::services::portal::stream))
 }
 pub fn power() -> Subscription<power::State> {
-    Subscription::run(|| forever(power::stream))
+    Subscription::run(|| forever("power", power::stream))
 }
 pub fn mpris() -> Subscription<mpris::State> {
-    Subscription::run(|| forever(mpris::stream))
+    Subscription::run(|| forever("mpris", mpris::stream))
 }
 pub fn copied() -> Subscription<crate::services::clipboard::Copied> {
-    Subscription::run(|| forever(crate::services::clipboard::stream))
+    Subscription::run(|| forever("clipboard", crate::services::clipboard::stream))
 }
 pub fn tray() -> Subscription<tray::State> {
-    Subscription::run(|| forever(tray::stream))
+    Subscription::run(|| forever("tray", tray::stream))
 }
 pub fn notifications() -> Subscription<notifications::Event> {
-    Subscription::run(|| forever(notifications::stream))
+    Subscription::run(|| forever("notifications", notifications::stream))
 }
 pub fn vpn() -> Subscription<vpn::State> {
-    Subscription::run(|| forever(vpn::stream))
+    Subscription::run(|| forever("vpn", vpn::stream))
 }
 pub fn system() -> Subscription<system::State> {
-    Subscription::run(|| forever(system::stream))
+    Subscription::run(|| forever("system", system::stream))
 }
 pub fn updates() -> Subscription<updates::State> {
-    Subscription::run(|| forever(updates::stream))
+    Subscription::run(|| forever("updates", updates::stream))
 }
 
 /// Weather for a city, or exact coordinates with the city as the label.
@@ -111,7 +111,7 @@ pub fn weather(
             },
             |p: &web::Place| {
                 let p = p.clone();
-                forever(move || web::weather_stream(&p))
+                forever("weather", move || web::weather_stream(&p))
             },
         ),
         _ => Subscription::none(),
@@ -128,7 +128,7 @@ pub enum ConfigFile {
 /// Changes to config.toml and init.lua, so edits apply without a restart. The directory is
 /// watched (not the files) because editors save by replacing the file.
 pub fn config_files() -> Subscription<ConfigFile> {
-    Subscription::run(|| forever(config_stream))
+    Subscription::run(|| forever("config", config_stream))
 }
 
 fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
@@ -191,19 +191,19 @@ fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
 }
 
 pub fn lua() -> Subscription<crate::lua::Event> {
-    Subscription::run(|| forever(crate::lua::stream))
+    Subscription::run(|| forever("lua", crate::lua::stream))
 }
 
 /// Live levels for the Sound page: output, microphone, and `apps` (stream index, its output).
 pub fn meters(apps: Vec<(u32, String)>) -> Subscription<crate::services::meters::Meters> {
     Subscription::run_with(apps, |a: &Vec<(u32, String)>| {
         let a = a.clone();
-        forever(move || crate::services::meters::stream(a.clone()))
+        forever("meters", move || crate::services::meters::stream(a.clone()))
     })
 }
 
 pub fn level() -> Subscription<crate::services::level::Bands> {
-    Subscription::run(|| forever(crate::services::level::stream))
+    Subscription::run(|| forever("level", crate::services::level::stream))
 }
 
 /// One message at `at` (then nothing): a deadline, instead of polling for it.

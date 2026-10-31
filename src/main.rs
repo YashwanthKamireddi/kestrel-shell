@@ -65,6 +65,9 @@ fn main() -> anyhow::Result<()> {
             );
             println!("kestrel close           close the open panel");
             println!("kestrel lock            lock the session (the lock screen, docs/LOCK.md)");
+            println!(
+                "kestrel health          what each service is doing (running, restarting, failed)"
+            );
             return Ok(());
         }
         if !ipc::send(&args.join(" ")) {
