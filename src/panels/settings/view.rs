@@ -527,13 +527,99 @@ pub(super) fn pick_search<'a>(
 pub(super) fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Message> {
     control(label(name, text::BODY, if on { s.accent } else { s.ink }))
         .padding([tok::NONE, tok::L])
-        .height(34)
+        .height(CHOICE_H)
         .width(Length::Fill)
         .radius(tok::R_ROW())
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(m)
         .into()
+}
+
+/// A list's row height: a chooser's choices and a pick list's entries.
+const CHOICE_H: f32 = 36.0;
+
+/// A chooser in a row: what is chosen now and an arrow (up while its list is open); a click
+/// opens or closes the list of `choice`s under its row. The one chooser every page uses.
+pub(super) fn dropdown<'a>(
+    s: Scheme,
+    shown: impl Into<Element<'a, Message>>,
+    open: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    control(
+        row![
+            shown.into(),
+            icon(
+                if open {
+                    Icon::ChevronUp
+                } else {
+                    Icon::ChevronDown
+                },
+                tok::ICON_S,
+                s.ink_dim
+            )
+        ]
+        .spacing(tok::S)
+        .align_y(Alignment::Center),
+    )
+    .padding([tok::XS, tok::L])
+    .radius(tok::FULL)
+    .kind(s, crate::ui::control::Kind::Ghost)
+    .on_press(m)
+    .into()
+}
+
+/// A chooser's words: what is chosen now.
+pub(super) fn dropdown_text<'a>(
+    s: Scheme,
+    now: impl iced::widget::text::IntoFragment<'a>,
+    open: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    dropdown(s, label(now, text::SMALL, s.ink), open, m)
+}
+
+/// One choice in an open chooser, indented under its row, a check on the one in use.
+pub(super) fn choice<'a>(
+    s: Scheme,
+    content: impl Into<Element<'a, Message>>,
+    on: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    control(
+        row![
+            container(content).width(Length::Fill),
+            if on {
+                Element::from(icon(Icon::Check, tok::ICON, s.accent))
+            } else {
+                iced::widget::Space::new().into()
+            }
+        ]
+        .align_y(Alignment::Center),
+    )
+    .padding([tok::NONE, tok::INDENT])
+    .height(CHOICE_H)
+    .width(Length::Fill)
+    .kind(s, crate::ui::control::Kind::Ghost)
+    .no_press_scale()
+    .on_press(m)
+    .into()
+}
+
+/// A choice that is words (the chosen one in the accent).
+pub(super) fn choice_text<'a>(
+    s: Scheme,
+    name: impl iced::widget::text::IntoFragment<'a>,
+    on: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    choice(
+        s,
+        label(name, text::BODY, if on { s.accent } else { s.ink }),
+        on,
+        m,
+    )
 }
 
 /// A row for one Hyprland input option: a switch, a choice, or a slider with its value.

@@ -37,42 +37,18 @@ pub(super) fn defaults_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
             s,
             kind.name,
             None,
-            control(
-                row![shown, icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)]
-                    .spacing(tok::S)
-                    .align_y(Alignment::Center),
-            )
-            .padding([tok::XS, tok::L])
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(Message::DefaultOpen((!open).then_some(k)))
-            .into(),
+            dropdown(s, shown, open, Message::DefaultOpen((!open).then_some(k))),
         ));
         if open {
             // The apps that can open it: a click makes one the default.
             for a in candidates(&st.apps, kind) {
                 let on = now.as_deref() == Some(a.id.as_str());
-                rows.push(Some(
-                    control(
-                        row![
-                            app_chip(s, a),
-                            iced::widget::Space::new().width(Length::Fill),
-                            if on {
-                                Element::from(icon(Icon::Check, tok::ICON, s.accent))
-                            } else {
-                                iced::widget::Space::new().into()
-                            }
-                        ]
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([tok::NONE, tok::INDENT])
-                    .height(36)
-                    .width(Length::Fill)
-                    .kind(s, crate::ui::control::Kind::Ghost)
-                    .no_press_scale()
-                    .on_press(Message::DefaultSet(k, a.id.clone()))
-                    .into(),
-                ));
+                rows.push(Some(choice(
+                    s,
+                    app_chip(s, a),
+                    on,
+                    Message::DefaultSet(k, a.id.clone()),
+                )));
             }
         }
     }
