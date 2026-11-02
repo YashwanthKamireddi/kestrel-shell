@@ -657,4 +657,37 @@ mod tests {
         let menu = parse_layout(&root).unwrap();
         assert!(menu.children.is_empty());
     }
+
+    #[test]
+    fn an_items_address_is_read_every_way_apps_register_it() {
+        let s = |service: &str| split_service(service, ":1.42");
+        // A path only (Electron apps): the sender is the bus name.
+        assert_eq!(
+            s("/org/ayatana/NotificationItem/x"),
+            (
+                ":1.42".to_string(),
+                "/org/ayatana/NotificationItem/x".to_string()
+            )
+        );
+        // A bus name and a path together.
+        assert_eq!(
+            s(":1.7/StatusNotifierItem"),
+            (":1.7".to_string(), "/StatusNotifierItem".to_string())
+        );
+        assert_eq!(
+            s("org.kde.StatusNotifierItem-12-1/a/b"),
+            (
+                "org.kde.StatusNotifierItem-12-1".to_string(),
+                "/a/b".to_string()
+            )
+        );
+        // A bus name only: the standard path.
+        assert_eq!(
+            s("org.blueman.Tray"),
+            (
+                "org.blueman.Tray".to_string(),
+                "/StatusNotifierItem".to_string()
+            )
+        );
+    }
 }

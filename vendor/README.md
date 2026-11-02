@@ -75,3 +75,6 @@ locked and unusable): its configure always draws a new frame, and layer property
 end right after. Also `caps_lock()`: Caps Lock as the compositor last reported it (iced's
 `Modifiers` has no Caps Lock), read on `ModifiersChanged`. Upstream's CLAUDE.md lists session
 lock as not supported; this is the smallest addition (2026-11-18).
+14. `OutputId::for_tests(n)`: an output id made by the app, so kestrel's tests can give the shell
+a screen without a compositor (panels open, switch and close on it). Real ids still come only
+from the compositor (2026-11-18).

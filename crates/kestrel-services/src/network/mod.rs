@@ -502,6 +502,34 @@ mod tests {
         assert!(check_ip(&bad_dns).is_err());
     }
 
+    #[test]
+    fn each_typed_field_says_what_is_wrong() {
+        let manual = |addr: &str, gw: &str| IpSettings {
+            manual: Some((addr.into(), gw.into())),
+            dns: vec![],
+        };
+        assert!(
+            check_ip(&manual("10.0.0.2/8", "")).is_ok(),
+            "no router is fine"
+        );
+        assert!(check_ip(&manual("10.0.0.2/32", "10.0.0.1")).is_ok());
+        for p in ["0", "33", "x", ""] {
+            let e = check_ip(&manual(&format!("10.0.0.2/{p}"), "")).unwrap_err();
+            assert!(e.contains("is not a prefix"), "/{p}: {e}");
+        }
+        let e = check_ip(&manual("10.0.0.256/24", "")).unwrap_err();
+        assert_eq!(e, "10.0.0.256 is not an IPv4 address");
+        let e = check_ip(&manual("10.0.0.2/24", "router")).unwrap_err();
+        assert_eq!(e, "router is not a router address");
+        let e = check_ip(&IpSettings {
+            manual: None,
+            dns: vec!["9.9.9.9".into(), "::1".into()],
+        })
+        .unwrap_err();
+        assert_eq!(e, "::1 is not a DNS server address");
+        assert!(check_ip(&IpSettings::default()).is_ok(), "automatic");
+    }
+
     /// Writes IP settings into a throwaway saved connection named by `KESTREL_TEST_CONN` (its
     /// settings path) and reads them back. Run by hand: it changes NetworkManager's settings.
     #[test]

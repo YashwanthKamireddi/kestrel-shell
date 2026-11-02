@@ -26,6 +26,9 @@ struct Saved {
 }
 
 fn file() -> Option<std::path::PathBuf> {
+    if cfg!(test) {
+        return Some(crate::config::state_dir().join("notifications.json"));
+    }
     let base = std::env::var_os("XDG_STATE_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| {

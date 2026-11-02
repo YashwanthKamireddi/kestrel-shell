@@ -32,6 +32,8 @@ mod panel_flow;
 mod reload;
 mod surfaces;
 mod system;
+#[cfg(test)]
+mod tests;
 pub(crate) mod wallpaper;
 #[allow(unused_imports)]
 use alerts::*;

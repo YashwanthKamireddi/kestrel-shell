@@ -48,9 +48,11 @@ pub async fn binds() -> Vec<(String, Vec<Bind>)> {
     let Ok(raw) = request("j/binds").await else {
         return Vec::new();
     };
-    let Ok(list) = serde_json::from_str::<Vec<JBind>>(&raw) else {
-        return Vec::new();
-    };
+    serde_json::from_str::<Vec<JBind>>(&raw).map_or_else(|_| Vec::new(), grouped)
+}
+
+/// Hyprland's binds (`j/binds`) as the cheatsheet groups them.
+fn grouped(list: Vec<JBind>) -> Vec<(String, Vec<Bind>)> {
     let mut groups: Vec<(String, Vec<Bind>)> = Vec::new();
     for b in list {
         if !b.has_description || b.description.is_empty() || b.dispatcher.contains("global") {
@@ -81,4 +83,81 @@ pub async fn binds() -> Vec<(String, Vec<Bind>)> {
         }
     }
     groups
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn binds(json: &str) -> Vec<(String, Vec<Bind>)> {
+        grouped(serde_json::from_str(json).unwrap())
+    }
+
+    fn keys(k: &[&str]) -> Vec<String> {
+        k.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn binds_group_by_their_category_in_order() {
+        let g = binds(
+            r#"[
+            {"modmask": 64, "key": "Return", "description": "Apps: Terminal", "has_description": true, "dispatcher": "exec"},
+            {"modmask": 65, "key": "q", "description": "Windows: Close", "has_description": true, "dispatcher": "killactive"},
+            {"modmask": 64, "key": "e", "description": "Apps: Files", "has_description": true, "dispatcher": "exec"},
+            {"modmask": 0, "key": "Print", "description": "Screenshot", "has_description": true, "dispatcher": "exec"}
+        ]"#,
+        );
+        let cats: Vec<&str> = g.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(cats, ["Apps", "Windows", "Other"]);
+        assert_eq!(
+            g[0].1,
+            [
+                Bind {
+                    keys: keys(&["Super", "Enter"]),
+                    what: "Terminal".into()
+                },
+                Bind {
+                    keys: keys(&["Super", "E"]),
+                    what: "Files".into()
+                },
+            ]
+        );
+        assert_eq!(g[1].1[0].keys, keys(&["Super", "Shift", "Q"]));
+        assert_eq!(g[2].1[0].keys, keys(&["PrtSc"]));
+    }
+
+    #[test]
+    fn undescribed_and_old_global_binds_are_left_out() {
+        let g = binds(
+            r#"[
+            {"modmask": 64, "key": "a", "description": "", "has_description": false},
+            {"modmask": 64, "key": "b", "description": "x: y", "has_description": false},
+            {"modmask": 64, "key": "c", "description": "Shell: Overview", "has_description": true, "dispatcher": "global"}
+        ]"#,
+        );
+        assert!(g.is_empty());
+    }
+
+    #[test]
+    fn super_alone_on_release_is_one_key_not_two() {
+        let g = binds(
+            r#"[
+            {"modmask": 64, "key": "SUPER_L", "description": "Shell: Launcher", "has_description": true, "release": true},
+            {"modmask": 64, "key": "SUPER_L", "description": "Shell: Launcher", "has_description": true, "release": true},
+            {"modmask": 12, "key": "mouse:272", "description": "Windows: Move", "has_description": true}
+        ]"#,
+        );
+        assert_eq!(g[0].1.len(), 1, "a bind listed twice shows once");
+        assert_eq!(g[0].1[0].keys, keys(&["Super"]));
+        assert_eq!(g[1].1[0].keys, keys(&["Ctrl", "Alt", "Left drag"]));
+    }
+
+    #[test]
+    fn key_names_read_as_on_the_keyboard() {
+        assert_eq!(key_name("XF86AudioMute"), "AudioMute");
+        assert_eq!(key_name("Slash"), "/");
+        assert_eq!(key_name("k"), "K");
+        assert_eq!(key_name("F12"), "F12");
+        assert_eq!(key_name("mouse_down"), "Scroll down");
+    }
 }

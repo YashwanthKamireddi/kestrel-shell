@@ -227,6 +227,22 @@ struct Session {
 
 impl Session {
     fn load(emit: &(impl Fn(Event) + Clone + 'static)) -> Self {
+        let file = path();
+        let session = Self::start(emit, std::fs::read_to_string(&file).ok(), plugins());
+        log::info!(
+            "lua: loaded {} ({} widgets)",
+            file.display(),
+            session.widgets.len()
+        );
+        session
+    }
+
+    /// A fresh state running `init` (init.lua's text, if there is one), then `plugins`.
+    fn start(
+        emit: &(impl Fn(Event) + Clone + 'static),
+        init: Option<String>,
+        plugins: Vec<Plugin>,
+    ) -> Self {
         let lua = Lua::new();
         let deadline = Rc::new(Cell::new(Instant::now() + CALL_LIMIT));
         let d = deadline.clone();
@@ -251,14 +267,13 @@ impl Session {
             widgets: Vec::new(),
             handlers: Rc::new(RefCell::new(Vec::new())),
         };
-        let file = path();
         if let Err(e) = session.install_api(emit, bar.clone(), defined.clone()) {
             emit(Event::Error(format!("init.lua: {e}")));
             return session;
         }
         // init.lua first (it may set the layout), then every plugin. A failing script is
         // reported by name and the others still load.
-        if let Ok(source) = std::fs::read_to_string(&file) {
+        if let Some(source) = init {
             session.deadline.set(Instant::now() + CALL_LIMIT);
             let loaded = session.lua.load(source).set_name("@init.lua").exec();
             if let Err(e) = loaded {
@@ -266,7 +281,7 @@ impl Session {
                 *bar.borrow_mut() = Bar::default();
             }
         }
-        for plugin in plugins() {
+        for plugin in plugins {
             session.deadline.set(Instant::now() + CALL_LIMIT);
             if let Err(e) = session.load_plugin(&plugin) {
                 emit(Event::Error(format!("plugin {}: {}", plugin.id, short(&e))));
@@ -277,11 +292,6 @@ impl Session {
             bar: bar.borrow().clone(),
             widgets: session.widgets.iter().map(|w| w.name.clone()).collect(),
         });
-        log::info!(
-            "lua: loaded {} ({} widgets)",
-            file.display(),
-            session.widgets.len()
-        );
         session
     }
 
@@ -763,5 +773,380 @@ mod tests {
         let t = Instant::now();
         assert_eq!(read("sleep 5; echo late"), "");
         assert!(t.elapsed() < Duration::from_secs(4));
+    }
+
+    type Seen = Rc<RefCell<Vec<Event>>>;
+
+    /// A session running `init`, and what it said.
+    fn session(init: &str) -> (Session, Seen) {
+        session_with(init, Vec::new())
+    }
+
+    fn session_with(init: &str, plugins: Vec<Plugin>) -> (Session, Seen) {
+        let seen: Seen = Rc::default();
+        let s = seen.clone();
+        let emit = move |e: Event| s.borrow_mut().push(e);
+        let session = Session::start(&emit, Some(init.to_string()), plugins);
+        (session, seen)
+    }
+
+    fn emitter(seen: &Seen) -> impl Fn(Event) + Clone + 'static {
+        let s = seen.clone();
+        move |e: Event| s.borrow_mut().push(e)
+    }
+
+    fn errors(seen: &Seen) -> Vec<String> {
+        seen.borrow()
+            .iter()
+            .filter_map(|e| match e {
+                Event::Error(m) => Some(m.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn loaded(seen: &Seen) -> (Bar, Vec<String>) {
+        seen.borrow()
+            .iter()
+            .find_map(|e| match e {
+                Event::Loaded { bar, widgets } => Some((bar.clone(), widgets.clone())),
+                _ => None,
+            })
+            .expect("a Loaded event")
+    }
+
+    fn chips(seen: &Seen) -> Vec<(String, Option<Chip>)> {
+        seen.borrow()
+            .iter()
+            .filter_map(|e| match e {
+                Event::Widget(n, c) => Some((n.clone(), c.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_script_sets_the_bar() {
+        let (_, seen) = session(r#"kestrel.bar { style = "pills", right = { "clock", "power" } }"#);
+        let (bar, widgets) = loaded(&seen);
+        assert_eq!(
+            bar,
+            Bar {
+                style: Some(BarStyle::Pills),
+                left: None,
+                center: None,
+                right: Some(vec!["clock".into(), "power".into()]),
+            }
+        );
+        assert!(widgets.is_empty());
+        assert!(errors(&seen).is_empty());
+    }
+
+    #[test]
+    fn a_failing_script_leaves_the_bar_as_configured() {
+        let (_, seen) = session(r#"kestrel.bar { left = { "clock" } } error("oops")"#);
+        assert_eq!(loaded(&seen).0, Bar::default());
+        let e = errors(&seen);
+        assert_eq!(e.len(), 1);
+        assert!(e[0].contains("oops"), "{e:?}");
+    }
+
+    #[test]
+    fn an_unknown_bar_style_is_explained() {
+        let (_, seen) = session(r#"kestrel.bar { style = "floating" }"#);
+        let e = errors(&seen);
+        assert!(
+            e[0].contains("\"floating\"") && e[0].contains("pills"),
+            "{e:?}"
+        );
+        assert_eq!(loaded(&seen).0, Bar::default());
+    }
+
+    #[test]
+    fn a_script_that_never_ends_is_stopped_and_the_shell_goes_on() {
+        let t = Instant::now();
+        let (_, seen) = session("while true do end");
+        assert!(t.elapsed() < CALL_LIMIT * 3);
+        let e = errors(&seen);
+        assert!(e[0].contains("took longer than a second"), "{e:?}");
+        // It still reports in, with nothing from the script.
+        assert_eq!(loaded(&seen), (Bar::default(), Vec::new()));
+    }
+
+    #[test]
+    fn built_in_names_are_not_for_widgets() {
+        let (_, seen) = session(r#"kestrel.widget("clock", { update = function() end })"#);
+        assert!(errors(&seen)[0].contains("built-in module"));
+        assert!(loaded(&seen).1.is_empty());
+    }
+
+    #[test]
+    fn widgets_update_no_faster_than_twice_a_second() {
+        let (s, _) = session(
+            r#"kestrel.widget("fast", { interval = 0.01, update = function() return "x" end })
+               kestrel.widget("slow", { update = function() return "y" end })"#,
+        );
+        assert_eq!(s.widgets[0].interval, Duration::from_millis(500));
+        assert_eq!(
+            s.widgets[1].interval,
+            Duration::from_secs(10),
+            "the default"
+        );
+    }
+
+    #[test]
+    fn a_widget_defined_again_replaces_the_first() {
+        let (mut s, seen) = session(
+            r#"kestrel.widget("w", { update = function() return "one" end })
+               kestrel.widget("w", { update = function() return "two" end })"#,
+        );
+        assert_eq!(loaded(&seen).1, ["w"]);
+        s.update_due(&emitter(&seen));
+        assert_eq!(
+            chips(&seen),
+            [(
+                "w".to_string(),
+                Some(Chip {
+                    text: "two".into(),
+                    icon: None
+                })
+            )]
+        );
+    }
+
+    #[test]
+    fn what_an_update_returns_becomes_its_chip() {
+        let (mut s, seen) = session(
+            r#"kestrel.widget("t", { update = function() return { text = "42%", icon = "cpu" } end })
+               kestrel.widget("n", { update = function() return nil end })
+               kestrel.widget("none", {})"#,
+        );
+        s.update_due(&emitter(&seen));
+        let c = chips(&seen);
+        assert_eq!(c.len(), 2, "a widget without update says nothing: {c:?}");
+        assert_eq!(c[0].1.as_ref().map(|c| c.text.as_str()), Some("42%"));
+        assert_eq!(c[1], ("n".to_string(), None));
+        // Not due again until its interval has passed.
+        s.update_due(&emitter(&seen));
+        assert_eq!(chips(&seen).len(), 2);
+    }
+
+    #[test]
+    fn a_failing_widget_is_reported_once_until_it_works_again() {
+        let (mut s, seen) = session(
+            r#"broken = true
+               kestrel.widget("w", { update = function()
+                 if broken then error("no data") end
+                 return "ok"
+               end })"#,
+        );
+        let emit = emitter(&seen);
+        s.update(0, &emit);
+        s.update(0, &emit);
+        assert_eq!(errors(&seen).len(), 1);
+        assert!(errors(&seen)[0].starts_with("widget \"w\":"));
+        s.lua.globals().set("broken", false).unwrap();
+        s.update(0, &emit);
+        assert_eq!(chips(&seen).last().unwrap().1.as_ref().unwrap().text, "ok");
+        s.lua.globals().set("broken", true).unwrap();
+        s.update(0, &emit);
+        assert_eq!(errors(&seen).len(), 2, "failing again is news again");
+    }
+
+    #[test]
+    fn a_widget_returning_a_number_is_told_what_to_return() {
+        let (mut s, seen) = session(r#"kestrel.widget("w", { update = function() return 5 end })"#);
+        s.update(0, &emitter(&seen));
+        assert!(errors(&seen)[0].contains("return a table, a string or nil"));
+    }
+
+    #[test]
+    fn a_runaway_update_is_stopped_and_the_next_call_gets_its_own_time() {
+        let (mut s, seen) = session(
+            r#"spin = true
+               kestrel.widget("w", { update = function()
+                 while spin do end
+                 return "done"
+               end })"#,
+        );
+        let emit = emitter(&seen);
+        s.update(0, &emit);
+        assert!(errors(&seen)[0].contains("took longer than a second"));
+        s.lua.globals().set("spin", false).unwrap();
+        s.update(0, &emit);
+        assert_eq!(
+            chips(&seen).last().unwrap().1.as_ref().unwrap().text,
+            "done"
+        );
+    }
+
+    #[test]
+    fn handlers_get_the_events_fields() {
+        let (mut s, seen) = session(
+            r#"got = nil
+               kestrel.on("notification", function(t) got = t.app .. ":" .. t.summary end)
+               kestrel.on("battery", function(t) pct = t.percent end)"#,
+        );
+        let emit = emitter(&seen);
+        s.dispatch(
+            "notification",
+            &[
+                ("app", Val::Str("Mail".into())),
+                ("summary", Val::Str("Hi".into())),
+            ],
+            &emit,
+        );
+        s.dispatch("battery", &[("percent", Val::Num(41.0))], &emit);
+        let g = s.lua.globals();
+        assert_eq!(g.get::<String>("got").unwrap(), "Mail:Hi");
+        assert_eq!(g.get::<f64>("pct").unwrap(), 41.0);
+        assert!(errors(&seen).is_empty());
+    }
+
+    #[test]
+    fn only_known_events_can_be_listened_to() {
+        let (_, seen) = session(r#"kestrel.on("keypress", function() end)"#);
+        let e = errors(&seen);
+        assert!(e[0].contains("no event \"keypress\""), "{e:?}");
+        assert!(e[0].contains("workspace"), "the events are listed: {e:?}");
+    }
+
+    #[test]
+    fn a_failing_handler_is_reported_once_and_the_others_still_run() {
+        let (mut s, seen) = session(
+            r#"n = 0
+               kestrel.on("media", function() error("bad") end)
+               kestrel.on("media", function() n = n + 1 end)"#,
+        );
+        let emit = emitter(&seen);
+        for _ in 0..3 {
+            s.dispatch("media", &[("playing", Val::Bool(true))], &emit);
+        }
+        assert_eq!(errors(&seen).len(), 1);
+        assert!(errors(&seen)[0].starts_with("kestrel.on(\"media\")"));
+        assert_eq!(s.lua.globals().get::<i64>("n").unwrap(), 3);
+    }
+
+    #[test]
+    fn a_click_runs_its_command_or_function_and_updates_the_widget() {
+        let (mut s, seen) = session(
+            r#"clicks = 0
+               kestrel.widget("cmd", { click = "kitty -e btop", update = function() return "c" end })
+               kestrel.widget("fn", {
+                 click = function() clicks = clicks + 1 end,
+                 update = function() return tostring(clicks) end,
+               })"#,
+        );
+        let emit = emitter(&seen);
+        s.click("cmd", &emit);
+        assert!(
+            seen.borrow()
+                .iter()
+                .any(|e| matches!(e, Event::Exec(c) if c == "kitty -e btop"))
+        );
+        s.click("fn", &emit);
+        assert_eq!(s.lua.globals().get::<i64>("clicks").unwrap(), 1);
+        assert_eq!(chips(&seen).last().unwrap().1.as_ref().unwrap().text, "1");
+        // A widget that is not there: nothing.
+        let before = seen.borrow().len();
+        s.click("gone", &emit);
+        assert_eq!(seen.borrow().len(), before);
+    }
+
+    #[test]
+    fn the_scripts_messages_reach_the_shell() {
+        let (_, seen) = session(
+            r#"kestrel.notify("Title")
+               kestrel.notify("T2", "body")
+               kestrel.island { icon = "cpu", title = "Hot" }
+               kestrel.exec("kitty")"#,
+        );
+        let seen = seen.borrow();
+        assert!(matches!(&seen[0], Event::Notify(t, b) if t == "Title" && b.is_empty()));
+        assert!(matches!(&seen[1], Event::Notify(t, b) if t == "T2" && b == "body"));
+        assert!(
+            matches!(&seen[2], Event::Island(Some(i), t, d) if i == "cpu" && t == "Hot" && d.is_empty())
+        );
+        assert!(matches!(&seen[3], Event::Exec(c) if c == "kitty"));
+    }
+
+    /// A plugin in a folder of its own under the temporary directory (removed by the caller).
+    fn plugin(id: &str, source: &str, settings: &str) -> Plugin {
+        let dir =
+            std::env::temp_dir().join(format!("kestrel-lua-test-{}-{id}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("main.lua"), source).unwrap();
+        Plugin {
+            id: id.into(),
+            dir,
+            main: "main.lua".into(),
+            settings: settings.parse().unwrap(),
+        }
+    }
+
+    #[test]
+    fn plugins_keep_their_globals_to_themselves() {
+        let a = plugin(
+            "a",
+            r#"mine = config.path .. #config.list
+               kestrel.widget("a-w", { update = function() return mine end })"#,
+            "path = \"/\"\nlist = [1, 2, 3]\n[nested]\nx = true",
+        );
+        let b = plugin(
+            "b",
+            r#"if mine ~= nil then error("saw a's global") end"#,
+            "",
+        );
+        let dirs = [a.dir.clone(), b.dir.clone()];
+        let (mut s, seen) = session_with("", vec![a, b]);
+        for d in dirs {
+            let _ = std::fs::remove_dir_all(d);
+        }
+        assert!(errors(&seen).is_empty(), "{:?}", errors(&seen));
+        assert!(s.lua.globals().get::<Value>("mine").unwrap().is_nil());
+        s.update_due(&emitter(&seen));
+        assert_eq!(chips(&seen)[0].1.as_ref().unwrap().text, "/3");
+    }
+
+    #[test]
+    fn a_broken_plugin_is_named_and_the_rest_still_load() {
+        let bad = plugin("bad", "this is not lua", "");
+        let good = plugin("good", r#"kestrel.widget("g", {})"#, "");
+        let missing = Plugin {
+            main: "absent.lua".into(),
+            ..plugin("missing", "", "")
+        };
+        let dirs = [bad.dir.clone(), good.dir.clone(), missing.dir.clone()];
+        let (_, seen) = session_with("", vec![bad, missing, good]);
+        for d in dirs {
+            let _ = std::fs::remove_dir_all(d);
+        }
+        let e = errors(&seen);
+        assert_eq!(e.len(), 2, "{e:?}");
+        assert!(e[0].starts_with("plugin bad:"));
+        assert!(e[1].starts_with("plugin missing: absent.lua"));
+        assert_eq!(loaded(&seen).1, ["g"]);
+    }
+
+    #[test]
+    fn a_bar_replaces_only_the_sections_it_names() {
+        let mut b = crate::config::BarConfig::default();
+        let before = b.clone();
+        Bar {
+            center: Some(vec!["clock".into()]),
+            ..Bar::default()
+        }
+        .apply(&mut b);
+        assert_eq!(b.center, ["clock"]);
+        assert_eq!(
+            (b.left, b.right, b.style),
+            (before.left, before.right, before.style)
+        );
+    }
+
+    #[test]
+    fn errors_are_cut_to_their_first_line() {
+        let e = mlua::Error::runtime("bad thing\nstack traceback:\n  [C]: in ?");
+        assert_eq!(short(&e), "bad thing");
     }
 }

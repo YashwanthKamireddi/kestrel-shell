@@ -223,7 +223,13 @@ fn between(cores: &Cores, procs: &Procs, c2: &Cores, p2: &Procs, secs: f32) -> D
         .iter()
         .zip(c2)
         .map(|((t0, i0), (t1, i1))| {
-            let dt = t1.saturating_sub(*t0).max(1) as f32;
+            // No ticks between the readings (an offline core, a counter that went back): no
+            // load. It read as 100 % (no time and no idle time came out as fully busy).
+            let dt = t1.saturating_sub(*t0);
+            if dt == 0 {
+                return 0;
+            }
+            let dt = dt as f32;
             ((1.0 - i1.saturating_sub(*i0) as f32 / dt) * 100.0)
                 .round()
                 .clamp(0.0, 100.0) as u8
@@ -298,4 +304,81 @@ pub fn detail() -> impl Stream<Item = Detail> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hz() -> u64 {
+        unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as u64
+    }
+
+    #[test]
+    fn core_load_is_the_share_not_idle() {
+        // (total, idle) ticks per core, before and after.
+        let before = vec![(1000, 800), (1000, 1000), (5, 5)];
+        let after = vec![(1100, 825), (1100, 1100), (5, 5)];
+        let d = between(&before, &Procs::new(), &after, &Procs::new(), 1.0);
+        assert_eq!(
+            d.cores,
+            [75, 0, 0],
+            "a core with no ticks between is idle, not NaN"
+        );
+    }
+
+    #[test]
+    fn a_counter_that_went_backwards_reads_as_nothing() {
+        let d = between(
+            &vec![(1000, 900)],
+            &Procs::new(),
+            &vec![(900, 950)],
+            &Procs::new(),
+            1.0,
+        );
+        assert_eq!(
+            d.cores,
+            [0],
+            "no time between the readings: no load, never wrapped round"
+        );
+    }
+
+    #[test]
+    fn busiest_processes_first_and_what_none_explains() {
+        let hz = hz();
+        let p = |name: &str, ticks: u64, rss: u64| (name.to_string(), ticks, rss, true);
+        let before: Procs = [(1, p("a", 0, 1)), (2, p("b", 0, 5)), (3, p("c", 0, 9))].into();
+        // In one second: a used half a core, b a whole one, c nothing; d is new.
+        let after: Procs = [
+            (1, p("a", hz / 2, 1)),
+            (2, p("b", hz, 5)),
+            (3, p("c", 0, 9)),
+            (4, p("d", 3 * hz, 2)),
+        ]
+        .into();
+        let cores = vec![(0, 0), (0, 0)];
+        let cores2 = vec![(100, 0), (100, 0)];
+        let d = between(&cores, &before, &cores2, &after, 1.0);
+        let names: Vec<&str> = d.top.iter().map(|p| p.name.as_str()).collect();
+        // A process not seen before counts nothing yet; equal shares go by memory.
+        assert_eq!(names, ["b", "a", "c", "d"]);
+        assert!((d.top[0].cpu - 100.0).abs() < 0.01);
+        assert!((d.top[1].cpu - 50.0).abs() < 0.01);
+        // Two busy cores (200 %), 150 % accounted for.
+        assert!((d.other - 50.0).abs() < 0.01, "{}", d.other);
+    }
+
+    #[test]
+    fn at_most_ten_processes() {
+        let before: Procs = (0..30)
+            .map(|i| (i, ("p".to_string(), 0, 0, false)))
+            .collect();
+        let after: Procs = (0..30)
+            .map(|i| (i, ("p".to_string(), u64::from(i), 0, false)))
+            .collect();
+        let d = between(&vec![], &before, &vec![], &after, 2.0);
+        assert_eq!(d.top.len(), 10);
+        assert_eq!(d.top[0].pid, 29);
+        assert_eq!(d.other, 0.0, "never below nothing");
+    }
 }

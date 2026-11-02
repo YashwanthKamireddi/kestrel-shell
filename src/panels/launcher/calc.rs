@@ -104,3 +104,70 @@ impl Parser<'_> {
             .ok()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::calc;
+
+    fn is(expr: &str, want: &str) {
+        assert_eq!(calc(expr).as_deref(), Some(want), "{expr}");
+    }
+
+    #[test]
+    fn the_same_level_goes_left_to_right() {
+        is("10-3-2", "5");
+        is("100/10/2", "5");
+        is("2*3/4", "1.5");
+        is("17%5*2", "4");
+    }
+
+    #[test]
+    fn powers_go_right_to_left_and_may_be_negative() {
+        is("2^3^2", "512");
+        is("2^-1", "0.5");
+        is("4^0.5", "2");
+        is("(2^3)^2", "64");
+    }
+
+    #[test]
+    fn signs() {
+        is("--3", "3");
+        is("-(2+3)", "-5");
+        is("2*-3", "-6");
+        is("3--1", "4");
+    }
+
+    #[test]
+    fn every_way_of_writing_times_and_divide() {
+        is("3x4", "12");
+        is("3×4", "12");
+        is("8÷2", "4");
+        is("10%3", "1");
+        is("7.5%2", "1.5");
+    }
+
+    #[test]
+    fn decimals_read_as_people_write_them() {
+        is("0.1+0.2", "0.3");
+        is(".5*2", "1");
+        is("1/3", "0.3333333333");
+        is("  1 +  2 ", "3");
+        is("10^20", "100000000000000000000");
+    }
+
+    #[test]
+    fn nonsense_has_no_answer() {
+        for bad in [
+            "", "   ", "1/0", "0/0", "(1+2", "1+2)", "()", "1..2", "1e3", "2(3)", "*2", "1+", "2^",
+            "-",
+        ] {
+            assert_eq!(calc(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn deep_brackets() {
+        let deep = format!("{}1{}", "(".repeat(50), ")".repeat(50));
+        is(&deep, "1");
+    }
+}

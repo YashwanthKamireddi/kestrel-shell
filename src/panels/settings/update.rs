@@ -295,79 +295,26 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             Message::ReadPlugins,
         ),
         Message::BarMove(id, d) => {
-            let mut l = layout(cx);
-            if let Some((sec, at)) = find_in(&l, &id) {
-                let to = at as i32 + d;
-                if to >= 0 && (to as usize) < l[sec].len() {
-                    l[sec].swap(at, to as usize);
-                    return save_layout(&l);
-                }
-            }
-            Act::None
+            moved(&layout(cx), &id, d).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarSection(id, d) => {
-            let mut l = layout(cx);
-            if let Some((sec, at)) = find_in(&l, &id) {
-                let to = sec as i32 + d;
-                if (0..3).contains(&to) {
-                    let m = l[sec].remove(at);
-                    // Into the near end of the next section (right: its start; left: its end).
-                    if d > 0 {
-                        l[to as usize].insert(0, m);
-                    } else {
-                        l[to as usize].push(m);
-                    }
-                    return save_layout(&l);
-                }
-            }
-            Act::None
+            to_section(&layout(cx), &id, d).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarRemove(id) => {
             if st.bar_pick.as_deref() == Some(id.as_str()) {
                 st.bar_pick = None;
             }
-            let mut l = layout(cx);
-            for list in &mut l {
-                list.retain(|m| *m != id);
-            }
-            save_layout(&l)
+            save_layout(&removed(&layout(cx), &id))
         }
         Message::BarAddTo(lane, id) => {
             st.bar_adding = None;
-            let mut l = layout(cx);
-            if find_in(&l, &id).is_some() || lane > 2 {
-                return Act::None;
-            }
-            // The right side's end is the power button's place: added before it.
-            let at = if lane == 2 {
-                l[2].iter().position(|m| m == "power").unwrap_or(l[2].len())
-            } else {
-                l[lane].len()
-            };
-            l[lane].insert(at, id);
-            save_layout(&l)
+            added(&layout(cx), lane, &id).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarDrop => {
-            let (Some(id), target) = (st.bar_drag.take(), st.bar_target.take()) else {
+            let (Some(id), Some((lane, to))) = (st.bar_drag.take(), st.bar_target.take()) else {
                 return Act::None;
             };
-            let Some((lane, mut to)) = target else {
-                return Act::None;
-            };
-            let mut l = layout(cx);
-            let Some((sec, from)) = find_in(&l, &id) else {
-                return Act::None;
-            };
-            // Back where it was: nothing to save.
-            if sec == lane && (to == from || to == from + 1) {
-                return Act::None;
-            }
-            l[sec].remove(from);
-            if sec == lane && from < to {
-                to -= 1;
-            }
-            l[lane].insert(to.min(l[lane].len()), id);
-            save_layout(&l)
+            dropped(&layout(cx), &id, lane, to).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarReset => {
             if !st.bar_reset_armed {
