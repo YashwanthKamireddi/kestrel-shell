@@ -142,7 +142,7 @@ pub(super) fn displays_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
             .padding([tok::L, tok::XL])
             .style(move |_| container::Style {
                 background: Some(s.accent.scale_alpha(0.14 * s.opacity).into()),
-                border: iced::Border::default().rounded(tok::R_CARD),
+                border: iced::Border::default().rounded(tok::R_CARD()),
                 ..container::Style::default()
             })
             .into(),

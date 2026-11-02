@@ -52,8 +52,9 @@ pub(crate) fn look() -> (Scheme, bool) {
             source: l.source,
         }
     };
-    let frosted = crate::config::load().material != crate::config::Material::Black;
-    crate::theme::set_glass(frosted);
+    let config = crate::config::load();
+    crate::theme::apply(&config);
+    let frosted = config.material != crate::config::Material::Black;
     (Scheme::dark(seed), frosted)
 }
 
@@ -224,13 +225,13 @@ pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {
             } else {
                 s.base.into()
             }),
-            border: iced::Border::default().rounded(tok::R_PANEL),
+            border: iced::Border::default().rounded(tok::R_PANEL()),
             ..container::Style::default()
         });
     let card: Element<'_, Message> = if frosted {
         iced::blur_container(card)
             .style(move |_| container::Style {
-                border: iced::Border::default().rounded(tok::R_PANEL),
+                border: iced::Border::default().rounded(tok::R_PANEL()),
                 ..container::Style::default()
             })
             .into()

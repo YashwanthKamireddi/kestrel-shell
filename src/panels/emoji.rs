@@ -273,7 +273,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                     )
                     .center(CELL),
                 )
-                .radius(tok::R_ROW)
+                .radius(tok::R_ROW())
                 .kind(
                     s,
                     if selected {
@@ -331,7 +331,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 container(label(glyph, 16.0, s.ink).font(iced::Font::with_name("Twemoji")))
                     .center(30),
             )
-            .radius(tok::R_CONTROL)
+            .radius(tok::R_CONTROL())
             .kind(
                 s,
                 if on {

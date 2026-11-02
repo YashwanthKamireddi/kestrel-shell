@@ -216,7 +216,7 @@ pub(super) fn preview_pane<'a>(s: Scheme, st: &'a State) -> Element<'a, Message>
             .height(Length::Fill)
             .style(move |_| container::Style {
                 background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-                border: iced::Border::default().rounded(theme::tok::R_CARD),
+                border: iced::Border::default().rounded(theme::tok::R_CARD()),
                 ..container::Style::default()
             }),
         foot

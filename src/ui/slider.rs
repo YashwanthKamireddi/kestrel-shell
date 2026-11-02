@@ -217,7 +217,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
                     state.shown = self.value;
                 } else {
                     // Exponential approach: ~90 % of the way in 120 ms.
-                    let k = 1.0 - (-dt * 19.0).exp();
+                    let k = crate::motion::glide(dt, crate::theme::tok::GLIDE_SLIDER);
                     state.shown += (self.value - state.shown) * k;
                 }
                 if (state.shown - self.value).abs() > 1e-3 {

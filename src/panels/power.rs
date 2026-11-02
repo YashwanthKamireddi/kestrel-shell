@@ -115,7 +115,7 @@ pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, Message> {
         .padding([tok::NONE, tok::L])
         .height(40)
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(s, kind)
         .on_press(Message::Press(a))
         .into()

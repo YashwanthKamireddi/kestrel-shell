@@ -30,7 +30,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     title: "Recording".into(),
                     detail: String::new(),
                     thumb: None,
-                    until: Instant::now() + Duration::from_millis(FLASH_MS),
+                    until: Instant::now() + tok::HOLD_FLASH,
                     // A click stops it.
                     action: s.recording_pid.map(|_| Message::StopRecording),
                 });
@@ -45,7 +45,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     title: "Recording saved".into(),
                     detail: name.clone(),
                     thumb: None,
-                    until: Instant::now() + Duration::from_millis(FLASH_MS + 1800),
+                    until: Instant::now() + tok::HOLD_FLASH_LONG,
                     // A click plays it.
                     action: Some(open_file(file)),
                 });

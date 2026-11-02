@@ -206,6 +206,39 @@ pub fn glass() -> bool {
     GLASS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// `[look] radius`: every radius token is multiplied by it (1 = the design's own radii).
+static RADIUS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1.0f32.to_bits());
+
+pub fn set_radius_scale(k: f32) {
+    RADIUS.store(
+        usable_scale(k).to_bits(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+/// A negative, NaN or endless scale is no scale: the design's own radii.
+fn usable_scale(k: f32) -> f32 {
+    if k.is_finite() && k >= 0.0 { k } else { 1.0 }
+}
+
+pub fn radius_scale() -> f32 {
+    f32::from_bits(RADIUS.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// A radius token as it is drawn now.
+fn rounded(r: f32) -> f32 {
+    r * radius_scale()
+}
+
+/// The config's look-wide settings, applied in the one place the tokens are read from: the
+/// material (glass), `[look] radius` and `[motion]`. Called on start and on every config
+/// change, by the shell and the prompt process alike.
+pub fn apply(c: &crate::config::Config) {
+    set_glass(c.material != crate::config::Material::Black);
+    set_radius_scale(c.look.radius.unwrap_or(1.0));
+    crate::motion::set_tuning(c.motion.speed, c.motion.reduce);
+}
+
 /// A pill-shaped thing's own fill: the black in the Black look, none when frosted (the frost
 /// under the pill shows through).
 pub fn surface(s: Scheme) -> iced::Color {
@@ -253,7 +286,10 @@ pub fn font(weight: font::Weight) -> Font {
 
 /// The design kit's tokens (docs/DESIGN.md). Panels use these names, never numbers.
 #[allow(dead_code)] // the whole scale, in use as panels move onto it
+#[allow(non_snake_case)] // the radii keep their token names (R_CARD) though they are functions
 pub mod tok {
+    use std::time::Duration;
+
     // Spacing: the 4 px grid (with 2 and 6 for tight optical fixes).
     pub const XXS: f32 = 2.0;
     pub const XS: f32 = 4.0;
@@ -269,13 +305,24 @@ pub mod tok {
     pub const HAIR: f32 = 1.0;
 
     // Radii, concentric: a panel (24) padded 12 holds cards of 12; rows 10; small controls 8.
-    // A pill is half its height (`pill`).
-    pub const R_PANEL: f32 = 24.0;
-    pub const R_CARD: f32 = 12.0;
+    // A pill is half its height (`pill`). Each follows `[look] radius` (`super::rounded`), so
+    // they are read as functions; pills (`FULL`, `pill`) stay pills at any scale.
+    pub fn R_PANEL() -> f32 {
+        super::rounded(24.0)
+    }
+    pub fn R_CARD() -> f32 {
+        super::rounded(12.0)
+    }
     /// Where cards of a grouped list meet (Android 16, DMS groupedListInnerRadius).
-    pub const R_JOIN: f32 = 4.0;
-    pub const R_ROW: f32 = 10.0;
-    pub const R_CONTROL: f32 = 8.0;
+    pub fn R_JOIN() -> f32 {
+        super::rounded(4.0)
+    }
+    pub fn R_ROW() -> f32 {
+        super::rounded(10.0)
+    }
+    pub fn R_CONTROL() -> f32 {
+        super::rounded(8.0)
+    }
 
     /// Fully round, whatever the height (controls cap a radius at half their height).
     pub const FULL: f32 = 999.0;
@@ -308,9 +355,62 @@ pub mod tok {
     /// A selection ring's ink (the overview's chosen window: neutral, never a colour).
     pub const RING: f32 = 0.55;
 
-    // Motion, in seconds.
+    // Motion: one named set, like ii's presets (docs/DESIGN.md, Motion). Springs are (angular
+    // frequency in rad/s, damping ratio); times are seconds; glide rates are per second. They
+    // are read only through `crate::motion` (`Spring::to`, `motion::secs`, `motion::glide`),
+    // which applies `[motion] speed` and `reduce` in that one place.
+    /// Panel opening: settles in ~280 ms with 0.6 % overshoot (Material 3 expressive
+    /// stiffness, damped further). Visible growth, no bounce.
+    pub const SPRING_OPEN: (f32, f32) = (19.5, 0.85);
+    /// Closing and quick moves: ~160 ms, no visible overshoot. Exits run faster than entries.
+    pub const SPRING_CLOSE: (f32, f32) = (30.0, 0.95);
+    /// Something appearing: critically damped, there in ~70 ms, no overshoot (fast enough to
+    /// read as instant, soft enough not to pop).
+    pub const SPRING_SHOW: (f32, f32) = (60.0, 1.0);
+    /// Small UI elements (a press springing back, a swiped card returning): snappy, barely
+    /// any overshoot.
+    pub const SPRING_SNAP: (f32, f32) = (24.0, 0.86);
+    /// The workspace pill's edge facing the move (ii's stretch): settled in ~0.11 s.
+    pub const SPRING_LEAD: (f32, f32) = (60.0, 1.0);
+    /// The workspace pill's other edge, following: ~0.15 s.
+    pub const SPRING_TRAIL: (f32, f32) = (45.0, 1.0);
+    /// The state layer easing in and out.
     pub const HOVER_IN: f32 = 0.07;
     pub const HOVER_OUT: f32 = 0.12;
+    /// A wheel notch's smooth scroll: most of it within ~120 ms.
+    pub const GLIDE_SCROLL: f32 = 26.0;
+    /// A slider's fill following a new value: ~90 % of the way in 120 ms.
+    pub const GLIDE_SLIDER: f32 = 19.0;
+    /// One breath of a pulsing icon (charging, connecting).
+    pub const BREATH: f32 = 1.6;
+    /// Where in an opening panel's progress its content fades in: once the shape has clearly
+    /// started growing.
+    pub const FADE_IN: (f32, f32) = (0.05, 0.55);
+    /// A closing panel's content, and a sheet's both ways: out early, so an empty card never
+    /// shrinks with stale content in it.
+    pub const FADE_LATE: (f32, f32) = (0.4, 0.9);
+    /// A closing panel's box: goes with its content instead of lingering faintly after it.
+    pub const FADE_BOX: (f32, f32) = (0.4, 1.0);
+
+    // Times that are not motion, so `[motion]` leaves them alone: how long something stays
+    // to be read, how a gesture is recognised, how a level meter follows sound.
+    /// The island's flash (something copied, a recording started).
+    pub const HOLD_FLASH: Duration = Duration::from_millis(2200);
+    /// A flash with a file name to read (a recording saved).
+    pub const HOLD_FLASH_LONG: Duration = Duration::from_millis(4000);
+    /// A level change's OSD.
+    pub const HOLD_OSD: Duration = Duration::from_millis(1400);
+    /// An event's OSD (a title and a line to read): twice a level's.
+    pub const HOLD_EVENT: Duration = Duration::from_millis(2800);
+    /// A fling is projected this far ahead, in seconds (DMS swipeFlingProjectionMs 200).
+    pub const FLING: f32 = 0.2;
+    /// A sideways scroll ends when no scroll arrives for this long, in seconds.
+    pub const WHEEL_IDLE: f32 = 0.12;
+    /// The visualiser's bands: rise fast, fall slower (like cava), per second.
+    pub const METER_RISE: f32 = 27.5;
+    pub const METER_FALL: f32 = 8.6;
+    /// The visualiser's bars gliding to their bands, per second.
+    pub const METER_GLIDE: f32 = 18.0;
 
     // Surfaces.
     /// The only panel widths (Apple-style: a few fixed sizes, not one per panel): a small menu
@@ -349,6 +449,55 @@ pub const SEMIBOLD: font::Weight = font::Weight::Semibold;
 mod tests {
     use super::*;
     use color::contrast;
+
+    #[test]
+    fn radius_tokens_default_to_the_design() {
+        // No test changes the scale: unset, the tokens are the values drawn before the scale.
+        assert_eq!(radius_scale(), 1.0);
+        assert_eq!(
+            [
+                tok::R_PANEL(),
+                tok::R_CARD(),
+                tok::R_JOIN(),
+                tok::R_ROW(),
+                tok::R_CONTROL()
+            ],
+            [24.0, 12.0, 4.0, 10.0, 8.0]
+        );
+        assert_eq!(
+            usable_scale(crate::config::Config::default().look.radius.unwrap_or(1.0)),
+            1.0
+        );
+    }
+
+    #[test]
+    fn radius_scale_multiplies_and_ignores_nonsense() {
+        assert_eq!(24.0 * usable_scale(0.5), 12.0);
+        assert_eq!(10.0 * usable_scale(2.0), 20.0);
+        assert_eq!(usable_scale(0.0), 0.0);
+        assert_eq!(usable_scale(-1.0), 1.0);
+        assert_eq!(usable_scale(f32::NAN), 1.0);
+        assert_eq!(usable_scale(f32::INFINITY), 1.0);
+    }
+
+    #[test]
+    fn motion_tokens_keep_their_values() {
+        assert_eq!(tok::SPRING_OPEN, (19.5, 0.85));
+        assert_eq!(tok::SPRING_CLOSE, (30.0, 0.95));
+        assert_eq!(tok::SPRING_SHOW, (60.0, 1.0));
+        assert_eq!(tok::SPRING_SNAP, (24.0, 0.86));
+        assert_eq!(tok::SPRING_LEAD, (60.0, 1.0));
+        assert_eq!(tok::SPRING_TRAIL, (45.0, 1.0));
+        assert_eq!((tok::HOVER_IN, tok::HOVER_OUT), (0.07, 0.12));
+        assert_eq!(
+            (tok::GLIDE_SCROLL, tok::GLIDE_SLIDER, tok::BREATH),
+            (26.0, 19.0, 1.6)
+        );
+        assert_eq!(tok::HOLD_FLASH.as_millis(), 2200);
+        assert_eq!(tok::HOLD_FLASH_LONG.as_millis(), 2200 + 1800);
+        assert_eq!(tok::HOLD_OSD.as_millis(), 1400);
+        assert_eq!(tok::HOLD_EVENT.as_millis(), 1400 * 2);
+    }
 
     #[test]
     fn material_schemes_stay_readable() {

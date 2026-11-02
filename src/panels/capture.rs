@@ -161,7 +161,7 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
     )
     .padding([tok::L, tok::NONE])
     .width(Length::Fill)
-    .radius(tok::R_CARD)
+    .radius(tok::R_CARD())
     .kind(
         s,
         if on {

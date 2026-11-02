@@ -415,7 +415,7 @@ pub fn list_row<'a, M: Clone + 'static>(
     .padding([0, 12])
     .height(44)
     .width(Length::Fill)
-    .radius(tok::R_ROW)
+    .radius(tok::R_ROW())
     // No box behind a row: the selected one (the network in use) is told by its name in the
     // accent; the pointer only lifts a row faintly.
     .colors(Color::TRANSPARENT, s.hover(), s.raised_press)

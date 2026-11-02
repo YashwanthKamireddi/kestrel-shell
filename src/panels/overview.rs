@@ -460,7 +460,7 @@ fn card<'a>(
         control(Space::new().width(width).height(height))
             .width(width)
             .height(height)
-            .radius(tok::R_CARD)
+            .radius(tok::R_CARD())
             .kind(
                 s,
                 if current {
@@ -500,7 +500,7 @@ fn card<'a>(
                 .center_y(bh)
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(tok::FILL * alpha * s.opacity).into()),
-                    border: iced::Border::default().rounded(tok::R_CONTROL),
+                    border: iced::Border::default().rounded(tok::R_CONTROL()),
                     ..container::Style::default()
                 })
                 .into(),
@@ -516,7 +516,7 @@ fn card<'a>(
                         border: iced::Border {
                             color: s.ink.scale_alpha(tok::RING * s.opacity),
                             width: 1.5,
-                            radius: tok::R_CONTROL.into(),
+                            radius: tok::R_CONTROL().into(),
                         },
                         ..container::Style::default()
                     }),
@@ -525,7 +525,7 @@ fn card<'a>(
         let tile = control(tile)
             .width(bw)
             .height(bh)
-            .radius(tok::R_CONTROL)
+            .radius(tok::R_CONTROL())
             .no_press_scale()
             .on_enter(Message::Hover(w.address.clone()))
             .on_exit(Message::Unhover(w.address.clone()))
@@ -551,7 +551,7 @@ fn card<'a>(
         .padding([tok::HAIR, tok::M])
         .style(move |_| container::Style {
             background: Some(s.fade(s.accent).into()),
-            border: iced::Border::default().rounded(tok::R_CONTROL),
+            border: iced::Border::default().rounded(tok::R_CONTROL()),
             ..container::Style::default()
         })
         .into()

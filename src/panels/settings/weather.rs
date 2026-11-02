@@ -14,7 +14,7 @@ pub(super) fn time_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Messa
         .width(200)
         .style(move |_, _| text_input::Style {
             background: s.ink.scale_alpha(tok::FILL * s.opacity).into(),
-            border: iced::Border::default().rounded(tok::R_ROW),
+            border: iced::Border::default().rounded(tok::R_ROW()),
             icon: s.ink_dim,
             placeholder: s.ink_faint,
             value: s.ink,

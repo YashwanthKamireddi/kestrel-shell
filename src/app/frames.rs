@@ -99,7 +99,11 @@ impl App {
         // Rises fast, falls slower (like cava): the old per-reading 0.6 / 0.25 at 30 a
         // second, as rates over the frame's time.
         for (target, b) in self.level_targets.iter_mut().zip(bands) {
-            let rate = if b > *target { 27.5 } else { 8.6 };
+            let rate = if b > *target {
+                tok::METER_RISE
+            } else {
+                tok::METER_FALL
+            };
             *target += (b - *target) * (1.0 - (-dt * rate).exp());
         }
         self.envelope = bands.iter().copied().fold(0.0, f32::max);
@@ -107,7 +111,7 @@ impl App {
         let playing = self.media.main().is_some_and(|p| p.playing);
         for (bar, target) in self.levels.iter_mut().zip(self.level_targets) {
             let to = if playing { 0.08 + target * 0.92 } else { 0.0 };
-            *bar += (to - *bar) * (1.0 - (-dt * 18.0).exp());
+            *bar += (to - *bar) * (1.0 - (-dt * tok::METER_GLIDE).exp());
         }
         self.loudness = self.envelope;
         if !playing && self.levels.iter().all(|b| *b < 0.005) {

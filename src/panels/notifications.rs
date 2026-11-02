@@ -223,9 +223,9 @@ fn app_name(n: &Notification) -> &str {
 /// The notification's picture, a rounded square (DMS: at most THUMB, its own shape).
 fn thumb<'a>(n: &Notification) -> Option<Element<'a, Message>> {
     match n.image.as_ref()? {
-        Image::Path(p) => ui::rounded_file(std::path::Path::new(p), THUMB, THUMB, tok::R_CARD)
+        Image::Path(p) => ui::rounded_file(std::path::Path::new(p), THUMB, THUMB, tok::R_CARD())
             .map(|h| image(h).width(THUMB).height(THUMB).into()),
-        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), THUMB, THUMB, tok::R_CARD)),
+        Image::Rgba(p) => Some(ui::cover(crate::ui::pixels(p), THUMB, THUMB, tok::R_CARD())),
     }
 }
 
@@ -349,7 +349,7 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, Message> {
         .identity(u64::from(n.id))
         .padding(tok::M + tok::XXS)
         .width(Length::Fill)
-        .radius(tok::R_CARD)
+        .radius(tok::R_CARD())
         .kind(
             s,
             if p.popup {
@@ -391,8 +391,8 @@ fn card_of<'a>(s: Scheme, n: &Notification, p: Place) -> Element<'a, Message> {
                         radius: iced::border::Radius {
                             top_left: tok::NONE,
                             top_right: tok::NONE,
-                            bottom_right: tok::R_CARD,
-                            bottom_left: tok::R_CARD,
+                            bottom_right: tok::R_CARD(),
+                            bottom_left: tok::R_CARD(),
                         },
                         ..iced::Border::default()
                     },

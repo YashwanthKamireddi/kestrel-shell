@@ -58,7 +58,7 @@ colours and icon sizes outside `src/ui` and `src/theme`; the count is zero and m
 | Tokens | Values |
 |---|---|
 | Spacing `XXS…XXXL` | 2 · 4 · 6 · 8 · 12 · 16 · 20 · 24 (`INDENT` 28, `HAIR` 1) |
-| Radii | `R_PANEL` 24, `R_CARD` 12 (= 24 − `PANEL_PAD`), `R_ROW` 10, `R_CONTROL` 8, `R_JOIN` 4, `FULL` (a pill) |
+| Radii | `R_PANEL()` 24, `R_CARD()` 12 (= 24 − `PANEL_PAD`), `R_ROW()` 10, `R_CONTROL()` 8, `R_JOIN()` 4, `FULL` (a pill). Functions since 2026-11-18: each is multiplied by `[look] radius` (default 1); pills are never scaled |
 | Heights | `H_SMALL` 28, `H_CONTROL` 32, `H_ROW` 40, `H_ROW2` 48; bar `BAR` 40, its round items `BAR_ITEM` 30 |
 | Panels | widths `PANEL_S` 320, `PANEL_M` 400, `PANEL_L` 560, `PANEL_XL` 860; padding `PANEL_PAD` 12; `JOIN` 16 (the concave curve to the bar) |
 | Icons | `ICON_XS` 12, `ICON_S` 14, `ICON` 16, `ICON_M` 18, `ICON_L` 20, `ICON_XL` 22, `ICON_XXL` 28, `ICON_HERO` 40, `ICON_DISPLAY` 52 (the weather panel's condition). Material Symbols Rounded, filled, weight 500, from an embedded subset font (assets/fonts/kestrel-icons.ttf, built by tools/icons) |
@@ -68,6 +68,29 @@ Measures that only make sense in one place (a table's columns, a fixed button wi
 constants in that file, shared by everything that must line up with them (header and rows).
 
 ### Motion
+
+Motion tokens (2026-11-18), one named set in `theme::tok` like ii's presets. They are read only
+through `crate::motion` (`Spring::to`, `motion::secs`, `motion::glide`), where `[motion] speed`
+and `reduce` apply (docs/CUSTOMIZE.md). `tools/lint/tokens.sh` counts literal springs,
+durations and rates anywhere outside `src/theme` and `src/motion.rs` (src/ui included).
+
+| Token | Value | Use |
+|---|---|---|
+| `SPRING_OPEN` | ω 19.5, ζ 0.85 (~280 ms, 0.6 % overshoot) | a sheet or the island growing |
+| `SPRING_CLOSE` | ω 30, ζ 0.95 (~160 ms) | closing, a press going down |
+| `SPRING_SHOW` | ω 60, ζ 1 (~70 ms) | something appearing, the clipboard's glide |
+| `SPRING_SNAP` | ω 24, ζ 0.86 | a press springing back, a swiped card returning |
+| `SPRING_LEAD` / `SPRING_TRAIL` | ω 60 / 45, ζ 1 | the workspace pill's stretch (leading / trailing edge) |
+| `HOVER_IN` / `HOVER_OUT` | 70 / 120 ms | the state layer |
+| `GLIDE_SCROLL` / `GLIDE_SLIDER` | 26 / 19 per second | smooth wheel scrolling; a slider following its value |
+| `BREATH` | 1.6 s | a pulsing icon |
+| `FADE_IN` / `FADE_LATE` / `FADE_BOX` | 0.05–0.55 / 0.4–0.9 / 0.4–1 of progress | content fading with an opening panel / a closing panel or sheet / a closing panel's box |
+
+Not motion, so never scaled: `HOLD_FLASH` 2.2 s, `HOLD_FLASH_LONG` 4 s, `HOLD_OSD` 1.4 s,
+`HOLD_EVENT` 2.8 s (how long things stay to be read), `FLING` 0.2 s and `WHEEL_IDLE` 0.12 s
+(swipe gestures), `METER_RISE` / `METER_FALL` / `METER_GLIDE` (the visualiser following sound).
+
+The table below is the original intent; the tokens above are what the code does.
 
 | What | How |
 |---|---|

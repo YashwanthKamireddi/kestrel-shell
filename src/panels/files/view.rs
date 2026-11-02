@@ -288,7 +288,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         .padding([tok::NONE, tok::L])
         .height(tok::H_ROW)
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(
             s,
             if here {
@@ -456,7 +456,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             .padding([tok::NONE, tok::M])
             .height(26)
             .width(width)
-            .radius(tok::R_CONTROL)
+            .radius(tok::R_CONTROL())
             .kind(s, crate::ui::control::Kind::Ghost)
             .no_press_scale()
             .on_press(Message::SortBy(by))
@@ -560,7 +560,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             .padding([tok::NONE, tok::M])
             .height(ROW_H)
             .width(Length::Fill)
-            .radius(tok::R_ROW)
+            .radius(tok::R_ROW())
             // Selected: the chosen fill (clear at a glance); under the pointer: the light lift.
             .kind(
                 s,

@@ -282,11 +282,11 @@ impl App {
             self.toast_w.snap(pill_w);
             self.toast_sheet.h.snap(tok::BAR - 6.0);
         }
-        self.toast_w.to(TOAST_WIDTH, Spring::OPEN);
+        self.toast_w.to(TOAST_WIDTH, tok::SPRING_OPEN);
         if self.toast_sheet.natural > 0.0 {
             self.toast_sheet
                 .h
-                .to(self.toast_sheet.natural, Spring::OPEN);
+                .to(self.toast_sheet.natural, tok::SPRING_OPEN);
         }
         self.clock.reset();
     }
@@ -300,8 +300,8 @@ impl App {
                 .focused_output()
                 .and_then(|o| self.output(o))
                 .map_or(120.0, |o| o.island_w.value + 2.0 * crate::theme::tok::L);
-            self.toast_w.to(pill_w, Spring::CLOSE);
-            self.toast_sheet.h.to(tok::BAR - 6.0, Spring::CLOSE);
+            self.toast_w.to(pill_w, tok::SPRING_CLOSE);
+            self.toast_sheet.h.to(tok::BAR - 6.0, tok::SPRING_CLOSE);
             self.clock.reset();
         }
     }
@@ -316,7 +316,7 @@ impl App {
             value,
             text: None,
             sub: None,
-            until: Instant::now() + Duration::from_millis(OSD_MS),
+            until: Instant::now() + tok::HOLD_OSD,
             // A click opens the control centre, where the level is set.
             action: Some(Message::Ipc("toggle control".into())),
         });
@@ -335,7 +335,7 @@ impl App {
             text: Some(title),
             // No second line when there is nothing to say on it.
             sub: (!sub.is_empty()).then_some(sub),
-            until: Instant::now() + Duration::from_millis(OSD_MS * 2),
+            until: Instant::now() + tok::HOLD_EVENT,
             action: Some(Message::Ipc("toggle control".into())),
         });
         if self.osd_sheet.natural > 0.0 {
@@ -445,7 +445,7 @@ impl App {
             title,
             detail,
             thumb,
-            until: Instant::now() + Duration::from_millis(FLASH_MS),
+            until: Instant::now() + tok::HOLD_FLASH,
             action,
         });
         self.clock.reset();

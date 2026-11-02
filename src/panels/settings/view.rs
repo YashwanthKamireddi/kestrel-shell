@@ -81,7 +81,7 @@ pub(super) fn group<'a>(
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-            border: iced::Border::default().rounded(tok::R_CARD),
+            border: iced::Border::default().rounded(tok::R_CARD()),
             ..container::Style::default()
         });
     Some(match title {
@@ -237,7 +237,7 @@ fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             .padding([tok::NONE, tok::L])
             .height(36)
             .width(Length::Fill)
-            .radius(tok::R_ROW)
+            .radius(tok::R_ROW())
             .kind(
                 s,
                 if on {
@@ -318,7 +318,7 @@ fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                     .padding([tok::NONE, tok::L])
                     .height(40)
                     .width(Length::Fill)
-                    .radius(tok::R_ROW)
+                    .radius(tok::R_ROW())
                     .kind(s, crate::ui::control::Kind::Tonal)
                     .no_press_scale()
                     .on_press(Message::Page(p)),
@@ -522,7 +522,7 @@ pub(super) fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Ele
         .padding([tok::NONE, tok::L])
         .height(34)
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(m)

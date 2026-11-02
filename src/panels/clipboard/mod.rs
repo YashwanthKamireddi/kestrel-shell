@@ -239,8 +239,8 @@ fn max_scroll(n: usize) -> f32 {
 
 /// Scrolls to `px`: at once (a touchpad, a drag, a key) or gliding (a wheel step).
 fn scroll_to(st: &mut State, px: f32, glide: bool) {
-    if glide && !crate::motion::still() {
-        st.glide.to(px, crate::motion::Spring::SHOW);
+    if glide && !crate::motion::instant() {
+        st.glide.to(px, tok::SPRING_SHOW);
     } else {
         st.glide.snap(px);
     }

@@ -99,7 +99,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         x,
         width: w,
         height: h,
-        radius: tok::R_PANEL,
+        radius: tok::R_PANEL(),
         join: tok::JOIN,
         flush_left: !pills && x <= t + 0.5,
         flush_right: !pills && x + w >= o.size.width - t - 0.5,
@@ -157,7 +157,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if show_toasts {
         let mut d = drop(grown_x, grown_w, grown_h);
         d.top = GROWN_TOP;
-        d.radius = ((tok::BAR - 6.0) / 2.0).max(tok::R_PANEL.min(grown_h / 2.0));
+        d.radius = ((tok::BAR - 6.0) / 2.0).max(tok::R_PANEL().min(grown_h / 2.0));
         drops.push(d);
     }
     if show_osd {
@@ -270,7 +270,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 if panel.is_some_and(|p| p.open) {
                     k
                 } else {
-                    crate::motion::range(k, 0.4, 1.0)
+                    crate::motion::range(k, tok::FADE_BOX.0, tok::FADE_BOX.1)
                 },
             ),
             bar: tok::BAR,
@@ -308,7 +308,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             let a = if panel.is_some_and(|p| p.open) {
                 k
             } else {
-                crate::motion::range(k, 0.4, 1.0)
+                crate::motion::range(k, tok::FADE_BOX.0, tok::FADE_BOX.1)
             };
             boxes.push((d, h, a));
         }
@@ -641,10 +641,10 @@ pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
                 crate::config::Material::Black => Some(s.base.into()),
                 crate::config::Material::Frosted => None,
             },
-            border: iced::Border::default().rounded(tok::R_PANEL),
+            border: iced::Border::default().rounded(tok::R_PANEL()),
             ..container::Style::default()
         });
-    let card = frosted(app, o, tok::R_PANEL, s.opacity, card);
+    let card = frosted(app, o, tok::R_PANEL(), s.opacity, card);
     ui::reveal(card, width, p.h.value.max(1.0))
         .on_measure(move |sz| Message::Measured(kind, sz))
         .into()

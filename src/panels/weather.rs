@@ -74,7 +74,7 @@ pub fn now<'a>(cx: &Cx<'_>, w: &'a Weather, s: Scheme) -> Element<'a, super::Mes
                     .add_stop(1.0, bottom)
                     .into(),
             ),
-            border: iced::Border::default().rounded(tok::R_CARD),
+            border: iced::Border::default().rounded(tok::R_CARD()),
             ..container::Style::default()
         })
         .into()

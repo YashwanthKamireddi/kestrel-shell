@@ -47,8 +47,8 @@ impl App {
         let now = crate::modules::privacy::glyphs(self);
         if now.is_empty() {
             if self.privacy_fade.target > 0.0 {
-                self.privacy_fade.to(0.0, Spring::CLOSE);
-                self.privacy_w.to(0.0, Spring::CLOSE);
+                self.privacy_fade.to(0.0, tok::SPRING_CLOSE);
+                self.privacy_w.to(0.0, tok::SPRING_CLOSE);
                 self.clock.reset();
             }
         } else if now != self.privacy_glyphs || self.privacy_fade.target < 1.0 {
@@ -58,8 +58,8 @@ impl App {
             if self.privacy_fade.value < 0.02 {
                 self.privacy_w.snap(0.0);
             }
-            self.privacy_w.to(w, Spring::SNAP);
-            self.privacy_fade.to(1.0, Spring::SHOW);
+            self.privacy_w.to(w, tok::SPRING_SNAP);
+            self.privacy_fade.to(1.0, tok::SPRING_SHOW);
             self.clock.reset();
             self.privacy_glyphs = now;
         }
@@ -80,6 +80,21 @@ impl App {
                 && !(*d == Icon::Mic && mic.contains(n))
         });
         self.privacy_recent.truncate(8);
+    }
+
+    /// Apps that follow the desktop (GTK 4, Qt 6, Chromium, Firefox) read this through the
+    /// portal: dark, kestrel's accent while it themes apps, and `[motion] reduce`.
+    pub(crate) fn tell_appearance(&self) {
+        let a = self.scheme.accent;
+        services::portal::set_appearance(services::portal::Appearance {
+            accent: self.config.theme_apps.then_some((
+                f64::from(a.r),
+                f64::from(a.g),
+                f64::from(a.b),
+            )),
+            reduced_motion: self.config.motion.reduce,
+            ..Default::default()
+        });
     }
 
     /// The colours from the wallpaper's seed, or from the accent chosen in Settings; then the
@@ -110,17 +125,7 @@ impl App {
                 source: seed.source,
             };
         });
-        // Apps that follow the desktop (GTK 4, Qt 6, Chromium, Firefox) read this through the
-        // portal: dark, and kestrel's accent while it themes apps.
-        let a = self.scheme.accent;
-        services::portal::set_appearance(services::portal::Appearance {
-            accent: self.config.theme_apps.then_some((
-                f64::from(a.r),
-                f64::from(a.g),
-                f64::from(a.b),
-            )),
-            ..Default::default()
-        });
+        self.tell_appearance();
         if !self.config.theme_apps {
             return Task::none();
         }

@@ -4,7 +4,7 @@ use super::*;
 
 /// Use a freshly read config (with the Lua layer's bar on top), updating only what changed.
 pub(crate) fn apply_config(app: &mut App, mut c: Config) -> Task<Message> {
-    crate::theme::set_glass(c.material != config::Material::Black);
+    crate::theme::apply(&c);
     app.lua_bar.apply(&mut c.bar);
     c.bar.normalize();
     if c == app.config {
@@ -20,14 +20,19 @@ pub(crate) fn apply_config(app: &mut App, mut c: Config) -> Task<Message> {
     // The accent, or the apps' fonts (Qt gets them with the colours), change the colours
     // written for apps.
     let accent_changed = c.accent != app.config.accent
-        || c.look != app.config.look
+        || c.look.for_apps() != app.config.look.for_apps()
         || c.theme_apps != app.config.theme_apps;
     // Quiet hours and night light's schedule follow their settings at once, however they
     // changed (Settings or a hand edit).
     let quiet_changed = c.quiet_from != app.config.quiet_from || c.quiet_to != app.config.quiet_to;
     let night_changed = c.night_light_schedule != app.config.night_light_schedule;
+    let motion_changed = c.motion != app.config.motion;
     app.config = c;
     let mut tasks = Vec::new();
+    // Apps hear "reduced motion" as the shell has it (a recolour tells them anyway).
+    if motion_changed && !accent_changed {
+        app.tell_appearance();
+    }
     if quiet_changed {
         app.quiet_auto = None;
         app.quiet_schedule();
@@ -93,7 +98,7 @@ pub(crate) fn lua_event(app: &mut App, e: crate::lua::Event) -> Task<Message> {
                 title,
                 detail,
                 thumb: None,
-                until: Instant::now() + Duration::from_millis(FLASH_MS),
+                until: Instant::now() + tok::HOLD_FLASH,
                 action: None,
             });
             app.clock.reset();

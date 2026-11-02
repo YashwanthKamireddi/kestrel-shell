@@ -147,7 +147,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 .padding([tok::NONE, tok::L])
                 .height(tok::H_ROW2)
                 .width(Length::Fill)
-                .radius(tok::R_ROW)
+                .radius(tok::R_ROW())
                 // The highlight underneath is the selection, and the pointer moves it: no
                 // second hover colour that would trail behind.
                 .kind(s, crate::ui::control::Kind::Bare)

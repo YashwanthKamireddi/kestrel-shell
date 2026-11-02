@@ -174,7 +174,7 @@ async fn thumbs(files: Vec<PathBuf>) -> Vec<(PathBuf, image::Handle)> {
                     .ok()?
                     .decode()
                     .ok()?;
-                let r = ui::rounded_cover(&img.into_rgba8(), THUMB_W, THUMB_H, tok::R_ROW - 3.0);
+                let r = ui::rounded_cover(&img.into_rgba8(), THUMB_W, THUMB_H, tok::R_ROW() - 3.0);
                 Some((
                     f,
                     image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
@@ -472,7 +472,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                                     border: iced::Border {
                                         color: s.ink.scale_alpha(ring * s.opacity),
                                         width: 2.0,
-                                        radius: (tok::R_ROW - 3.0).into(),
+                                        radius: (tok::R_ROW() - 3.0).into(),
                                     },
                                     ..container::Style::default()
                                 }),
@@ -481,7 +481,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                     r = r.push(
                         control(tile)
                             .padding(tok::XS)
-                            .radius(tok::R_ROW)
+                            .radius(tok::R_ROW())
                             .kind(s, crate::ui::control::Kind::Bare)
                             .no_press_scale()
                             .on_enter(Message::Hover(i))

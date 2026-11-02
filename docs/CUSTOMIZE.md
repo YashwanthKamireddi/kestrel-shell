@@ -23,7 +23,8 @@ hand is the same as using Settings). Copying it to another machine is the export
 | `[clock]` | `format` (`"24h"` / `"12h"`), `date`, `seconds`, `week_starts_sunday` |
 | `[sound]` | `step`, `max` (volume keys), `alerts` (alert volume %), `feedback`, `screenshot` |
 | `[notifications]` | `muted`, `quiet`, `silent` (app lists), `sound`, `banner` (seconds), `urgent_in_dnd` |
-| `[look]` | `font`, `font_size`, `mono`, `mono_size`, `icons`, `cursor` |
+| `[look]` | `font`, `font_size`, `mono`, `mono_size`, `icons`, `cursor`; `radius` (below) |
+| `[motion]` | `speed`, `reduce` (below) |
 | `[hyprland]` | any Hyprland option, nested as `hl.config` nests it (written to `hypr/conf/settings.lua`) |
 | `[[window_rules]]` | `class`, `float`, `size` (`"small"`/`"medium"`/`"large"`), `center`, `workspace`, `opacity`, `pin` |
 | `[[devices]]` | `name`, `sensitivity` (per pointing device) |
@@ -33,6 +34,31 @@ hand is the same as using Settings). Copying it to another machine is the export
 Bar module ids: `workspaces app island clock media weather airpods tray system updates
 privacy network bluetooth volume battery notifications power` (docs/BAR.md says what each
 does). An older `status` is read as `network bluetooth volume battery` plus the bell.
+
+### Shape and motion
+
+```toml
+[look]
+radius = 1.0     # every corner radius token times this: 0.5 half as round, 0 square
+
+[motion]
+speed = 1.0      # every animation: 2 twice as fast, 0.5 half as fast
+reduce = false   # true: no animations, everything arrives at once
+```
+
+- `radius` scales the radius tokens (`R_PANEL` 24, `R_CARD` 12, `R_ROW` 10, `R_CONTROL` 8,
+  `R_JOIN` 4). Pills stay pills, the bar's concave join (`JOIN`) and the screen frame's own
+  `[frame] radius` are not scaled. Unset or 1.0 is the design as drawn.
+- `speed` scales every motion token (`theme::tok` `SPRING_*`, `HOVER_*`, `GLIDE_*`, `BREATH`):
+  durations are divided by it, springs get stiffer by it with the same damping, so motion keeps
+  its shape. 0 or less counts as `reduce`.
+- `reduce = true` makes every transition arrive at once (springs, hover fades, smooth scroll,
+  slider glides, pulsing icons), and apps are told "reduced motion" through kestrel's portal
+  (`org.freedesktop.appearance` `reduced-motion`). The visualiser is a meter, not a transition,
+  and keeps moving (game mode stops it). How long things stay to be read (the island's flash,
+  the OSD) is not motion and does not change.
+- Both apply in one place (`theme::apply`, read through `crate::motion` and the `tok::R_*`
+  functions), on start and whenever config.toml is saved.
 
 ## init.lua
 

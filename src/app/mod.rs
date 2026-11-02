@@ -119,9 +119,9 @@ impl Panel {
     pub fn alpha(&self, natural: f32) -> f32 {
         let p = self.progress(natural);
         if self.open {
-            range(p, 0.05, 0.55)
+            range(p, tok::FADE_IN.0, tok::FADE_IN.1)
         } else {
-            range(p, 0.4, 0.9)
+            range(p, tok::FADE_LATE.0, tok::FADE_LATE.1)
         }
     }
 }
@@ -167,7 +167,6 @@ pub struct Flash {
     pub action: Option<Message>,
 }
 
-const FLASH_MS: u64 = 2200;
 /// In `panel_surface`'s keyboard byte: the surface was just made and not yet laid out.
 const FRESH: u8 = 0x80;
 
@@ -188,7 +187,11 @@ impl Sheet {
         if self.natural <= 0.0 {
             0.0
         } else {
-            range(self.h.value / self.natural, 0.4, 0.9)
+            range(
+                self.h.value / self.natural,
+                tok::FADE_LATE.0,
+                tok::FADE_LATE.1,
+            )
         }
     }
     pub fn visible(&self) -> bool {
@@ -198,7 +201,6 @@ impl Sheet {
 
 pub const TOAST_WIDTH: f32 = 380.0;
 pub const OSD_WIDTH: f32 = 248.0;
-const OSD_MS: u64 = 1400;
 
 pub struct Wallpaper {
     pub handle: iced::widget::image::Handle,
@@ -446,7 +448,7 @@ impl std::fmt::Debug for Wallpaper {
 
 pub fn boot() -> (App, Task<Message>) {
     let config = config::load();
-    crate::theme::set_glass(config.material != config::Material::Black);
+    crate::theme::apply(&config);
     let mut app = App {
         scheme: Scheme::default(),
         seed: crate::theme::Seed::default(),

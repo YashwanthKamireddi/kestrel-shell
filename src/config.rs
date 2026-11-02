@@ -22,8 +22,11 @@ pub struct Config {
     pub accent: Option<String>,
     /// $EDITOR and $VISUAL for the session ("nvim"), set in settings.lua.
     pub editor: Option<String>,
-    /// Apps' fonts, icon theme and cursor theme (`[look]`), as chosen in Settings.
+    /// Apps' fonts, icon theme and cursor theme (`[look]`), as chosen in Settings, and the
+    /// shell's corner radius scale.
     pub look: LookConfig,
+    /// How the shell moves: `[motion] speed = 1.0` (2 twice as fast), `reduce = false`.
+    pub motion: MotionConfig,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
     /// Exact place for the weather (a neighbourhood the city search can't find); the city
@@ -84,7 +87,7 @@ impl Default for NotificationRules {
 }
 
 /// `[look]`: unset fields leave what is there alone.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct LookConfig {
     pub font: Option<String>,
@@ -93,9 +96,39 @@ pub struct LookConfig {
     pub mono_size: Option<u32>,
     pub icons: Option<String>,
     pub cursor: Option<String>,
+    /// The shell's corner radii, scaled (`radius = 0.5` half as round, 0 square); pills stay
+    /// pills. Unset: 1, the design's own.
+    pub radius: Option<f32>,
+}
+
+/// `[motion]`: how the shell's animations play.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MotionConfig {
+    /// Every animation's speed: 2 twice as fast, 0.5 half as fast (0 or less: none).
+    pub speed: f32,
+    /// No animations: everything arrives at once (also told to apps as "reduced motion").
+    pub reduce: bool,
+}
+
+impl Default for MotionConfig {
+    fn default() -> Self {
+        Self {
+            speed: 1.0,
+            reduce: false,
+        }
+    }
 }
 
 impl LookConfig {
+    /// The part apps are themed with (fonts, icons, cursor): `radius` is the shell's own.
+    pub fn for_apps(&self) -> Self {
+        Self {
+            radius: None,
+            ..self.clone()
+        }
+    }
+
     /// The app font and size (the shell's own font, 11, unless chosen).
     pub fn font(&self) -> (String, u32) {
         (
@@ -350,6 +383,7 @@ impl Default for Config {
             accent: None,
             editor: None,
             look: LookConfig::default(),
+            motion: MotionConfig::default(),
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,

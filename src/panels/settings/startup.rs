@@ -68,7 +68,7 @@ pub(super) fn startup_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Me
         .padding([tok::NONE, tok::XL])
         .height(42)
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(Message::StartupAddOpen(!st.startup_add))
@@ -96,7 +96,7 @@ pub(super) fn startup_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Me
                     .padding([tok::NONE, tok::L])
                     .height(36)
                     .width(Length::Fill)
-                    .radius(tok::R_ROW)
+                    .radius(tok::R_ROW())
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(Message::StartupAdd(a.id.clone())),

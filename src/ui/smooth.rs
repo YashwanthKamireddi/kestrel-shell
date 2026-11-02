@@ -12,8 +12,6 @@ use iced::{Element, Length, Rectangle, Size};
 
 /// One wheel notch, in pixels (iced's own line height for scrolling).
 const LINE: f32 = 60.0;
-/// How fast the rest is caught up (per second).
-const RATE: f32 = 26.0;
 
 pub struct Smooth<'a, M> {
     content: Element<'a, M>,
@@ -107,7 +105,8 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Smooth<'_, M> {
                         })
                         .clamp(0.0, 0.05);
                     st.last = Some(*now);
-                    let k = 1.0 - (-dt * RATE).exp();
+                    // How fast the rest is caught up (`tok::GLIDE_SCROLL`).
+                    let k = crate::motion::glide(dt, crate::theme::tok::GLIDE_SCROLL);
                     let mut step = (st.left.0 * k, st.left.1 * k);
                     // The tail goes in one piece (no endless sub-pixel creep).
                     if (st.left.0 - step.0).abs() < 0.5 && (st.left.1 - step.1).abs() < 0.5 {

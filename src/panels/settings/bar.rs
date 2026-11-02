@@ -309,7 +309,7 @@ fn lane_view<'a>(
         .padding(tok::S)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-            border: iced::Border::default().rounded(tok::R_CARD),
+            border: iced::Border::default().rounded(tok::R_CARD()),
             ..container::Style::default()
         })
         .into()
@@ -358,7 +358,7 @@ fn card<'a>(st: &'a State, cx: &Cx<'a>, lane: usize, i: usize, id: &str) -> Elem
                     .scale_alpha(if picked { tok::SELECTED } else { tok::FILL } * s.opacity)
                     .into(),
             ),
-            border: iced::Border::default().rounded(tok::R_ROW),
+            border: iced::Border::default().rounded(tok::R_ROW()),
             ..container::Style::default()
         });
     if st.bar_drag.is_none() {

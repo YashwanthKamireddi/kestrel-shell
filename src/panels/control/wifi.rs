@@ -166,7 +166,7 @@ pub(super) fn detail_row<'a>(s: Scheme, what: &'a str, value: String) -> Element
     .padding([tok::NONE, tok::L])
     .height(32)
     .width(Length::Fill)
-    .radius(tok::R_ROW)
+    .radius(tok::R_ROW())
     .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
     .on_press(Message::CopyIp(value))

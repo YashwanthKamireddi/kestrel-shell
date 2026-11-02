@@ -103,7 +103,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         )
         .padding([tok::S, tok::L])
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(s, crate::ui::control::Kind::Ghost)
         .on_press(Message::Choose(id.to_string()));
         list = list.push(if i == 0 { row.id(FIRST.clone()) } else { row });

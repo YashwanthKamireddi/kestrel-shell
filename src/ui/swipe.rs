@@ -6,6 +6,7 @@
 //! (`on_tap`, on release so a drag never taps). Buttons inside keep their own clicks.
 
 use crate::motion::Spring;
+use crate::theme::tok;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
 use iced::advanced::widget::{Tree, Widget, tree};
@@ -16,12 +17,8 @@ use std::time::Instant;
 
 /// How far (share of the width) a release must carry the card to dismiss it (DMS 0.35).
 const THRESHOLD: f32 = 0.35;
-/// A fling is projected this far ahead (DMS swipeFlingProjectionMs 200).
-const FLING_SECS: f32 = 0.2;
 /// Movement before a press becomes a drag rather than a tap.
 const SLOP: f32 = 6.0;
-/// A sideways scroll ends when no scroll arrives for this long.
-const WHEEL_IDLE_SECS: f32 = 0.12;
 
 pub struct Swipe<'a, M> {
     content: Element<'a, M>,
@@ -104,14 +101,14 @@ impl State {
     fn release(&mut self, width: f32) -> bool {
         self.grab = Grab::None;
         self.last = None;
-        let projected = self.offset.value + self.speed * FLING_SECS;
+        let projected = self.offset.value + self.speed * tok::FLING;
         self.speed = 0.0;
         self.moved_at = None;
         if projected.abs() > width * THRESHOLD {
             self.leaving = true;
             true
         } else {
-            self.offset.to(0.0, Spring::SNAP);
+            self.offset.to(0.0, tok::SPRING_SNAP);
             false
         }
     }
@@ -263,7 +260,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Swipe<'_, M> {
             }
             Event::Window(window::Event::RedrawRequested(now)) => {
                 if let Grab::Wheel(t) = state.grab
-                    && now.saturating_duration_since(t).as_secs_f32() > WHEEL_IDLE_SECS
+                    && now.saturating_duration_since(t).as_secs_f32() > tok::WHEEL_IDLE
                     && state.release(width)
                     && let Some(m) = &self.on_dismiss
                 {
