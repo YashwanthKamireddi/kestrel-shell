@@ -144,6 +144,8 @@ impl App {
                 }
                 shown
             }
+            // The bar's buttons from the keyboard (app/bar_keys.rs).
+            (Some("focus"), Some("bar")) => self.focus_bar(),
             (Some("close"), _) => self.close(),
             (Some("game-mode"), _) => self.change(Change::GameMode),
             #[cfg(feature = "devtools")]

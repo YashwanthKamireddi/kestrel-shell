@@ -174,6 +174,35 @@ pub(crate) fn subscription(app: &App) -> Subscription<Message> {
             _ => None,
         }));
     }
+    // The bar has the keyboard (app/bar_keys.rs): the keys that move along it, Esc to leave,
+    // and a click anywhere on kestrel's surfaces leaves too (the pointer took over). Enter
+    // and Space are the lit button's own (ui::control).
+    if app.bar_keys.is_some() && !app.panel.as_ref().is_some_and(|p| p.open) {
+        subs.push(iced::event::listen_with(|e, _status, _id| {
+            use iced::keyboard::key::Named as N;
+            use panels::Key;
+            match e {
+                iced::event::Event::Mouse(iced::mouse::Event::ButtonPressed(_)) => {
+                    Some(Message::BarKey(None))
+                }
+                iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                    key: iced::keyboard::Key::Named(k),
+                    modifiers,
+                    ..
+                }) => match k {
+                    N::Escape => Some(Message::BarKey(None)),
+                    N::Tab if modifiers.shift() => Some(Message::BarKey(Some(Key::BackTab))),
+                    N::Tab => Some(Message::BarKey(Some(Key::Tab))),
+                    N::ArrowLeft => Some(Message::BarKey(Some(Key::Left))),
+                    N::ArrowRight => Some(Message::BarKey(Some(Key::Right))),
+                    N::ArrowUp => Some(Message::BarKey(Some(Key::Up))),
+                    N::ArrowDown => Some(Message::BarKey(Some(Key::Down))),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }));
+    }
     if app.panel.as_ref().is_some_and(|p| p.open) {
         // Escape closes the panel even while a text field has the keyboard.
         subs.push(iced::event::listen_with(|e, _status, w| match e {

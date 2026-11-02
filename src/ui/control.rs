@@ -418,8 +418,12 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         let state = tree.state.downcast_mut::<State>();
         let over = interactive && cursor.is_over(bounds);
 
-        // Any click takes the keyboard focus away (it is the keyboard's place only).
-        if state.focused && matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))) {
+        // Any click takes the keyboard focus away (it is the keyboard's place only), and so
+        // does no longer being pressable: the focus walk passes over it, so a focus it kept
+        // would come back lit later beside the one the keyboard is really on.
+        if state.focused
+            && (!pressable || matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))))
+        {
             state.focused = false;
             shell.request_redraw();
         }

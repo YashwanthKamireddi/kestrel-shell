@@ -6,9 +6,10 @@ use crate::theme::tok;
 use iced::widget::column;
 
 /// What `kestrel <command>` does (the IPC the keybinds use): (what, the command).
-pub(super) const COMMANDS: [(&str, &str); 10] = [
+pub(super) const COMMANDS: [(&str, &str); 11] = [
     ("Open or close a panel", "kestrel toggle launcher"),
     ("Close the open panel", "kestrel close"),
+    ("The bar from the keyboard", "kestrel focus bar"),
     ("Volume", "kestrel volume up"),
     ("Mute", "kestrel volume mute"),
     ("Microphone", "kestrel mic mute"),

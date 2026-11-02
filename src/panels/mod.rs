@@ -729,11 +729,26 @@ pub fn subscription(app: &App) -> Subscription<Message> {
 
 pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     // A panel that panics shows nothing (and stays off); the shell carries on.
-    crate::guard::run(
+    let content = crate::guard::run(
         &format!("panel {kind:?}"),
         || view_unguarded(app, kind, s),
         || iced::widget::Space::new().into(),
-    )
+    );
+    // The keyboard's root (`ROOT`), wherever the panel is drawn (its own surface, or the
+    // overlay in the full bar style, which had none, so Tab and the arrows went nowhere
+    // there), keeping its place when its control goes (`ui::focus::keep`).
+    let key = {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        kind.hash(&mut h);
+        if kind == PanelKind::Control {
+            std::mem::discriminant(&app.panels.control.page).hash(&mut h);
+        }
+        h.finish()
+    };
+    iced::widget::container(crate::ui::focus::keep(content, key))
+        .id(ROOT.clone())
+        .into()
 }
 
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {

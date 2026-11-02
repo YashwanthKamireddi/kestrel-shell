@@ -134,7 +134,8 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                     .center(28)
                     .into(),
                 w.name().to_string(),
-                "Switch on or off".into(),
+                // Whether it is on now (the shell's live state): Enter flips it.
+                w.status(cx),
             ),
         };
         let mut texts =

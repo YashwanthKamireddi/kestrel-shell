@@ -175,7 +175,11 @@ panel draws its own disabled look.
 
 **Keyboard.** The keyboard's place is the control's pressed tone, shown at once (no ring, no
 animation: keyboard selection in Raycast and Spotlight); Tab and the arrows move it
-(`panels::focus_step`, `ui::focus`), scoped to the open panel or window.
+(`panels::focus_step`, `ui::focus`), scoped to the open panel or window. When its control
+goes (a row removed), the same kind of control nearest its place takes it: the next row, or
+the previous after the last (`ui::focus::keep`, at every panel's and Settings' root). The bar
+is reached with `kestrel focus bar` (docs/CUSTOMIZE.md); a bar button shows the keyboard as
+it shows the pointer (its veil lifts), since its press has no tone of its own.
 
 **Components.** Buttons come in four variants only (Primary: accent fill · Tonal: faint ink fill ·
 Ghost: clear at rest · Danger), plus the icon button, chip, row, card, section heading, field,

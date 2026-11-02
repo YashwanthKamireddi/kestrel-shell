@@ -136,7 +136,9 @@ pub fn on_sound(st: &State) -> bool {
 /// Settings as its own window: the same view on the shell's solid surface colour.
 pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme.faded(1.0);
-    let body = container(view(st, &cx.with_scheme(s)))
+    // The keyboard keeps its place when its control goes, forgotten on another page.
+    let page = st.page as u64;
+    let body = container(crate::ui::focus::keep(view(st, &cx.with_scheme(s)), page))
         .id(ROOT.clone())
         .width(Length::Fill)
         .height(Length::Fill);

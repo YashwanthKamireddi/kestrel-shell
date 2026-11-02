@@ -23,6 +23,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod alerts;
+mod bar_keys;
 mod change;
 mod commands;
 mod dispatch;
@@ -85,6 +86,9 @@ pub struct Output {
     reserves: Vec<SurfaceId>,
     /// Size, input region and keyboard mode last applied to the bar surface.
     plan: Option<Plan>,
+    /// The bar's own surface, and whether it was last given the keyboard (`App::bar_keys`).
+    pub bar: SurfaceId,
+    bar_keyboard: bool,
     /// Workspace pill position and width.
     /// The current-workspace highlight's left and right edges (separate springs: the edge
     /// facing the move leads, the other follows, so it stretches and settles like liquid).
@@ -309,6 +313,9 @@ pub struct App {
     pub pods_fresh: bool,
     /// The open panel was opened from the keyboard, so it takes the keys.
     pub panel_keys: bool,
+    /// The bar has the keyboard on this output (`kestrel focus bar`): the arrows move along
+    /// its buttons, Enter opens one, Esc gives the keyboard back.
+    pub bar_keys: Option<OutputId>,
     /// Each player's artwork as shown (settled), and as it last reported it.
     pub settled_art: HashMap<String, Option<String>>,
     pub reported_art: HashMap<String, Option<String>>,
@@ -357,6 +364,8 @@ pub enum Message {
     Trim,
     /// Open (or close, if already open) a panel under the given button.
     Toggle(PanelKind, OutputId, Rectangle),
+    /// A key while the bar has the keyboard: the arrows and Tab move along it, Esc leaves.
+    BarKey(Option<panels::Key>),
     /// A bar button for one part of the control centre: opens it on that page (or closes it,
     /// when it is open there already).
     ControlAt(panels::control::Page, OutputId, Rectangle),
@@ -510,6 +519,7 @@ pub fn boot() -> (App, Task<Message>) {
         pods: None,
         pods_fresh: false,
         panel_keys: true,
+        bar_keys: None,
         settled_art: HashMap::new(),
         reported_art: HashMap::new(),
         config_error: None,
@@ -651,7 +661,8 @@ pub fn update(app: &mut App, msg: Message) -> Task<Message> {
     // moved or ended the panel (paths that set `panel = None` left their surface behind).
     let panel_surface = app.sync_panel_surface();
     let surfaces = app.sync_surfaces();
-    Task::batch([task, panel_surface, surfaces])
+    let bar_keyboard = app.sync_bar_keyboard();
+    Task::batch([task, panel_surface, surfaces, bar_keyboard])
 }
 
 pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {

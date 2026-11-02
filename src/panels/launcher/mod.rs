@@ -151,6 +151,16 @@ mod tests {
         assert_eq!(calc("2+").as_deref(), None);
         assert_eq!(calc("abc"), None);
     }
+
+    /// A quick switch's row says whether it is on, and with what only while on.
+    #[test]
+    fn switch_status() {
+        use super::status_text;
+        assert_eq!(status_text(false, Some("Home")), "Off");
+        assert_eq!(status_text(true, None), "On");
+        assert_eq!(status_text(true, Some("")), "On");
+        assert_eq!(status_text(true, Some("Home")), "On \u{b7} Home");
+    }
 }
 
 #[cfg(test)]

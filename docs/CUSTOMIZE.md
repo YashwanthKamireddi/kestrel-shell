@@ -143,3 +143,14 @@ tray        failed             6  14:01:40 panicked: …
 (doubling to 30 s while it keeps failing). `failed`: it failed (panicked, or ended before its
 first reading) more than 5 times in 60 s, so it is tried only once every 2 minutes until it
 works again. A service whose module is switched off has no row.
+
+**The bar from the keyboard.** `kestrel focus bar` gives the bar on the focused screen the
+keyboard with its first button lit (the button's own pointer-over look; no ring). Left and Right
+(also Up/Down, Tab and Shift+Tab) move along the buttons in screen order; Enter or Space presses
+the lit one, and a panel opened that way takes the keyboard (Esc closes it). Esc, a click, the
+same command again, or any panel opening gives the keyboard back to the app in use. It is
+GNOME's Ctrl+Alt+Tab ("Switch system controls") and KDE's Meta+Alt+P ("Activate panel"): bind
+it to one of those in Settings › Shortcuts, or in Hyprland's config to
+`exec kestrel focus bar`. Inside panels, Tab and the arrows already move between controls; when
+the control with the keyboard goes (a row's ✕ pressed with Enter), the next row takes the
+keyboard, or the one before when it was the last (`ui::focus::keep`).

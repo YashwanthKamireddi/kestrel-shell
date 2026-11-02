@@ -142,6 +142,8 @@ impl App {
             surfaces,
             reserves,
             plan: None,
+            bar,
+            bar_keyboard: false,
             pill_x: Spring::new(0.0),
             pill_r: Spring::new(0.0),
             island_w: Spring::new(0.0),

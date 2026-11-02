@@ -26,6 +26,8 @@ fn output(n: u32, name: &str) -> Output {
         name: name.into(),
         size: Size::new(SCREEN_W, SCREEN_H),
         overlay: SurfaceId::unique(),
+        bar: SurfaceId::unique(),
+        bar_keyboard: false,
         surfaces: Vec::new(),
         reserves: Vec::new(),
         plan: None,

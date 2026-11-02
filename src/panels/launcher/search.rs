@@ -285,6 +285,15 @@ pub(super) fn processes(name: &str) -> Vec<(u32, String, u64)> {
     out
 }
 
+/// A switch's state in words: what it is on with only while it is on.
+pub fn status_text(on: bool, with: Option<&str>) -> String {
+    match (on, with.filter(|w| !w.is_empty())) {
+        (false, _) => "Off".into(),
+        (true, None) => "On".into(),
+        (true, Some(w)) => format!("On \u{b7} {w}"),
+    }
+}
+
 /// A system switch the launcher flips: one of the shell's changes (app::Change), so it acts
 /// exactly as the control centre's tile does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -345,6 +354,41 @@ impl Switch {
             Switch::Caffeine => Icon::Coffee,
             Switch::GameMode => Icon::Gamepad2,
         }
+    }
+
+    /// Whether it is on now, and what it is on with (the network, the device, until when),
+    /// read from the shell's live state as the control centre's tile reads it.
+    pub fn state(self, cx: &Cx<'_>) -> (bool, Option<String>) {
+        match self {
+            Switch::Wifi => (cx.net.wifi_enabled, cx.net.ssid.clone()),
+            Switch::Bluetooth => {
+                let names: Vec<&str> = cx.bt.connected().map(|d| d.name.as_str()).collect();
+                let with = match names.len() {
+                    0 => None,
+                    1 => Some(names[0].to_string()),
+                    k => Some(format!("{k} devices")),
+                };
+                (cx.bt.powered, with)
+            }
+            Switch::Airplane => (crate::state::get(|s| s.toggles.airplane.is_some()), None),
+            Switch::Dnd => (
+                cx.dnd,
+                crate::state::get(|s| s.toggles.dnd_until)
+                    .map(|t| format!("until {}", crate::panels::control::until_text(t))),
+            ),
+            Switch::NightLight => (
+                cx.night_light,
+                Some(format!("{} K", cx.config.night_light_temperature)),
+            ),
+            Switch::Caffeine => (cx.caffeine, None),
+            Switch::GameMode => (cx.game_mode, None),
+        }
+    }
+
+    /// Its row's second line: "On", "Off", or "On · Home" (what it is on with).
+    pub fn status(self, cx: &Cx<'_>) -> String {
+        let (on, with) = self.state(cx);
+        status_text(on, with.as_deref())
     }
 
     pub fn change(self) -> crate::app::Change {

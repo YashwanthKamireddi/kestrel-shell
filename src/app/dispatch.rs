@@ -54,6 +54,7 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::Expire { .. }
         | Message::ReloadWallpaper) => outputs::handle(app, m),
         m @ (Message::Toggle { .. }
+        | Message::BarKey { .. }
         | Message::ControlAt { .. }
         | Message::SettingsAt { .. }
         | Message::RuleFor { .. }

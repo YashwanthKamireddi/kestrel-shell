@@ -6,12 +6,14 @@ use super::super::*;
 pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
     match msg {
         Message::Toggle(kind, output, button) => {
-            // Clicked: the keyboard stays with the app in use (see `sync_surfaces`).
-            app.panel_keys = false;
+            // Clicked: the keyboard stays with the app in use (see `sync_surfaces`). Pressed
+            // with Enter while the bar has the keyboard: the panel takes it.
+            app.panel_keys = app.bar_keys.is_some();
             app.toggle(kind, output, button)
         }
+        Message::BarKey(k) => app.bar_key(k),
         Message::ControlAt(page, output, button) => {
-            app.panel_keys = false;
+            app.panel_keys = app.bar_keys.is_some();
             let open_here = app
                 .panel
                 .as_ref()
@@ -92,6 +94,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             Task::none()
         }
         Message::TrayMenu(item, output, rect) => {
+            app.panel_keys = app.bar_keys.is_some();
             let same = app
                 .panel
                 .as_ref()

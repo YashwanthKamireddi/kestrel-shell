@@ -67,6 +67,12 @@ pub fn scroll_target(h: &hyprland::State, active: i32, n: u32, step: i32) -> i32
     ids[(at + step).rem_euclid(len) as usize]
 }
 
+/// The bar's buttons on output `o`, as one place for the keyboard: one name per screen, as
+/// an operation reaches every surface and must move along one bar only.
+pub fn root(o: &Output) -> iced::widget::Id {
+    iced::widget::Id::from(format!("kestrel-bar-{}", o.name))
+}
+
 /// The bar surface: the bar itself (its band in the full style, the pills) and the frame's top
 /// corners under it. Only as tall as that, so the bar's own motion (visualiser, workspaces,
 /// clock) repaints a strip, not the screen.
@@ -225,10 +231,14 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 .height(tok::BAR)
                 .center_y(tok::BAR)
         };
-        stack![layer(sides.into()), layer(middle)]
-            .width(Length::Fill)
-            .height(tok::BAR)
-            .into()
+        // The keyboard's root on this screen's bar (`kestrel focus bar`, app/bar_keys.rs).
+        container(
+            stack![layer(sides.into()), layer(middle)]
+                .width(Length::Fill)
+                .height(tok::BAR),
+        )
+        .id(root(o))
+        .into()
     });
 
     if let Some(bar) = bar {
@@ -646,7 +656,6 @@ pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let content = panels::view(app, kind, s);
     let material = app.config.material;
     let card = container(content)
-        .id(panels::ROOT.clone())
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: match material {

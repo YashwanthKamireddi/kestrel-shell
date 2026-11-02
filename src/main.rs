@@ -68,6 +68,7 @@ fn main() -> anyhow::Result<()> {
             println!(
                 "kestrel health          what each service is doing (running, restarting, failed)"
             );
+            println!("kestrel focus bar       move along the bar's buttons with the keys");
             return Ok(());
         }
         if !ipc::send(&args.join(" ")) {
