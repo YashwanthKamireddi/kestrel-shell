@@ -605,6 +605,12 @@ mod logo_tests {
     }
 }
 
+/// Whether play or pause was asked for and its answer is awaited (tests).
+#[cfg(test)]
+pub(crate) fn asked(st: &State) -> bool {
+    st.want.is_some()
+}
+
 /// Space plays or pauses the player in front; the arrows go to the previous or next track.
 pub fn key(st: &mut State, k: super::Key, cx: &Cx) -> Action<Message> {
     use super::Key;

@@ -142,7 +142,7 @@ pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         .height(Length::Fill);
     // The shell's look: Black is solid; Frosted is the panels' own glass (the compositor's
     // blur of what is behind, under the same dark tint).
-    if crate::theme::glass() {
+    let look: Element<'a, Message> = if crate::theme::glass() {
         iced::blur_container(body)
             .style(move |_| container::Style {
                 background: Some(s.base.scale_alpha(0.42).into()),
@@ -155,7 +155,12 @@ pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             ..container::Style::default()
         })
         .into()
-    }
+    };
+    // Its first frame says so: the search takes the focus then (iced's own sensor, at the
+    // root so it fires once per window).
+    iced::widget::sensor(look)
+        .on_show(|_| Message::Shown)
+        .into()
 }
 
 fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {

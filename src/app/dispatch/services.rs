@@ -390,11 +390,11 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
         }
         Message::Notification(e) => app.notify(e),
         Message::VolumeStep(lines) => {
-            if let Some(d) = app.audio.sink().cloned() {
-                // 5 % a notch, up to Settings > Sound's maximum like the volume keys (capped at
-                // 100 %, scrolling up from a boosted 130 % dropped it to 100 %).
-                let v = stepped(d.volume, lines.signum() * 5.0, app.volume_max());
-                audio::command(audio::Command::SinkVolume(d.name, d.channels, v));
+            // 5 % a notch (a touchpad's small scrolls add up to one), up to Settings > Sound's
+            // maximum like the volume keys, and heard again if muted as they do.
+            let n = notches(&mut app.volume_scroll, lines);
+            if n != 0 {
+                app.step_volume(n as f32 * 5.0);
             }
             Task::none()
         }

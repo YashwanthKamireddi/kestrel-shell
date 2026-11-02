@@ -186,11 +186,7 @@ impl App {
                         "down" => Some(-(self.config.sound.step.clamp(1, 25) as f32)),
                         a => a.trim_end_matches('%').parse::<f32>().ok(),
                     } {
-                        let v = stepped(d.volume, step, self.volume_max());
-                        audio::command(audio::Command::SinkVolume(d.name.clone(), d.channels, v));
-                        if d.muted {
-                            audio::command(audio::Command::SinkMute(d.name, false));
-                        }
+                        self.step_volume(step);
                         // The click is heard at the new volume (the output's own level).
                         if self.config.sound.feedback {
                             services::sounds::play(
@@ -251,6 +247,32 @@ impl App {
     pub(crate) fn volume_max(&self) -> f32 {
         self.config.sound.max.clamp(100, 150) as f32 / 100.0
     }
+
+    /// The output's volume `step` percent up or down, on whole steps up to the maximum; a muted
+    /// output is heard again (the volume keys and scrolling on the bar's volume).
+    pub(crate) fn step_volume(&mut self, step: f32) {
+        if let Some(d) = self.audio.sink().cloned() {
+            let v = stepped(d.volume, step, self.volume_max());
+            audio::command(audio::Command::SinkVolume(d.name.clone(), d.channels, v));
+            if d.muted {
+                audio::command(audio::Command::SinkMute(d.name, false));
+            }
+        }
+    }
+}
+
+/// Whole notches in a scroll of `lines` (positive = up), with what is left of a notch kept
+/// in `acc`: a mouse wheel's notch is one line, a touchpad sends many small fractions of one,
+/// each of which was a whole step (a flick ran the volume from quiet to full). Turning back
+/// drops what was left the other way.
+pub(crate) fn notches(acc: &mut f32, lines: f32) -> i32 {
+    if *acc * lines < 0.0 {
+        *acc = 0.0;
+    }
+    *acc += lines;
+    let n = acc.trunc();
+    *acc -= n;
+    n as i32
 }
 
 /// The volume one step of `step` percent from `cur`, on whole steps, from silent to `max`. A
@@ -296,7 +318,7 @@ pub fn remember_game_mode(on: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::stepped;
+    use super::{notches, stepped};
 
     #[test]
     fn a_volume_step_never_goes_the_wrong_way() {
@@ -310,5 +332,23 @@ mod tests {
         // Above a maximum lowered since: up stays, down comes down.
         assert!(near(stepped(1.3, 2.0, 1.0), 1.3));
         assert!(near(stepped(1.3, -2.0, 1.0), 1.0));
+    }
+
+    #[test]
+    fn small_scrolls_add_up_to_whole_notches() {
+        let mut acc = 0.0;
+        // A wheel: a step a notch.
+        assert_eq!(notches(&mut acc, 1.0), 1);
+        assert_eq!(notches(&mut acc, -2.0), -2);
+        // A touchpad flick: 3 px a time (iced's pixels, 40 to a line) is no step until a
+        // whole line has gone by.
+        acc = 0.0;
+        let steps: i32 = (0..20).map(|_| notches(&mut acc, 3.0 / 40.0)).sum();
+        assert_eq!(steps, 1);
+        // Turning back drops what was left the other way: 0.9 up, then 0.5 down is no step.
+        acc = 0.0;
+        assert_eq!(notches(&mut acc, 0.9), 0);
+        assert_eq!(notches(&mut acc, -0.5), 0);
+        assert_eq!(notches(&mut acc, -0.5), -1);
     }
 }

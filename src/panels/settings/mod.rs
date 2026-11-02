@@ -523,6 +523,9 @@ pub const KEEP_SECS: u64 = 15;
 pub enum Message {
     Page(Page),
     Query(String),
+    /// The window's first frame: its widgets exist, so its search can take the focus (asked
+    /// for with the window's creation, the focus found no widget and went nowhere).
+    Shown,
     Style(BarStyle),
     Workspaces(i64),
     ThemeApps(bool),

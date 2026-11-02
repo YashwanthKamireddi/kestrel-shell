@@ -250,4 +250,82 @@ mod tests {
         let _ = crate::app::update(&mut app, Message::Escape(settings));
         assert!(app.settings_window.is_some());
     }
+
+    /// A 1920×1080 monitor, as the compositor would announce it.
+    fn monitor(app: &mut App) -> OutputId {
+        let id = OutputId::for_tests(1);
+        let _ = crate::app::update(
+            app,
+            Message::Output(OutputEvent::Added(iced::OutputInfo {
+                id,
+                name: "eDP-1".into(),
+                description: None,
+                scale_factor: 1,
+                logical_size: Some((1920, 1080)),
+                make: String::new(),
+                model: String::new(),
+            })),
+        );
+        id
+    }
+
+    #[test]
+    fn space_typed_in_settings_leaves_the_music_panel_alone() {
+        // Settings open, then the music panel opened with the mouse: the keyboard stays with
+        // Settings, whose search is where Space is typed.
+        let (mut app, _) = crate::app::boot();
+        app.media.players.push(crate::services::mpris::Player {
+            bus: "org.mpris.MediaPlayer2.test".into(),
+            ..Default::default()
+        });
+        let out = monitor(&mut app);
+        let _ = app.open_settings();
+        let settings = app.settings_window.map(iced::window::Id::from).unwrap();
+        let _ = app.open_panel(
+            PanelKind::Media,
+            out,
+            Rectangle::new(iced::Point::ORIGIN, Size::ZERO),
+        );
+        assert!(app.panel.as_ref().is_some_and(|p| p.open));
+
+        let space = |w| Message::Panel(panels::Message::Key(w, panels::Key::Space));
+        let _ = crate::app::update(&mut app, space(settings));
+        assert!(!panels::media::asked(&app.panels.media));
+        // Typed in the panel itself it plays or pauses.
+        let panel = iced::window::Id::from(SurfaceId::unique());
+        let _ = crate::app::update(&mut app, space(panel));
+        assert!(panels::media::asked(&app.panels.media));
+    }
+
+    #[test]
+    fn only_keys_typed_in_settings_are_recorded() {
+        // Recording new keys; Shift+A typed into the launcher is not them.
+        let (mut app, _) = crate::app::boot();
+        let _ = app.open_settings();
+        let settings = app.settings_window.map(iced::window::Id::from).unwrap();
+        // Recording happens on the Shortcuts page.
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Settings(settings::Message::Page(settings::Page::Shortcuts)),
+        );
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Settings(settings::Message::Record(true)),
+        );
+        assert!(
+            settings::recording(&app.panels.settings),
+            "recording started"
+        );
+        let launcher = iced::window::Id::from(SurfaceId::unique());
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Combo(launcher, "SHIFT + A".into()),
+        );
+        assert!(settings::recording(&app.panels.settings));
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Combo(settings, "SUPER + Y".into()),
+        );
+        assert!(!settings::recording(&app.panels.settings));
+    }
 }

@@ -466,6 +466,18 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
     .into()
 }
 
+/// A module's scroll action for a scroll of `y` (positive = up). A sideways scroll (y 0) is
+/// neither: it ran the scroll-down action.
+fn scrolled<'a>(y: f32, up: &'a Option<String>, down: &'a Option<String>) -> Option<&'a String> {
+    if y > 0.0 {
+        up.as_ref()
+    } else if y < 0.0 {
+        down.as_ref()
+    } else {
+        None
+    }
+}
+
 /// One bar section: its modules' items in order. In the pill style the section sits on its
 /// own floating pill (none when the section is empty).
 /// The message for a configured action: kestrel's own command, or a program to run.
@@ -502,7 +514,7 @@ fn with_actions<'a>(
                 iced::mouse::ScrollDelta::Lines { y, .. }
                 | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
             };
-            match if y > 0.0 { &up } else { &down } {
+            match scrolled(y, &up, &down) {
                 Some(c) => action(c),
                 None => Message::Batch(Vec::new()),
             }
@@ -648,4 +660,17 @@ pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     ui::reveal(card, width, p.h.value.max(1.0))
         .on_measure(move |sz| Message::Measured(kind, sz))
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scrolled;
+
+    #[test]
+    fn a_sideways_scroll_runs_no_scroll_action() {
+        let (up, down) = (Some("up".to_string()), Some("down".to_string()));
+        assert_eq!(scrolled(1.0, &up, &down).map(String::as_str), Some("up"));
+        assert_eq!(scrolled(-0.2, &up, &down).map(String::as_str), Some("down"));
+        assert_eq!(scrolled(0.0, &up, &down), None);
+    }
 }

@@ -215,6 +215,8 @@ pub struct App {
     roles: HashMap<SurfaceId, (OutputId, Role)>,
     /// Settings, an ordinary window (moved, tiled, closed like any app) while open.
     pub settings_window: Option<SurfaceId>,
+    /// What is left of a volume scroll short of a whole notch (`commands::notches`).
+    pub volume_scroll: f32,
     pub hypr: hyprland::State,
     pub now: chrono::DateTime<chrono::Local>,
     pub wallpaper: Option<Arc<Wallpaper>>,
@@ -458,6 +460,7 @@ pub fn boot() -> (App, Task<Message>) {
         now: chrono::Local::now(),
         night_auto: None,
         settings_window: None,
+        volume_scroll: 0.0,
         quiet_auto: None,
         saved_recording: None,
         started_recording: None,

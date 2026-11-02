@@ -31,8 +31,8 @@ pub fn open(st: &mut State, cx: &Cx<'_>) -> Action {
         );
     }
     tasks.push(load(st.page));
-    // Typing searches at once.
-    tasks.push(Task::Iced(iced::widget::focus(SEARCH_ID.clone())));
+    // The search takes the focus once the window is on screen (`Message::Shown`): here, in the
+    // same batch that makes the window, it has no widgets yet.
     Act::Run(Task::batch(tasks))
 }
 

@@ -244,6 +244,9 @@ pub enum Message {
     Key(iced::window::Id, Key),
     /// Tab or Shift+Tab in a window of its own (Settings): its id, and which.
     WindowKey(iced::window::Id, Key),
+    /// A key combination pressed while Settings records a shortcut, and the window it was
+    /// typed in (only Settings' own is recorded).
+    Combo(iced::window::Id, String),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
 }
@@ -527,6 +530,12 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
+        // Recorded only when typed in Settings: Shift+A typed into the launcher while a
+        // shortcut waited for its keys rebound the user's shortcut to it.
+        Message::Combo(w, k) if in_settings(app, w) => {
+            update(app, Message::Settings(settings::Message::Recorded(k)))
+        }
+        Message::Combo(..) => Task::none(),
         Message::WindowKey(w, k) => {
             if in_settings(app, w) {
                 focus_step(settings::ROOT.clone(), k)
@@ -557,13 +566,12 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     // Recording a shortcut's keys in Settings: the next combination pressed.
     if settings::recording(&app.panels.settings) {
-        subs.push(iced::event::listen_with(|e, _status, _id| match e {
+        subs.push(iced::event::listen_with(|e, _status, w| match e {
             iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key,
                 modifiers,
                 ..
-            }) => settings::combo(&key, modifiers)
-                .map(|k| Message::Settings(settings::Message::Recorded(k))),
+            }) => settings::combo(&key, modifiers).map(|k| Message::Combo(w, k)),
             _ => None,
         }));
     }
