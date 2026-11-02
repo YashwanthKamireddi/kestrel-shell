@@ -6,7 +6,8 @@ use super::*;
 use crate::panels::action::Note;
 use crate::services::notifications::{Event, Notification};
 
-const SCREEN: (f32, f32) = (1920.0, 1080.0);
+const SCREEN_W: f32 = 1920.0;
+const SCREEN_H: f32 = 1080.0;
 
 /// A screen kestrel was told about, as the compositor would tell it.
 fn output(n: u32, name: &str) -> Output {
@@ -18,12 +19,12 @@ fn output(n: u32, name: &str) -> Output {
             name: name.into(),
             description: None,
             scale_factor: 1,
-            logical_size: Some((SCREEN.0 as i32, SCREEN.1 as i32)),
+            logical_size: Some((SCREEN_W as i32, SCREEN_H as i32)),
             make: String::new(),
             model: String::new(),
         },
         name: name.into(),
-        size: Size::new(SCREEN.0, SCREEN.1),
+        size: Size::new(SCREEN_W, SCREEN_H),
         overlay: SurfaceId::unique(),
         surfaces: Vec::new(),
         reserves: Vec::new(),
@@ -545,7 +546,7 @@ fn copying_says_so_in_the_island() {
         thumb: (0, 0, Vec::new()),
         file: None,
     };
-    app.copied(image(SCREEN.0 as u32, SCREEN.1 as u32));
+    app.copied(image(SCREEN_W as u32, SCREEN_H as u32));
     assert_eq!(app.flash.as_ref().unwrap().title, "Screenshot copied");
     app.copied(image(300, 200));
     assert_eq!(app.flash.as_ref().unwrap().title, "Image copied");
