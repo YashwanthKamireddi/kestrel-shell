@@ -16,7 +16,7 @@ state.toml and the wallpaper's file (both read only).
 | State | `src/lock/state.rs` | typed input, attempts, the message shown, when it may unlock. Pure, unit tested |
 | Password | `src/lock/secret.rs` | one fixed 511-byte buffer, never reallocated, wiped on clear, submit and drop |
 | PAM | `src/lock/pam.rs` | `pam_start` / `pam_authenticate` / `pam_setcred(REFRESH)` / `pam_end`, the conversation |
-| Session lock | `vendor/iced_layershell` patch 13 | ext-session-lock-v1 on SCTK 0.20's `session_lock` (vendor/README.md) |
+| Session lock | `vendor/iced_layershell` patch 26 | ext-session-lock-v1 on SCTK 0.20's `session_lock` (vendor/README.md) |
 
 ### How locking works (ext-session-lock-v1)
 
@@ -58,7 +58,7 @@ any (pam_faillock: "The account is locked due to 3 failed logins", "(9 minutes l
 unlock)"). The message stays until the next key, then you can try again. While a check runs,
 typing waits; **Esc gives up on that check** (its answer is then ignored), so a PAM module
 that never answers can never leave the screen unusable. A Caps Lock line shows while Caps Lock
-is on (the compositor's own modifier state, vendor patch 13).
+is on (the compositor's own modifier state, vendor patch 26).
 
 ### Look
 
