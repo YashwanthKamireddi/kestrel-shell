@@ -269,16 +269,57 @@ pub fn stream() -> impl Stream<Item = State> {
         };
         let mut last = None;
         loop {
-            let s = read(&c).await.unwrap_or_default();
-            if last.as_ref() != Some(&s) {
+            let got = outcome(read(&c).await);
+            if let Some(s) = &got
+                && last.as_ref() != Some(s)
+            {
                 last = Some(s.clone());
-                let _ = out.send(s).await;
+                let _ = out.send(s.clone()).await;
             }
-            if changes.next().await.is_none() {
+            // A failed read is tried again soon even if BlueZ says nothing more: the state is
+            // re-read from its source, not left to the next event.
+            let next = changes.next();
+            let ended = if got.is_some() {
+                next.await.is_none()
+            } else {
+                matches!(tokio::time::timeout(RETRY, next).await, Ok(None))
+            };
+            if ended {
                 return;
             }
         }
     })
+}
+
+/// How soon a read that failed for a passing reason is tried again.
+const RETRY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What a read says to show: its state; "no Bluetooth" when BlueZ is not on the bus (a real
+/// absence, like a removed adapter, which reads fine with no adapter in it); or nothing new
+/// when the read failed for a passing reason (a timeout, a busy daemon), so Bluetooth does not
+/// flash as missing.
+fn outcome(r: zbus::Result<State>) -> Option<State> {
+    match r {
+        Ok(s) => Some(s),
+        Err(e) if absent(&e) => Some(State::default()),
+        Err(e) => {
+            log::warn!("bluetooth: read failed, the last state is kept ({e})");
+            None
+        }
+    }
+}
+
+/// The error says BlueZ is not running (no owner for its bus name).
+fn absent(e: &zbus::Error) -> bool {
+    let name = match e {
+        zbus::Error::MethodError(name, ..) => name.to_string(),
+        zbus::Error::FDO(e) => zbus::DBusError::name(e.as_ref()).to_string(),
+        _ => return false,
+    };
+    matches!(
+        name.as_str(),
+        "org.freedesktop.DBus.Error.ServiceUnknown" | "org.freedesktop.DBus.Error.NameHasNoOwner"
+    )
 }
 
 /// Searches for devices for as long as the stream is polled (the Bluetooth page is open): the
@@ -584,4 +625,50 @@ pub fn agent() -> impl Stream<Item = Ask> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zbus::fdo;
+
+    fn shown() -> State {
+        State {
+            available: true,
+            powered: true,
+            adapter: "/org/bluez/hci0".into(),
+            ..State::default()
+        }
+    }
+
+    #[test]
+    fn a_good_read_is_shown() {
+        assert_eq!(outcome(Ok(shown())), Some(shown()));
+    }
+
+    #[test]
+    fn a_passing_failure_keeps_what_is_shown() {
+        let timeout = zbus::Error::FDO(Box::new(fdo::Error::NoReply("timed out".into())));
+        assert_eq!(outcome(Err(timeout)), None);
+        let reset = zbus::Error::InputOutput(std::io::Error::other("reset").into());
+        assert_eq!(outcome(Err(reset)), None);
+    }
+
+    #[test]
+    fn bluez_not_running_is_no_bluetooth() {
+        for e in [
+            fdo::Error::ServiceUnknown("org.bluez".into()),
+            fdo::Error::NameHasNoOwner("org.bluez".into()),
+        ] {
+            let s = outcome(Err(zbus::Error::FDO(Box::new(e)))).expect("a state");
+            assert!(!s.available);
+        }
+    }
+
+    #[test]
+    fn a_removed_adapter_is_no_bluetooth() {
+        // It reads fine, with no adapter in it.
+        let s = outcome(Ok(State::default())).expect("a state");
+        assert!(!s.available);
+    }
 }

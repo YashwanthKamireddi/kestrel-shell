@@ -94,6 +94,20 @@ fn with<T>(f: impl FnOnce(&mut Index) -> T) -> T {
     f(ix)
 }
 
+/// The longest start of `data`, at most `max` bytes, that does not end inside a UTF-8
+/// character: one cut in half decoded as a replacement box. A character is at most four bytes,
+/// so at most three continuation bytes are stepped back over (anything longer is not UTF-8).
+fn utf8_cut(data: &[u8], max: usize) -> usize {
+    if data.len() <= max {
+        return data.len();
+    }
+    let mut end = max;
+    while end > max.saturating_sub(3) && end > 0 && data[end] & 0xC0 == 0x80 {
+        end -= 1;
+    }
+    end
+}
+
 fn digest(mime: &str, data: &[u8]) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     // Text copied as one text type or another is the same text.
@@ -103,7 +117,7 @@ fn digest(mime: &str, data: &[u8]) -> u64 {
 }
 
 fn preview_of(data: &[u8]) -> String {
-    String::from_utf8_lossy(&data[..data.len().min(4096)])
+    String::from_utf8_lossy(&data[..utf8_cut(data, 4096)])
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -344,6 +358,22 @@ mod tests {
     fn previews_collapse_whitespace() {
         assert_eq!(preview_of(b"  a\n\tb  c "), "a b c");
         assert_eq!(preview_of(b" \n "), "");
+    }
+
+    #[test]
+    fn a_character_across_the_cut_is_left_out_whole() {
+        // "é" is two bytes, "🦅" four: each placed to straddle byte 4096.
+        for (pad, ch) in [(4094, "é"), (4092, "🦅"), (4093, "🦅"), (4094, "🦅")] {
+            let text = format!("{}a{ch}{ch}", " ".repeat(pad));
+            let p = preview_of(text.as_bytes());
+            assert!(!p.contains('\u{FFFD}'), "{pad} {ch}: {p:?}");
+            assert!(p.starts_with('a'), "{pad} {ch}: {p:?}");
+        }
+        assert_eq!(utf8_cut("aé".as_bytes(), 2), 1);
+        assert_eq!(utf8_cut("aé".as_bytes(), 3), 3);
+        assert_eq!(utf8_cut(b"abc", 2), 2);
+        // Not UTF-8 at all: still cut near the limit.
+        assert_eq!(utf8_cut(&[0x80; 10], 8), 5);
     }
 
     #[test]

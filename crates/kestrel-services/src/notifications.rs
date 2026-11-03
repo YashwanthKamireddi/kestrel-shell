@@ -1,7 +1,7 @@
 //! kestrel is the desktop's notification server (`org.freedesktop.Notifications`).
 
 use futures::{SinkExt, Stream};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 use tokio::sync::mpsc;
@@ -80,11 +80,43 @@ pub enum Reason {
     Closed = 3,
 }
 
-static SERVER: OnceLock<(Connection, Arc<Mutex<u32>>)> = OnceLock::new();
+static SERVER: OnceLock<(Connection, Arc<Mutex<Ids>>)> = OnceLock::new();
 
 struct Server {
-    next: Arc<Mutex<u32>>,
+    ids: Arc<Mutex<Ids>>,
     tx: mpsc::UnboundedSender<Event>,
+}
+
+/// The ids given out: the last one, and the ones the shell shows now (its list, sent after
+/// every change by `shown`, plus the ones given since).
+#[derive(Default)]
+struct Ids {
+    last: u32,
+    shown: HashSet<u32>,
+}
+
+impl Ids {
+    /// A new id: the one after the last, past `u32::MAX` back to 1 (0 means "none" in the
+    /// spec), and never one still shown (an app's or one of kestrel's own, which count down
+    /// from the top).
+    fn next(&mut self) -> u32 {
+        loop {
+            self.last = self.last.checked_add(1).unwrap_or(1);
+            if self.shown.insert(self.last) {
+                return self.last;
+            }
+        }
+    }
+}
+
+/// The ids the shell shows now, after every change to its list: a new notification never gets
+/// one of them, however far the counter has gone round.
+pub fn shown(ids: impl IntoIterator<Item = u32>) {
+    if let Some((_, lock)) = SERVER.get() {
+        lock.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .shown = ids.into_iter().collect();
+    }
 }
 
 fn sound_from_hints(hints: &HashMap<String, OwnedValue>) -> crate::sounds::Sound {
@@ -189,15 +221,17 @@ impl Server {
         hints: HashMap<String, OwnedValue>,
         expire_timeout: i32,
     ) -> u32 {
-        let id = if replaces_id > 0 {
-            replaces_id
-        } else {
-            let mut n = self
-                .next
+        let id = {
+            let mut ids = self
+                .ids
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *n += 1;
-            *n
+            if replaces_id > 0 {
+                ids.shown.insert(replaces_id);
+                replaces_id
+            } else {
+                ids.next()
+            }
         };
         let urgency = hints
             .get("urgency")
@@ -325,9 +359,9 @@ pub async fn invoke(id: u32, action: String) {
 pub fn stream() -> impl Stream<Item = Event> {
     crate::stream::channel(16, async |mut out| {
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let next = Arc::new(Mutex::new(0));
+        let ids = Arc::new(Mutex::new(Ids::default()));
         let server = Server {
-            next: next.clone(),
+            ids: ids.clone(),
             tx,
         };
         let conn = async {
@@ -340,7 +374,7 @@ pub fn stream() -> impl Stream<Item = Event> {
         .await;
         match conn {
             Ok(c) => {
-                let _ = SERVER.set((c, next));
+                let _ = SERVER.set((c, ids));
             }
             Err(e) => {
                 log::warn!("notifications: another server owns the name ({e})");
@@ -381,6 +415,23 @@ mod tests {
             decode_rgba(2, 2, 8, 4, &[0; 15]).is_none(),
             "data too short"
         );
+    }
+
+    #[test]
+    fn ids_go_round_and_skip_the_ones_shown() {
+        let mut ids = super::Ids::default();
+        assert_eq!((ids.next(), ids.next()), (1, 2));
+        // Past the top it starts again at 1 (0 means "none"), stepping over every id still
+        // shown: an app's (1) and kestrel's own, which count down from the top.
+        ids.last = u32::MAX - 2;
+        ids.shown = [u32::MAX - 1, 1].into();
+        assert_eq!(ids.next(), u32::MAX);
+        assert_eq!(ids.next(), 2);
+        // Once gone from the shell's list, an id may come round again.
+        ids.last = 0;
+        ids.shown = [2].into();
+        assert_eq!(ids.next(), 1);
+        assert_eq!(ids.next(), 3);
     }
 
     #[test]

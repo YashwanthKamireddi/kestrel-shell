@@ -102,13 +102,7 @@ pub fn prepare(
         };
         let jobs = live_jobs(hypr);
         let fresh = Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    crate::services::previews::snapshot(&jobs, WAIT)
-                })
-                .await
-                .unwrap_or_default()
-            },
+            crate::services::previews::snapshot(jobs, WAIT),
             Message::Live,
         );
         return open.and(Act::Run(fresh));
@@ -118,11 +112,7 @@ pub fn prepare(
     st.pending = Some((token, output, at));
     let jobs = live_jobs(hypr);
     Act::Run(Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || crate::services::previews::snapshot(&jobs, WAIT))
-                .await
-                .unwrap_or_default()
-        },
+        crate::services::previews::snapshot(jobs, WAIT),
         move |frames| Message::Fresh(token, frames),
     ))
 }
@@ -148,13 +138,7 @@ fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Act {
         return Act::None;
     }
     Act::Run(Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                crate::services::previews::snapshot(&jobs, std::time::Duration::from_millis(250))
-            })
-            .await
-            .unwrap_or_default()
-        },
+        crate::services::previews::snapshot(jobs, std::time::Duration::from_millis(250)),
         Message::Live,
     ))
 }

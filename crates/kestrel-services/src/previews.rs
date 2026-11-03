@@ -33,12 +33,12 @@ use wayland_client::{Connection, Dispatch, QueueHandle, WEnum};
 
 /// One picture of each job's window, already cropped, scaled and rounded to its size. All
 /// windows are asked for at once (the live follower's first round), so it takes about one frame
-/// whatever the number of windows; anything not in after `limit` is left out. Blocking: run it
-/// off the UI thread.
-pub fn snapshot(jobs: &[Job], limit: std::time::Duration) -> Vec<Frame> {
+/// whatever the number of windows; anything not in after `limit` is left out. The Wayland
+/// follower runs on its own thread; the wait is on the runtime's timer (it was a thread started
+/// for every wait).
+pub async fn snapshot(jobs: Vec<Job>, limit: std::time::Duration) -> Vec<Frame> {
     let want: std::collections::HashSet<String> = jobs.iter().map(|j| j.address.clone()).collect();
-    let (tx, mut rx) = futures::channel::mpsc::unbounded();
-    let jobs = jobs.to_vec();
+    let (tx, rx) = futures::channel::mpsc::unbounded();
     let worker = std::thread::Builder::new()
         .name("kestrel-snapshot".into())
         .spawn(move || {
@@ -47,43 +47,32 @@ pub fn snapshot(jobs: &[Job], limit: std::time::Duration) -> Vec<Frame> {
     if worker.is_err() {
         return Vec::new();
     }
-    let until = std::time::Instant::now() + limit;
-    let mut got: Vec<Frame> = Vec::new();
-    while got.len() < want.len() {
-        let left = until.saturating_duration_since(std::time::Instant::now());
-        if left.is_zero() {
-            break;
-        }
-        match futures::executor::block_on(async {
-            futures::future::select(
-                futures::StreamExt::next(&mut rx),
-                Box::pin(async_sleep(left)),
-            )
-            .await
-        }) {
-            futures::future::Either::Left((Some(batch), _)) => {
-                for f in batch {
-                    if !got.iter().any(|g| g.address == f.address) {
-                        got.push(f);
-                    }
-                }
-            }
-            _ => break,
-        }
-    }
-    // Dropping the receiver ends the follower.
-    drop(rx);
-    got
+    gather(rx, want.len(), limit).await
 }
 
-/// A sleep that needs no runtime (a thread wakes it).
-async fn async_sleep(d: std::time::Duration) {
-    let (tx, rx) = futures::channel::oneshot::channel::<()>();
-    std::thread::spawn(move || {
-        std::thread::sleep(d);
-        let _ = tx.send(());
-    });
-    let _ = rx.await;
+/// The first picture of each window from `rx` until `want` windows are in, the follower ends,
+/// or `limit` has passed (whichever is first). Dropping the receiver ends the follower.
+async fn gather(
+    mut rx: futures::channel::mpsc::UnboundedReceiver<Vec<Frame>>,
+    want: usize,
+    limit: std::time::Duration,
+) -> Vec<Frame> {
+    use futures::StreamExt;
+    let mut got: Vec<Frame> = Vec::new();
+    let _ = tokio::time::timeout(limit, async {
+        while got.len() < want {
+            let Some(batch) = rx.next().await else {
+                return;
+            };
+            for f in batch {
+                if !got.iter().any(|g| g.address == f.address) {
+                    got.push(f);
+                }
+            }
+        }
+    })
+    .await;
+    got
 }
 
 /// The window handle the protocol wants: the address's low 32 bits.
@@ -566,6 +555,53 @@ mod tests {
     fn handles_are_the_low_32_bits() {
         assert_eq!(super::handle("0x55d1a2b3c4d5"), Some(0xa2b3_c4d5));
         assert_eq!(super::handle("nonsense"), None);
+    }
+
+    fn frame(address: &str) -> super::Frame {
+        super::Frame {
+            address: address.into(),
+            width: 1,
+            height: 1,
+            rgba: vec![0; 4],
+        }
+    }
+
+    // The wait runs on the runtime's timer: it ends at its limit when a window never answers,
+    // and as soon as every window is in otherwise, without a thread per wait.
+    #[tokio::test]
+    async fn waits_until_the_limit_for_a_window_that_never_answers() {
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        tx.unbounded_send(vec![frame("0x1")]).unwrap();
+        let limit = std::time::Duration::from_millis(80);
+        let start = std::time::Instant::now();
+        let got = super::gather(rx, 2, limit).await;
+        let took = start.elapsed();
+        assert_eq!(got.len(), 1);
+        assert!(took >= limit, "ended early: {took:?}");
+        assert!(took < limit * 5, "ended late: {took:?}");
+        drop(tx);
+    }
+
+    #[tokio::test]
+    async fn ends_as_soon_as_every_window_is_in() {
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        tx.unbounded_send(vec![frame("0x1"), frame("0x1")]).unwrap();
+        tx.unbounded_send(vec![frame("0x2")]).unwrap();
+        let start = std::time::Instant::now();
+        let got = super::gather(rx, 2, std::time::Duration::from_secs(10)).await;
+        assert_eq!(got.len(), 2);
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
+        drop(tx);
+    }
+
+    #[tokio::test]
+    async fn ends_when_the_follower_does() {
+        let (tx, rx) = futures::channel::mpsc::unbounded::<Vec<super::Frame>>();
+        drop(tx);
+        let start = std::time::Instant::now();
+        let got = super::gather(rx, 3, std::time::Duration::from_secs(10)).await;
+        assert!(got.is_empty());
+        assert!(start.elapsed() < std::time::Duration::from_secs(1));
     }
 }
 

@@ -33,6 +33,7 @@ impl App {
         if self.notifications.len() > 50 {
             self.notifications.remove(0);
         }
+        self.notes_changed();
     }
 
     pub(crate) fn notify(&mut self, e: notifications::Event) -> Task<Message> {
@@ -128,9 +129,16 @@ impl App {
     }
 
     /// After every change to the list, however it came (an app, a panel, the 50 limit): the
-    /// panel forgets what was about ones now gone.
+    /// panel forgets what was about ones now gone, and the server is told which ids are still
+    /// shown, so a new one never reuses them.
     fn notes_changed(&mut self) {
         self.panels.notifications.keep(&self.notifications);
+        notifications::shown(
+            self.notifications
+                .iter()
+                .map(|n| n.id)
+                .chain(self.toasts.iter().map(|t| t.id)),
+        );
     }
 
     /// A change to the list asked by a panel or a banner (`panels::action::Note`).
