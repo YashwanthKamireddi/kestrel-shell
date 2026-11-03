@@ -187,6 +187,26 @@ pub fn present(
         })
         .unwrap_or_else(|| vec![Rectangle::with_size(viewport.logical_size())]);
 
+    // kestrel patch: what changed since the frame on screen (the previous one), told to the
+    // compositor with the buffer. `damage` above is measured against this buffer's own older
+    // content (it may be 2-3 frames old); the compositor needs the change from what it shows.
+    // It was told the whole surface changed on every frame, so it took and composited all of
+    // a full-screen overlay (8.3 MB at 1080p) for a panel's few hundred pixels.
+    let shown = surface
+        .layer_stack
+        .front()
+        .filter(|_| surface.background_color == background_color)
+        .map(|previous| {
+            damage::diff(
+                previous,
+                renderer.layers(),
+                |layer| vec![layer.bounds],
+                Layer::damage,
+            )
+        })
+        .unwrap_or_else(|| vec![Rectangle::with_size(viewport.logical_size())]);
+    let shown = physical(&grown(shown, viewport), viewport);
+
     if damage.is_empty() {
         if let Some(last_layers) = last_layers {
             surface.layer_stack.push_front(last_layers.clone());
@@ -200,20 +220,7 @@ pub fn present(
         // only the bounds left that fringe behind when the shape went (thin lines above and
         // below a pressed or hovered chip).
         let screen = Rectangle::with_size(viewport.logical_size());
-        let px = 1.0 / viewport.scale_factor();
-        let damage: Vec<Rectangle> = damage
-            .into_iter()
-            .filter_map(|r| {
-                Rectangle {
-                    x: r.x - px,
-                    y: r.y - px,
-                    width: r.width + 2.0 * px,
-                    height: r.height + 2.0 * px,
-                }
-                .intersection(&screen)
-            })
-            .collect();
-        let damage = damage::group(damage, screen);
+        let damage = damage::group(grown(damage, viewport), screen);
         // kestrel patch: many overlapping rectangles (a scrolled list moves every item inside
         // it: 27 rectangles, 640 000 px for a 398 000 px panel) are painted once as their
         // bounding box when they cover most of it, instead of painting the overlaps again and
@@ -259,7 +266,51 @@ pub fn present(
     }
 
     on_pre_present();
-    buffer.present().map_err(|_| compositor::SurfaceError::Lost)
+    buffer
+        .present_with_damage(&shown)
+        .map_err(|_| compositor::SurfaceError::Lost)
+}
+
+/// kestrel patch: each damaged area grown by a pixel on every side and kept on the surface. A
+/// shape at a fractional position anti-aliases one pixel past its bounds; repainting only the
+/// bounds left that fringe behind when the shape went.
+fn grown(damage: Vec<Rectangle>, viewport: &Viewport) -> Vec<Rectangle> {
+    let screen = Rectangle::with_size(viewport.logical_size());
+    let px = 1.0 / viewport.scale_factor();
+    damage
+        .into_iter()
+        .filter_map(|r| {
+            Rectangle {
+                x: r.x - px,
+                y: r.y - px,
+                width: r.width + 2.0 * px,
+                height: r.height + 2.0 * px,
+            }
+            .intersection(&screen)
+        })
+        .collect()
+}
+
+/// kestrel patch: logical rectangles as the buffer's pixels (outward to whole pixels, inside
+/// the buffer), for `wl_surface.damage_buffer`.
+fn physical(damage: &[Rectangle], viewport: &Viewport) -> Vec<softbuffer::Rect> {
+    let scale = viewport.scale_factor();
+    let size = viewport.physical_size();
+    damage
+        .iter()
+        .filter_map(|r| {
+            let x0 = ((r.x * scale).floor().max(0.0) as u32).min(size.width);
+            let y0 = ((r.y * scale).floor().max(0.0) as u32).min(size.height);
+            let x1 = (((r.x + r.width) * scale).ceil().max(0.0) as u32).min(size.width);
+            let y1 = (((r.y + r.height) * scale).ceil().max(0.0) as u32).min(size.height);
+            Some(softbuffer::Rect {
+                x: x0,
+                y: y0,
+                width: std::num::NonZeroU32::new(x1.saturating_sub(x0))?,
+                height: std::num::NonZeroU32::new(y1.saturating_sub(y0))?,
+            })
+        })
+        .collect()
 }
 
 pub fn screenshot(

@@ -1,7 +1,7 @@
 # Vendored dependencies
 
 Four crates are vendored and patched. Every change against the published source is listed below,
-numbered once across the whole file (1-16 and 26-27 iced_layershell, 17-20 iced_tiny_skia, 21-23
+numbered once across the whole file (1-16 and 26-27 iced_layershell, 17-20 and 28 iced_tiny_skia, 21-23
 tiny-skia, 24-25 softbuffer). In the code most are marked `kestrel patch` (a few say only
 `kestrel:` or carry no marker; those are named below), so `grep -rn kestrel vendor/` finds them.
 
@@ -173,6 +173,14 @@ from the compositor (2026-11-18).
 20. **Damage tracing**: under `KESTREL_TRACE` each frame prints the buffer age and the redrawn
     rectangles with their area. `src/window/compositor.rs` (also keeps `buffer_age` in a local
     for it). Upstream: no. Keep.
+
+28. **The compositor is told what changed since the frame it shows** (`src/window/compositor.rs`,
+`present`): `present_with_damage` with the difference from the previous frame (grown by the same
+pixel and turned into buffer pixels) instead of `present()`, which damaged the whole buffer every
+frame. Correct by the protocol and checked for leftovers in the rig (none after opening and
+closing 8 panels). Measured gain: none visible in the nested rig (compositor CPU 36-41 vs 42-44
+ticks over the same sequence, within noise; Hyprland's damage_blink showed the whole output
+repainted for both, likely its blur widening damage), so the benefit is unproven (2026-11-18).
 
 ## tiny-skia (0.11.4)
 
