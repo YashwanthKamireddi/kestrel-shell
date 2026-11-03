@@ -3,7 +3,7 @@
 
 use super::dbus;
 use futures::{SinkExt, Stream, StreamExt};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use zbus::object_server::SignalEmitter;
@@ -64,7 +64,20 @@ fn split_service(service: &str, sender: &str) -> (String, String) {
 
 struct Watcher {
     items: Arc<Mutex<Vec<String>>>,
-    tx: mpsc::UnboundedSender<String>,
+    tx: mpsc::UnboundedSender<Event>,
+}
+
+/// The watcher's side of a registration: the key joins its list unless it is there already.
+/// True when it is new (then announced).
+pub(crate) fn register(items: &Mutex<Vec<String>>, key: &str) -> bool {
+    let mut items = items
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if items.iter().any(|k| k == key) {
+        return false;
+    }
+    items.push(key.to_string());
+    true
 }
 
 #[interface(name = "org.kde.StatusNotifierWatcher")]
@@ -78,18 +91,14 @@ impl Watcher {
         let sender = header.sender().map(|s| s.to_string()).unwrap_or_default();
         let (bus, path) = split_service(&service, &sender);
         let key = format!("{bus}{path}");
-        {
-            let mut items = self
-                .items
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if items.contains(&key) {
-                return;
-            }
-            items.push(key.clone());
+        if register(&self.items, &key) {
+            let _ = Self::status_notifier_item_registered(&emitter, &key).await;
         }
-        let _ = Self::status_notifier_item_registered(&emitter, &key).await;
-        let _ = self.tx.send(key);
+        // Read even when the key is listed already: an app that restarts under the same
+        // well-known name (a sandboxed app sees the same PID every time) registers again
+        // before its old process's leaving has been handled. Dropped here, the new item was
+        // then removed with the old one.
+        let _ = self.tx.send(Event::Registered { key, sender });
     }
 
     fn register_status_notifier_host(&self, _service: String) {}
@@ -346,9 +355,10 @@ pub async fn menu_event(bus: String, path: String, id: i32) {
 }
 
 /// One tray item as last read, with the unique name its signals come from.
-struct Known {
-    item: Item,
-    owner: String,
+#[derive(Clone, Debug)]
+pub(crate) struct Known {
+    pub(crate) item: Item,
+    pub(crate) owner: String,
 }
 
 /// Reads an item and who owns its name (signals carry the unique name, items often register a
@@ -370,11 +380,86 @@ async fn learn(c: &Connection, key: &str) -> Option<Known> {
     Some(Known { item, owner })
 }
 
-/// What reached the tray.
-enum Ev {
-    /// An app registered an item with kestrel's watcher.
-    Registered(String),
-    Bus(zbus::Message),
+/// What reached the tray, as far as its items are concerned.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Event {
+    /// An app (`sender`, its unique name) registered an item with kestrel's watcher.
+    Registered { key: String, sender: String },
+    /// An item's own signal (NewIcon, NewTitle, NewStatus…), from its unique name.
+    ItemSignal { sender: String, path: String },
+    /// A name left the bus (`NameOwnerChanged` with no new owner); `old` owned it.
+    OwnerLeft { name: String, old: String },
+    /// Another watcher's news (kestrel is then only a host).
+    Watcher { registered: bool, key: String },
+}
+
+impl Event {
+    fn from_message(m: &zbus::Message) -> Option<Event> {
+        let h = m.header();
+        let iface = h.interface().map(|i| i.to_string()).unwrap_or_default();
+        let member = h.member().map(|m| m.to_string()).unwrap_or_default();
+        let sender = h.sender().map(|s| s.to_string()).unwrap_or_default();
+        if iface == ITEM {
+            let path = h.path().map(|p| p.to_string()).unwrap_or_default();
+            Some(Event::ItemSignal { sender, path })
+        } else if member == "NameOwnerChanged" {
+            let (name, old, new) = m.body().deserialize::<(String, String, String)>().ok()?;
+            new.is_empty().then_some(Event::OwnerLeft { name, old })
+        } else if iface == WATCHER {
+            let service = m.body().deserialize::<String>().ok()?;
+            let (bus, path) = split_service(&service, &sender);
+            let registered = match member.as_str() {
+                "StatusNotifierItemRegistered" => true,
+                "StatusNotifierItemUnregistered" => false,
+                _ => return None,
+            };
+            Some(Event::Watcher {
+                registered,
+                key: format!("{bus}{path}"),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+/// What the tracker wants done after an event.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Todo {
+    Nothing,
+    /// Read these items (each answer goes to `Tracker::learned`).
+    Read(Vec<Ask>),
+    /// These items left the list (as the watcher, announce it).
+    Gone(Vec<String>),
+}
+
+/// One item to read.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Ask {
+    pub(crate) key: String,
+    /// The program it is read for: the one that registered it, or whose signal asked. A read
+    /// goes to whoever owns the name when it arrives: if that is another program (the app
+    /// restarted under the same name and has not registered yet), the item asked about is
+    /// gone, and the new one comes when it registers. Before, the new program's object was
+    /// taken for the old item and kept even if it never registered. None when kestrel only
+    /// hosts another watcher's list (its signals do not say who registered).
+    pub(crate) owner: Option<String>,
+}
+
+impl Ask {
+    fn one(key: String, owner: Option<String>) -> Todo {
+        Todo::Read(vec![Ask { key, owner }])
+    }
+}
+
+/// What changed in the list after a read, for other hosts (as the watcher, announce it).
+#[derive(Debug, PartialEq)]
+pub(crate) enum News {
+    Nothing,
+    /// It joined the list (it had left it while this read was waiting).
+    Added(String),
+    /// It left the list (it does not answer: it quit already, or never was an item).
+    Gone(Vec<String>),
 }
 
 /// Items kept current from their own signals, as KDE's and GNOME's hosts keep them: an item's
@@ -382,20 +467,28 @@ enum Ev {
 /// watcher says it went. Before, any item's signal, and any program at all connecting to or
 /// leaving the bus (each `notify-send`, each short-lived client), re-read every item and the
 /// watcher's list: ~10 calls per item each time.
-struct Tray {
-    c: Connection,
+///
+/// No I/O: it says which items to read and takes what was read (`learned`). `stream` is its
+/// driver on the real bus; the simulation tests (`crate::sim::tray`) drive it against a
+/// simulated one.
+pub(crate) struct Tracker {
     /// The watcher's list (its RegisteredStatusNotifierItems, in order).
     items: Arc<Mutex<Vec<String>>>,
-    known: HashMap<String, Known>,
+    /// In key order, so the items one signal asks for are read in the same order every time.
+    known: BTreeMap<String, Known>,
     /// kestrel is the watcher (else a host of another watcher, following its signals).
     watcher: bool,
-    /// Items that signalled during the current burst, read again once it ends: an app changing
-    /// its icon, title and tooltip together was read whole three times, an animated icon on
-    /// every frame of the animation.
-    stale: std::collections::HashSet<String>,
 }
 
-impl Tray {
+impl Tracker {
+    pub(crate) fn new(items: Arc<Mutex<Vec<String>>>, watcher: bool) -> Self {
+        Tracker {
+            items,
+            known: BTreeMap::new(),
+            watcher,
+        }
+    }
+
     fn list(&self) -> Vec<String> {
         self.items
             .lock()
@@ -403,7 +496,7 @@ impl Tray {
             .clone()
     }
 
-    fn state(&self) -> State {
+    pub(crate) fn state(&self) -> State {
         State {
             items: self
                 .list()
@@ -413,103 +506,181 @@ impl Tray {
         }
     }
 
-    async fn add(&mut self, key: String) {
-        match learn(&self.c, &key).await {
-            Some(k) => {
-                let mut list = self
-                    .items
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !list.contains(&key) {
-                    list.push(key.clone());
-                }
-                drop(list);
-                self.known.insert(key, k);
+    /// Each item read, with its owner, in key order.
+    #[cfg(test)]
+    pub(crate) fn snapshot(&self) -> Vec<(String, String)> {
+        self.known
+            .iter()
+            .map(|(key, k)| (key.clone(), k.owner.clone()))
+            .collect()
+    }
+
+    pub(crate) fn event(&mut self, e: Event) -> Todo {
+        match e {
+            Event::Registered { key, sender } => Ask::one(key, Some(sender)),
+            // NewIcon, NewTitle, NewStatus…: that item read again.
+            Event::ItemSignal { sender, path } => Todo::Read(
+                self.known
+                    .iter()
+                    .filter(|(_, k)| k.owner == sender && k.item.path == path)
+                    .map(|(key, _)| Ask {
+                        key: key.clone(),
+                        owner: Some(sender.clone()),
+                    })
+                    .collect(),
+            ),
+            Event::OwnerLeft { name, old } => {
+                // What `old` owned goes. A name leaving says who held it: an item read since
+                // from a new owner of the same name (an app restarted under it) stays. An item
+                // not read yet is matched by its name alone.
+                let gone: Vec<String> = self
+                    .list()
+                    .into_iter()
+                    .filter(|key| match self.known.get(key) {
+                        Some(k) => k.owner == old,
+                        None => key.split_once('/').map(|(b, _)| b) == Some(name.as_str()),
+                    })
+                    .collect();
+                Todo::gone(self.remove(&gone))
             }
-            // It does not answer (it quit already, or never was an item).
-            None => self.remove(&[key]).await,
+            Event::Watcher { .. } if self.watcher => Todo::Nothing,
+            Event::Watcher {
+                registered: true,
+                key,
+            } => Ask::one(key, None),
+            Event::Watcher {
+                registered: false,
+                key,
+            } => Todo::gone(self.remove(std::slice::from_ref(&key))),
         }
     }
 
-    /// Items gone: out of the list, and (as the watcher) announced gone.
-    async fn remove(&mut self, keys: &[String]) {
+    /// What reading an item gave.
+    pub(crate) fn learned(&mut self, ask: Ask, k: Option<Known>) -> News {
+        let key = ask.key;
+        // Another program answers for it now: the item asked about is gone.
+        let k = k.filter(|k| ask.owner.as_ref().is_none_or(|o| *o == k.owner));
+        match k {
+            Some(k) => {
+                let added = register(&self.items, &key);
+                self.known.insert(key.clone(), k);
+                if added {
+                    News::Added(key)
+                } else {
+                    News::Nothing
+                }
+            }
+            None => match self.remove(std::slice::from_ref(&key)) {
+                gone if gone.is_empty() => News::Nothing,
+                gone => News::Gone(gone),
+            },
+        }
+    }
+
+    /// Takes `keys` out; returns those that were in the list.
+    fn remove(&mut self, keys: &[String]) -> Vec<String> {
+        let mut gone = Vec::new();
         self.items
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|k| !keys.contains(k));
+            .retain(|k| {
+                let go = keys.contains(k);
+                if go {
+                    gone.push(k.clone());
+                }
+                !go
+            });
         for k in keys {
             self.known.remove(k);
-            self.stale.remove(k);
         }
-        if self.watcher
-            && let Ok(w) = self
-                .c
-                .object_server()
-                .interface::<_, Watcher>("/StatusNotifierWatcher")
-                .await
-        {
-            for k in keys {
-                let _ = Watcher::status_notifier_item_unregistered(w.signal_emitter(), k).await;
-            }
+        gone
+    }
+}
+
+impl Todo {
+    fn gone(keys: Vec<String>) -> Todo {
+        if keys.is_empty() {
+            Todo::Nothing
+        } else {
+            Todo::Gone(keys)
         }
     }
+}
 
-    /// Each item that signalled during the burst, read again (once).
-    async fn refresh(&mut self) {
-        for key in std::mem::take(&mut self.stale) {
-            if self.known.contains_key(&key) {
-                self.add(key).await;
-            }
-        }
-    }
+/// Raw events: a registration with kestrel's watcher, or a bus message.
+enum Ev {
+    Local(Event),
+    Bus(zbus::Message),
+}
 
+/// The tracker on the real bus: each event applied, the items it asks for read, and (as the
+/// watcher) changes to the list announced.
+struct Driver {
+    c: Connection,
+    t: Tracker,
+    /// Items asked for during the current burst, read once when it ends (the latest ask per
+    /// item): each icon, title or tooltip signal read the whole item again, ~10 calls, and an
+    /// animated icon signals every frame.
+    pending: Vec<Ask>,
+}
+
+impl Driver {
     async fn apply(&mut self, ev: Ev) {
-        let m = match ev {
-            Ev::Registered(key) => return self.add(key).await,
-            Ev::Bus(m) => m,
+        let e = match ev {
+            Ev::Local(e) => e,
+            Ev::Bus(m) => match Event::from_message(&m) {
+                Some(e) => e,
+                None => return,
+            },
         };
-        let h = m.header();
-        let iface = h.interface().map(|i| i.to_string()).unwrap_or_default();
-        let member = h.member().map(|m| m.to_string()).unwrap_or_default();
-        let sender = h.sender().map(|s| s.to_string()).unwrap_or_default();
-        if iface == ITEM {
-            // NewIcon, NewTitle, NewStatus…: that item read again when the burst ends.
-            let path = h.path().map(|p| p.to_string()).unwrap_or_default();
-            let keys = self
-                .known
-                .iter()
-                .filter(|(_, k)| k.owner == sender && k.item.path == path)
-                .map(|(key, _)| key.clone());
-            self.stale.extend(keys);
-        } else if member == "NameOwnerChanged" {
-            let Ok((name, _old, new)) = m.body().deserialize::<(String, String, String)>() else {
-                return;
-            };
-            if !new.is_empty() {
-                return;
+        match self.t.event(e) {
+            Todo::Nothing => {}
+            Todo::Read(asks) => {
+                for ask in asks {
+                    self.pending.retain(|p| p.key != ask.key);
+                    self.pending.push(ask);
+                }
             }
-            let gone: Vec<String> = self
-                .list()
-                .into_iter()
-                .filter(|key| {
-                    key.split_once('/').map(|(b, _)| b) == Some(name.as_str())
-                        || self.known.get(key).is_some_and(|k| k.owner == name)
-                })
-                .collect();
-            if !gone.is_empty() {
-                self.remove(&gone).await;
+            Todo::Gone(keys) => {
+                // An item that went needs no read at the end of the burst.
+                self.pending.retain(|p| !keys.contains(&p.key));
+                self.announce(&[], &keys).await;
             }
-        } else if iface == WATCHER && !self.watcher {
-            // The other watcher's news.
-            let Ok(service) = m.body().deserialize::<String>() else {
-                return;
-            };
-            let (bus, path) = split_service(&service, &sender);
-            let key = format!("{bus}{path}");
-            match member.as_str() {
-                "StatusNotifierItemRegistered" => self.add(key).await,
-                "StatusNotifierItemUnregistered" => self.remove(&[key]).await,
-                _ => {}
+        }
+    }
+
+    /// The burst ended: each item asked for is read once.
+    async fn refresh(&mut self) {
+        for ask in std::mem::take(&mut self.pending) {
+            self.read(ask).await;
+        }
+    }
+
+    async fn read(&mut self, ask: Ask) {
+        let k = learn(&self.c, &ask.key).await;
+        match self.t.learned(ask, k) {
+            News::Nothing => {}
+            News::Added(key) => self.announce(&[key], &[]).await,
+            News::Gone(keys) => self.announce(&[], &keys).await,
+        }
+    }
+
+    /// As the watcher, tells other hosts what joined and left the list.
+    async fn announce(&self, added: &[String], gone: &[String]) {
+        if (added.is_empty() && gone.is_empty()) || !self.t.watcher {
+            return;
+        }
+        if let Ok(w) = self
+            .c
+            .object_server()
+            .interface::<_, Watcher>("/StatusNotifierWatcher")
+            .await
+        {
+            for k in added {
+                let _ = Watcher::status_notifier_item_registered(w.signal_emitter(), k).await;
+            }
+            for k in gone {
+                let _ = Watcher::status_notifier_item_unregistered(w.signal_emitter(), k).await;
             }
         }
     }
@@ -562,12 +733,10 @@ pub fn stream() -> impl Stream<Item = State> {
             c.request_name(WATCHER).await
         }
         .await;
-        let mut tray = Tray {
+        let mut tray = Driver {
             c: c.clone(),
-            items,
-            known: HashMap::new(),
-            watcher: own.is_ok(),
-            stale: std::collections::HashSet::new(),
+            t: Tracker::new(items, own.is_ok()),
+            pending: Vec::new(),
         };
         if let Err(e) = own {
             // Someone else is the watcher: be a host and read its list.
@@ -584,12 +753,12 @@ pub fn stream() -> impl Stream<Item = State> {
                     .await
                 {
                     for key in list {
-                        tray.add(key).await;
+                        tray.read(Ask { key, owner: None }).await;
                     }
                 }
             }
         }
-        let local = tokio_stream_unbounded(rx).map(Ev::Registered);
+        let local = tokio_stream_unbounded(rx).map(Ev::Local);
         let bus = futures::stream::select(futures::stream::select(a, b), w)
             .filter_map(|m| async { m.ok().map(Ev::Bus) });
         let mut events = Box::pin(futures::stream::select(local, bus));
@@ -597,7 +766,7 @@ pub fn stream() -> impl Stream<Item = State> {
         const QUIET: std::time::Duration = std::time::Duration::from_millis(100);
         let mut last = None;
         loop {
-            let state = tray.state();
+            let state = tray.t.state();
             if last.as_ref() != Some(&state) {
                 last = Some(state.clone());
                 let _ = out.send(state).await;

@@ -56,3 +56,6 @@ pub mod updates;
 pub mod vpn;
 pub mod web;
 pub mod xdg;
+
+#[cfg(test)]
+mod sim;
