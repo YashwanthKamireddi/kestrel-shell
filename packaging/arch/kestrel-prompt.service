@@ -19,6 +19,8 @@ RestartSec=1
 WatchdogSec=20
 NotifyAccess=main
 Slice=session.slice
+# Kept in RAM like the shell (kestrel.service): a password prompt must not wait on swap.
+MemoryLow=32M
 
 [Install]
 WantedBy=graphical-session.target
