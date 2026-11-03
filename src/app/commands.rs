@@ -28,15 +28,25 @@ impl App {
                 } else {
                     arg.to_string()
                 };
-                match services::defaults::command_for(mime, &arg) {
-                    Some(cmd) => {
-                        Task::done(Message::Dispatch(services::compositor::Action::Exec(cmd)))
-                    }
-                    None => {
-                        log::warn!("open-default {kind}: no default app");
-                        Task::none()
-                    }
-                }
+                // The default and its desktop file are read off the UI thread.
+                let (mime, kind) = (mime.to_string(), kind.to_string());
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            services::defaults::command_for(&mime, &arg)
+                        })
+                        .await
+                        .ok()
+                        .flatten()
+                    },
+                    move |cmd| match cmd {
+                        Some(cmd) => Message::Dispatch(services::compositor::Action::Exec(cmd)),
+                        None => {
+                            log::warn!("open-default {kind}: no default app");
+                            Message::Batch(Vec::new())
+                        }
+                    },
+                )
             }
             // Settings is a window of its own: opened, or brought forward if open. A toggle
             // closes it when it is the window in front (as every other toggle closes its panel).
@@ -299,8 +309,12 @@ pub(crate) fn game_mode_flag() -> std::path::PathBuf {
 }
 
 /// Records game mode in the runtime directory (cleared at logout), so a restarted shell agrees
-/// with Hyprland about whether it is on.
+/// with Hyprland about whether it is on. Written by the disk writer, in order.
 pub fn remember_game_mode(on: bool) {
+    crate::disk::write(move || write_game_mode(on));
+}
+
+fn write_game_mode(on: bool) {
     let flag = game_mode_flag();
     let r = if on {
         std::fs::write(&flag, b"")

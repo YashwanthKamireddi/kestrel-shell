@@ -389,6 +389,10 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             Task::none()
         }
         Message::Notification(e) => app.notify(e),
+        Message::PictureSaved(id, to) => {
+            app.picture_saved(id, &to);
+            Task::none()
+        }
         Message::VolumeStep(lines) => {
             // 5 % a notch (a touchpad's small scrolls add up to one), up to Settings > Sound's
             // maximum like the volume keys, and heard again if muted as they do.

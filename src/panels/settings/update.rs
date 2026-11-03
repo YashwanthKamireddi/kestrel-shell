@@ -97,21 +97,28 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             })))
         }
         Message::OpenFile(path) => {
-            // A file not made yet is made empty (a folder, made), so it opens.
-            if !path.exists() {
-                if path.extension().is_none() {
-                    let _ = std::fs::create_dir_all(&path);
-                } else {
-                    if let Some(d) = path.parent() {
-                        let _ = std::fs::create_dir_all(d);
+            // A file not made yet is made empty (a folder, made), so it opens: by the disk
+            // writer, then opened.
+            run(Task::perform(
+                crate::disk::run(move || {
+                    if !path.exists() {
+                        if path.extension().is_none() {
+                            let _ = std::fs::create_dir_all(&path);
+                        } else {
+                            if let Some(d) = path.parent() {
+                                let _ = std::fs::create_dir_all(d);
+                            }
+                            let _ = std::fs::write(&path, "");
+                        }
                     }
-                    let _ = std::fs::write(&path, "");
-                }
-            }
-            Act::Dispatch(crate::services::compositor::Action::Open(
-                path.to_string_lossy().into(),
+                    path
+                }),
+                |p| p.map_or(Message::Batch(Vec::new()), Message::OpenMade),
             ))
         }
+        Message::OpenMade(path) => Act::Dispatch(crate::services::compositor::Action::Open(
+            path.to_string_lossy().into(),
+        )),
         Message::FirmwareUpdate(id) => {
             // The device id is fwupd's hex: nothing else reaches the shell.
             let id: String = id.chars().filter(char::is_ascii_hexdigit).collect();

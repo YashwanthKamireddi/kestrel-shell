@@ -42,6 +42,9 @@ pub struct State {
     clips: Option<Vec<Clip>>,
     /// File search results for the query they were found for.
     files: (String, Vec<PathBuf>),
+    /// This user's processes (pid, name, KiB) for a `!` query, read off the UI thread, and
+    /// the name they were read for.
+    procs: (String, Vec<(u32, String, u64)>),
     /// The query's first word is a program on PATH (offered as a command to run).
     exe: bool,
     /// A process asked to end once (the next press on it ends it, as the monitor asks).
@@ -63,6 +66,8 @@ pub enum Message {
     Launch(usize),
     Clips(Vec<Clip>),
     Files(String, Vec<PathBuf>),
+    /// Processes found for a name (see `State::procs`).
+    Procs(String, Vec<(u32, String, u64)>),
     /// The installed apps, read in the background.
     Apps(Vec<apps::App>),
 }

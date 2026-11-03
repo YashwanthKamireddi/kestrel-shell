@@ -3,6 +3,7 @@
 mod app;
 mod apptheme;
 mod config;
+mod disk;
 mod guard;
 mod history;
 mod hypr_settings;

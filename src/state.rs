@@ -188,7 +188,8 @@ pub fn get<T>(f: impl FnOnce(&State) -> T) -> T {
     f(&s)
 }
 
-/// Changes it and writes it out (only when something really changed).
+/// Changes it and writes it out (only when something really changed). The change is seen at
+/// once; the file is written by the disk writer (`crate::disk`), in order, off the UI thread.
 pub fn update(f: impl FnOnce(&mut State)) {
     let mut s = STATE
         .lock()
@@ -196,7 +197,8 @@ pub fn update(f: impl FnOnce(&mut State)) {
     let before = s.clone();
     f(&mut s);
     if *s != before {
-        save(&s);
+        let now = s.clone();
+        crate::disk::write(move || save(&now));
     }
 }
 

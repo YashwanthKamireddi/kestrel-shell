@@ -205,13 +205,35 @@ impl App {
                 path.into(),
             )));
         }
+        // The file is read or copied off the UI thread (a screenshot is megabytes).
         if let Some(path) = key.strip_prefix("kestrel-copy:") {
-            copy_file(path);
-        } else if let Some(path) = key.strip_prefix("kestrel-save:")
-            && let Some(saved) = save_picture(path)
-            // The entry now points at the saved file.
-            && let Some(n) = self.notifications.iter_mut().find(|n| n.id == id)
-        {
+            let path = path.to_string();
+            return Task::future(async move {
+                let _ = tokio::task::spawn_blocking(move || copy_file(&path)).await;
+            })
+            .discard();
+        }
+        if let Some(path) = key.strip_prefix("kestrel-save:") {
+            let from = path.to_string();
+            return Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || save_picture(&from))
+                        .await
+                        .ok()
+                        .flatten()
+                },
+                move |saved| match saved {
+                    Some(to) => Message::PictureSaved(id, to),
+                    None => Message::Batch(Vec::new()),
+                },
+            );
+        }
+        Task::none()
+    }
+
+    /// A kept picture was saved: its entry now points at the saved file.
+    pub(crate) fn picture_saved(&mut self, id: u32, saved: &std::path::Path) {
+        if let Some(n) = self.notifications.iter_mut().find(|n| n.id == id) {
             n.body = format!(
                 "Saved in {}",
                 saved
@@ -220,7 +242,6 @@ impl App {
             );
             n.actions = vec![(format!("kestrel-open:{}", saved.display()), "Open".into())];
         }
-        Task::none()
     }
 
     /// Low battery: warned once as UPower's level rises on battery (low, then critical, urgent),

@@ -2,25 +2,33 @@
 
 use super::*;
 
-/// config.toml as it is on disk (module options are read from it).
-pub(super) fn read_doc() -> toml::Table {
-    std::fs::read_to_string(config::path())
-        .ok()
-        .and_then(|t| t.parse().ok())
-        .unwrap_or_default()
+/// config.toml as it is on disk (module options are read from it) and the installed plugins,
+/// read by the disk writer: off the UI thread, and after any change to the file queued before.
+pub(super) fn read_doc() -> Task<Message> {
+    Task::perform(
+        crate::disk::run(|| {
+            let doc = std::fs::read_to_string(config::path())
+                .ok()
+                .and_then(|t| t.parse().ok())
+                .unwrap_or_default();
+            (doc, crate::lua::installed())
+        }),
+        |r| {
+            let (doc, plugins) = r.unwrap_or_default();
+            Message::Doc(doc, plugins)
+        },
+    )
 }
 
 pub fn open(st: &mut State, cx: &Cx<'_>) -> Action {
     // Each open starts fresh: no search left from last time.
     st.query.clear();
-    st.doc = read_doc();
     st.city = cx.config.weather_city.clone().unwrap_or_default();
-    st.plugins = crate::lua::installed();
     // The first open reads every page's data in the background, so switching pages shows a full
     // page at once (a page read only when chosen drew empty for a frame, then filled in). Later
     // opens keep that data and read again only the page shown: each page refreshes itself when
     // chosen. Updates is left to its page: checking for updates is slow and uses the network.
-    let mut tasks: Vec<Task<Message>> = Vec::new();
+    let mut tasks: Vec<Task<Message>> = vec![read_doc()];
     if !st.preloaded {
         st.preloaded = true;
         tasks.extend(

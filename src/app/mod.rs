@@ -323,6 +323,10 @@ pub struct App {
     pub config_error: Option<String>,
     /// `[plugins]` in config.toml as last seen (plugins reload when it changes).
     pub plugin_settings: String,
+    /// config.toml reads asked for, and the newest one applied: a read that answers after a
+    /// newer one is dropped.
+    pub config_reads: u64,
+    pub config_applied: u64,
     /// The tray's hidden apps are slid out in the bar.
     pub tray_expanded: bool,
     /// The Lua layer: its bar layout and what each of its widgets shows.
@@ -422,12 +426,16 @@ pub enum Message {
     Pods(Option<services::airpods::Pods>),
     /// config.toml or init.lua was saved.
     ConfigFile(crate::subs::ConfigFile),
+    /// config.toml as read off the UI thread (after every change queued before it).
+    ConfigRead(Box<ConfigRead>),
     Lua(crate::lua::Event),
     LuaClick(String),
     Copied(services::clipboard::Copied),
     Meters(crate::services::meters::Meters),
     Ddc(Vec<services::ddc::Display>),
     DdcLevel(u32, Option<f32>),
+    /// A kept picture (a screenshot's notification) was saved there.
+    PictureSaved(u32, std::path::PathBuf),
     /// A player's new artwork has stayed put long enough to show.
     ArtSettled(String, Option<String>),
     /// An app asks which program should open something ("Open with…").
@@ -524,6 +532,8 @@ pub fn boot() -> (App, Task<Message>) {
         reported_art: HashMap::new(),
         config_error: None,
         plugin_settings: config::plugin_settings(),
+        config_reads: 0,
+        config_applied: 0,
         tray_expanded: false,
         lua_bar: crate::lua::Bar::default(),
         chips: HashMap::new(),
@@ -600,17 +610,22 @@ impl App {}
 /// The bar surface's height: the bar and room for the frame's corners under it.
 const BAR_SURFACE: f32 = tok::BAR + 32.0;
 
+/// Handles one message. Every update is measured: one that keeps the UI thread long enough to
+/// delay a frame is logged by its message's kind (`guard::timed`), so a handler that does slow
+/// work in place shows in the journal.
 pub fn update(app: &mut App, msg: Message) -> Task<Message> {
+    let kind = crate::guard::Kind::of(&msg);
+    log::debug!("msg {}", kind.as_str());
+    crate::guard::timed(&kind, || update_measured(app, msg))
+}
+
+fn update_measured(app: &mut App, msg: Message) -> Task<Message> {
     // A part that failed while drawing is reported once.
     for failure in crate::guard::take_unreported() {
         app.notify(notifications::Event::Added(own_notification(
             "Part of kestrel stopped",
             &format!("{failure}. The rest keeps working; restart kestrel to try it again."),
         )));
-    }
-    if log::log_enabled!(log::Level::Debug) {
-        let name = format!("{msg:?}");
-        log::debug!("msg {}", name.split(['(', ' ', '{']).next().unwrap_or(""));
     }
     let (cam_before, mic_before) = (app.camera_apps.clone(), app.audio.recording.clone());
     let was_animating = app.animating();

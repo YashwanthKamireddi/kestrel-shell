@@ -92,7 +92,8 @@ pub fn save(list: &[Notification]) {
     let (Some(f), Ok(bytes)) = (file(), serde_json::to_vec(&saved)) else {
         return;
     };
-    std::thread::spawn(move || {
+    // In order with the other writes: a thread per save could finish an older save last.
+    crate::disk::write(move || {
         if let Some(d) = f.parent() {
             let _ = std::fs::create_dir_all(d);
         }

@@ -689,6 +689,8 @@ pub enum Message {
     /// Developer: open a file of kestrel's in the default app for it; restart the shell (the
     /// first press asks).
     OpenFile(std::path::PathBuf),
+    /// That file is there now: open it.
+    OpenMade(std::path::PathBuf),
     Restart,
     /// Firmware updates (fwupd), read; one to install (fwupd's own updater, in the terminal).
     Firmware(Vec<crate::services::updates::Firmware>),
@@ -764,6 +766,8 @@ pub enum Message {
     /// Read config.toml's module options, or the installed plugins, again (after a change).
     ReadDoc,
     ReadPlugins,
+    /// config.toml's module options and the installed plugins, as read.
+    Doc(toml::Table, Vec<(String, String, String, bool)>),
     /// A change to the system (a radio, the sound, a device), asked of the shell.
     Change(crate::app::Change),
     /// Several, in order.

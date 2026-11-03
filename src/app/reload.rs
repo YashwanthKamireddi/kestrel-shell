@@ -2,6 +2,89 @@
 
 use super::*;
 
+/// Why config.toml was read, which decides what a mistake in it does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ConfigFrom {
+    /// The file was saved (by hand or by kestrel): a mistake is reported.
+    File,
+    /// Settings changed something: a mistake elsewhere in the file is left to the watcher.
+    Settings,
+    /// The Lua layer has a new bar: with a mistake, the running settings take it.
+    Lua,
+}
+
+/// config.toml as read, and why.
+#[derive(Clone, Debug)]
+pub(crate) struct ConfigRead {
+    pub from: ConfigFrom,
+    /// Which read this is (`App::config_reads`): an older one answering late is dropped.
+    pub seq: u64,
+    pub config: Result<Config, String>,
+    /// `[plugins]` as text.
+    pub plugins: String,
+}
+
+impl App {
+    /// Reads config.toml off the UI thread, after every change already queued for it
+    /// (`crate::disk`), and applies it when it is in (`ConfigRead`).
+    pub(crate) fn read_config(&mut self, from: ConfigFrom) -> Task<Message> {
+        self.config_reads += 1;
+        let seq = self.config_reads;
+        Task::perform(
+            crate::disk::run(move || ConfigRead {
+                from,
+                seq,
+                config: config::read(),
+                plugins: config::plugin_settings(),
+            }),
+            |r| match r {
+                Some(r) => Message::ConfigRead(Box::new(r)),
+                None => Message::Batch(Vec::new()),
+            },
+        )
+    }
+}
+
+/// config.toml, as read: applied as each reason asks (what the handlers did when they read it
+/// in place).
+pub(crate) fn config_read(app: &mut App, r: ConfigRead) -> Task<Message> {
+    if r.seq <= app.config_applied {
+        return Task::none();
+    }
+    app.config_applied = r.seq;
+    match (r.from, r.config) {
+        (_, Ok(c)) => {
+            app.config_error = None;
+            // Plugin settings live in config.toml: plugins reload when they change (whichever
+            // read sees it first: an older read answering late is dropped).
+            if r.plugins != app.plugin_settings {
+                app.plugin_settings = r.plugins;
+                crate::lua::reload();
+            }
+            apply_config(app, c)
+        }
+        // A mistake while editing keeps everything as it was and says where it is (once per
+        // distinct mistake), instead of falling back to the defaults.
+        (ConfigFrom::File, Err(e)) => {
+            if app.config_error.as_deref() != Some(e.as_str()) {
+                app.config_error = Some(e.clone());
+                app.notify(notifications::Event::Added(own_notification(
+                    "Config not applied",
+                    &e,
+                )));
+            }
+            Task::none()
+        }
+        // A hand-made mistake elsewhere in the file: the watcher says where.
+        (ConfigFrom::Settings, Err(_)) => Task::none(),
+        (ConfigFrom::Lua, Err(_)) => {
+            let mut c = app.config.clone();
+            app.lua_bar.apply(&mut c.bar);
+            apply_config(app, c)
+        }
+    }
+}
+
 /// Use a freshly read config (with the Lua layer's bar on top), updating only what changed.
 pub(crate) fn apply_config(app: &mut App, mut c: Config) -> Task<Message> {
     crate::theme::apply(&c);
@@ -63,14 +146,7 @@ pub(crate) fn lua_event(app: &mut App, e: crate::lua::Event) -> Task<Message> {
         Event::Loaded { bar, widgets } => {
             app.chips.retain(|name, _| widgets.contains(name));
             app.lua_bar = bar;
-            match config::read() {
-                Ok(c) => apply_config(app, c),
-                Err(_) => {
-                    let mut c = app.config.clone();
-                    app.lua_bar.apply(&mut c.bar);
-                    apply_config(app, c)
-                }
-            }
+            app.read_config(ConfigFrom::Lua)
         }
         Event::Widget(name, Some(chip)) => {
             app.chips.insert(name, chip);

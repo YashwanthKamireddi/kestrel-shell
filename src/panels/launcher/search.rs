@@ -76,9 +76,14 @@ pub fn entries(st: &State) -> Vec<Entry<'_>> {
         };
     }
     if let Some(name) = q.strip_prefix('!') {
-        return processes(name.trim())
-            .into_iter()
-            .map(|(pid, n, mem)| Entry::Process(pid, n, mem))
+        // The last list read; while a newer read is on its way, narrowed to what is typed now.
+        let name = name.trim().to_lowercase();
+        return st
+            .procs
+            .1
+            .iter()
+            .filter(|(_, n, _)| n.to_lowercase().contains(&name))
+            .map(|(pid, n, mem)| Entry::Process(*pid, n.clone(), *mem))
             .collect();
     }
     if let Some(cmd) = q.strip_prefix('>') {
@@ -237,8 +242,16 @@ pub(super) async fn find_files(term: String) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+/// This user's processes whose name contains `name`, biggest memory first: (pid, name, KiB),
+/// read off the UI thread (every process's status file).
+pub(super) async fn find_processes(name: String) -> Vec<(u32, String, u64)> {
+    tokio::task::spawn_blocking(move || processes(&name))
+        .await
+        .unwrap_or_default()
+}
+
 /// This user's processes whose name contains `name`, biggest memory first: (pid, name, KiB).
-pub(super) fn processes(name: &str) -> Vec<(u32, String, u64)> {
+fn processes(name: &str) -> Vec<(u32, String, u64)> {
     let uid = unsafe { libc::getuid() };
     let me = std::process::id();
     let name = name.to_lowercase();
