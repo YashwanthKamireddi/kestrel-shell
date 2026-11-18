@@ -29,11 +29,14 @@
 ## Under the hood
 
 ```
- Wayland ── layer-shell · session-lock · data-control · toplevel-export · cursor-shape
- D-Bus ──── NetworkManager · BlueZ · UPower · logind · systemd · UDisks2 · MPRIS · polkit
- Audio ──── PipeWire · libpulse
- Hyprland ─ IPC socket
- Serves ─── notifications · StatusNotifier · polkit agent · secret agents · xdg-desktop-portal
+Wayland    layer-shell · session-lock · data-control
+           toplevel-export · cursor-shape
+D-Bus      NetworkManager · BlueZ · UPower · logind
+           systemd · UDisks2 · MPRIS · polkit
+Audio      PipeWire · libpulse
+Hyprland   IPC socket
+Serves     notifications · StatusNotifier · polkit agent
+           secret agents · xdg-desktop-portal
 ```
 
 - **Direct.** Core services talk to the real interfaces, not to command-line tools.
