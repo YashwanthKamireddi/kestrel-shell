@@ -89,6 +89,9 @@ not enabled, and its subscription is never created.
 
 ### Stability
 
+- Truth over events: a change signal never carries state into the shell. It only means
+  "read again", and the service re-reads the whole object from its source, so a dropped or
+  reordered signal cannot leave a wrong value on screen.
 - Module `update` and `view` run inside a guard: a panic disables that module, logs it, and shows
   a notification; the rest of the shell continues.
 - No `unwrap()`/`expect()` on anything that can fail at runtime. Errors are values; services log

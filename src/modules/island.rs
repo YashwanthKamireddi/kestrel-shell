@@ -54,7 +54,7 @@ pub fn visualiser<'a>(app: &App, s: Scheme) -> Option<Element<'a, Message>> {
         o.to_color()
     });
     // Whole pixels only: 3.5 px bars with 2.5 px gaps sat on half pixels, and smoothing split
-    // each bar into a solid stripe and a faint one beside it (a "line" in every bar, the user's
+    // each bar into a solid stripe and a faint one beside it (a "line" in every bar, the
     // report 2026-11-14). Even heights keep the centred bars on whole pixels too.
     let bars = app.levels.iter().map(|v| {
         let h = (2.0 * (2.0 + v.clamp(0.0, 1.0) * 6.5)).round();

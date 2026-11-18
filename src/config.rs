@@ -47,7 +47,7 @@ pub struct Config {
     /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
     pub clock: ClockConfig,
     /// Volume keys: `[sound] step = 2` (percent per press), `max = 150` (percent the keys may
-    /// reach; above 100 boosts quiet sound, as the user's keys always allowed).
+    /// reach; above 100 boosts quiet sound, as the keys always allowed).
     pub sound: SoundConfig,
     /// Temperatures in "celsius" or "fahrenheit".
     pub weather_units: Units,

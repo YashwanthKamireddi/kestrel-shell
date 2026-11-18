@@ -2,7 +2,7 @@
 //! authentication agent, NetworkManager secret agent and BlueZ pairing agent, with their window,
 //! apart from the shell. A shell that crashes, freezes or restarts never cancels a password,
 //! Wi-Fi or pairing question, and a question never waits on the shell
-//! (docs/ROADMAP-v2.md, rule 3).
+//! (docs/ARCHITECTURE.md, Stability).
 //!
 //! It shows panels::auth (the same component the shell shows when there is no prompt process)
 //! in a window of its own, under the bar's centre, made when a question arrives and gone when

@@ -1,7 +1,7 @@
 //! Service streams as iced subscriptions. Each subscription exists only while the app asks for
 //! it, so a module that is switched off never starts its service. Every one but the one-shot
 //! `at` runs under `forever`: if its stream ends or panics it is made again, so nothing freezes
-//! on its last answer (docs/ROADMAP-v2.md, rule 1).
+//! on its last answer (docs/ARCHITECTURE.md, Stability: truth over events).
 
 use crate::services::stream::forever;
 use crate::services::{

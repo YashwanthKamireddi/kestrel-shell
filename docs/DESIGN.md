@@ -138,8 +138,8 @@ A button whose panel is open shows `accent_soft` behind an `accent` icon.
 The contract above was right; the code drifted from it. Measured on 2026-11-15: 94 literal radii
 in 15 values (2…20, against the contract's 24 / 12 / 10 / 8 / pill), 214 literal paddings, 283
 literal gaps and 87 hand-picked `.colors(rest, hover, press)` triples with ~15 different ink
-alphas. So nothing looked quite like anything else. How the popular shells prevent this is in
-docs/research/SHELLS.md (Noctalia and DMS forbid raw values by rule).
+alphas. So nothing looked quite like anything else. Popular shells prevent this by rule (Noctalia and DMS
+forbid raw values); kestrel does it with a lint.
 
 **Tokens in code.** `theme::tok` holds this document's scales as named constants: spacing
 (`XXS 2 · XS 4 · S 6 · M 8 · L 12 · XL 16 · XXL 20 · XXXL 24`), radii (`PANEL 24 · CARD 12 ·

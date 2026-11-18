@@ -43,7 +43,7 @@ impl Action {
             Self::ShutDown => "Shut down",
         }
     }
-    /// The armed row asks, in red ("Click again to …" was hint text: the user's rules).
+    /// The armed row asks, in red ("Click again to …" was hint text: the design rules).
     fn confirm(self) -> Option<&'static str> {
         match self {
             Self::LogOut => Some("Log out?"),

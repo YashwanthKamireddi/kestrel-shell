@@ -452,7 +452,7 @@ impl App {
             } else if (x - o.pill_x.target).abs() > 0.5 {
                 // ii's stretch: the edge facing the move leads, the other follows, so the
                 // circle reaches out and gathers itself. Both critically damped: no overshoot.
-                // Settled in ~0.11 s / ~0.15 s (was 0.17 / 0.28: it trailed a fast scroll, the user's
+                // Settled in ~0.11 s / ~0.15 s (was 0.17 / 0.28: it trailed a fast scroll, the
                 // "sluggish", 2026-11-15).
                 let (lead, trail) = (tok::SPRING_LEAD, tok::SPRING_TRAIL);
                 let (right_edge, left_edge) = if x > o.pill_x.target {

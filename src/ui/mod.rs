@@ -536,7 +536,7 @@ pub fn section<'a, M: 'a>(
 
 /// Where a list would be when it is empty *because of what was typed or chosen* (a search, a
 /// path, a filter): says why, centred, where the first rows would start. Not for a list that is
-/// simply empty: that shows `empty` (an icon, no words: the user's first rule, 2026-11-13).
+/// simply empty: that shows `empty` (an icon, no words: the first design rule).
 pub fn empty_reason<'a, M: 'a>(s: Scheme, why: String, height: f32) -> Element<'a, M> {
     container(label(why, theme::text::BODY, s.ink_dim))
         .center_x(Length::Fill)
@@ -550,7 +550,7 @@ pub fn empty_reason<'a, M: 'a>(s: Scheme, why: String, height: f32) -> Element<'
 
 /// Muted centred message for empty lists.
 /// Where a list or picture would be and there is nothing (yet): only a faint icon of what
-/// belongs there. No words: "Nothing here" labels were the user's first rule (2026-11-13).
+/// belongs there. No words: "Nothing here" labels were the first design rule.
 pub fn empty<'a, M: 'static>(s: Scheme, i: Icon) -> Element<'a, M> {
     container(icon(i, crate::theme::tok::ICON_XL, s.ink_faint))
         .center_x(Length::Fill)

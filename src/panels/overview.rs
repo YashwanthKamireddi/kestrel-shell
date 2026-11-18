@@ -88,7 +88,7 @@ pub fn prepare(
     const WAIT: std::time::Duration = std::time::Duration::from_millis(90);
     // Every window has a picture already (taken when it opened, kept fresh while shown): open at
     // once and refresh them behind it. Waiting for fresh ones every time put ~40 ms between the
-    // key and the overview (the user's "delay").
+    // key and the overview (it read as a delay).
     let complete = hypr
         .windows
         .iter()

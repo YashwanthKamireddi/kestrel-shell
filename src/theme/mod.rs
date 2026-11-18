@@ -84,7 +84,7 @@ impl Scheme {
             .build();
         let d = theme.schemes.dark;
         let c = |x: Rgb| Color::from_rgb8(x.red, x.green, x.blue);
-        // Only the accent comes from the wallpaper. Text and surfaces stay neutral greys (the user's
+        // Only the accent comes from the wallpaper. Text and surfaces stay neutral greys (the
         // call 2026-11-13: tinted text and surfaces read as too much colour).
         let neutral = Self::oklch(Seed {
             chroma: 0.0,

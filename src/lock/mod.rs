@@ -1,5 +1,5 @@
 //! The lock screen (`kestrel lock`): its own small process, as the prompt process is
-//! (docs/ROADMAP-v2.md, rule 3), started by hypridle's `lock_cmd` (docs/LOCK.md).
+//! (docs/ARCHITECTURE.md, Stability), started by hypridle's `lock_cmd` (docs/LOCK.md).
 //!
 //! It locks the session with the Wayland session lock protocol (ext-session-lock-v1), the way
 //! swaylock and hyprlock do: the compositor hides everything and gives input only to this

@@ -5,11 +5,11 @@ hl.config({
     -- started again over the dead lock (docs/LOCK.md).
     misc = { disable_hyprland_logo = true, disable_splash_rendering = true,
              allow_session_lock_restore = true },
-    -- This compositor runs on the user's session bus with the user's HOME: syncing its cursor to gsettings
-    -- wrote the rig's cursor theme into the user's real settings (2026-11-14). Never.
+    -- This compositor runs on the session bus with the rig's HOME: syncing its cursor to gsettings
+    -- wrote the rig's cursor theme into the real settings (2026-11-14). Never.
     cursor = { sync_gsettings_theme = false },
     general = { gaps_in = 4, gaps_out = 8, border_size = 0 },
-    -- Blur as on the user's desktop (conf/look.lua), so windows look as they do there.
+    -- Blur as on the desktop (conf/look.lua), so windows look as they do there.
     decoration = {
         rounding = 12,
         blur = { enabled = true, size = 10, passes = 3, noise = 0.05, contrast = 0.89,

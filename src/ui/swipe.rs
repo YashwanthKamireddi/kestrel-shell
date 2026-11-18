@@ -2,7 +2,7 @@
 //! (`Modules/Notifications/NotificationSwipeRow.qml`): it follows a held drag or a two-finger
 //! sideways scroll; let go past 35 % of its width (or flung that far) it slides out and
 //! `on_dismiss` is sent at once (the list closes up on that frame: a slide-out first left an
-//! empty slot that read as lag, the user's rule), short of that it springs back. A click that does not move is a tap
+//! empty slot that read as lag), short of that it springs back. A click that does not move is a tap
 //! (`on_tap`, on release so a drag never taps). Buttons inside keep their own clicks.
 
 use crate::motion::Spring;

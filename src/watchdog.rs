@@ -1,7 +1,7 @@
 //! systemd's watchdog: the UI loop says "still alive" every few seconds, and systemd restarts
 //! kestrel if it stops (a hang). A crash already restarts it (Restart=on-failure); this covers
 //! a freeze, which would otherwise leave the desktop without a working shell
-//! (docs/ROADMAP-v2.md, rule 3). The ping is sent from the update loop itself, so a stuck UI
+//! (docs/ARCHITECTURE.md, Stability). The ping is sent from the update loop itself, so a stuck UI
 //! thread stops it. Nothing at all when not started by systemd with a watchdog.
 
 use std::os::unix::net::UnixDatagram;

@@ -90,7 +90,7 @@ pub async fn changes(
     let stream = MessageStream::for_match_rule(rule, c, Some(64)).await?;
     // Also "look again" after the machine wakes (changes during sleep can be missed) and when
     // the service itself restarts (its old signals are gone, its state is new): the state is
-    // always read whole again, never patched from events (docs/ROADMAP-v2.md, rule 1).
+    // always read whole again, never patched from events (docs/ARCHITECTURE.md, Stability: truth over events).
     let resume = MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
         .sender("org.freedesktop.login1")?

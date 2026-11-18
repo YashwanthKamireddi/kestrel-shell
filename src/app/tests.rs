@@ -414,7 +414,11 @@ fn banners_last_as_the_app_asks_within_limits() {
     app.toasts.clear();
     app.config.notifications.banner = 7;
     add(&mut app, note(4, "A"));
-    assert_eq!(secs(&app, 4), Some(7), "the app did not say: the user's setting");
+    assert_eq!(
+        secs(&app, 4),
+        Some(7),
+        "the app did not say: the user's setting"
+    );
     app.config.notifications.banner = 0;
     add(&mut app, note(5, "A"));
     assert_eq!(secs(&app, 5), Some(2));

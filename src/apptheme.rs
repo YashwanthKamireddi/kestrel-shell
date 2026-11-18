@@ -130,7 +130,7 @@ fn gtk_css(s: &Scheme) -> String {
         fg = hex(s.ink)
     ));
     // Selected rows and files a soft white, like the shell's selections: the theme's accent
-    // mixed into black read as a muddy brown in file managers (the user's rule: neutral selection).
+    // mixed into black read as a muddy brown in file managers (design rule: neutral selection).
     out.push_str(&format!(
         "\n.sidebar row:selected, .navigation-sidebar row:selected, treeview.view:selected,\n\
          .view:selected, iconview:selected, .view text selection, flowboxchild:selected,\n\

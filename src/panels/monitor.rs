@@ -257,7 +257,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
         );
     }
     // The rest of the cores' work, so the list adds up: the kernel and programs too short-lived
-    // to be read twice (the user's "every core at 10 % but every process at 1 %", 2026-11-17).
+    // to be read twice ("every core at 10 % but every process at 1 %", 2026-11-17).
     if d.other >= 1.0 {
         procs = procs.push(
             container(

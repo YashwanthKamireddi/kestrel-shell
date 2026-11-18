@@ -579,7 +579,7 @@ fn section<'a>(st: &'a State, cx: &Cx<'a>, room: f32) -> Element<'a, Message> {
                 ..container::Style::default()
             });
         // Placed by its own top padding, not a Fill height: inside a panel that measures its
-        // content, Fill made the list infinitely tall and the panel never showed (the user's clicks
+        // content, Fill made the list infinitely tall and the panel never showed (clicks
         // on the count did nothing).
         iced::widget::stack![
             list,

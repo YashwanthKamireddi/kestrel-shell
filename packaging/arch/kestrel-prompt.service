@@ -1,7 +1,7 @@
 [Unit]
 Description=kestrel system prompts (passwords, Wi-Fi secrets, Bluetooth pairing)
 # Its own process so a shell crash, freeze or restart never cancels a question being asked
-# (docs/ROADMAP-v2.md, rule 3). kestrel.service sets KESTREL_SEPARATE_PROMPTS=1 and Wants= this
+# (docs/ARCHITECTURE.md, Stability). kestrel.service sets KESTREL_SEPARATE_PROMPTS=1 and Wants= this
 # unit, so the agents always have exactly one owner.
 PartOf=graphical-session.target
 After=graphical-session.target

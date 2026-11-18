@@ -110,7 +110,7 @@ cache hit) the first frame is plain `base`: the lock never waits for a file.
   for 10 minutes, **everywhere** (sudo, TTY login too). PAM's message is shown. This is the same
   for hyprlock today. From root, `faillock --user <name> --reset` clears it.
 
-A dedicated service, if the user ever wants one (say, to add pam_fprintd only for the lock):
+A dedicated service, if you ever want one (say, to add pam_fprintd only for the lock):
 create `/etc/pam.d/kestrel-lock` containing
 
 ```
@@ -119,13 +119,13 @@ auth include login
 
 (root-owned, 0644), then change `pam::SERVICE` to `"kestrel-lock"` in the same commit. The
 file must exist before a build using that name is installed. Not done: it is a change to
-/etc/pam.d, design call.
+/etc/pam.d, your call.
 
 ## Testing it safely (nested rig only)
 
 Everything below locks **only the nested test compositor**. Never run `kestrel lock` on the
 desktop until all of it passes. If anything goes wrong, `tools/rig/rig.sh stop` ends the
-nested compositor and the lock with it; the user's desktop is never locked.
+nested compositor and the lock with it; the real desktop is never locked.
 
 1. Build with the test tools: `cargo build --release --features devtools`. In this build the
    rig's lock takes the password **`kestrel`** instead of PAM (`KESTREL_PREVIEW=lock`), so no
@@ -156,11 +156,11 @@ nested compositor and the lock with it; the user's desktop is never locked.
    the first "present" of each lock surface and "session locked"; time between them.
 9. Real PAM, once the above passes, and only then: `KESTREL_LOCK_PAM=1 tools/rig/rig.sh lock`
    (or a build without devtools). **Every wrong password counts towards pam_faillock's 3**
-   (a 10-minute lockout of the user's account everywhere), so type it right, once.
+   (a 10-minute lockout of your account everywhere), so type it right, once.
 
 ## How hypridle would start it
 
-Not changed: hypridle's config is the user's. When the user decides to switch, in
+Not changed: hypridle's config is yours. When you decide to switch, in
 `~/.config/hypr/hypridle.conf`:
 
 ```
@@ -177,7 +177,7 @@ general {
   match the shell.
 - Before sleep, hypridle holds logind's sleep delay inhibitor while `before_sleep_cmd` runs;
   the lock asks for the session lock first thing, before reading any file.
-- Before relying on it, set `misc:allow_session_lock_restore = true` in the user's Hyprland config
+- Before relying on it, set `misc:allow_session_lock_restore = true` in your Hyprland config
   (the Lua config's `misc` table), so that if `kestrel lock` ever crashes, a new lock screen
   (kestrel's or hyprlock) can be started from a TTY to take over: Ctrl+Alt+F3, log in, then
   `WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/$(id -u) hyprlock` (the display name as

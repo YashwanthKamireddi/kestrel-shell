@@ -44,7 +44,7 @@ pub struct Policy {
     pub hold: std::time::Duration,
 }
 
-/// Every service's policy: at most 5 failures in 60 s (docs/ROADMAP-v3.md, Phase 1), then
+/// Every service's policy: at most 5 failures in 60 s (docs/ARCHITECTURE.md, Stability), then
 /// one try every 2 minutes. 2 minutes is longer than the 30 s backoff cap, so a failed
 /// service costs less than a restarting one, and short enough that one that comes back
 /// (a daemon restarted) is picked up again soon.
@@ -57,7 +57,7 @@ pub const POLICY: Policy = Policy {
 /// A stream that never stays dead: when the one `make` returns ends (a connection dropped, a
 /// service gone), a new one is made a second later and carries on. Every long-lived service
 /// stream runs under this, so an indicator can never freeze on its last answer
-/// (docs/ROADMAP-v2.md, rule 1). `name` is its row in the health table (`kestrel health`).
+/// (docs/ARCHITECTURE.md, Stability: truth over events). `name` is its row in the health table (`kestrel health`).
 pub fn forever<T, S, F>(name: &'static str, make: F) -> impl Stream<Item = T>
 where
     T: Send + 'static,

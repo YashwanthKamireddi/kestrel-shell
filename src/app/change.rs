@@ -178,7 +178,7 @@ impl App {
                 self.vpn.tailscale = Some(on);
                 Task::future(async move {
                     vpn::set_tailscale(on).await;
-                    // Timing guess (docs/ROADMAP-v2.md): the tailnet reads as it was for a
+                    // Timing guess: the tailnet reads as it was for a
                     // moment after `tailscale up`.
                     tokio::time::sleep(Duration::from_millis(800)).await;
                 })

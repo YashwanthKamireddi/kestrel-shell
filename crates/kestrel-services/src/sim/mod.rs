@@ -1,4 +1,4 @@
-//! Deterministic simulation tests (docs/ROADMAP-v3.md, Phase 2): a service's pure state logic
+//! Deterministic simulation tests : a service's pure state logic
 //! (its `Tracker`) driven against a simulated bus by a seeded random sequence of events, with
 //! the service's invariants checked after every step.
 //!

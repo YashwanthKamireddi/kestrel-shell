@@ -24,9 +24,9 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 WORK=${WORK:-$HOME/.cache/kestrel-rig}
 BIN=${BIN:-$HERE/../../target/release/kestrel}
-# The renderer the installed desktop uses (from its service file), so the rig draws what the user sees
+# The renderer the installed desktop uses (from its service file), so the rig draws what the desktop shows
 # (2026-11-17: it drew with the GPU renderer while the desktop used the CPU one, and every
-# picture shown to the user that day came from the wrong renderer). ICED_BACKEND=… overrides it.
+# picture shown that day came from the wrong renderer). ICED_BACKEND=… overrides it.
 ICED_BACKEND=${ICED_BACKEND:-$(sed -n 's/^Environment=ICED_BACKEND=//p' "$HERE/../../packaging/arch/kestrel.service")}
 mkdir -p "$WORK/home/.config/kestrel"
 
@@ -42,7 +42,7 @@ nested() {
     fi
     HYPRLAND_INSTANCE_SIGNATURE=$s timeout 5 hyprctl "$@"
 }
-# The rig's kestrel(s), by HOME: never a process name alone, which is also the user's desktop's shell.
+# The rig's kestrel(s), by HOME: never a process name alone, which is also the desktop's shell.
 # (`|| true`: under set -e a last non-matching one ended the script silently, whenever the
 # desktop's kestrel happened to be listed after the rig's.)
 rig_kestrels() {
@@ -61,7 +61,7 @@ wayland_sockets() {
     done | sort
 }
 
-# --- bench: the numbers of docs/ROADMAP-v3.md Phase 0, measured the same way every time -------
+# --- bench: the numbers of the README, measured the same way every time -------
 # Everything is read from /proc of the rig's kestrel (found by its HOME, never by name alone).
 # CPU time in /proc is in clock ticks (CLK_TCK, 100 here): N ticks over T s is N / CLK_TCK / T
 # of one core, so 18 ticks in 10 s is 1.8 %, not 18 % (got wrong twice on 2026-11-15).
@@ -128,7 +128,7 @@ bench_window() {
 # Open each panel PANEL_REPEATS times: "panel ms" per open, from the command to the first frame
 # presented after it (KESTREL_TRACE's "frame" lines in kestrel.log; any surface's, so a bar
 # frame that happens to fall in between counts too). Not the power menu: in the rig its second
-# click really restarts the user's machine.
+# click really restarts the machine.
 bench_panels() {
     local panel t0
     grep -q '^TRACE .* frame ' "$WORK/kestrel.log" || return 0
@@ -170,7 +170,7 @@ start)
     : >"$WORK/sig"
     # The rig's HOME, so what it starts (an app kestrel opens, a screenshot, a recording) uses
     # the rig's profile and folders: with the real HOME, a file opened in the rig became a tab
-    # in the user's running Chromium (2026-11-16) and captures landed in the user's Pictures.
+    # in the running Chromium (2026-11-16) and captures landed in the real Pictures.
     HOME="$WORK/home" setsid Hyprland -c "$HERE/hyprland.lua" >"$WORK/hypr.log" 2>&1 </dev/null &
     pid=$!
     echo "$pid" >"$WORK/pid"

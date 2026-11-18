@@ -19,7 +19,7 @@ crates.io copies' `Cargo.toml.orig` / `.cargo_vcs_info.json` / `Cargo.lock`, and
 un-normalised `Cargo.toml` plus `examples/` and `run-wasm/` (the branch's git tree, not the
 crates.io package).
 
-"Upstream" for each patch comes from docs/research/ICED-UPSTREAM.md (section 3). **Upstream:
+ **Upstream:
 recommended** marks the patches worth offering upstream now (see "Upstream candidates" at the end).
 
 ## iced_layershell (v0.6.2)
@@ -95,7 +95,7 @@ About 400 added and 60 removed lines in `src/`, plus the new `src/handlers/windo
 10. **The blur region rides the present's commit**: the separate `wl.commit()` after setting the
     region is removed. `src/surface_manager.rs`. Why: it applied the new region over the old
     buffer a frame before its picture; a panel opened as a blurred empty block for one frame
-    (the user's recordings, 2026-11-15). Upstream: **went the other way**: MalpenZibo PR #28
+    (screen recordings, 2026-11-15). Upstream: **went the other way**: MalpenZibo PR #28
     (2026-09-01) added the separate commit because "in practice that update is lost" when it rode
     the buffer commit. Re-check against #28's case at every upgrade. Keep.
 11. **Widgets' `RedrawRequest::At(t)` honoured**: the event loop sleeps until the earliest such
@@ -224,8 +224,7 @@ MalpenZibo's branch can go once softbuffer releases and iced uses `AlphaMode::Pr
 
 ## Upstream candidates
 
-From docs/research/ICED-UPSTREAM.md section 5. Each would be a separate small PR from the user's
-personal account; pushing is design call. To MalpenZibo, phrase each as an ashell-relevant bug
+Each would be a separate small PR. To MalpenZibo, phrase each as an ashell-relevant bug
 (its README limits outside requests).
 
 - **softbuffer**: 25 (buffer age reset on resize). The clearest bug; no issue filed yet.

@@ -76,7 +76,7 @@ fn s(m: &HashMap<String, OwnedValue>, k: &str) -> Option<String> {
 
 /// What is known of one player, as read from it. Read whole when it appears and again, whole,
 /// whenever it signals a change (the signal only says "look again": truth over events,
-/// docs/ROADMAP-v2.md rule 1). Only the player that signalled is read: before, any signal from
+/// docs/ARCHITECTURE.md, Stability: truth over events). Only the player that signalled is read: before, any signal from
 /// any player re-listed the bus and re-read every player (~6 calls per player per signal).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Known {

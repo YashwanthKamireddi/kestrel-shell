@@ -18,7 +18,7 @@ const INSET: f32 = tok::L;
 pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, super::Message> {
     let s = cx.scheme;
     let Some(w) = &cx.weather else {
-        // No forecast yet: its icon only (no "No weather yet" or hint lines: the user's rules).
+        // No forecast yet: its icon only (no "No weather yet" or hint lines: the design rules).
         return crate::ui::empty(s, Icon::Cloud);
     };
     let mut col = column![now(cx, w, s), details(cx, w, s)].spacing(tok::L);
