@@ -1,0 +1,199 @@
+//! Settings › bluetooth: its page.
+
+use super::*;
+use crate::app::Change;
+use crate::theme::tok;
+// Explicit: the prelude has a `column!` of its own (the source line).
+use iced::widget::column;
+
+/// A name that becomes a field when clicked (Enter keeps it, the field leaving drops it).
+pub(super) fn renamable<'a>(
+    s: Scheme,
+    st: &'a State,
+    target: Option<String>,
+    now: String,
+) -> Element<'a, Message> {
+    match &st.bt_rename {
+        Some((t, text)) if *t == target => field(
+            s,
+            "bt-rename",
+            "Name",
+            text,
+            Message::BtRenameText,
+            Some(Message::BtRenameDone),
+            false,
+        ),
+        _ => control(label(now.clone(), text::BODY, s.ink_dim))
+            .padding([tok::XS, tok::L])
+            .radius(tok::FULL)
+            .kind(s, crate::ui::control::Kind::Ghost)
+            .no_press_scale()
+            .on_press(Message::BtRename(target, now))
+            .into(),
+    }
+}
+
+pub(super) fn bluetooth_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let b = &cx.bt;
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
+    if !b.available {
+        out.push(crate::ui::empty(s, Icon::Bluetooth));
+        return out;
+    }
+    let mut top = vec![row_of(
+        s,
+        "Bluetooth",
+        None,
+        ui::switch(s, b.powered, chg(Change::Bluetooth(!b.powered))),
+    )];
+    if b.powered {
+        // While this page is open, other devices can find this computer by this name.
+        top.push(row_of(
+            s,
+            "Name",
+            Some(if b.discoverable {
+                "Visible to devices nearby while this page is open"
+            } else {
+                "Other devices see this name"
+            }),
+            renamable(s, st, None, b.name.clone()),
+        ));
+        if !b.address.is_empty() {
+            top.push(copy_row(s, "Address", b.address.clone()));
+        }
+    }
+    out.extend(group(s, None, top));
+    if !b.powered {
+        return out;
+    }
+
+    // Your devices: connect or disconnect, its battery, rename, forget (asked once).
+    let mut mine = Vec::new();
+    for d in &b.devices {
+        if !matches(&d.name) && !matches("bluetooth") {
+            continue;
+        }
+        let busy = cx.in_progress(&d.path);
+        let err = cx
+            .device_error
+            .as_ref()
+            .filter(|(p, _)| *p == d.path)
+            .map(|(_, w)| w.clone());
+        let state = match (busy, d.connected, d.battery) {
+            (Some(true), _, _) => "Connecting…".to_string(),
+            (Some(false), _, _) => "Disconnecting…".to_string(),
+            _ if err.is_some() => err.unwrap_or_default(),
+            (None, true, Some(p)) => format!("Connected · battery {p}%"),
+            (None, true, None) => "Connected".to_string(),
+            (None, false, _) => "Not connected".to_string(),
+        };
+        let armed = st.forget.as_deref() == Some(d.path.as_str());
+        let name: Element<'_, Message> = match &st.bt_rename {
+            Some((Some(p), _)) if *p == d.path => {
+                renamable(s, st, Some(d.path.clone()), d.name.clone())
+            }
+            // A click on the name renames it.
+            _ => column![
+                control(label(d.name.clone(), text::BODY, s.ink))
+                    .padding([tok::XXS, tok::S])
+                    .radius(tok::R_ROW)
+                    .kind(s, crate::ui::control::Kind::Ghost)
+                    .no_press_scale()
+                    .on_press(Message::BtRename(Some(d.path.clone()), d.name.clone())),
+                container(label(state, text::CAPTION, s.ink_dim)).padding([tok::NONE, tok::S]),
+            ]
+            .spacing(tok::NONE)
+            .into(),
+        };
+        mine.push(Some(
+            container(
+                row![
+                    icon(
+                        crate::panels::control::device_icon(&d.icon),
+                        18.0,
+                        if d.connected { s.accent } else { s.ink_dim }
+                    ),
+                    container(name).width(Length::Fill),
+                    control(label(
+                        if d.connected { "Disconnect" } else { "Connect" },
+                        text::SMALL,
+                        s.ink
+                    ))
+                    .pill(s, crate::ui::control::Pill::Plain)
+                    .on_press(chg(Change::Device {
+                        path: d.path.clone(),
+                        connect: !d.connected,
+                    })),
+                    control(label(
+                        if armed { "Forget?" } else { "Forget" },
+                        text::SMALL,
+                        if armed { s.bad } else { s.ink }
+                    ))
+                    .pill(s, crate::ui::control::Pill::Plain)
+                    .on_press(Message::Forget(d.path.clone())),
+                ]
+                .spacing(tok::L)
+                .align_y(Alignment::Center),
+            )
+            .padding([tok::NONE, tok::XL])
+            .height(56)
+            .align_y(Alignment::Center)
+            .into(),
+        ));
+    }
+    out.extend(group(s, Some("My devices"), mine));
+
+    // Devices nearby, found while this page is open: Pair pairs, trusts and connects.
+    let mut near = Vec::new();
+    // Found devices join at the end (the order kept since the page opened).
+    for d in crate::panels::control::in_order(&b.nearby, &st.nearby_order, |d| &d.path) {
+        if !matches(&d.name) && !matches("bluetooth") {
+            continue;
+        }
+        let pairing = cx.pairing == Some(d.path.as_str());
+        let err = cx
+            .device_error
+            .as_ref()
+            .filter(|(p, _)| *p == d.path)
+            .map(|(_, w)| w.clone());
+        let mut words = column![label(d.name.clone(), text::BODY, s.ink)].spacing(tok::XXS);
+        if pairing {
+            words = words.push(label("Pairing…", text::CAPTION, s.ink_dim));
+        } else if let Some(e) = err {
+            words = words.push(label(e, text::CAPTION, s.bad));
+        }
+        let mut pair =
+            control(label("Pair", text::SMALL, s.ink)).pill(s, crate::ui::control::Pill::Plain);
+        if cx.pairing.is_none() {
+            pair = pair.on_press(chg(Change::Pair(d.path.clone())));
+        }
+        near.push(Some(
+            container(
+                row![
+                    icon(
+                        crate::panels::control::device_icon(&d.icon),
+                        18.0,
+                        s.ink_dim
+                    ),
+                    words.width(Length::Fill),
+                    pair,
+                ]
+                .spacing(tok::L)
+                .align_y(Alignment::Center),
+            )
+            .padding([tok::NONE, tok::XL])
+            .height(52)
+            .align_y(Alignment::Center)
+            .into(),
+        ));
+    }
+    if near.is_empty() {
+        near.push(Some(ui::waiting(s, Icon::Search, "Looking for devices…")));
+    }
+    out.extend(group(s, Some("Devices nearby"), near));
+    if let Some(e) = &st.error {
+        out.push(label(e.clone(), text::SMALL, s.bad).into());
+    }
+    out
+}

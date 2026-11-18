@@ -1,0 +1,12 @@
+[package]
+name = "rig-pointer"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Test-rig helper: moves and clicks a virtual pointer (wlr-virtual-pointer)."
+
+[dependencies]
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+[workspace]

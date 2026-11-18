@@ -1,0 +1,212 @@
+//! Settings › notifications: its page.
+
+use super::*;
+use crate::theme::tok;
+// Explicit: the prelude has a `column!` of its own (the source line).
+use iced::widget::column;
+
+pub(super) fn notifications_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let c = &cx.config;
+    let quiet = c
+        .quiet_from
+        .clone()
+        .filter(|t| !t.is_empty())
+        .zip(c.quiet_to.clone().filter(|t| !t.is_empty()));
+    let mut dnd_rows = vec![
+        row_of(
+            s,
+            "Do not disturb",
+            None,
+            ui::switch(s, cx.dnd, Message::Change(crate::app::Change::Dnd)),
+        ),
+        row_of(
+            s,
+            "Quiet hours",
+            None,
+            ui::switch(
+                s,
+                quiet.is_some(),
+                Message::Quiet(if quiet.is_some() {
+                    None
+                } else {
+                    Some(("22:00".into(), "07:00".into()))
+                }),
+            ),
+        ),
+    ];
+    if let Some((from, to)) = &quiet {
+        for (which, name, now) in [(0u8, "From", from), (1u8, "Until", to)] {
+            let open = st.quiet_open == Some(which);
+            dnd_rows.push(row_of(
+                s,
+                name,
+                None,
+                control(
+                    row![
+                        label(now.clone(), text::SMALL, s.ink),
+                        icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
+                    ]
+                    .spacing(tok::S)
+                    .align_y(Alignment::Center),
+                )
+                .padding([tok::XS, tok::L])
+                .radius(tok::FULL)
+                .kind(s, crate::ui::control::Kind::Ghost)
+                .on_press(Message::QuietOpen((!open).then_some(which)))
+                .into(),
+            ));
+            if open {
+                // Every half hour of the day, a few per line.
+                let mut grid = column![].spacing(tok::XXS);
+                let times: Vec<String> = (0..48)
+                    .map(|h| format!("{:02}:{:02}", h / 2, (h % 2) * 30))
+                    .collect();
+                for chunk in times.chunks(6) {
+                    let mut r = row![].spacing(tok::XXS);
+                    for t in chunk {
+                        let on = t == now;
+                        let pick = if which == 0 {
+                            (t.clone(), to.clone())
+                        } else {
+                            (from.clone(), t.clone())
+                        };
+                        r = r.push(
+                            control(
+                                container(label(
+                                    t.clone(),
+                                    text::SMALL,
+                                    if on { s.on_accent } else { s.ink },
+                                ))
+                                .center_x(Length::Fill),
+                            )
+                            .padding([tok::S, tok::NONE])
+                            .width(Length::Fill)
+                            .radius(tok::FULL)
+                            .kind(
+                                s,
+                                if on {
+                                    crate::ui::control::Kind::Primary
+                                } else {
+                                    crate::ui::control::Kind::Ghost
+                                },
+                            )
+                            .no_press_scale()
+                            .on_press(Message::Quiet(Some(pick))),
+                        );
+                    }
+                    grid = grid.push(r);
+                }
+                dnd_rows.push(Some(container(grid).padding([tok::XS, tok::L]).into()));
+            }
+        }
+    }
+    let dnd = group(s, None, dnd_rows);
+    let rules = &cx.config.notifications;
+    let banner_opts: Vec<(&str, bool, Message)> = [("Short", 3i64), ("Normal", 5), ("Long", 10)]
+        .into_iter()
+        .map(|(l, secs)| {
+            (
+                l,
+                rules.banner == secs as u64,
+                Message::NotifyOpt("banner", secs.into()),
+            )
+        })
+        .collect();
+    let banners = group(
+        s,
+        None,
+        vec![
+            row_of(
+                s,
+                "Sound",
+                None,
+                ui::switch(
+                    s,
+                    rules.sound,
+                    Message::NotifyOpt("sound", (!rules.sound).into()),
+                ),
+            ),
+            row_of(s, "Banner time", None, segments(s, &banner_opts)),
+            row_of(
+                s,
+                "Urgent ones in Do not disturb",
+                None,
+                ui::switch(
+                    s,
+                    rules.urgent_in_dnd,
+                    Message::NotifyOpt("urgent_in_dnd", (!rules.urgent_in_dnd).into()),
+                ),
+            ),
+        ],
+    );
+    // Every app that has sent something: banners and list, list only, or nothing; and whether
+    // its banners sound.
+    let apps = crate::state::get(|st| st.notifiers.clone());
+    let rows = apps
+        .into_iter()
+        .filter(|name| matches(name) || matches("notifications"))
+        .map(|name| {
+            let now = if rules.muted.contains(&name) {
+                2
+            } else if rules.quiet.contains(&name) {
+                1
+            } else {
+                0
+            };
+            let opts: Vec<(&str, bool, Message)> = [("Show", 0u8), ("Quiet", 1), ("Off", 2)]
+                .into_iter()
+                .map(|(l, r)| (l, now == r, Message::NotifyRule(name.clone(), r)))
+                .collect();
+            let ic = ui::app_icon(s, &name, 18.0, Icon::Bell);
+            Some(
+                container(
+                    row![
+                        ic,
+                        label(name.clone(), text::BODY, s.ink).width(Length::Fill),
+                        sound_toggle(s, &name, now, rules),
+                        segments(s, &opts)
+                    ]
+                    .spacing(tok::L)
+                    .align_y(Alignment::Center),
+                )
+                .padding([tok::NONE, tok::XL])
+                .height(46)
+                .align_y(Alignment::Center)
+                .into(),
+            )
+        })
+        .collect();
+    [dnd, banners, group(s, Some("Apps"), rows)]
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// An app's sound on/off: a speaker that strikes through when its banners are silent. Only for
+/// apps whose banners show (rule 0) with sounds on; otherwise the same space stays empty, so the
+/// rows line up.
+pub(super) fn sound_toggle<'a>(
+    s: Scheme,
+    name: &str,
+    rule: u8,
+    rules: &config::NotificationRules,
+) -> Element<'a, Message> {
+    if rule != 0 || !rules.sound {
+        // As wide as the button it stands in for, so rows line up.
+        return iced::widget::Space::new()
+            .width(tok::ICON + 2.0 * tok::S)
+            .into();
+    }
+    let on = !rules.silent.iter().any(|a| a == name);
+    control(icon(
+        if on { Icon::Volume2 } else { Icon::VolumeX },
+        tok::ICON,
+        if on { s.ink } else { s.ink_dim },
+    ))
+    .padding(tok::S)
+    .radius(tok::FULL)
+    .kind(s, crate::ui::control::Kind::Ghost)
+    .on_press(Message::NotifySilent(name.to_string(), !on))
+    .into()
+}

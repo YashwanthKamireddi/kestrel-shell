@@ -1,0 +1,42 @@
+# Local package for kestrel, built from this repository. Named kestrel-shell: the AUR has an
+# unrelated "kestrel" (a file encryption tool), which an AUR helper would offer as an upgrade.
+pkgname=kestrel-shell
+pkgver=0.1.0.r338.gc019254
+pkgrel=1
+pkgdesc="A native desktop shell for Hyprland"
+arch=('x86_64')
+license=('MIT')
+depends=('hyprland' 'libpulse' 'dbus' 'libxkbcommon' 'wayland' 'ttf-rubik-vf' 'ttf-twemoji'
+         'pipewire' 'sound-theme-freedesktop')
+optdepends=('hyprsunset: night light'
+            'hyprlock: lock screen')
+conflicts=('kestrel')
+makedepends=('cargo' 'clang')
+options=('!lto' '!debug')
+
+_repo="$(realpath "$startdir/../..")"
+
+pkgver() {
+    cd "$_repo"
+    printf "0.1.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+# No build() or check(): `make install` compiles once and runs the tests in its own `check`
+# (makepkg's environment rebuilt every C dependency, ~2.5 min per install). This packages the
+# binary it just built.
+package() {
+    [ -x "$_repo/target/release/kestrel" ] || { echo "Build first: make install" >&2; return 1; }
+    install -Dm755 "$_repo/target/release/kestrel" "$pkgdir/usr/bin/kestrel"
+    install -Dm644 "$startdir/kestrel.service" "$pkgdir/usr/lib/systemd/user/kestrel.service"
+    install -Dm644 "$startdir/kestrel-prompt.service" "$pkgdir/usr/lib/systemd/user/kestrel-prompt.service"
+    install -Dm644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    # kestrel's file picker, as the desktop portal's FileChooser backend.
+    install -Dm644 "$_repo/packaging/portal/kestrel.portal" \
+        "$pkgdir/usr/share/xdg-desktop-portal/portals/kestrel.portal"
+    # Colour filters (Settings > Accessibility): Hyprland screen shaders.
+    install -Dm644 -t "$pkgdir/usr/share/kestrel/shaders" "$_repo"/assets/shaders/*.frag
+    # The "kestrel media" browser extension (load it unpacked from here) and its native host.
+    install -Dm644 -t "$pkgdir/usr/share/kestrel/browser" "$_repo"/browser/*
+    install -Dm644 "$_repo/packaging/browser/dev.kestrel.media.json" \
+        "$pkgdir/etc/chromium/native-messaging-hosts/dev.kestrel.media.json"
+}

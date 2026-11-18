@@ -1,0 +1,503 @@
+//! Surface management for `iced_layershell`.
+//!
+//! Handles creation and synchronization of Wayland layer surfaces
+//! with their corresponding iced rendering surfaces.
+
+use std::collections::HashMap;
+
+use iced_graphics::Viewport;
+use iced_graphics::compositor::Compositor as _;
+use iced_renderer::Compositor;
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::{LayerShell, LayerSurface};
+use wayland_client::QueueHandle;
+
+use crate::settings::{LayerShellSettings, SurfaceId};
+use crate::state::{SurfaceData, WaylandState};
+use crate::task_impl::{BlurRect, LayerShellCommand};
+use crate::window_handle::WaylandWindow;
+
+/// Per-surface iced rendering data.
+pub(crate) struct IcedSurface {
+    pub surface: <Compositor as iced_graphics::Compositor>::Surface,
+    pub viewport: Viewport,
+    pub cache: Option<iced_runtime::user_interface::Cache>,
+    pub needs_redraw: bool,
+    /// kestrel patch: redraw key of the content last presented (see
+    /// `Application::redraw_key`).
+    pub redraw_key: Option<u64>,
+    /// The compositor needs a new frame (configure, scale, resize) whatever the key says.
+    pub forced: bool,
+}
+
+/// Surfaces requested during an update, created together once it's done by
+/// [`flush_pending_creations`]. A property command sent in the same update
+/// for one of them would otherwise find no surface, so it's held here and
+/// replayed, in order, right after the surface is created.
+#[derive(Default)]
+pub(crate) struct PendingCreations {
+    surfaces: Vec<(SurfaceId, LayerShellSettings)>,
+    windows: Vec<(SurfaceId, crate::settings::WindowSettings)>,
+    commands: Vec<LayerShellCommand>,
+}
+
+impl PendingCreations {
+    pub(crate) fn clear(&mut self) {
+        self.surfaces.clear();
+        self.windows.clear();
+        self.commands.clear();
+    }
+
+    /// Hold `cmd` if it targets a surface still waiting to be created;
+    /// otherwise hand it back.
+    fn defer(&mut self, id: SurfaceId, cmd: LayerShellCommand) -> Option<LayerShellCommand> {
+        if self.surfaces.iter().any(|(pending, _)| *pending == id)
+            || self.windows.iter().any(|(pending, _)| *pending == id)
+        {
+            self.commands.push(cmd);
+            None
+        } else {
+            Some(cmd)
+        }
+    }
+}
+
+/// Apply a synchronous layer shell command (surface create/destroy, property changes).
+#[allow(clippy::too_many_lines)]
+pub(crate) fn apply_layer_shell_command(
+    cmd: LayerShellCommand,
+    state: &mut WaylandState,
+    pending_creations: &mut PendingCreations,
+) {
+    if let Some(id) = cmd.property_target()
+        && !state.surface_id_map.contains_key(&id)
+    {
+        if let Some(cmd) = pending_creations.defer(id, cmd) {
+            log::warn!("Ignoring {cmd:?}: surface {id:?} does not exist");
+        }
+        return;
+    }
+
+    match cmd {
+        LayerShellCommand::NewSurface(id, settings) => {
+            pending_creations.surfaces.push((id, settings));
+        }
+        LayerShellCommand::NewWindow(id, settings) => {
+            pending_creations.windows.push((id, settings));
+        }
+        LayerShellCommand::DestroySurface(id) => {
+            state.closed_surfaces.push(id);
+        }
+        LayerShellCommand::SetAnchor(id, anchor) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get(wl)
+            {
+                if let Some(l) = data.role.layer() {
+                    l.set_anchor(anchor.to_sctk());
+                }
+                data.role.wl_surface().commit();
+            }
+        }
+        LayerShellCommand::SetLayer(id, layer) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get(wl)
+            {
+                if let Some(l) = data.role.layer() {
+                    l.set_layer(layer.to_sctk());
+                }
+                let wl_surf = data.role.wl_surface();
+                // When hiding (Background), set empty input region so it
+                // doesn't intercept clicks meant for surfaces above it.
+                if layer == crate::settings::Layer::Background {
+                    if let Ok(empty) =
+                        smithay_client_toolkit::compositor::Region::new(&state.compositor)
+                    {
+                        wl_surf.set_input_region(Some(empty.wl_region()));
+                    }
+                } else {
+                    wl_surf.set_input_region(None);
+                }
+                wl_surf.commit();
+            }
+        }
+        LayerShellCommand::SetExclusiveZone(id, zone) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get(wl)
+            {
+                if let Some(l) = data.role.layer() {
+                    l.set_exclusive_zone(zone);
+                }
+                data.role.wl_surface().commit();
+            }
+        }
+        LayerShellCommand::SetKeyboardInteractivity(id, ki) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get(wl)
+            {
+                crate::ktrace!("keyboard {id:?}");
+                if let Some(l) = data.role.layer() {
+                    l.set_keyboard_interactivity(ki.to_sctk());
+                }
+                data.role.wl_surface().commit();
+            }
+        }
+        LayerShellCommand::SetSize(id, (w, h)) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get_mut(wl)
+            {
+                crate::ktrace!("set_size {id:?} {w}x{h}");
+                if let Some(l) = data.role.layer() {
+                    l.set_size(w, h);
+                }
+                data.role.wl_surface().commit();
+            }
+        }
+        LayerShellCommand::SetMargin(id, (top, right, bottom, left)) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get(wl)
+            {
+                if let Some(l) = data.role.layer() {
+                    l.set_margin(top, right, bottom, left);
+                }
+                data.role.wl_surface().commit();
+            }
+        }
+        LayerShellCommand::SetInputRegion(id, rects) => {
+            if let Some(wl) = state.surface_id_map.get(&id)
+                && let Some(data) = state.surfaces.get(wl)
+            {
+                crate::ktrace!("input_region {id:?} {:?}", rects.as_ref().map(Vec::len));
+                let wl_surf = data.role.wl_surface();
+                match rects {
+                    None => {
+                        wl_surf.set_input_region(None);
+                    }
+                    Some(rects) => {
+                        if let Ok(region) =
+                            smithay_client_toolkit::compositor::Region::new(&state.compositor)
+                        {
+                            for r in &rects {
+                                region.add(r.x, r.y, r.width, r.height);
+                            }
+                            wl_surf.set_input_region(Some(region.wl_region()));
+                        }
+                    }
+                }
+                wl_surf.commit();
+            }
+        }
+    }
+}
+
+/// Push a blur region to the compositor (`ext-background-effect-v1`).
+///
+/// `set_blur_region` is double-buffered state applied by the next
+/// `wl_surface.commit`. Leaving it for the buffer commit that `present` issues
+/// loses updates in practice: the surface keeps the region it had until some
+/// later change happens to push a new one through, so a surface that shrinks
+/// stays blurred where it no longer paints. Commit here instead, which applies
+/// the region a commit ahead of the frame that motivated it.
+///
+/// The one commit to withhold is while a `set_buffer_scale` is still waiting
+/// for its buffer: committing then would tag the buffer still attached with the
+/// new scale.
+pub(crate) fn apply_blur_region(
+    state: &mut WaylandState,
+    id: SurfaceId,
+    rects: Vec<BlurRect>,
+    qh: &QueueHandle<WaylandState>,
+) {
+    let Some(wl) = state.surface_id_map.get(&id).cloned() else {
+        return;
+    };
+    let Some(data) = state.surfaces.get(&wl) else {
+        return;
+    };
+    // `None` means nothing has been pushed yet, so the first frame always sends
+    // a region even when empty — see below.
+    if data.blur_region.as_deref() == Some(rects.as_slice()) {
+        return;
+    }
+    let scale_uncommitted = data.committed_scale_factor != data.scale_factor;
+
+    // Asking twice for the same surface is a protocol error.
+    if data.bg_effect_surface.is_none() {
+        let Some(manager) = state.bg_effect_manager.clone() else {
+            return;
+        };
+        let effect = manager.get_background_effect(&wl, qh, ());
+        if let Some(data) = state.surfaces.get_mut(&wl) {
+            data.bg_effect_surface = Some(effect);
+        }
+    }
+
+    let Some(effect) = state
+        .surfaces
+        .get(&wl)
+        .and_then(|d| d.bg_effect_surface.clone())
+    else {
+        return;
+    };
+
+    // Never NULL: that only withdraws our opinion and lets a compositor-side rule
+    // blur the whole surface, where an empty region says "blur exactly nothing".
+    let Ok(region) = smithay_client_toolkit::compositor::Region::new(&state.compositor) else {
+        return;
+    };
+    for r in &rects {
+        region.add(r.x, r.y, r.width, r.height);
+    }
+    effect.set_blur_region(Some(region.wl_region()));
+
+    // Leave the region for the next commit to carry rather than tagging the
+    // attached buffer with a scale it was not drawn at. Not caching it makes
+    // the next frame push and commit it again.
+    if scale_uncommitted {
+        return;
+    }
+    // kestrel patch: no commit here. It applied the new region over the old buffer, a frame
+    // before the picture it belongs to: a panel opened as a blurred empty block for one frame
+    // (his recordings 2026-11-15). The present that follows commits region and buffer together.
+    let _ = &wl;
+
+    // Cached only once the request is out, so a failed region is retried.
+    if let Some(data) = state.surfaces.get_mut(&wl) {
+        data.blur_region = Some(rects);
+    }
+}
+
+/// Flush pending surface creations, then replay the commands held for them.
+pub(crate) fn flush_pending_creations(
+    wl: &mut WaylandState,
+    pending: &mut PendingCreations,
+    qh: &QueueHandle<WaylandState>,
+) {
+    while let Some((id, settings)) = pending.surfaces.pop() {
+        let (layer, scale) =
+            create_layer_surface(&wl.compositor, &wl.layer_shell, qh, &settings, wl);
+        wl.register_surface(id, layer, scale);
+    }
+    while let Some((id, settings)) = pending.windows.pop() {
+        let Some(xdg) = wl.xdg_shell.as_ref() else {
+            log::warn!("no xdg-shell: window {id:?} not created");
+            continue;
+        };
+        let surface = wl.compositor.create_surface(qh);
+        let window = xdg.create_window(
+            surface,
+            smithay_client_toolkit::shell::xdg::window::WindowDecorations::RequestServer,
+            qh,
+        );
+        window.set_title(settings.title.clone());
+        window.set_app_id(settings.app_id.clone());
+        window.set_min_size(Some(settings.min_size));
+        window.commit();
+        wl.register_role(id, crate::state::Role::Window(window), 1, settings.size);
+    }
+    // Every held command's surface exists now, so none is deferred again.
+    for cmd in std::mem::take(&mut pending.commands) {
+        apply_layer_shell_command(cmd, wl, pending);
+    }
+}
+
+/// Create a new Wayland layer surface from settings, targeting a specific output if configured.
+/// Returns the layer surface together with the initial buffer scale applied to it.
+pub(crate) fn create_layer_surface(
+    compositor_state: &CompositorState,
+    layer_shell_state: &LayerShell,
+    qh: &QueueHandle<WaylandState>,
+    settings: &LayerShellSettings,
+    wl_state: &WaylandState,
+) -> (LayerSurface, i32) {
+    let surface = compositor_state.create_surface(qh);
+
+    // Resolve OutputId → WlOutput for targeting a specific monitor
+    let wl_output = settings.output.and_then(|output_id| {
+        wl_state
+            .outputs
+            .iter()
+            .find(|(_, info)| info.id == output_id)
+            .map(|(wl_output, _)| wl_output.clone())
+    });
+
+    let layer_surface = layer_shell_state.create_layer_surface(
+        qh,
+        surface,
+        settings.layer.to_sctk(),
+        Some(settings.namespace.clone()),
+        wl_output.as_ref(),
+    );
+
+    layer_surface.set_anchor(settings.anchor.to_sctk());
+    layer_surface.set_exclusive_zone(settings.exclusive_zone);
+    layer_surface.set_keyboard_interactivity(settings.keyboard_interactivity.to_sctk());
+
+    if let Some((w, h)) = settings.size {
+        layer_surface.set_size(w, h);
+    }
+
+    let (top, right, bottom, left) = settings.margin;
+    layer_surface.set_margin(top, right, bottom, left);
+
+    // Surfaces on Background layer start with empty input region
+    // to avoid intercepting input meant for surfaces above them
+    if settings.layer == crate::settings::Layer::Background
+        && let Ok(empty) = smithay_client_toolkit::compositor::Region::new(compositor_state)
+    {
+        layer_surface
+            .wl_surface()
+            .set_input_region(Some(empty.wl_region()));
+    }
+
+    // Set buffer scale for HiDPI: when the target output is known, use its
+    // scale; otherwise default to 1 and rely on `wl_surface.enter` /
+    // `preferred_buffer_scale` to correct it. Picking an arbitrary output's
+    // scale here would mismatch the compositor's choice on multi-monitor
+    // setups with different scales.
+    let scale = wl_output
+        .as_ref()
+        .and_then(|wo| wl_state.outputs.get(wo))
+        .map_or(1, |info| info.scale_factor);
+    if scale > 1 {
+        layer_surface.wl_surface().set_buffer_scale(scale);
+    }
+
+    layer_surface.commit();
+    (layer_surface, scale)
+}
+
+/// Create a scaled cursor for the given surface.
+///
+/// Active touch position takes precedence over the pointer —
+/// iced widgets check `cursor.is_over(bounds)` for touch events too.
+pub(crate) fn scaled_cursor(
+    wl_state: &WaylandState,
+    surface_id: SurfaceId,
+    app_scale: f32,
+) -> iced_core::mouse::Cursor {
+    if let Some((_, pos)) = wl_state
+        .touch_fingers
+        .values()
+        .find(|(sid, _)| *sid == surface_id)
+    {
+        return iced_core::mouse::Cursor::Available(iced_core::Point::new(
+            pos.x / app_scale,
+            pos.y / app_scale,
+        ));
+    }
+
+    if wl_state.pointer_surface == Some(surface_id) {
+        let pos = wl_state.cursor_position;
+        iced_core::mouse::Cursor::Available(iced_core::Point::new(
+            pos.x / app_scale,
+            pos.y / app_scale,
+        ))
+    } else {
+        iced_core::mouse::Cursor::Unavailable
+    }
+}
+
+/// Scale factor the application asks for on a given surface, on top of the
+/// monitor's own scale.
+pub(crate) type ScaleFactorFn<State> = dyn Fn(&State, SurfaceId) -> f32;
+
+/// Resolve the scale of every live surface the frame has not asked about yet.
+///
+/// Only live surfaces are asked: a queued event can outlive the surface it was
+/// meant for, and the application should never be handed an id belonging to a
+/// surface it has already seen destroyed.
+///
+/// Leaving the surfaces already in the map untouched is what keeps a frame
+/// coherent when new ones appear midway through it.
+pub(crate) fn resolve_new_surface_scales<State>(
+    scales: &mut HashMap<SurfaceId, f32>,
+    scale_factor_fn: Option<&ScaleFactorFn<State>>,
+    state: &State,
+    wl_state: &WaylandState,
+) {
+    for data in wl_state.surfaces.values() {
+        scales
+            .entry(data.id)
+            .or_insert_with(|| scale_factor_fn.map_or(1.0, |f| f(state, data.id)));
+    }
+}
+
+/// Take the frame's scale snapshot, discarding the previous one.
+///
+/// One snapshot per frame, because `update` runs between the point where a
+/// viewport is sized and the point where the cursor and the blur region are
+/// derived from it. Resolving separately at each of those would let them
+/// disagree, putting the pointer in the wrong place and handing the compositor
+/// a misscaled region.
+pub(crate) fn refresh_surface_scales<State>(
+    scales: &mut HashMap<SurfaceId, f32>,
+    scale_factor_fn: Option<&ScaleFactorFn<State>>,
+    state: &State,
+    wl_state: &WaylandState,
+) {
+    scales.clear();
+    resolve_new_surface_scales(scales, scale_factor_fn, state, wl_state);
+}
+
+/// The scale for one surface, `1.0` for a surface that no longer exists.
+pub(crate) fn scale_of(scales: &HashMap<SurfaceId, f32>, id: SurfaceId) -> f32 {
+    scales.get(&id).copied().unwrap_or(1.0)
+}
+
+/// The viewport a surface should have: its size in physical pixels, at the
+/// monitor's scale combined with the application's.
+///
+/// `None` while the compositor has not given the surface a size yet.
+#[allow(clippy::cast_sign_loss, clippy::cast_precision_loss)]
+pub(crate) fn surface_viewport(
+    data: &SurfaceData,
+    scales: &HashMap<SurfaceId, f32>,
+) -> Option<Viewport> {
+    let (width, height) = data.size;
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    let monitor_scale = data.scale_factor.max(1);
+
+    Some(Viewport::with_physical_size(
+        iced_core::Size::new(width * monitor_scale as u32, height * monitor_scale as u32),
+        monitor_scale as f32 * scale_of(scales, data.id),
+    ))
+}
+
+/// Ensure every registered wayland surface has a corresponding iced rendering surface.
+pub(crate) fn sync_iced_surfaces(
+    wl_state: &WaylandState,
+    compositor: &mut Compositor,
+    iced_surfaces: &mut HashMap<SurfaceId, IcedSurface>,
+    scales: &HashMap<SurfaceId, f32>,
+) {
+    for (wl_surface, data) in &wl_state.surfaces {
+        if iced_surfaces.contains_key(&data.id) {
+            continue;
+        }
+        // Only create wgpu surface after configure (need real dimensions)
+        if !data.configured {
+            continue;
+        }
+        let Some(viewport) = surface_viewport(data, scales) else {
+            continue;
+        };
+        if let Some(window) = WaylandWindow::new(wl_state.display_ptr, wl_surface) {
+            let (w, h) = (viewport.physical_width(), viewport.physical_height());
+            iced_surfaces.insert(
+                data.id,
+                IcedSurface {
+                    surface: compositor.create_surface(window, w, h),
+                    viewport,
+                    cache: None,
+                    needs_redraw: true,
+                    redraw_key: None,
+                    forced: true,
+                },
+            );
+        }
+    }
+}

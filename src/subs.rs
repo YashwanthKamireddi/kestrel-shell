@@ -1,0 +1,218 @@
+//! Service streams as iced subscriptions. Each subscription exists only while the app asks for
+//! it, so a module that is switched off never starts its service. Every one but the one-shot
+//! `at` runs under `forever`: if its stream ends or panics it is made again, so nothing freezes
+//! on its last answer (docs/ROADMAP-v2.md, rule 1).
+
+use crate::services::stream::forever;
+use crate::services::{
+    audio, bluetooth, clock, hyprland, mpris, network, notifications, power, system, tray, updates,
+    vpn, web,
+};
+use iced::Subscription;
+
+pub fn hyprland() -> Subscription<hyprland::State> {
+    Subscription::run(|| forever(hyprland::stream))
+}
+pub fn clock() -> Subscription<()> {
+    Subscription::run(|| forever(clock::stream))
+}
+pub fn seconds() -> Subscription<()> {
+    Subscription::run(|| forever(clock::seconds))
+}
+pub fn camera() -> Subscription<Vec<String>> {
+    Subscription::run(|| forever(crate::services::camera::stream))
+}
+pub fn audio() -> Subscription<audio::State> {
+    Subscription::run(|| forever(audio::stream))
+}
+pub fn network() -> Subscription<network::State> {
+    Subscription::run(|| forever(network::stream))
+}
+pub fn bluetooth() -> Subscription<bluetooth::State> {
+    Subscription::run(|| forever(bluetooth::stream))
+}
+/// The AirPods at BlueZ object `path` (…/dev_B4_59_…): charge and fit.
+pub fn airpods(path: &str) -> Subscription<Option<crate::services::airpods::Pods>> {
+    let address = path
+        .rsplit('/')
+        .next()
+        .and_then(|d| d.strip_prefix("dev_"))
+        .unwrap_or_default()
+        .replace('_', ":");
+    Subscription::run_with(address, |a: &String| {
+        let a = a.clone();
+        forever(move || crate::services::airpods::stream(&a))
+    })
+}
+pub fn bt_agent() -> Subscription<crate::services::bluetooth::Ask> {
+    Subscription::run(|| forever(crate::services::bluetooth::agent))
+}
+pub fn wifi_agent() -> Subscription<crate::services::network::Ask> {
+    Subscription::run(|| forever(crate::services::network::agent))
+}
+pub fn bt_visible() -> Subscription<()> {
+    Subscription::run(|| forever(crate::services::bluetooth::visible))
+}
+
+pub fn bt_search() -> Subscription<()> {
+    Subscription::run(|| forever(crate::services::bluetooth::search))
+}
+/// GNOME Keyring's password prompts (kestrel is its system prompter).
+pub fn keyring() -> Subscription<crate::services::keyring::Ask> {
+    Subscription::run(|| forever(crate::services::keyring::stream))
+}
+
+pub fn polkit() -> Subscription<crate::services::polkit::Event> {
+    Subscription::run(|| forever(crate::services::polkit::stream))
+}
+/// What apps ask through kestrel's portal backend (a file, which app opens something).
+pub fn portal() -> Subscription<crate::services::portal::Event> {
+    Subscription::run(|| forever(crate::services::portal::stream))
+}
+pub fn power() -> Subscription<power::State> {
+    Subscription::run(|| forever(power::stream))
+}
+pub fn mpris() -> Subscription<mpris::State> {
+    Subscription::run(|| forever(mpris::stream))
+}
+pub fn copied() -> Subscription<crate::services::clipboard::Copied> {
+    Subscription::run(|| forever(crate::services::clipboard::stream))
+}
+pub fn tray() -> Subscription<tray::State> {
+    Subscription::run(|| forever(tray::stream))
+}
+pub fn notifications() -> Subscription<notifications::Event> {
+    Subscription::run(|| forever(notifications::stream))
+}
+pub fn vpn() -> Subscription<vpn::State> {
+    Subscription::run(|| forever(vpn::stream))
+}
+pub fn system() -> Subscription<system::State> {
+    Subscription::run(|| forever(system::stream))
+}
+pub fn updates() -> Subscription<updates::State> {
+    Subscription::run(|| forever(updates::stream))
+}
+
+/// Weather for a city, or exact coordinates with the city as the label.
+pub fn weather(
+    city: Option<&str>,
+    lat: Option<f64>,
+    lon: Option<f64>,
+) -> Subscription<web::Weather> {
+    let coords = lat
+        .zip(lon)
+        .map(|(a, b)| ((a * 1e6) as i64, (b * 1e6) as i64));
+    match city {
+        Some(c) if !c.trim().is_empty() || coords.is_some() => Subscription::run_with(
+            web::Place {
+                name: c.to_string(),
+                coords,
+            },
+            |p: &web::Place| {
+                let p = p.clone();
+                forever(move || web::weather_stream(&p))
+            },
+        ),
+        _ => Subscription::none(),
+    }
+}
+
+/// Which file in `~/.config/kestrel/` changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfigFile {
+    Toml,
+    Lua,
+}
+
+/// Changes to config.toml and init.lua, so edits apply without a restart. The directory is
+/// watched (not the files) because editors save by replacing the file.
+pub fn config_files() -> Subscription<ConfigFile> {
+    Subscription::run(|| forever(config_stream))
+}
+
+fn config_stream() -> impl futures::Stream<Item = ConfigFile> {
+    use futures::{SinkExt, StreamExt};
+    crate::services::stream::channel(4, async |mut out| {
+        let dir = crate::config::path()
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
+        let _ = std::fs::create_dir_all(&dir);
+        let Ok(ino) = inotify::Inotify::init() else {
+            return;
+        };
+        let mask = inotify::WatchMask::CLOSE_WRITE
+            | inotify::WatchMask::MOVED_TO
+            | inotify::WatchMask::CREATE
+            | inotify::WatchMask::DELETE;
+        if let Err(e) = ino.watches().add(&dir, mask) {
+            log::warn!("config: watching {}: {e}", dir.display());
+            return;
+        }
+        // Plugins: their folder and each plugin's own (a new plugin is watched when it appears).
+        let plugins = crate::lua::plugins_dir();
+        let mut watches = ino.watches();
+        let watch_plugins = |w: &mut inotify::Watches| {
+            let _ = w.add(&plugins, mask);
+            if let Ok(rd) = std::fs::read_dir(&plugins) {
+                for e in rd.flatten().filter(|e| e.path().is_dir()) {
+                    let _ = w.add(e.path(), mask);
+                }
+            }
+        };
+        watch_plugins(&mut watches);
+        let Ok(mut events) = ino.into_event_stream([0u8; 4096]) else {
+            return;
+        };
+        while let Some(Ok(e)) = events.next().await {
+            let file = match e.name.as_deref().and_then(|n| n.to_str()) {
+                Some("config.toml") => ConfigFile::Toml,
+                Some("init.lua") => ConfigFile::Lua,
+                Some("plugins") => {
+                    watch_plugins(&mut watches);
+                    ConfigFile::Lua
+                }
+                Some(n) if n.ends_with(".lua") || n == "plugin.toml" => ConfigFile::Lua,
+                // A plugin folder added or removed.
+                Some(_) if e.mask.contains(inotify::EventMask::ISDIR) => {
+                    watch_plugins(&mut watches);
+                    ConfigFile::Lua
+                }
+                _ => continue,
+            };
+            // An editor's save is several events; let it finish, then report once.
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            if out.send(file).await.is_err() {
+                return;
+            }
+        }
+    })
+}
+
+pub fn lua() -> Subscription<crate::lua::Event> {
+    Subscription::run(|| forever(crate::lua::stream))
+}
+
+/// Live levels for the Sound page: output, microphone, and `apps` (stream index, its output).
+pub fn meters(apps: Vec<(u32, String)>) -> Subscription<crate::services::meters::Meters> {
+    Subscription::run_with(apps, |a: &Vec<(u32, String)>| {
+        let a = a.clone();
+        forever(move || crate::services::meters::stream(a.clone()))
+    })
+}
+
+pub fn level() -> Subscription<crate::services::level::Bands> {
+    Subscription::run(|| forever(crate::services::level::stream))
+}
+
+/// One message at `at` (then nothing): a deadline, instead of polling for it.
+pub fn at(at: std::time::Instant) -> Subscription<std::time::Instant> {
+    Subscription::run_with(at, |at: &std::time::Instant| {
+        let at = *at;
+        futures::stream::once(async move {
+            tokio::time::sleep_until(at.into()).await;
+            at
+        })
+    })
+}

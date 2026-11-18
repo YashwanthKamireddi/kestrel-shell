@@ -1,0 +1,29 @@
+[Unit]
+Description=kestrel desktop shell
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+# No start limit: restarting from the key several times in a row hit systemd's default
+# (5 starts in 10 s) and left the desktop without a shell. A crash loop is still paced by
+# RestartSec below (one start a second at most).
+StartLimitIntervalSec=0
+# The polkit, Wi-Fi secret and Bluetooth pairing agents run in kestrel-prompt.service (its own
+# process, src/prompt.rs); the shell pulls it in and leaves the agents to it. No KDE agent.
+Wants=kestrel-prompt.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/kestrel
+Environment=KESTREL_SEPARATE_PROMPTS=1
+# CPU renderer until the GPU one draws the same as it (colours were blended differently).
+Environment=ICED_BACKEND=tiny-skia
+Restart=on-failure
+RestartSec=1
+# A freeze restarts it too: kestrel's update loop pings every 10 s (src/watchdog.rs); 20 s
+# without one and systemd ends it, and Restart= brings it back.
+WatchdogSec=20
+NotifyAccess=main
+Slice=session.slice
+
+[Install]
+WantedBy=graphical-session.target

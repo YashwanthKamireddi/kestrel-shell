@@ -1,0 +1,516 @@
+//! Settings › network: its page.
+
+use super::*;
+use crate::app::Change;
+use crate::theme::tok;
+// Explicit: the prelude has a `column!` of its own (the source line).
+use iced::widget::column;
+
+pub(super) fn network_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let n = &cx.net;
+    let mut out: Vec<Element<'_, Message>> = Vec::new();
+    if !n.available {
+        out.push(crate::ui::empty(s, Icon::WifiOff));
+        return out;
+    }
+    let airplane = !n.wifi_enabled && !cx.bt.powered;
+    let mut top = vec![row_of(
+        s,
+        "Airplane mode",
+        None,
+        ui::switch(s, airplane, chg(Change::Airplane)),
+    )];
+    if n.has_wifi {
+        top.push(row_of(
+            s,
+            "Wi-Fi",
+            None,
+            ui::switch(s, n.wifi_enabled, chg(Change::Wifi(!n.wifi_enabled))),
+        ));
+    }
+    out.extend(group(s, None, top));
+
+    // Wi-Fi: the network in use with its details, then the others in range.
+    if n.has_wifi && n.wifi_enabled && !n.hotspot {
+        // The network in use (with its details) and the others in range, apart.
+        let mut current = Vec::new();
+        let mut rows = Vec::new();
+        let pw = &st.password;
+        let order = &st.wifi_order;
+        let mut shown: Vec<_> = n.networks.iter().collect();
+        shown.sort_by_key(|net| {
+            order
+                .iter()
+                .position(|s| *s == net.ssid)
+                .unwrap_or(usize::MAX)
+        });
+        for net in shown.into_iter().take(14) {
+            if !matches(&net.ssid) && !matches("wi-fi") {
+                continue;
+            }
+            let busy = cx.in_progress(&net.ssid);
+            let failed = cx.net_error(&net.ssid).map(str::to_string);
+            let state: String = match busy {
+                Some(true) => "Connecting…".into(),
+                Some(false) => "Disconnecting…".into(),
+                None if net.active => "Connected".into(),
+                None if failed.is_some() => failed.clone().unwrap_or_default(),
+                None if net.known => "Saved".into(),
+                None => String::new(),
+            };
+            let lead = icon(
+                crate::panels::control::strength_icon(net.strength),
+                16.0,
+                if net.active { s.accent } else { s.ink_dim },
+            );
+            let trailing: Element<'_, Message> = if net.active {
+                control(label("Disconnect", text::SMALL, s.ink))
+                    .pill(s, crate::ui::control::Pill::Plain)
+                    .on_press(chg(Change::Disconnect))
+                    .into()
+            } else if net.secure && !net.known {
+                icon(Icon::Lock, tok::ICON_S, s.ink_faint).into()
+            } else {
+                iced::widget::Space::new().into()
+            };
+            let body = row![
+                lead,
+                {
+                    let mut words =
+                        column![label(net.ssid.clone(), text::BODY, s.ink)].spacing(tok::XXS);
+                    if !state.is_empty() {
+                        let ink = if failed.is_some() && busy.is_none() && !net.active {
+                            s.bad
+                        } else {
+                            s.ink_dim
+                        };
+                        words = words.push(label(state.clone(), text::CAPTION, ink));
+                    }
+                    words.width(Length::Fill)
+                },
+                trailing,
+            ]
+            .spacing(tok::L)
+            .align_y(Alignment::Center);
+            let mut c = control(body)
+                .padding([tok::NONE, tok::XL])
+                .height(if state.is_empty() { 46 } else { 54 })
+                .width(Length::Fill)
+                .kind(s, crate::ui::control::Kind::Ghost)
+                .no_press_scale();
+            if !net.active {
+                c = c.on_press(Message::JoinNet(net.clone()));
+            }
+            if net.active {
+                current.push(Some(c.into()));
+            } else {
+                rows.push(Some(c.into()));
+            }
+            if net.active
+                && let Some(d) = &n.details
+            {
+                let rows = &mut current;
+                rows.extend(detail_rows(s, d));
+                let band = match d.frequency {
+                    f if f >= 5900 => "6 GHz",
+                    f if f >= 4900 => "5 GHz",
+                    f if f > 0 => "2.4 GHz",
+                    _ => "",
+                };
+                if !band.is_empty() {
+                    rows.push(copy_row(s, "Band", band.to_string()));
+                }
+                if d.speed > 0 {
+                    rows.push(copy_row(s, "Speed", format!("{} Mb/s", d.speed)));
+                }
+                if !d.security.is_empty() {
+                    rows.push(copy_row(s, "Security", d.security.clone()));
+                }
+                if !d.mac.is_empty() {
+                    rows.push(copy_row(s, "Hardware address", d.mac.clone()));
+                }
+            }
+            if let Some((ssid, _, typed)) = pw
+                && *ssid == net.ssid
+            {
+                rows.push(row_of(
+                    s,
+                    "Password",
+                    None,
+                    field(
+                        s,
+                        "net-password",
+                        "Password",
+                        typed,
+                        Message::Password,
+                        Some(Message::SubmitPassword),
+                        true,
+                    ),
+                ));
+            }
+        }
+        if n.networks.is_empty() {
+            rows.push(Some(ui::waiting(s, Icon::Search, "Looking for networks…")));
+        }
+        // A network that does not announce its name.
+        if st.hidden_open {
+            let (name, pass) = &st.hidden;
+            rows.push(row_of(
+                s,
+                "Network name",
+                None,
+                field(
+                    s,
+                    "hidden-name",
+                    "Name",
+                    name,
+                    Message::HiddenName,
+                    None,
+                    false,
+                ),
+            ));
+            rows.push(row_of(
+                s,
+                "Password",
+                None,
+                field(
+                    s,
+                    "hidden-password",
+                    "Password",
+                    pass,
+                    Message::HiddenPassword,
+                    Some(Message::Batch(vec![
+                        Message::JoinHidden,
+                        Message::HiddenOpen(false),
+                    ])),
+                    true,
+                ),
+            ));
+        } else {
+            rows.push(row_of(
+                s,
+                "Other network…",
+                None,
+                control(label("Join", text::SMALL, s.ink))
+                    .pill(s, crate::ui::control::Pill::Plain)
+                    .on_press(Message::HiddenOpen(true))
+                    .into(),
+            ));
+        }
+        out.extend(group(s, Some("Wi-Fi"), current));
+        out.extend(group(s, Some("Other networks"), rows));
+
+        // Saved networks: join by themselves or not, forget. The switches' meaning is said
+        // once, over them.
+        let mut saved: Vec<Option<Element<'_, Message>>> = vec![Some(
+            container(
+                row![
+                    iced::widget::Space::new().width(Length::Fill),
+                    label("Join automatically", text::CAPTION, s.ink_dim),
+                    iced::widget::Space::new().width(FORGET_W + tok::L),
+                ]
+                .align_y(Alignment::Center),
+            )
+            .padding(iced::Padding {
+                top: tok::L,
+                right: tok::XL,
+                bottom: tok::XXS,
+                left: tok::XL,
+            })
+            .into(),
+        )];
+        let rows: Vec<Option<Element<'_, Message>>> = n
+            .saved
+            .iter()
+            .filter(|k| matches(&k.ssid) || matches("saved"))
+            .map(|k| {
+                let asking = st.forget_net.as_deref() == Some(k.ssid.as_str());
+                Some(
+                    container(
+                        row![
+                            label(k.ssid.clone(), text::BODY, s.ink).width(Length::Fill),
+                            ui::switch(s, k.auto, Message::AutoJoinNet(k.ssid.clone(), !k.auto)),
+                            control(label(
+                                if asking { "Forget?" } else { "Forget" },
+                                text::SMALL,
+                                if asking { s.bad } else { s.ink },
+                            ))
+                            .pill(s, crate::ui::control::Pill::Plain)
+                            .width(FORGET_W)
+                            .center_x()
+                            .on_press(Message::ForgetNet(k.ssid.clone())),
+                        ]
+                        .spacing(tok::L)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding([tok::NONE, tok::XL])
+                    .height(46)
+                    .align_y(Alignment::Center)
+                    .into(),
+                )
+            })
+            .collect();
+        if rows.is_empty() {
+            saved.clear();
+        }
+        saved.extend(rows);
+        out.extend(group(s, Some("Saved networks"), saved));
+    }
+
+    // Ethernet: the cable, the link, its addresses.
+    if let Some(w) = &n.wired {
+        let status = if w.connected {
+            match w.speed {
+                0 => "Connected".to_string(),
+                sp if sp >= 1000 && sp % 1000 == 0 => format!("Connected · {} Gb/s", sp / 1000),
+                sp => format!("Connected · {sp} Mb/s"),
+            }
+        } else if w.plugged {
+            "Cable in, not connected".to_string()
+        } else {
+            "Cable unplugged".to_string()
+        };
+        let mut rows = vec![copy_row(s, "Ethernet", status)];
+        if let Some(d) = &w.details {
+            rows.extend(detail_rows(s, d));
+        }
+        if !w.mac.is_empty() {
+            rows.push(copy_row(s, "Hardware address", w.mac.clone()));
+        }
+        out.extend(group(s, Some("Ethernet"), rows));
+    }
+
+    // IP settings of the connection in use.
+    if let Some((_, name)) = &st.ip_for {
+        let e = &st.ip_edit;
+        // Manual starts from the address and router in use now (edited, not typed out).
+        let now = n
+            .wired
+            .as_ref()
+            .and_then(|w| w.details.as_ref())
+            .filter(|_| n.link == crate::services::network::Link::Wired)
+            .or(n.details.as_ref());
+        let (now_ip, now_gw) = (
+            now.and_then(|d| d.ipv4.clone()).unwrap_or_default(),
+            now.and_then(|d| d.gateway.clone()).unwrap_or_default(),
+        );
+        let set = |f: &dyn Fn(&mut IpEdit)| {
+            let mut x = e.clone();
+            f(&mut x);
+            Message::IpEdit(x)
+        };
+        let mut rows = vec![
+            copy_row(s, "Connection", name.clone()),
+            row_of(
+                s,
+                "IP address",
+                None,
+                segments(
+                    s,
+                    &[
+                        ("Automatic", !e.manual, set(&|x| x.manual = false)),
+                        (
+                            "Manual",
+                            e.manual,
+                            set(&|x| {
+                                x.manual = true;
+                                if x.address.is_empty() {
+                                    x.address.clone_from(&now_ip);
+                                }
+                                if x.router.is_empty() {
+                                    x.router.clone_from(&now_gw);
+                                }
+                            }),
+                        ),
+                    ],
+                ),
+            ),
+        ];
+        if e.manual {
+            let base = e.clone();
+            rows.push(row_of(
+                s,
+                "Address",
+                None,
+                field(
+                    s,
+                    "ip-address",
+                    "192.168.1.50/24",
+                    &e.address,
+                    move |t| {
+                        let mut x = base.clone();
+                        x.address = t;
+                        Message::IpEdit(x)
+                    },
+                    Some(Message::IpApply),
+                    false,
+                ),
+            ));
+            let base = e.clone();
+            rows.push(row_of(
+                s,
+                "Router",
+                None,
+                field(
+                    s,
+                    "ip-router",
+                    "192.168.1.1",
+                    &e.router,
+                    move |t| {
+                        let mut x = base.clone();
+                        x.router = t;
+                        Message::IpEdit(x)
+                    },
+                    Some(Message::IpApply),
+                    false,
+                ),
+            ));
+        }
+        rows.push(row_of(
+            s,
+            "DNS",
+            None,
+            segments(
+                s,
+                &[
+                    ("Automatic", !e.custom_dns, set(&|x| x.custom_dns = false)),
+                    ("Custom", e.custom_dns, set(&|x| x.custom_dns = true)),
+                ],
+            ),
+        ));
+        if e.custom_dns {
+            let base = e.clone();
+            rows.push(row_of(
+                s,
+                "Servers",
+                None,
+                field(
+                    s,
+                    "ip-dns",
+                    "1.1.1.1, 9.9.9.9",
+                    &e.dns,
+                    move |t| {
+                        let mut x = base.clone();
+                        x.dns = t;
+                        Message::IpEdit(x)
+                    },
+                    Some(Message::IpApply),
+                    false,
+                ),
+            ));
+        }
+        if *e != IpEdit::from(&st.ip_saved) {
+            rows.push(Some(
+                container(
+                    row![
+                        iced::widget::Space::new().width(Length::Fill),
+                        control(label("Revert", text::SMALL, s.ink))
+                            .pill(s, crate::ui::control::Pill::Plain)
+                            .on_press(Message::IpEdit(IpEdit::from(&st.ip_saved))),
+                        control(label("Apply", text::SMALL, s.on_accent))
+                            .pill(s, crate::ui::control::Pill::Primary)
+                            .on_press(Message::IpApply),
+                    ]
+                    .spacing(tok::M)
+                    .align_y(Alignment::Center),
+                )
+                .padding([tok::M, tok::XL])
+                .into(),
+            ));
+        }
+        out.extend(group(s, Some("IP settings"), rows));
+    }
+
+    // Hotspot: shares Ethernet over Wi-Fi (the one Wi-Fi radio cannot join a network and host
+    // one at once).
+    if n.has_wifi {
+        let wired_up = n.wired.as_ref().is_some_and(|w| w.connected);
+        let mut rows = Vec::new();
+        if n.hotspot {
+            rows.push(row_of(
+                s,
+                "Hotspot",
+                None,
+                ui::switch(s, true, Message::HotspotOn(false)),
+            ));
+            if let Some(h) = &st.hotspot {
+                rows.push(copy_row(s, "Name", h.name.clone()));
+                rows.push(copy_row(s, "Password", h.password.clone()));
+            }
+        } else if wired_up {
+            rows.push(row_of(
+                s,
+                "Hotspot",
+                None,
+                ui::switch(s, false, Message::HotspotOn(true)),
+            ));
+            let (name, pass) = st.hotspot_edit.clone();
+            let p2 = pass.clone();
+            rows.push(row_of(
+                s,
+                "Name",
+                None,
+                field(
+                    s,
+                    "hotspot-name",
+                    "Name",
+                    &name,
+                    move |t| Message::HotspotEdit(t, p2.clone()),
+                    None,
+                    false,
+                ),
+            ));
+            rows.push(row_of(
+                s,
+                "Password",
+                None,
+                field(
+                    s,
+                    "hotspot-password",
+                    "8 characters or more",
+                    &pass,
+                    move |t| Message::HotspotEdit(name.clone(), t),
+                    Some(Message::HotspotOn(true)),
+                    false,
+                ),
+            ));
+        } else {
+            rows.push(row_of(
+                s,
+                "Hotspot",
+                Some("Shares Ethernet over Wi-Fi: plug in a cable first"),
+                iced::widget::Space::new().into(),
+            ));
+        }
+        out.extend(group(s, Some("Hotspot"), rows));
+    }
+
+    // VPNs kestrel knows (installed ones only).
+    let mut vpn = Vec::new();
+    if let Some(on) = cx.vpn.warp {
+        vpn.push(row_of(
+            s,
+            "Cloudflare WARP",
+            None,
+            ui::switch(s, on, chg(Change::Warp(!on))),
+        ));
+    }
+    if let Some(on) = cx.vpn.tailscale {
+        vpn.push(row_of(
+            s,
+            "Tailscale",
+            None,
+            ui::switch(s, on, chg(Change::Tailscale(!on))),
+        ));
+    }
+    out.extend(group(s, Some("VPN"), vpn));
+    if let Some(e) = &st.error {
+        out.push(label(e.clone(), text::SMALL, s.bad).into());
+    }
+    out
+}
+
+/// "Forget" and "Forget?" the same width (a button that grows when asked jumped under the
+/// pointer), and the switches' caption spaced from it.
+const FORGET_W: f32 = 72.0;

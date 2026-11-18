@@ -1,0 +1,7 @@
+{
+  "name": "dev.kestrel.media",
+  "description": "kestrel: the browser's media as an MPRIS player",
+  "path": "/usr/bin/kestrel",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://ginbfooleljdbokgfjmeinlpddgginhj/"]
+}

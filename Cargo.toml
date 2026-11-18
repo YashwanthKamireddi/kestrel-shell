@@ -1,0 +1,82 @@
+[package]
+name = "kestrel"
+description = "A native desktop shell for Hyprland"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.98"
+
+[workspace]
+members = [".", "crates/kestrel-services"]
+exclude = ["tools/pointer"]
+
+[dependencies]
+kestrel-services = { path = "crates/kestrel-services" }
+iced = { package = "iced_layershell", path = "vendor/iced_layershell", default-features = false, features = [
+  "tokio",
+  "advanced",
+  "tiny-skia",
+  "wgpu",
+  "web-colors",
+  "image",
+  "svg",
+  "canvas",
+] }
+# iced's own widget operations (the keyboard focus scoped to a panel), the same crate the
+# vendored iced_layershell builds on.
+iced_runtime = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "fs", "time", "process", "sync"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+toml_edit = "0.25"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+log = "0.4"
+anyhow = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+libpulse-binding = { version = "2.30", features = ["pa_v15"] }
+inotify = { version = "0.11", default-features = false, features = ["stream"] }
+libc = "0.2"
+ttf-parser = "0.25"
+# Installed fonts from fontconfig itself (its library, loaded when first needed): no fc-list or
+# fc-match. fontdb disagreed with it on bitmap and Nerd monospace fonts.
+fontconfig = { version = "0.11", features = ["dlopen"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
+# SVG icons drawn once at their size (the renderer kept every parsed SVG for good).
+resvg = { version = "0.45", default-features = false }
+# TLS through ring: aws-lc (reqwest's default) is a large C library whose build script
+# re-ran on every build (~1 min each time).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+mlua = { version = "0.11", features = ["lua54", "vendored"] }
+material-colors = { version = "0.5", features = ["quantize"] }
+
+[patch.crates-io]
+# wl_shm Argb8888 so the CPU renderer keeps alpha on Wayland (MalpenZibo's wayland-argb
+# branch, vendored), plus a third buffer so a frame never waits for the compositor.
+softbuffer = { path = "vendor/softbuffer" }
+# 8×8 anti-aliasing samples per pixel instead of 4×4 (vendor/tiny-skia, one constant): curves
+# on 1x screens (pills, circles, rings) get 64 shades along their edge instead of 16.
+tiny-skia = { path = "vendor/tiny-skia" }
+iced_tiny_skia = { path = "vendor/iced_tiny_skia" }
+
+[profile.release]
+lto = "thin"
+strip = true
+opt-level = 3
+# Unwind, so a bug in one module is caught (guard::run) instead of ending the shell.
+panic = "unwind"
+
+[features]
+# A heap tracer for finding what holds memory (`kestrel memdump` writes a report). Debug only:
+# `cargo build --release --features memtrace`; never in the installed package.
+memtrace = []
+# `kestrel preview <prompt>` opens a system prompt with a made-up request, for testing its look
+# in the rig (the real agents only answer the live session). Answers go nowhere.
+devtools = []
+
+[dev-dependencies]
+# The screen checks lay panels out with the CPU renderer (the fallback the shell keeps), so they
+# run anywhere, a GPU or not.
+iced_tiny_skia = "0.14"

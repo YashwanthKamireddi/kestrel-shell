@@ -1,0 +1,164 @@
+//! Settings › updates: its page.
+
+use super::*;
+use crate::theme::tok;
+// Explicit: the prelude has a `column!` of its own (the source line).
+use iced::widget::column;
+
+pub(super) fn updates_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let mut out = package_updates(st, cx);
+    // Firmware (fwupd, from the LVFS): each update a row; Update runs fwupd's own updater in
+    // the terminal (it asks before anything, and says what it needs).
+    // Asked only on request: fwupd stays running once asked.
+    let Some(fw) = &st.firmware else {
+        let check = ui::button(
+            s,
+            if st.firmware_checking {
+                "Checking…"
+            } else {
+                "Check"
+            },
+            crate::ui::control::Pill::Plain,
+            (!st.firmware_checking).then(|| Message::CheckFirmware),
+        );
+        out.extend(group(
+            s,
+            Some("Firmware"),
+            vec![row_of(s, "Device firmware", None, check.into())],
+        ));
+        return out;
+    };
+    if fw.is_empty() {
+        out.extend(group(
+            s,
+            Some("Firmware"),
+            vec![value_row(s, "Up to date", String::new())],
+        ));
+    } else {
+        let rows = fw
+            .iter()
+            .map(|f| {
+                let mut note = Vec::new();
+                if f.needs_ac {
+                    note.push("plug in first");
+                }
+                if f.needs_reboot {
+                    note.push("restarts to install");
+                }
+                Some(
+                    container(
+                        row![
+                            column![
+                                label(f.device.clone(), text::BODY, s.ink),
+                                label(
+                                    if note.is_empty() {
+                                        format!("{} → {}", f.from, f.to)
+                                    } else {
+                                        format!("{} → {} · {}", f.from, f.to, note.join(", "))
+                                    },
+                                    text::CAPTION,
+                                    s.ink_dim
+                                ),
+                            ]
+                            .spacing(tok::XXS)
+                            .width(Length::Fill),
+                            control(label("Update…", text::SMALL, s.ink))
+                                .pill(s, crate::ui::control::Pill::Plain)
+                                .on_press(Message::FirmwareUpdate(f.id.clone())),
+                        ]
+                        .spacing(tok::L)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding([tok::NONE, tok::XL])
+                    .height(56)
+                    .align_y(Alignment::Center)
+                    .into(),
+                )
+            })
+            .collect();
+        out.extend(group(s, Some("Firmware"), rows));
+    }
+    out
+}
+
+pub(super) fn package_updates<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
+    let s = cx.scheme;
+    let Some(list) = &st.updates else {
+        return vec![crate::ui::waiting(
+            s,
+            Icon::Package,
+            "Checking for updates…",
+        )];
+    };
+    if list.is_empty() {
+        return group(s, None, vec![value_row(s, "Up to date", String::new())])
+            .into_iter()
+            .collect();
+    }
+    let n = list.len();
+    let head = group(
+        s,
+        None,
+        vec![row_of(
+            s,
+            if n == 1 {
+                "1 update"
+            } else {
+                "Updates available"
+            },
+            None,
+            row![
+                label(format!("{n}"), text::BODY, s.ink_dim),
+                control(label_w(
+                    "Update all",
+                    text::SMALL,
+                    s.on_accent,
+                    theme::SEMIBOLD
+                ))
+                .pill(s, crate::ui::control::Pill::Primary)
+                .on_press(Message::Batch(vec![
+                    Message::InTerminal(
+                        "sh -c 'yay -Syu; echo; read -p \"Done. Press Enter to close.\" _'",
+                        "Updates"
+                    ),
+                    Message::Close,
+                ])),
+            ]
+            .spacing(tok::L)
+            .align_y(Alignment::Center)
+            .into(),
+        )],
+    );
+    let rows = list
+        .iter()
+        .map(|p| {
+            Some(
+                container(
+                    row![
+                        label(p.name.clone(), text::BODY, s.ink).width(Length::Fill),
+                        label(format!("{}  →  {}", p.from, p.to), text::SMALL, s.ink_dim),
+                        if p.aur {
+                            Element::from(
+                                container(label("AUR", text::CAPTION, s.ink_dim))
+                                    .padding([tok::HAIR, tok::S]),
+                            )
+                        } else {
+                            iced::widget::Space::new().into()
+                        },
+                    ]
+                    .spacing(tok::L)
+                    .align_y(Alignment::Center),
+                )
+                .padding([tok::NONE, tok::XL])
+                .height(38)
+                .align_y(Alignment::Center)
+                .into(),
+            )
+        })
+        .collect();
+    [head, group(s, Some("Packages"), rows)]
+        .into_iter()
+        .flatten()
+        .collect()
+}
