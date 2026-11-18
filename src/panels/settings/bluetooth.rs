@@ -97,7 +97,7 @@ pub(super) fn bluetooth_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, 
             _ => column![
                 control(label(d.name.clone(), text::BODY, s.ink))
                     .padding([tok::XXS, tok::S])
-                    .radius(tok::R_ROW)
+                    .radius(tok::R_ROW())
                     .kind(s, crate::ui::control::Kind::Ghost)
                     .no_press_scale()
                     .on_press(Message::BtRename(Some(d.path.clone()), d.name.clone())),

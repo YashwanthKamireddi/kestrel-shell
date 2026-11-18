@@ -37,10 +37,20 @@ impl App {
     /// one of its buttons that hands over to a terminal. (Its ✕ closes it in the compositor;
     /// `WindowClosed` then forgets it.)
     pub fn close_settings(&mut self) -> Task<Message> {
-        match self.settings_window.take() {
-            Some(id) => iced::destroy_layer_surface(id),
+        match self.settings_window {
+            Some(id) => {
+                self.settings_gone();
+                iced::destroy_layer_surface(id)
+            }
             None => Task::none(),
         }
+    }
+
+    /// The Settings window is gone, however it went (closed here or by the compositor): it is
+    /// forgotten and what was half done in it ends (`settings::closed`).
+    pub(crate) fn settings_gone(&mut self) {
+        self.settings_window = None;
+        panels::settings::closed(&mut self.panels.settings);
     }
 
     pub(crate) fn toggle(
@@ -71,18 +81,23 @@ impl App {
         self.show(kind, output, button)
     }
 
-    /// Open `kind` under `button`, or move the open panel there.
-    /// Opens `kind` under `at` (for panels that open themselves once their content is in).
-    pub fn open_panel(
+    /// Asked to open `kind` under `button`, or move the open panel there: at once, or, for a
+    /// panel that waits for what it shows (`panels::prepare`), once that is in.
+    pub(crate) fn show(
         &mut self,
         kind: PanelKind,
         output: OutputId,
-        at: Rectangle,
+        button: Rectangle,
     ) -> Task<Message> {
-        self.show(kind, output, at)
+        match panels::prepare(self, kind, output, button) {
+            Some(waiting) => waiting,
+            None => self.open_panel(kind, output, button),
+        }
     }
 
-    pub(crate) fn show(
+    /// Opens `kind` under `button` now (a waiting panel's `Action::Open` comes here), or moves
+    /// the open panel there.
+    pub fn open_panel(
         &mut self,
         kind: PanelKind,
         output: OutputId,
@@ -118,7 +133,7 @@ impl App {
             // bar and reveals downward. Nothing slides or stretches across the bar; the old
             // panel is simply replaced.
             _ => {
-                // A panel is simply there, at once: no fade in, no transition (his call
+                // A panel is simply there, at once: no fade in, no transition (design call
                 // 2026-11-14: under load any animation crawled and read as lag).
                 let t = Spring::new(1.0);
                 self.panel = Some(Panel {
@@ -150,9 +165,167 @@ impl App {
         if let Some(kind) = self.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             panels::closed(self, kind);
         }
-        // Gone on the click (his call 2026-11-13: any delay closing felt slow); its own surface
+        // One asked for but still waiting for its content stays closed too.
+        panels::cancel(self);
+        // Gone on the click (design call 2026-11-13: any delay closing felt slow); its own surface
         // goes with it, and Hyprland animates that out.
         self.panel = None;
         self.drop_panel_surface()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::panels::settings;
+
+    /// Records new keys for one of the user's shortcuts in Settings › Shortcuts.
+    fn rebinding(app: &mut App) {
+        let _ = app.open_settings();
+        for m in [
+            settings::Message::Page(settings::Page::Shortcuts),
+            settings::Message::Rebind("SUPER + T".into()),
+        ] {
+            let _ = panels::update(app, panels::Message::Settings(m));
+        }
+        assert!(settings::recording(&app.panels.settings));
+    }
+
+    #[test]
+    fn closing_settings_stops_recording_a_shortcut() {
+        // Closed by a toggle or `kestrel close settings`.
+        let (mut app, _) = crate::app::boot();
+        rebinding(&mut app);
+        let _ = app.close_settings();
+        assert!(app.settings_window.is_none());
+        assert!(!settings::recording(&app.panels.settings));
+
+        // Closed by its ✕ (the compositor).
+        rebinding(&mut app);
+        let id = app.settings_window.map(iced::window::Id::from);
+        let _ = crate::app::update(&mut app, Message::WindowClosed(id.unwrap()));
+        assert!(app.settings_window.is_none());
+        assert!(!settings::recording(&app.panels.settings));
+    }
+
+    #[test]
+    fn settings_closes_itself_not_the_panel() {
+        // Storage › a drive's Open hands over to the file manager and closes Settings.
+        let (mut app, _) = crate::app::boot();
+        let _ = app.open_settings();
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Settings(settings::Message::VolumeOpen(
+                "/dev/null".into(),
+                Some("/tmp".into()),
+            )),
+        );
+        assert!(app.settings_window.is_none());
+    }
+
+    #[test]
+    fn control_centre_gear_keeps_settings_open() {
+        // Settings is the window in front; the gear in the control centre brings it forward.
+        let (mut app, _) = crate::app::boot();
+        let _ = app.open_settings();
+        app.hypr.window_class = SETTINGS_CLASS.into();
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Control(panels::control::Message::Toggle("settings")),
+        );
+        assert!(app.settings_window.is_some());
+    }
+
+    #[test]
+    fn keys_typed_in_settings_are_its_own() {
+        // The open panel's keys (and Esc) ignore what is typed in Settings' window.
+        let (mut app, _) = crate::app::boot();
+        let other = iced::window::Id::from(SurfaceId::unique());
+        assert!(!panels::in_settings(&app, other));
+        let _ = app.open_settings();
+        let settings = app.settings_window.map(iced::window::Id::from).unwrap();
+        assert!(panels::in_settings(&app, settings));
+        assert!(!panels::in_settings(&app, other));
+        // Esc there leaves Settings and everything else as it was.
+        let _ = crate::app::update(&mut app, Message::Escape(settings));
+        assert!(app.settings_window.is_some());
+    }
+
+    /// A 1920×1080 monitor, as the compositor would announce it.
+    fn monitor(app: &mut App) -> OutputId {
+        let id = OutputId::for_tests(1);
+        let _ = crate::app::update(
+            app,
+            Message::Output(OutputEvent::Added(iced::OutputInfo {
+                id,
+                name: "eDP-1".into(),
+                description: None,
+                scale_factor: 1,
+                logical_size: Some((1920, 1080)),
+                make: String::new(),
+                model: String::new(),
+            })),
+        );
+        id
+    }
+
+    #[test]
+    fn space_typed_in_settings_leaves_the_music_panel_alone() {
+        // Settings open, then the music panel opened with the mouse: the keyboard stays with
+        // Settings, whose search is where Space is typed.
+        let (mut app, _) = crate::app::boot();
+        app.media.players.push(crate::services::mpris::Player {
+            bus: "org.mpris.MediaPlayer2.test".into(),
+            ..Default::default()
+        });
+        let out = monitor(&mut app);
+        let _ = app.open_settings();
+        let settings = app.settings_window.map(iced::window::Id::from).unwrap();
+        let _ = app.open_panel(
+            PanelKind::Media,
+            out,
+            Rectangle::new(iced::Point::ORIGIN, Size::ZERO),
+        );
+        assert!(app.panel.as_ref().is_some_and(|p| p.open));
+
+        let space = |w| Message::Panel(panels::Message::Key(w, panels::Key::Space));
+        let _ = crate::app::update(&mut app, space(settings));
+        assert!(!panels::media::asked(&app.panels.media));
+        // Typed in the panel itself it plays or pauses.
+        let panel = iced::window::Id::from(SurfaceId::unique());
+        let _ = crate::app::update(&mut app, space(panel));
+        assert!(panels::media::asked(&app.panels.media));
+    }
+
+    #[test]
+    fn only_keys_typed_in_settings_are_recorded() {
+        // Recording new keys; Shift+A typed into the launcher is not them.
+        let (mut app, _) = crate::app::boot();
+        let _ = app.open_settings();
+        let settings = app.settings_window.map(iced::window::Id::from).unwrap();
+        // Recording happens on the Shortcuts page.
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Settings(settings::Message::Page(settings::Page::Shortcuts)),
+        );
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Settings(settings::Message::Record(true)),
+        );
+        assert!(
+            settings::recording(&app.panels.settings),
+            "recording started"
+        );
+        let launcher = iced::window::Id::from(SurfaceId::unique());
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Combo(launcher, "SHIFT + A".into()),
+        );
+        assert!(settings::recording(&app.panels.settings));
+        let _ = panels::update(
+            &mut app,
+            panels::Message::Combo(settings, "SUPER + Y".into()),
+        );
+        assert!(!settings::recording(&app.panels.settings));
     }
 }

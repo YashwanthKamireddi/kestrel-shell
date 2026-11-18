@@ -4,7 +4,7 @@
 use super::*;
 
 /// A rule for one app's windows, made in Settings > Windows. Sizes are shares of the screen
-/// (as in his rules.lua), so a rule fits any monitor.
+/// (as in the default rules.lua), so a rule fits any monitor.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WindowRule {
     /// The window class it matches, exactly.
@@ -23,7 +23,7 @@ pub struct WindowRule {
     pub pin: bool,
 }
 
-/// Size presets as shares of the monitor (the medium and large of his rules.lua).
+/// Size presets as shares of the monitor (the medium and large of the default rules.lua).
 pub const RULE_SIZES: [(&str, &str, f32, f32); 3] = [
     ("small", "Small", 0.35, 0.40),
     ("medium", "Medium", 0.45, 0.45),

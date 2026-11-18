@@ -17,6 +17,80 @@ pub(super) fn find_in(l: &[Vec<String>; 3], id: &str) -> Option<(usize, usize)> 
         .find_map(|(s, list)| list.iter().position(|m| m == id).map(|p| (s, p)))
 }
 
+/// The bar's sections, as the editor changes them. Each move gives the new layout, or None
+/// when nothing would change (nothing is then written).
+pub(super) type Layout = [Vec<String>; 3];
+
+/// `id` one or more places along its section (-1: towards its start, 1: towards its end).
+pub(super) fn moved(l: &Layout, id: &str, d: i32) -> Option<Layout> {
+    let (sec, at) = find_in(l, id)?;
+    let to = usize::try_from(at as i32 + d).ok()?;
+    if to >= l[sec].len() || to == at {
+        return None;
+    }
+    let mut l = l.clone();
+    l[sec].swap(at, to);
+    Some(l)
+}
+
+/// `id` into another section, `d` sections over (-1: left, 1: right), at that section's near
+/// end (going right: its start; going left: its end).
+pub(super) fn to_section(l: &Layout, id: &str, d: i32) -> Option<Layout> {
+    let (sec, at) = find_in(l, id)?;
+    let to = sec as i32 + d;
+    if !(0..3).contains(&to) {
+        return None;
+    }
+    let mut l = l.clone();
+    let m = l[sec].remove(at);
+    if d > 0 {
+        l[to as usize].insert(0, m);
+    } else {
+        l[to as usize].push(m);
+    }
+    Some(l)
+}
+
+/// `id`, not in the bar yet, added to `lane`'s end (the right side: before Power, its place).
+pub(super) fn added(l: &Layout, lane: usize, id: &str) -> Option<Layout> {
+    if find_in(l, id).is_some() || lane > 2 {
+        return None;
+    }
+    let mut l = l.clone();
+    let at = if lane == 2 {
+        l[2].iter().position(|m| m == "power").unwrap_or(l[2].len())
+    } else {
+        l[lane].len()
+    };
+    l[lane].insert(at, id.to_string());
+    Some(l)
+}
+
+/// `id` dragged and let go before place `to` of `lane` (`to` counted with `id` still where it
+/// was, as the drop targets are drawn).
+pub(super) fn dropped(l: &Layout, id: &str, lane: usize, to: usize) -> Option<Layout> {
+    let (sec, from) = find_in(l, id)?;
+    // Back where it was: nothing to save.
+    if lane > 2 || (sec == lane && (to == from || to == from + 1)) {
+        return None;
+    }
+    let mut l = l.clone();
+    l[sec].remove(from);
+    let to = if sec == lane && from < to { to - 1 } else { to };
+    let to = to.min(l[lane].len());
+    l[lane].insert(to, id.to_string());
+    Some(l)
+}
+
+/// `id` taken out of the bar.
+pub(super) fn removed(l: &Layout, id: &str) -> Layout {
+    let mut l = l.clone();
+    for list in &mut l {
+        list.retain(|m| m != id);
+    }
+    l
+}
+
 pub(super) fn save_layout(l: &[Vec<String>; 3]) -> Act<Message> {
     Act::Change(Change::Settings(
         ["left", "center", "right"]
@@ -89,7 +163,7 @@ const LANE_W: f32 = (READING_W - 2.0 * tok::M) / 3.0;
 /// style, then the three lanes side by side, each a column of compact cards (a grip to drag,
 /// the module, its options ⚙, remove ✕) with "+" for the modules not in the bar; a card is
 /// dragged within or between lanes, an accent line showing where it lands. A module's options
-/// and its place (for the keyboard) show only when it is picked. His call 2026-11-17: the old
+/// and its place (for the keyboard) show only when it is picked. Design call 2026-11-17: the old
 /// page's Left/Centre/Right, arrows and ✕ on every row were "many clicks, cluttered".
 pub(super) fn bar_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Message>> {
     let s = cx.scheme;
@@ -235,7 +309,7 @@ fn lane_view<'a>(
         .padding(tok::S)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-            border: iced::Border::default().rounded(tok::R_CARD),
+            border: iced::Border::default().rounded(tok::R_CARD()),
             ..container::Style::default()
         })
         .into()
@@ -284,7 +358,7 @@ fn card<'a>(st: &'a State, cx: &Cx<'a>, lane: usize, i: usize, id: &str) -> Elem
                     .scale_alpha(if picked { tok::SELECTED } else { tok::FILL } * s.opacity)
                     .into(),
             ),
-            border: iced::Border::default().rounded(tok::R_ROW),
+            border: iced::Border::default().rounded(tok::R_ROW()),
             ..container::Style::default()
         });
     if st.bar_drag.is_none() {
@@ -423,5 +497,187 @@ fn describe(id: &str) -> &'static str {
         "notifications" => "Unread notifications (inside the island when it is in the bar)",
         "power" => "Lock, sleep, restart and shut down",
         _ => "A widget from a Lua script",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bar(left: &[&str], center: &[&str], right: &[&str]) -> Layout {
+        let v = |ids: &[&str]| ids.iter().map(|s| (*s).to_string()).collect();
+        [v(left), v(center), v(right)]
+    }
+
+    fn sample() -> Layout {
+        bar(
+            &["workspaces", "app"],
+            &["island"],
+            &["network", "volume", "power"],
+        )
+    }
+
+    #[test]
+    fn a_module_moves_along_its_section() {
+        let l = sample();
+        assert_eq!(
+            moved(&l, "volume", -1),
+            Some(bar(
+                &["workspaces", "app"],
+                &["island"],
+                &["volume", "network", "power"]
+            ))
+        );
+        assert_eq!(
+            moved(&l, "workspaces", 1).unwrap()[0],
+            ["app", "workspaces"]
+        );
+    }
+
+    #[test]
+    fn a_module_at_its_sections_end_stays() {
+        let l = sample();
+        assert_eq!(moved(&l, "workspaces", -1), None);
+        assert_eq!(moved(&l, "power", 1), None);
+        assert_eq!(moved(&l, "island", 1), None, "alone in its section");
+        assert_eq!(moved(&l, "volume", 5), None);
+        assert_eq!(moved(&l, "volume", 0), None);
+    }
+
+    #[test]
+    fn a_module_not_in_the_bar_moves_nowhere() {
+        let l = sample();
+        assert_eq!(moved(&l, "tray", 1), None);
+        assert_eq!(to_section(&l, "tray", 1), None);
+        assert_eq!(dropped(&l, "tray", 0, 0), None);
+    }
+
+    #[test]
+    fn going_right_lands_at_the_sections_start() {
+        let l = to_section(&sample(), "app", 1).unwrap();
+        assert_eq!(
+            l,
+            bar(
+                &["workspaces"],
+                &["app", "island"],
+                &["network", "volume", "power"]
+            )
+        );
+        // Two sections over (the "Right" segment from the left).
+        let l = to_section(&sample(), "app", 2).unwrap();
+        assert_eq!(l[2], ["app", "network", "volume", "power"]);
+    }
+
+    #[test]
+    fn going_left_lands_at_the_sections_end() {
+        let l = to_section(&sample(), "network", -1).unwrap();
+        assert_eq!(l[1], ["island", "network"]);
+        assert_eq!(l[2], ["volume", "power"]);
+        let l = to_section(&sample(), "network", -2).unwrap();
+        assert_eq!(l[0], ["workspaces", "app", "network"]);
+    }
+
+    #[test]
+    fn no_section_past_the_edges() {
+        let l = sample();
+        assert_eq!(to_section(&l, "app", -1), None);
+        assert_eq!(to_section(&l, "power", 1), None);
+        assert_eq!(to_section(&l, "island", 2), None);
+    }
+
+    #[test]
+    fn the_last_module_of_a_section_can_leave_it() {
+        let l = to_section(&sample(), "island", -1).unwrap();
+        assert!(l[1].is_empty());
+        assert_eq!(l[0], ["workspaces", "app", "island"]);
+    }
+
+    #[test]
+    fn added_on_the_right_goes_before_power() {
+        let l = added(&sample(), 2, "battery").unwrap();
+        assert_eq!(l[2], ["network", "volume", "battery", "power"]);
+        // Without a power button: at the end.
+        let l = added(&bar(&[], &[], &["clock"]), 2, "battery").unwrap();
+        assert_eq!(l[2], ["clock", "battery"]);
+        // Elsewhere: at the end too.
+        let l = added(&sample(), 0, "tray").unwrap();
+        assert_eq!(l[0], ["workspaces", "app", "tray"]);
+        let l = added(&bar(&[], &[], &[]), 1, "clock").unwrap();
+        assert_eq!(l[1], ["clock"]);
+    }
+
+    #[test]
+    fn a_module_is_never_added_twice_or_off_the_bar() {
+        let l = sample();
+        assert_eq!(added(&l, 0, "volume"), None, "already on the right");
+        assert_eq!(added(&l, 3, "tray"), None);
+    }
+
+    #[test]
+    fn dropped_where_it_was_saves_nothing() {
+        let l = sample();
+        // Before itself, or before the one after it: the same place.
+        assert_eq!(dropped(&l, "volume", 2, 1), None);
+        assert_eq!(dropped(&l, "volume", 2, 2), None);
+    }
+
+    #[test]
+    fn dropped_further_along_its_own_section() {
+        // Places count with the module still there: before "power" (2) is after "volume".
+        let l = dropped(&sample(), "network", 2, 2).unwrap();
+        assert_eq!(l[2], ["volume", "network", "power"]);
+        // Past the end.
+        let l = dropped(&sample(), "network", 2, 3).unwrap();
+        assert_eq!(l[2], ["volume", "power", "network"]);
+        // Earlier.
+        let l = dropped(&sample(), "power", 2, 0).unwrap();
+        assert_eq!(l[2], ["power", "network", "volume"]);
+    }
+
+    #[test]
+    fn dropped_into_another_section() {
+        let l = dropped(&sample(), "app", 2, 1).unwrap();
+        assert_eq!(l[0], ["workspaces"]);
+        assert_eq!(l[2], ["network", "app", "volume", "power"]);
+        // A place past the end of a shorter section: at its end.
+        let l = dropped(&sample(), "power", 1, 9).unwrap();
+        assert_eq!(l[1], ["island", "power"]);
+        // Into an empty section.
+        let l = dropped(&bar(&["a"], &[], &["b"]), "a", 1, 0).unwrap();
+        assert_eq!(l, bar(&[], &["a"], &["b"]));
+    }
+
+    #[test]
+    fn a_drop_on_no_section_is_ignored() {
+        assert_eq!(dropped(&sample(), "app", 3, 0), None);
+    }
+
+    #[test]
+    fn removed_from_wherever_it_is() {
+        let l = removed(&sample(), "volume");
+        assert_eq!(l[2], ["network", "power"]);
+        assert_eq!(removed(&sample(), "tray"), sample());
+    }
+
+    #[test]
+    fn every_move_keeps_each_module_once() {
+        // Any sequence of moves keeps the same modules, each once.
+        let mut l = sample();
+        let mut all: Vec<String> = l.concat();
+        all.sort();
+        for (id, d) in [("app", 1), ("power", -2), ("island", 1), ("app", -1)] {
+            if let Some(n) = to_section(&l, id, d) {
+                l = n;
+            }
+            if let Some(n) = moved(&l, id, 1) {
+                l = n;
+            }
+            if let Some(n) = dropped(&l, id, 1, 0) {
+                l = n;
+            }
+            let mut now: Vec<String> = l.concat();
+            now.sort();
+            assert_eq!(now, all);
+        }
     }
 }

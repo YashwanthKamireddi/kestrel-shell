@@ -76,9 +76,14 @@ pub fn entries(st: &State) -> Vec<Entry<'_>> {
         };
     }
     if let Some(name) = q.strip_prefix('!') {
-        return processes(name.trim())
-            .into_iter()
-            .map(|(pid, n, mem)| Entry::Process(pid, n, mem))
+        // The last list read; while a newer read is on its way, narrowed to what is typed now.
+        let name = name.trim().to_lowercase();
+        return st
+            .procs
+            .1
+            .iter()
+            .filter(|(_, n, _)| n.to_lowercase().contains(&name))
+            .map(|(pid, n, mem)| Entry::Process(*pid, n.clone(), *mem))
             .collect();
     }
     if let Some(cmd) = q.strip_prefix('>') {
@@ -237,8 +242,16 @@ pub(super) async fn find_files(term: String) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+/// This user's processes whose name contains `name`, biggest memory first: (pid, name, KiB),
+/// read off the UI thread (every process's status file).
+pub(super) async fn find_processes(name: String) -> Vec<(u32, String, u64)> {
+    tokio::task::spawn_blocking(move || processes(&name))
+        .await
+        .unwrap_or_default()
+}
+
 /// This user's processes whose name contains `name`, biggest memory first: (pid, name, KiB).
-pub(super) fn processes(name: &str) -> Vec<(u32, String, u64)> {
+fn processes(name: &str) -> Vec<(u32, String, u64)> {
     let uid = unsafe { libc::getuid() };
     let me = std::process::id();
     let name = name.to_lowercase();
@@ -283,6 +296,15 @@ pub(super) fn processes(name: &str) -> Vec<(u32, String, u64)> {
     out.sort_by_key(|p| std::cmp::Reverse(p.2));
     out.truncate(MAX_RESULTS);
     out
+}
+
+/// A switch's state in words: what it is on with only while it is on.
+pub fn status_text(on: bool, with: Option<&str>) -> String {
+    match (on, with.filter(|w| !w.is_empty())) {
+        (false, _) => "Off".into(),
+        (true, None) => "On".into(),
+        (true, Some(w)) => format!("On \u{b7} {w}"),
+    }
 }
 
 /// A system switch the launcher flips: one of the shell's changes (app::Change), so it acts
@@ -345,6 +367,41 @@ impl Switch {
             Switch::Caffeine => Icon::Coffee,
             Switch::GameMode => Icon::Gamepad2,
         }
+    }
+
+    /// Whether it is on now, and what it is on with (the network, the device, until when),
+    /// read from the shell's live state as the control centre's tile reads it.
+    pub fn state(self, cx: &Cx<'_>) -> (bool, Option<String>) {
+        match self {
+            Switch::Wifi => (cx.net.wifi_enabled, cx.net.ssid.clone()),
+            Switch::Bluetooth => {
+                let names: Vec<&str> = cx.bt.connected().map(|d| d.name.as_str()).collect();
+                let with = match names.len() {
+                    0 => None,
+                    1 => Some(names[0].to_string()),
+                    k => Some(format!("{k} devices")),
+                };
+                (cx.bt.powered, with)
+            }
+            Switch::Airplane => (crate::state::get(|s| s.toggles.airplane.is_some()), None),
+            Switch::Dnd => (
+                cx.dnd,
+                crate::state::get(|s| s.toggles.dnd_until)
+                    .map(|t| format!("until {}", crate::panels::control::until_text(t))),
+            ),
+            Switch::NightLight => (
+                cx.night_light,
+                Some(format!("{} K", cx.config.night_light_temperature)),
+            ),
+            Switch::Caffeine => (cx.caffeine, None),
+            Switch::GameMode => (cx.game_mode, None),
+        }
+    }
+
+    /// Its row's second line: "On", "Off", or "On · Home" (what it is on with).
+    pub fn status(self, cx: &Cx<'_>) -> String {
+        let (on, with) = self.state(cx);
+        status_text(on, with.as_deref())
     }
 
     pub fn change(self) -> crate::app::Change {

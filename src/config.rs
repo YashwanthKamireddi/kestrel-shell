@@ -22,8 +22,11 @@ pub struct Config {
     pub accent: Option<String>,
     /// $EDITOR and $VISUAL for the session ("nvim"), set in settings.lua.
     pub editor: Option<String>,
-    /// Apps' fonts, icon theme and cursor theme (`[look]`), as chosen in Settings.
+    /// Apps' fonts, icon theme and cursor theme (`[look]`), as chosen in Settings, and the
+    /// shell's corner radius scale.
     pub look: LookConfig,
+    /// How the shell moves: `[motion] speed = 1.0` (2 twice as fast), `reduce = false`.
+    pub motion: MotionConfig,
     /// City for the weather (looked up with Open-Meteo). No city, no weather.
     pub weather_city: Option<String>,
     /// Exact place for the weather (a neighbourhood the city search can't find); the city
@@ -44,7 +47,7 @@ pub struct Config {
     /// How the time reads: `[clock] format = "24h" | "12h"`, `date = true`.
     pub clock: ClockConfig,
     /// Volume keys: `[sound] step = 2` (percent per press), `max = 150` (percent the keys may
-    /// reach; above 100 boosts quiet sound, as his keys always allowed).
+    /// reach; above 100 boosts quiet sound, as the keys always allowed).
     pub sound: SoundConfig,
     /// Temperatures in "celsius" or "fahrenheit".
     pub weather_units: Units,
@@ -84,7 +87,7 @@ impl Default for NotificationRules {
 }
 
 /// `[look]`: unset fields leave what is there alone.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct LookConfig {
     pub font: Option<String>,
@@ -93,9 +96,39 @@ pub struct LookConfig {
     pub mono_size: Option<u32>,
     pub icons: Option<String>,
     pub cursor: Option<String>,
+    /// The shell's corner radii, scaled (`radius = 0.5` half as round, 0 square); pills stay
+    /// pills. Unset: 1, the design's own.
+    pub radius: Option<f32>,
+}
+
+/// `[motion]`: how the shell's animations play.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MotionConfig {
+    /// Every animation's speed: 2 twice as fast, 0.5 half as fast (0 or less: none).
+    pub speed: f32,
+    /// No animations: everything arrives at once (also told to apps as "reduced motion").
+    pub reduce: bool,
+}
+
+impl Default for MotionConfig {
+    fn default() -> Self {
+        Self {
+            speed: 1.0,
+            reduce: false,
+        }
+    }
 }
 
 impl LookConfig {
+    /// The part apps are themed with (fonts, icons, cursor): `radius` is the shell's own.
+    pub fn for_apps(&self) -> Self {
+        Self {
+            radius: None,
+            ..self.clone()
+        }
+    }
+
     /// The app font and size (the shell's own font, 11, unless chosen).
     pub fn font(&self) -> (String, u32) {
         (
@@ -350,6 +383,7 @@ impl Default for Config {
             accent: None,
             editor: None,
             look: LookConfig::default(),
+            motion: MotionConfig::default(),
             weather_city: None,
             weather_latitude: None,
             weather_longitude: None,
@@ -370,6 +404,9 @@ impl Default for Config {
 
 /// kestrel's state directory (`$XDG_STATE_HOME/kestrel`): things the shell remembers.
 pub fn state_dir() -> PathBuf {
+    if cfg!(test) {
+        return test_home().join("state").join("kestrel");
+    }
     std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
@@ -378,11 +415,25 @@ pub fn state_dir() -> PathBuf {
 }
 
 pub fn path() -> PathBuf {
+    if cfg!(test) {
+        return test_home()
+            .join("config")
+            .join("kestrel")
+            .join("config.toml");
+    }
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
         .unwrap_or_default();
     base.join("kestrel").join("config.toml")
+}
+
+/// Under `cargo test`, kestrel's own folders (config, state, history, init.lua) are a folder
+/// of this test run's own in the temporary directory, which is never created unless a test
+/// writes there: no test reads the user's config or writes the user's state, and a test sees the defaults
+/// whatever the user's config says.
+fn test_home() -> PathBuf {
+    std::env::temp_dir().join(format!("kestrel-test-{}", std::process::id()))
 }
 
 pub fn load() -> Config {
@@ -399,7 +450,12 @@ pub fn read() -> Result<Config, String> {
     let Ok(s) = std::fs::read_to_string(&p) else {
         return Ok(Config::default());
     };
-    let parsed: Result<Config, toml::de::Error> = toml::from_str(&s);
+    parse(&s)
+}
+
+/// config.toml's text as the config, or what is wrong with it (the line and why).
+fn parse(s: &str) -> Result<Config, String> {
+    let parsed: Result<Config, toml::de::Error> = toml::from_str(s);
     parsed
         .map(|mut c| {
             c.bar.normalize();
@@ -408,7 +464,15 @@ pub fn read() -> Result<Config, String> {
         .map_err(|e| {
             let line = e
                 .span()
-                .map(|r| s[..r.start.min(s.len())].lines().count().max(1));
+                // Line breaks before the error, plus one: `lines().count()` of the text before it
+                // came one short when the error began at a line's first character.
+                .map(|r| {
+                    s.as_bytes()[..r.start.min(s.len())]
+                        .iter()
+                        .filter(|b| **b == b'\n')
+                        .count()
+                        + 1
+                });
             let what = e.message().trim().to_string();
             match line {
                 Some(l) => format!("config.toml, line {l}: {what}"),
@@ -462,26 +526,37 @@ impl Edit {
 pub fn set(table: &[&str], key: &str, value: toml_edit::Item) {
     let p = self::path();
     let text = std::fs::read_to_string(&p).unwrap_or_default();
-    let Ok(mut doc) = text.parse::<toml_edit::DocumentMut>() else {
-        log::warn!("config: {} does not parse; not changing it", p.display());
-        return;
+    let changed = match edited(&text, table, key, value) {
+        Ok(t) => t,
+        Err(e) => {
+            log::warn!("config: {}: {e}; not changing it", p.display());
+            return;
+        }
     };
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(&p, changed);
+}
+
+/// config.toml's `text` with one key set (`Item::None` removes it), its tables made as needed,
+/// comments and everything else kept as written.
+fn edited(text: &str, table: &[&str], key: &str, value: toml_edit::Item) -> Result<String, String> {
+    let mut doc = text
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|_| "it does not parse".to_string())?;
     let mut t = doc.as_table_mut();
     for name in table {
         if !t.contains_key(name) {
             t.insert(name, toml_edit::Item::Table(toml_edit::Table::new()));
         }
-        let Some(next) = t.get_mut(name).and_then(toml_edit::Item::as_table_mut) else {
-            log::warn!("config: [{name}] is not a table");
-            return;
-        };
-        t = next;
+        t = t
+            .get_mut(name)
+            .and_then(toml_edit::Item::as_table_mut)
+            .ok_or_else(|| format!("[{name}] is not a table"))?;
     }
     t.insert(key, value);
-    if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
-    let _ = std::fs::write(&p, doc.to_string());
+    Ok(doc.to_string())
 }
 
 /// A list of strings as a config value.
@@ -542,5 +617,186 @@ mod bar_tests {
         let before = b.clone();
         b.normalize();
         assert_eq!(b, before);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_file_is_the_defaults() {
+        assert_eq!(parse("").unwrap(), Config::default());
+        assert_eq!(parse("# only a comment\n").unwrap(), Config::default());
+    }
+
+    #[test]
+    fn a_partial_table_keeps_the_other_defaults() {
+        let c = parse("[bar]\nleft = [\"clock\"]\n[sound]\nstep = 5\n").unwrap();
+        assert_eq!(c.bar.left, ["clock"]);
+        assert_eq!(c.bar.right, BarConfig::default().right);
+        assert_eq!(c.sound.step, 5);
+        assert_eq!(c.sound.max, SoundConfig::default().max);
+        assert_eq!(c.workspaces, 5);
+    }
+
+    #[test]
+    fn unknown_keys_are_ignored() {
+        let c = parse("future_option = true\n[bar]\nshiny = 3\nstyle = \"pills\"\n").unwrap();
+        assert_eq!(c.bar.style, BarStyle::Pills);
+    }
+
+    #[test]
+    fn a_wrong_value_names_its_line() {
+        let e = parse("workspaces = 3\n\n[bar]\nstyle = \"pils\"\n").unwrap_err();
+        assert!(e.starts_with("config.toml, line 4:"), "{e}");
+        assert!(e.contains("pils"), "{e}");
+    }
+
+    #[test]
+    fn an_error_at_the_start_of_a_line_names_that_line() {
+        // The error's span starts at the line's first character.
+        let e = parse("workspaces = 3\ntheme_apps = true\n= 5\n").unwrap_err();
+        assert!(e.starts_with("config.toml, line 3:"), "{e}");
+        let e = parse("[bar]\n[bar]\n").unwrap_err();
+        assert!(e.starts_with("config.toml, line 2:"), "{e}");
+    }
+
+    #[test]
+    fn a_wrong_type_is_an_error_not_a_default() {
+        let e = parse("workspaces = \"five\"\n").unwrap_err();
+        assert!(e.starts_with("config.toml, line 1:"), "{e}");
+    }
+
+    #[test]
+    fn glass_reads_as_frosted() {
+        assert_eq!(
+            parse("material = \"glass\"").unwrap().material,
+            Material::Frosted
+        );
+        assert_eq!(
+            parse("material = \"frosted\"").unwrap().material,
+            Material::Frosted
+        );
+    }
+
+    #[test]
+    fn an_old_layout_is_read_in_todays_terms() {
+        let c = parse("[bar]\nright = [\"status\", \"power\"]\n").unwrap();
+        assert!(!c.bar.contains("status"));
+        assert!(c.bar.contains("network") && c.bar.contains("notifications"));
+        assert_eq!(c.bar.right.last().map(String::as_str), Some("power"));
+    }
+
+    #[test]
+    fn module_and_notification_tables_are_read() {
+        let c = parse(
+            "[modules.clock]\nmiddle = \"kitty\"\n[notifications]\nmuted = [\"Discord\"]\nbanner = 8\n",
+        )
+        .unwrap();
+        assert_eq!(c.modules["clock"].middle.as_deref(), Some("kitty"));
+        assert_eq!(c.notifications.muted, ["Discord"]);
+        assert_eq!(c.notifications.banner, 8);
+        assert!(c.notifications.sound, "unset keys keep their default");
+    }
+
+    #[test]
+    fn an_edit_keeps_comments_and_other_keys() {
+        let before =
+            "# my config\nworkspaces = 3 # three\n\n[bar]\n# the left side\nleft = [\"app\"]\n";
+        let after = edited(before, &[], "theme_apps", toml_edit::value(false)).unwrap();
+        assert!(after.contains("# my config"));
+        assert!(after.contains("workspaces = 3 # three"));
+        assert!(after.contains("# the left side"));
+        let c = parse(&after).unwrap();
+        assert!(!c.theme_apps);
+        assert_eq!(c.workspaces, 3);
+        assert_eq!(c.bar.left, ["app"]);
+    }
+
+    #[test]
+    fn an_edit_replaces_a_value_in_place() {
+        let before = "[sound]\nstep = 2\nmax = 150\n";
+        let after = edited(before, &["sound"], "step", toml_edit::value(5)).unwrap();
+        assert_eq!(after, "[sound]\nstep = 5\nmax = 150\n");
+    }
+
+    #[test]
+    fn an_edit_makes_the_tables_it_needs() {
+        let after = edited("", &["plugins", "disk"], "enabled", toml_edit::value(false)).unwrap();
+        let t: toml::Table = after.parse().unwrap();
+        assert_eq!(t["plugins"]["disk"]["enabled"].as_bool(), Some(false));
+    }
+
+    #[test]
+    fn an_edit_of_none_removes_the_key() {
+        let after = edited(
+            "cursor_size = 32\nworkspaces = 4\n",
+            &[],
+            "cursor_size",
+            toml_edit::Item::None,
+        )
+        .unwrap();
+        assert!(!after.contains("cursor_size"), "{after}");
+        assert_eq!(parse(&after).unwrap().workspaces, 4);
+    }
+
+    #[test]
+    fn an_edit_never_rewrites_a_broken_file() {
+        assert!(edited("[bar\nleft = 1", &[], "workspaces", toml_edit::value(3)).is_err());
+        // A table in the way that is a value: nothing is changed.
+        assert!(edited("bar = 3\n", &["bar"], "left", toml_edit::value(1)).is_err());
+    }
+
+    #[test]
+    fn a_bar_list_round_trips() {
+        let ids = ["clock".to_string(), "media".to_string()];
+        let after = edited("", &["bar"], "center", list(&ids)).unwrap();
+        assert_eq!(parse(&after).unwrap().bar.center, ids);
+        let after = edited(&after, &["bar"], "center", list(&[])).unwrap();
+        assert!(parse(&after).unwrap().bar.center.is_empty());
+    }
+
+    #[test]
+    fn groups_and_membership() {
+        let b = BarConfig::default();
+        assert_eq!(b.group_of("volume"), Some(0));
+        assert_eq!(b.group_of("workspaces"), None);
+        assert!(b.contains("workspaces") && b.contains("island") && b.contains("power"));
+        assert!(
+            !b.contains("tray"),
+            "a group member that is not in the bar is not in it"
+        );
+    }
+
+    #[test]
+    fn temperatures_and_alert_volume() {
+        assert_eq!(Units::Celsius.show(21.4), "21°");
+        assert_eq!(Units::Fahrenheit.show(100.0), "212°");
+        assert_eq!(Units::Fahrenheit.show(-40.0), "-40°");
+        let s = SoundConfig {
+            alerts: 250,
+            ..SoundConfig::default()
+        };
+        assert_eq!(s.alert_volume(), 1.0);
+        assert!((SoundConfig::default().alert_volume() - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn only_a_leading_tilde_slash_is_home() {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
+        assert_eq!(expand("~/Pictures"), home.join("Pictures"));
+        assert_eq!(expand("/srv/x"), PathBuf::from("/srv/x"));
+        assert_eq!(expand("~other/x"), PathBuf::from("~other/x"));
+        assert_eq!(expand("a/~/b"), PathBuf::from("a/~/b"));
+    }
+
+    #[test]
+    fn tests_never_see_his_folders() {
+        let tmp = std::env::temp_dir();
+        assert!(path().starts_with(&tmp));
+        assert!(state_dir().starts_with(&tmp));
+        assert!(crate::lua::path().starts_with(&tmp));
+        assert!(crate::lua::plugins_dir().starts_with(&tmp));
     }
 }

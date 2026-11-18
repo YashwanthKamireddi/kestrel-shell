@@ -683,8 +683,8 @@ fn keyring_view<'a, M: Clone + 'static>(
 }
 
 /// A made-up question for screen tests (devtools builds only): the shell's `preview` command
-/// and the prompt process's `KESTREL_PREVIEW`. polkit only asks the live session, and his own
-/// session is let through without a password, so the real ones cannot be called up at will.
+/// and the prompt process's `KESTREL_PREVIEW`. polkit only asks the live session (and a local
+/// rule may let it through without asking), so the real ones cannot be called up at will.
 #[cfg(feature = "devtools")]
 pub enum Preview {
     Polkit(polkit::Request),

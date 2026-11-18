@@ -244,7 +244,7 @@ pub const TOUCHPAD: &[Opt] = &[
     ),
 ];
 
-/// How windows look (his look.lua sets them; a choice here wins, as with input).
+/// How windows look (the default look.lua sets them; a choice here wins, as with input).
 pub const WINDOW_LOOK: &[Opt] = &[
     opt!(
         "Space between windows",

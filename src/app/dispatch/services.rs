@@ -30,7 +30,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     title: "Recording".into(),
                     detail: String::new(),
                     thumb: None,
-                    until: Instant::now() + Duration::from_millis(FLASH_MS),
+                    until: Instant::now() + tok::HOLD_FLASH,
                     // A click stops it.
                     action: s.recording_pid.map(|_| Message::StopRecording),
                 });
@@ -45,7 +45,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                     title: "Recording saved".into(),
                     detail: name.clone(),
                     thumb: None,
-                    until: Instant::now() + Duration::from_millis(FLASH_MS + 1800),
+                    until: Instant::now() + tok::HOLD_FLASH_LONG,
                     // A click plays it.
                     action: Some(open_file(file)),
                 });
@@ -389,10 +389,16 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             Task::none()
         }
         Message::Notification(e) => app.notify(e),
+        Message::PictureSaved(id, to) => {
+            app.picture_saved(id, &to);
+            Task::none()
+        }
         Message::VolumeStep(lines) => {
-            if let Some(d) = app.audio.sink().cloned() {
-                let v = (d.volume + lines.signum() * 0.05).clamp(0.0, 1.0);
-                audio::command(audio::Command::SinkVolume(d.name, d.channels, v));
+            // 5 % a notch (a touchpad's small scrolls add up to one), up to Settings > Sound's
+            // maximum like the volume keys, and heard again if muted as they do.
+            let n = notches(&mut app.volume_scroll, lines);
+            if n != 0 {
+                app.step_volume(n as f32 * 5.0);
             }
             Task::none()
         }

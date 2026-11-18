@@ -182,11 +182,15 @@ fn pinned() -> Vec<String> {
 
 /// Indices of the entries matching the filter, pinned ones first. "image" finds pictures.
 fn filtered(st: &State) -> Vec<usize> {
-    let q = st.query.trim().to_lowercase();
     let Some(clips) = &st.clips else {
         return Vec::new();
     };
-    let pins = pinned();
+    matching(clips, &st.query, &pinned())
+}
+
+/// Indices of the `clips` matching `query`, the `pins` (ids) first in their order.
+fn matching(clips: &[Clip], query: &str, pins: &[String]) -> Vec<usize> {
+    let q = query.trim().to_lowercase();
     let mut v: Vec<usize> = clips
         .iter()
         .enumerate()
@@ -235,8 +239,8 @@ fn max_scroll(n: usize) -> f32 {
 
 /// Scrolls to `px`: at once (a touchpad, a drag, a key) or gliding (a wheel step).
 fn scroll_to(st: &mut State, px: f32, glide: bool) {
-    if glide && !crate::motion::still() {
-        st.glide.to(px, crate::motion::Spring::SHOW);
+    if glide && !crate::motion::instant() {
+        st.glide.to(px, tok::SPRING_SHOW);
     } else {
         st.glide.snap(px);
     }
@@ -421,5 +425,321 @@ mod tests {
         };
         assert!(!t.is_image());
         assert_eq!(t.text_info(), "Link · github.com");
+    }
+
+    /// Ids far past any real history's, so the history's own pins (read by `filtered`) never
+    /// name one of these.
+    const BASE: u64 = 1 << 60;
+
+    fn text(n: u64, preview: &str) -> Clip {
+        use crate::services::clips::Entry;
+        Clip {
+            key: (BASE + n).to_string(),
+            entry: Entry {
+                id: BASE + n,
+                mime: "text/plain;charset=utf-8".into(),
+                preview: preview.into(),
+                ..Entry::default()
+            },
+            preview: preview.into(),
+            thumb: None,
+        }
+    }
+
+    fn picture(n: u64) -> Clip {
+        use crate::services::clips::Entry;
+        Clip {
+            key: (BASE + n).to_string(),
+            entry: Entry {
+                id: BASE + n,
+                mime: "image/png".into(),
+                size: Some((10, 10)),
+                bytes: 3 * 1024 * 1024 / 2,
+                ..Entry::default()
+            },
+            preview: String::new(),
+            thumb: None,
+        }
+    }
+
+    fn key(n: u64) -> String {
+        (BASE + n).to_string()
+    }
+
+    fn loaded(clips: Vec<Clip>) -> State {
+        let mut st = State::default();
+        let _ = update(&mut st, Message::Loaded(clips));
+        st
+    }
+
+    fn many(n: u64) -> State {
+        loaded((0..n).map(|i| text(i, &format!("entry {i}"))).collect())
+    }
+
+    #[test]
+    fn a_filter_matches_text_in_any_case() {
+        let clips = vec![
+            text(0, "Hello World"),
+            text(1, "goodbye"),
+            text(2, "WORLD news"),
+        ];
+        assert_eq!(matching(&clips, "", &[]), [0, 1, 2]);
+        assert_eq!(matching(&clips, "  world ", &[]), [0, 2]);
+        assert_eq!(matching(&clips, "nothing", &[]), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn pictures_are_found_by_what_they_are() {
+        let clips = vec![text(0, "an image of a cat"), picture(1), text(2, "cat")];
+        assert_eq!(matching(&clips, "image", &[]), [0, 1]);
+        assert_eq!(matching(&clips, "screenshot", &[]), [1]);
+        assert_eq!(matching(&clips, "pic", &[]), [1]);
+        assert_eq!(matching(&clips, "cat", &[]), [0, 2]);
+    }
+
+    #[test]
+    fn pinned_entries_come_first_in_the_order_pinned() {
+        let clips: Vec<Clip> = (0..5).map(|i| text(i, &format!("e{i}"))).collect();
+        let pins = [key(3), key(1)];
+        assert_eq!(matching(&clips, "", &pins), [3, 1, 0, 2, 4]);
+        // Filtered too: a pin that does not match stays out.
+        assert_eq!(matching(&clips, "e1", &pins), [1]);
+        // A pin no longer in the history changes nothing.
+        assert_eq!(matching(&clips, "", &[key(99)]), [0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn arrows_stay_inside_the_list() {
+        let mut st = many(20);
+        let _ = key_press(&mut st, crate::panels::Key::Up);
+        assert_eq!(st.selected, 0);
+        let _ = key_press(&mut st, crate::panels::Key::Down);
+        assert_eq!(st.selected, 1);
+        let _ = key_press(&mut st, crate::panels::Key::PageDown);
+        assert_eq!(st.selected, 1 + ROWS);
+        let _ = key_press(&mut st, crate::panels::Key::End);
+        assert_eq!(st.selected, 19);
+        let _ = key_press(&mut st, crate::panels::Key::Down);
+        assert_eq!(st.selected, 19);
+        let _ = key_press(&mut st, crate::panels::Key::Home);
+        assert_eq!(st.selected, 0);
+    }
+
+    fn key_press(st: &mut State, k: crate::panels::Key) -> Act {
+        super::key(st, k)
+    }
+
+    #[test]
+    fn arrows_on_an_empty_list_do_nothing() {
+        let mut st = loaded(Vec::new());
+        let _ = update(&mut st, Message::Move(1));
+        assert_eq!(st.selected, 0);
+        let mut st = State::default();
+        let _ = update(&mut st, Message::Move(-3));
+        assert_eq!(st.selected, 0);
+    }
+
+    #[test]
+    fn the_selection_is_always_on_screen() {
+        let mut st = many(40);
+        for target in [20, 39, 3, 0, 25] {
+            let d = target as i32 - st.selected as i32;
+            let _ = update(&mut st, Message::Move(d));
+            assert_eq!(st.selected, target);
+            assert!(
+                st.top <= target && target < st.top + ROWS,
+                "row {target} with the view from {}",
+                st.top
+            );
+            assert!(st.glide.target >= 0.0 && st.glide.target <= max_scroll(40));
+        }
+    }
+
+    #[test]
+    fn scrolling_stops_at_both_ends() {
+        let mut st = many(30);
+        let _ = update(&mut st, Message::Scroll(-1e6, false));
+        assert_eq!(st.glide.target, max_scroll(30));
+        let _ = update(&mut st, Message::Scroll(1e6, false));
+        assert_eq!(st.glide.target, 0.0);
+        // A list shorter than the view does not scroll at all.
+        let mut st = many(3);
+        let _ = update(&mut st, Message::Scroll(-500.0, false));
+        assert_eq!(st.glide.target, 0.0);
+    }
+
+    #[test]
+    fn typing_selects_the_top_match_and_forgets_clear_all() {
+        let mut st = many(20);
+        let _ = update(&mut st, Message::Move(10));
+        let _ = update(&mut st, Message::Clear);
+        assert!(st.confirm_clear);
+        let _ = update(&mut st, Message::Query("entry 1".into()));
+        assert_eq!((st.selected, st.top), (0, 0));
+        assert!(
+            !st.confirm_clear,
+            "typing takes back the half-pressed Clear all"
+        );
+    }
+
+    #[test]
+    fn a_narrower_filter_pulls_the_selection_back_in() {
+        let mut st = many(20);
+        let _ = update(&mut st, Message::Query("entry".into()));
+        let _ = update(&mut st, Message::Move(15));
+        assert_eq!(st.selected, 15);
+        st.query = "entry 1".into();
+        let _ = update(&mut st, Message::Move(0));
+        // "entry 1", "entry 10" … "entry 19": eleven rows.
+        assert_eq!(st.selected, 10);
+    }
+
+    #[test]
+    fn enter_pastes_and_shift_enter_only_copies() {
+        let mut st = loaded(vec![text(0, "a"), text(1, "b")]);
+        let _ = update(&mut st, Message::Move(1));
+        match key_press(&mut st, crate::panels::Key::Enter) {
+            Act::Many(v) => assert!(matches!(
+                v.as_slice(),
+                [Act::PasteClip { key: k, paste: true }, Act::Close] if *k == key(1)
+            )),
+            _ => panic!("not pasted"),
+        }
+        match key_press(&mut st, crate::panels::Key::ShiftEnter) {
+            Act::Many(v) => assert!(matches!(
+                v.as_slice(),
+                [Act::PasteClip { paste: false, .. }, Act::Close]
+            )),
+            _ => panic!("not copied"),
+        }
+    }
+
+    #[test]
+    fn the_row_pasted_is_the_one_shown_under_the_filter() {
+        let mut st = loaded(vec![
+            text(0, "apple"),
+            text(1, "banana"),
+            text(2, "apricot"),
+        ]);
+        let _ = update(&mut st, Message::Query("ap".into()));
+        match update(&mut st, Message::Copy(1)) {
+            Act::Many(v) => assert!(matches!(
+                v.as_slice(),
+                [Act::PasteClip { key: k, .. }, Act::Close] if *k == key(2)
+            )),
+            _ => panic!("not pasted"),
+        }
+        assert!(matches!(update(&mut st, Message::Copy(2)), Act::None));
+    }
+
+    #[test]
+    fn delete_takes_the_row_shown_and_keeps_a_selection() {
+        let mut st = loaded(vec![
+            text(0, "apple"),
+            text(1, "banana"),
+            text(2, "apricot"),
+        ]);
+        let _ = update(&mut st, Message::Query("ap".into()));
+        let _ = update(&mut st, Message::Move(1));
+        let _ = key_press(&mut st, crate::panels::Key::Delete);
+        let left: Vec<String> = st
+            .clips
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|c| c.preview.clone())
+            .collect();
+        assert_eq!(left, ["apple", "banana"]);
+        assert_eq!(st.selected, 0, "the selection moves onto what is left");
+        // Nothing at that row: nothing happens.
+        let _ = update(&mut st, Message::Delete(7));
+        assert_eq!(st.clips.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn clear_all_asks_once_first() {
+        let mut st = many(5);
+        let _ = update(&mut st, Message::Clear);
+        assert!(st.confirm_clear);
+        assert_eq!(
+            st.clips.as_ref().unwrap().len(),
+            5,
+            "the first press only asks"
+        );
+        let _ = update(&mut st, Message::Clear);
+        assert!(!st.confirm_clear);
+        assert!(st.clips.as_ref().unwrap().is_empty());
+    }
+
+    #[test]
+    fn opening_again_starts_fresh() {
+        let mut st = many(30);
+        let _ = update(&mut st, Message::Query("entry 2".into()));
+        let _ = update(&mut st, Message::Move(5));
+        let _ = update(&mut st, Message::Clear);
+        let _ = open(&mut st);
+        assert!(st.query.is_empty());
+        assert_eq!((st.selected, st.top), (0, 0));
+        assert!(!st.confirm_clear);
+        assert_eq!(st.glide.target, 0.0);
+    }
+
+    #[test]
+    fn thumbnails_arrive_for_their_own_entries() {
+        let mut st = loaded(vec![picture(0), picture(1), text(2, "x")]);
+        assert!(st.pending.contains(&key(0)) && st.pending.contains(&key(1)));
+        let t = std::path::PathBuf::from("/nonexistent/kestrel-thumb.png");
+        let _ = update(
+            &mut st,
+            Message::Thumbs(vec![(key(1), Some(t.clone())), (key(9), Some(t.clone()))]),
+        );
+        let clips = st.clips.as_ref().unwrap();
+        assert_eq!(clips[1].thumb.as_ref(), Some(&t));
+        assert_eq!(clips[0].thumb, None);
+        assert!(!st.pending.contains(&key(1)));
+        assert!(st.pending.contains(&key(0)));
+    }
+
+    #[test]
+    fn a_text_read_once_is_shown_without_reading_again() {
+        let mut st = loaded(vec![text(0, "short"), text(1, "other")]);
+        assert!(
+            st.reading.contains(&key(0)),
+            "the rows in view are read ahead"
+        );
+        let _ = update(
+            &mut st,
+            Message::Texts(vec![(key(0), "short, in full".into())]),
+        );
+        assert!(!st.reading.contains(&key(0)));
+        assert_eq!(
+            st.preview,
+            Some((key(0), "short, in full".into())),
+            "the selected row's text shows at once"
+        );
+        let _ = update(&mut st, Message::Hover(1));
+        let _ = update(&mut st, Message::Preview(key(1), "other, in full".into()));
+        assert_eq!(st.preview, Some((key(1), "other, in full".into())));
+        // Back on the first: its text is already in.
+        let _ = update(&mut st, Message::Hover(0));
+        assert_eq!(st.preview, Some((key(0), "short, in full".into())));
+    }
+
+    #[test]
+    fn what_a_text_entry_is() {
+        let info = |s: &str| text(0, s).text_info();
+        assert_eq!(info("http://example.org/a b"), "Text · 22 characters");
+        assert_eq!(info("http://www.example.org/x"), "Link · example.org");
+        assert_eq!(info("~/Pictures/a.png"), "Path");
+        assert_eq!(
+            info("/etc/hosts\n/etc/passwd"),
+            "Text · 2 lines · 22 characters"
+        );
+        assert_eq!(info("héllo"), "Text · 5 characters");
+    }
+
+    #[test]
+    fn a_big_picture_is_counted_in_mebibytes() {
+        assert_eq!(picture(0).image_info(), "PNG · 10 × 10 · 1.5 MiB");
     }
 }

@@ -134,6 +134,16 @@ impl KeyboardInteractivity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutputId(pub(crate) u32);
 
+impl OutputId {
+    /// kestrel patch: an id made up by the app, for its tests (a screen without a
+    /// compositor). Real outputs only ever get theirs from the compositor.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn for_tests(n: u32) -> Self {
+        Self(n)
+    }
+}
+
 impl fmt::Display for OutputId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "OutputId({})", self.0)

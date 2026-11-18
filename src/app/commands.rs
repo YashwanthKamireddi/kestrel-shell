@@ -28,15 +28,25 @@ impl App {
                 } else {
                     arg.to_string()
                 };
-                match services::defaults::command_for(mime, &arg) {
-                    Some(cmd) => {
-                        Task::done(Message::Dispatch(services::compositor::Action::Exec(cmd)))
-                    }
-                    None => {
-                        log::warn!("open-default {kind}: no default app");
-                        Task::none()
-                    }
-                }
+                // The default and its desktop file are read off the UI thread.
+                let (mime, kind) = (mime.to_string(), kind.to_string());
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            services::defaults::command_for(&mime, &arg)
+                        })
+                        .await
+                        .ok()
+                        .flatten()
+                    },
+                    move |cmd| match cmd {
+                        Some(cmd) => Message::Dispatch(services::compositor::Action::Exec(cmd)),
+                        None => {
+                            log::warn!("open-default {kind}: no default app");
+                            Message::Batch(Vec::new())
+                        }
+                    },
+                )
             }
             // Settings is a window of its own: opened, or brought forward if open. A toggle
             // closes it when it is the window in front (as every other toggle closes its panel).
@@ -144,6 +154,8 @@ impl App {
                 }
                 shown
             }
+            // The bar's buttons from the keyboard (app/bar_keys.rs).
+            (Some("focus"), Some("bar")) => self.focus_bar(),
             (Some("close"), _) => self.close(),
             (Some("game-mode"), _) => self.change(Change::GameMode),
             #[cfg(feature = "devtools")]
@@ -186,14 +198,7 @@ impl App {
                         "down" => Some(-(self.config.sound.step.clamp(1, 25) as f32)),
                         a => a.trim_end_matches('%').parse::<f32>().ok(),
                     } {
-                        // As high as Settings > Sound allows (past 100 % boosts quiet sound).
-                        let max = self.config.sound.max.clamp(100, 150) as f32 / 100.0;
-                        let unit = step.abs() / 100.0;
-                        let v = (((d.volume + step / 100.0) / unit).round() * unit).clamp(0.0, max);
-                        audio::command(audio::Command::SinkVolume(d.name.clone(), d.channels, v));
-                        if d.muted {
-                            audio::command(audio::Command::SinkMute(d.name, false));
-                        }
+                        self.step_volume(step);
                         // The click is heard at the new volume (the output's own level).
                         if self.config.sound.feedback {
                             services::sounds::play(
@@ -248,6 +253,49 @@ impl App {
     }
 }
 
+impl App {
+    /// The highest the volume goes by steps: Settings > Sound's maximum (past 100 % boosts
+    /// quiet sound).
+    pub(crate) fn volume_max(&self) -> f32 {
+        self.config.sound.max.clamp(100, 150) as f32 / 100.0
+    }
+
+    /// The output's volume `step` percent up or down, on whole steps up to the maximum; a muted
+    /// output is heard again (the volume keys and scrolling on the bar's volume).
+    pub(crate) fn step_volume(&mut self, step: f32) {
+        if let Some(d) = self.audio.sink().cloned() {
+            let v = stepped(d.volume, step, self.volume_max());
+            audio::command(audio::Command::SinkVolume(d.name.clone(), d.channels, v));
+            if d.muted {
+                audio::command(audio::Command::SinkMute(d.name, false));
+            }
+        }
+    }
+}
+
+/// Whole notches in a scroll of `lines` (positive = up), with what is left of a notch kept
+/// in `acc`: a mouse wheel's notch is one line, a touchpad sends many small fractions of one,
+/// each of which was a whole step (a flick ran the volume from quiet to full). Turning back
+/// drops what was left the other way.
+pub(crate) fn notches(acc: &mut f32, lines: f32) -> i32 {
+    if *acc * lines < 0.0 {
+        *acc = 0.0;
+    }
+    *acc += lines;
+    let n = acc.trunc();
+    *acc -= n;
+    n as i32
+}
+
+/// The volume one step of `step` percent from `cur`, on whole steps, from silent to `max`. A
+/// step never moves the other way: up from a level above `max` (boosted, then the maximum
+/// lowered) stays where it is instead of dropping to `max`.
+pub(crate) fn stepped(cur: f32, step: f32, max: f32) -> f32 {
+    let unit = step.abs().max(0.01) / 100.0;
+    let v = (((cur + step / 100.0) / unit).round() * unit).clamp(0.0, max);
+    if step > 0.0 { v.max(cur) } else { v.min(cur) }
+}
+
 /// Opens a file with its default app.
 pub(crate) fn open_file(path: &str) -> Message {
     Message::Dispatch(crate::services::compositor::Action::Open(path.into()))
@@ -261,8 +309,12 @@ pub(crate) fn game_mode_flag() -> std::path::PathBuf {
 }
 
 /// Records game mode in the runtime directory (cleared at logout), so a restarted shell agrees
-/// with Hyprland about whether it is on.
+/// with Hyprland about whether it is on. Written by the disk writer, in order.
 pub fn remember_game_mode(on: bool) {
+    crate::disk::write(move || write_game_mode(on));
+}
+
+fn write_game_mode(on: bool) {
     let flag = game_mode_flag();
     let r = if on {
         std::fs::write(&flag, b"")
@@ -277,5 +329,42 @@ pub fn remember_game_mode(on: bool) {
     };
     if let Err(e) = r {
         log::warn!("game mode flag {}: {e}", flag.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{notches, stepped};
+
+    #[test]
+    fn a_volume_step_never_goes_the_wrong_way() {
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-4;
+        // Whole steps, up to the maximum.
+        assert!(near(stepped(0.5, 5.0, 1.5), 0.55));
+        assert!(near(stepped(1.48, 5.0, 1.5), 1.5));
+        assert!(near(stepped(0.01, -5.0, 1.5), 0.0));
+        // Boosted past the bar's old 100 % cap: up goes on up.
+        assert!(near(stepped(1.2, 5.0, 1.5), 1.25));
+        // Above a maximum lowered since: up stays, down comes down.
+        assert!(near(stepped(1.3, 2.0, 1.0), 1.3));
+        assert!(near(stepped(1.3, -2.0, 1.0), 1.0));
+    }
+
+    #[test]
+    fn small_scrolls_add_up_to_whole_notches() {
+        let mut acc = 0.0;
+        // A wheel: a step a notch.
+        assert_eq!(notches(&mut acc, 1.0), 1);
+        assert_eq!(notches(&mut acc, -2.0), -2);
+        // A touchpad flick: 3 px a time (iced's pixels, 40 to a line) is no step until a
+        // whole line has gone by.
+        acc = 0.0;
+        let steps: i32 = (0..20).map(|_| notches(&mut acc, 3.0 / 40.0)).sum();
+        assert_eq!(steps, 1);
+        // Turning back drops what was left the other way: 0.9 up, then 0.5 down is no step.
+        acc = 0.0;
+        assert_eq!(notches(&mut acc, 0.9), 0);
+        assert_eq!(notches(&mut acc, -0.5), 0);
+        assert_eq!(notches(&mut acc, -0.5), -1);
     }
 }

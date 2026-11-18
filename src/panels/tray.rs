@@ -187,7 +187,7 @@ fn back_row<'a>(s: Scheme, text_: String) -> Element<'a, Message> {
     .padding([tok::NONE, tok::L])
     .height(tok::H_ROW)
     .width(Length::Fill)
-    .radius(tok::R_ROW)
+    .radius(tok::R_ROW())
     .kind(s, crate::ui::control::Kind::Ghost)
     .no_press_scale()
     .on_press(Message::Back)
@@ -392,7 +392,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 .padding([tok::NONE, tok::L])
                 .height(tok::H_ROW)
                 .width(Length::Fill)
-                .radius(tok::R_ROW)
+                .radius(tok::R_ROW())
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press_maybe(on),

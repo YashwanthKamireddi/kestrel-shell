@@ -150,7 +150,9 @@ pub fn perform<M: Send + 'static>(
         }
         Action::SetWallpaper(p) => {
             let s = p.to_string_lossy().into_owned();
-            crate::config::set_wallpaper(&s);
+            // Saved by the disk writer, in order with the other changes to config.toml.
+            let keep = s.clone();
+            crate::disk::write(move || crate::config::set_wallpaper(&keep));
             app.config.wallpaper = Some(s);
             Task::done(AppMessage::ReloadWallpaper)
         }
@@ -160,7 +162,10 @@ pub fn perform<M: Send + 'static>(
                 Ok(rest) => format!("~/{}", rest.display()),
                 Err(_) => p.display().to_string(),
             };
-            crate::config::set(&[], "wallpaper_dir", toml_edit::value(shown.clone()));
+            let keep = shown.clone();
+            crate::disk::write(move || {
+                crate::config::set(&[], "wallpaper_dir", toml_edit::value(keep));
+            });
             app.config.wallpaper_dir = Some(shown);
             Task::done(AppMessage::Ipc("toggle wallpaper".into()))
         }

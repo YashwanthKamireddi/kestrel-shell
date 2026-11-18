@@ -24,6 +24,11 @@ RestartSec=1
 WatchdogSec=20
 NotifyAccess=main
 Slice=session.slice
+# Kept in RAM under memory pressure: swapped out, the shell paged itself back in before it
+# could draw (2026-11-18: 55.7 MB of it in zram, ~16k major faults an hour). Takes effect only
+# because every parent up to user.slice has a MemoryLow too (memory_recursiveprot);
+# the drop-ins are listed in ~/.config/system-layout.md.
+MemoryLow=200M
 
 [Install]
 WantedBy=graphical-session.target

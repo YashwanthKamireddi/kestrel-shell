@@ -67,6 +67,12 @@ pub fn scroll_target(h: &hyprland::State, active: i32, n: u32, step: i32) -> i32
     ids[(at + step).rem_euclid(len) as usize]
 }
 
+/// The bar's buttons on output `o`, as one place for the keyboard: one name per screen, as
+/// an operation reaches every surface and must move along one bar only.
+pub fn root(o: &Output) -> iced::widget::Id {
+    iced::widget::Id::from(format!("kestrel-bar-{}", o.name))
+}
+
 /// The bar surface: the bar itself (its band in the full style, the pills) and the frame's top
 /// corners under it. Only as tall as that, so the bar's own motion (visualiser, workspaces,
 /// clock) repaints a strip, not the screen.
@@ -99,7 +105,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         x,
         width: w,
         height: h,
-        radius: tok::R_PANEL,
+        radius: tok::R_PANEL(),
         join: tok::JOIN,
         flush_left: !pills && x <= t + 0.5,
         flush_right: !pills && x + w >= o.size.width - t - 0.5,
@@ -113,7 +119,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     } else {
         0.0
     };
-    // Banners grow out of the island, at the bar's centre (his call 2026-11-16).
+    // Banners grow out of the island, at the bar's centre (design call 2026-11-16).
     let toast_x = card_rect(app.toast_sheet.natural, o.size.width).0;
     let _ = edge;
     let osd_x = ((o.size.width - OSD_WIDTH) / 2.0).round();
@@ -140,7 +146,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
         let d = drop(x, w, h);
         panel_drop = Some((d, k, h));
     }
-    // Notifications always arrive as cards under the bar (his call 2026-11-13: squeezed into
+    // Notifications always arrive as cards under the bar (design call 2026-11-13: squeezed into
     // one line in the island they were hard to read); the island keeps the short pop-ups.
     let show_toasts = focused && (app.toast_sheet.visible() || !app.toasts.is_empty());
     // With the island in the bar, pop-ups live inside it instead of dropping a box.
@@ -157,7 +163,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
     if show_toasts {
         let mut d = drop(grown_x, grown_w, grown_h);
         d.top = GROWN_TOP;
-        d.radius = ((tok::BAR - 6.0) / 2.0).max(tok::R_PANEL.min(grown_h / 2.0));
+        d.radius = ((tok::BAR - 6.0) / 2.0).max(tok::R_PANEL().min(grown_h / 2.0));
         drops.push(d);
     }
     if show_osd {
@@ -225,10 +231,14 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 .height(tok::BAR)
                 .center_y(tok::BAR)
         };
-        stack![layer(sides.into()), layer(middle)]
-            .width(Length::Fill)
-            .height(tok::BAR)
-            .into()
+        // The keyboard's root on this screen's bar (`kestrel focus bar`, app/bar_keys.rs).
+        container(
+            stack![layer(sides.into()), layer(middle)]
+                .width(Length::Fill)
+                .height(tok::BAR),
+        )
+        .id(root(o))
+        .into()
     });
 
     if let Some(bar) = bar {
@@ -270,7 +280,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
                 if panel.is_some_and(|p| p.open) {
                     k
                 } else {
-                    crate::motion::range(k, 0.4, 1.0)
+                    crate::motion::range(k, tok::FADE_BOX.0, tok::FADE_BOX.1)
                 },
             ),
             bar: tok::BAR,
@@ -308,7 +318,7 @@ fn build<'a>(app: &'a App, o: &'a Output, overlay: bool) -> Element<'a, Message>
             let a = if panel.is_some_and(|p| p.open) {
                 k
             } else {
-                crate::motion::range(k, 0.4, 1.0)
+                crate::motion::range(k, tok::FADE_BOX.0, tok::FADE_BOX.1)
             };
             boxes.push((d, h, a));
         }
@@ -466,6 +476,18 @@ fn osd_view<'a>(s: Scheme, osd: &crate::app::Osd, top_volume: f32) -> Element<'a
     .into()
 }
 
+/// A module's scroll action for a scroll of `y` (positive = up). A sideways scroll (y 0) is
+/// neither: it ran the scroll-down action.
+fn scrolled<'a>(y: f32, up: &'a Option<String>, down: &'a Option<String>) -> Option<&'a String> {
+    if y > 0.0 {
+        up.as_ref()
+    } else if y < 0.0 {
+        down.as_ref()
+    } else {
+        None
+    }
+}
+
 /// One bar section: its modules' items in order. In the pill style the section sits on its
 /// own floating pill (none when the section is empty).
 /// The message for a configured action: kestrel's own command, or a program to run.
@@ -502,7 +524,7 @@ fn with_actions<'a>(
                 iced::mouse::ScrollDelta::Lines { y, .. }
                 | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
             };
-            match if y > 0.0 { &up } else { &down } {
+            match scrolled(y, &up, &down) {
                 Some(c) => action(c),
                 None => Message::Batch(Vec::new()),
             }
@@ -634,18 +656,30 @@ pub fn panel_surface<'a>(app: &'a App, o: &'a Output) -> Element<'a, Message> {
     let content = panels::view(app, kind, s);
     let material = app.config.material;
     let card = container(content)
-        .id(panels::ROOT.clone())
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: match material {
                 crate::config::Material::Black => Some(s.base.into()),
                 crate::config::Material::Frosted => None,
             },
-            border: iced::Border::default().rounded(tok::R_PANEL),
+            border: iced::Border::default().rounded(tok::R_PANEL()),
             ..container::Style::default()
         });
-    let card = frosted(app, o, tok::R_PANEL, s.opacity, card);
+    let card = frosted(app, o, tok::R_PANEL(), s.opacity, card);
     ui::reveal(card, width, p.h.value.max(1.0))
         .on_measure(move |sz| Message::Measured(kind, sz))
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scrolled;
+
+    #[test]
+    fn a_sideways_scroll_runs_no_scroll_action() {
+        let (up, down) = (Some("up".to_string()), Some("down".to_string()));
+        assert_eq!(scrolled(1.0, &up, &down).map(String::as_str), Some("up"));
+        assert_eq!(scrolled(-0.2, &up, &down).map(String::as_str), Some("down"));
+        assert_eq!(scrolled(0.0, &up, &down), None);
+    }
 }

@@ -10,7 +10,7 @@ pub struct About {
     /// "Arch Linux".
     pub os: String,
     pub kernel: String,
-    /// "12th Gen Intel Core i5-1245U · 12 threads".
+    /// "AMD Ryzen 7 7840U · 16 threads".
     pub processor: String,
     /// "16 GB".
     pub memory: String,

@@ -49,3 +49,7 @@ sha2 = "0.11.1"
 crypto-bigint = "0.7.11"
 getrandom = "0.4.3"
 base64 = "0.23.1"
+
+[dev-dependencies]
+# Paused time: the supervisor tests run minutes of restarts and hold-offs in milliseconds.
+tokio = { version = "1", features = ["test-util"] }

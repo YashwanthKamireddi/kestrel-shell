@@ -84,27 +84,13 @@ pub(super) fn look_rows<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Option<Element<'a
     let mut rows = Vec::new();
     for i in 0..4u8 {
         let open = st.look_open == Some(i);
-        let chooser = control(
-            row![
-                label(now[usize::from(i)].clone(), text::SMALL, s.ink),
-                icon(
-                    if open {
-                        Icon::ChevronUp
-                    } else {
-                        Icon::ChevronDown
-                    },
-                    14.0,
-                    s.ink_dim
-                )
-            ]
-            .spacing(tok::S)
-            .align_y(Alignment::Center),
-        )
-        .padding([tok::XS, tok::L])
-        .radius(tok::FULL)
-        .kind(s, crate::ui::control::Kind::Ghost)
-        .on_press(Message::LookOpen((!open).then_some(i)));
-        rows.push(row_of(s, names[usize::from(i)], None, chooser.into()));
+        let chooser = dropdown_text(
+            s,
+            now[usize::from(i)].clone(),
+            open,
+            Message::LookOpen((!open).then_some(i)),
+        );
+        rows.push(row_of(s, names[usize::from(i)], None, chooser));
         // Font sizes beside their fonts.
         if i < 2 {
             let size_now = if i == 0 { font_size } else { mono_size };

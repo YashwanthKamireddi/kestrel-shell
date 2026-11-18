@@ -1,7 +1,7 @@
 [Unit]
 Description=kestrel system prompts (passwords, Wi-Fi secrets, Bluetooth pairing)
 # Its own process so a shell crash, freeze or restart never cancels a question being asked
-# (docs/ROADMAP-v2.md, rule 3). kestrel.service sets KESTREL_SEPARATE_PROMPTS=1 and Wants= this
+# (docs/ARCHITECTURE.md, Stability). kestrel.service sets KESTREL_SEPARATE_PROMPTS=1 and Wants= this
 # unit, so the agents always have exactly one owner.
 PartOf=graphical-session.target
 After=graphical-session.target
@@ -12,13 +12,15 @@ StartLimitIntervalSec=0
 Type=simple
 ExecStart=/usr/bin/kestrel prompt
 # Drawn on the CPU: a small window almost never shown, where the GPU's fixed ~50 MB per process
-# is not worth it (as COSMIC advises for its small applets). The shell itself draws on the GPU.
+# is not worth it. The shell draws on the CPU too (kestrel.service).
 Environment=ICED_BACKEND=tiny-skia
 Restart=always
 RestartSec=1
 WatchdogSec=20
 NotifyAccess=main
 Slice=session.slice
+# Kept in RAM like the shell (kestrel.service): a password prompt must not wait on swap.
+MemoryLow=32M
 
 [Install]
 WantedBy=graphical-session.target

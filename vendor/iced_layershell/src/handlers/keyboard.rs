@@ -12,6 +12,16 @@ use wayland_client::{Connection, QueueHandle};
 use crate::conversion;
 use crate::state::WaylandState;
 
+/// kestrel patch: whether Caps Lock is on, as the compositor last told the focused surface.
+/// iced's `Modifiers` has no Caps Lock; a lock screen shows it. Read it on `ModifiersChanged`.
+static CAPS_LOCK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether Caps Lock is on (kestrel patch). Updated before each `ModifiersChanged` event.
+#[must_use]
+pub fn caps_lock() -> bool {
+    CAPS_LOCK.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Create a key pressed event for iced.
 pub(crate) fn make_key_pressed(
     event: &KeyEvent,
@@ -108,6 +118,7 @@ impl KeyboardHandler for WaylandState {
         _raw_modifiers: smithay_client_toolkit::seat::keyboard::RawModifiers,
         _layout: u32,
     ) {
+        CAPS_LOCK.store(modifiers.caps_lock, std::sync::atomic::Ordering::Relaxed);
         self.modifiers = conversion::modifiers_to_iced(modifiers);
         if let Some(surface_id) = self.keyboard_focus {
             self.pending_events.push((

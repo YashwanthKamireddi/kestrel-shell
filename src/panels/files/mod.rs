@@ -254,6 +254,17 @@ mod tests {
         assert!(super::glob("*.png", "Shot.PNG"));
         assert!(super::glob("*.tar.*", "a.tar.gz"));
         assert!(!super::glob("*.png", "a.jpg"));
+        // Chromium's patterns: one class per letter.
+        assert!(super::glob("*.[jJ][pP][gG]", "2.jpg"));
+        assert!(super::glob("*.[jJ][pP][gG]", "Shot.JPG"));
+        assert!(!super::glob("*.[jJ][pP][gG]", "a.png"));
+        assert!(super::glob("*.[jJ][pP][eE][gG]", "photo.jpeg"));
+        assert!(super::glob("*.mp[34]", "a.mp4"));
+        assert!(super::glob("[a-c]*", "Beta"));
+        assert!(!super::glob("[!a-c]*", "beta"));
+        assert!(super::glob("[]x]", "]"));
+        // An unclosed `[` is a plain character.
+        assert!(super::glob("a[b", "a[b"));
     }
 
     #[test]

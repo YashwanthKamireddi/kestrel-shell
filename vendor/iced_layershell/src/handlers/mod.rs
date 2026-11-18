@@ -18,5 +18,6 @@ pub mod layer_shell;
 pub mod output;
 pub mod pointer;
 pub mod seat;
+pub mod session_lock;
 pub mod touch;
 mod window;

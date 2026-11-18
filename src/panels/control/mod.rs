@@ -454,6 +454,10 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             Task::future(crate::services::tray::activate(item.bus, item.path, false)).discard(),
         ),
         Message::TrayMenu(item) => Act::TrayMenu(item),
+        // The gear opens Settings, or brings it forward: a toggle closed it when it was the
+        // window in front (a click on a panel leaves the keyboard, and so the front window,
+        // with the app), so pressing the gear made Settings vanish.
+        Message::Toggle("settings") => Act::Command("open settings".into()),
         Message::Toggle(name) => Act::Command(format!("toggle {name}")),
         Message::Lock => Act::Close.and(Act::Run(
             super::power::run(super::power::Action::Lock).discard(),

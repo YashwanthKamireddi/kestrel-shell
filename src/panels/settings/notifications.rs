@@ -42,19 +42,12 @@ pub(super) fn notifications_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<
                 s,
                 name,
                 None,
-                control(
-                    row![
-                        label(now.clone(), text::SMALL, s.ink),
-                        icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
-                    ]
-                    .spacing(tok::S)
-                    .align_y(Alignment::Center),
-                )
-                .padding([tok::XS, tok::L])
-                .radius(tok::FULL)
-                .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(Message::QuietOpen((!open).then_some(which)))
-                .into(),
+                dropdown_text(
+                    s,
+                    now.clone(),
+                    open,
+                    Message::QuietOpen((!open).then_some(which)),
+                ),
             ));
             if open {
                 // Every half hour of the day, a few per line.

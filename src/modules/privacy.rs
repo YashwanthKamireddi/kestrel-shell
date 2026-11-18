@@ -76,7 +76,7 @@ pub fn view<'a>(
     items
 }
 
-/// A privacy dot: an accent circle with what is in use. No hover text (his call 2026-11-13).
+/// A privacy dot: an accent circle with what is in use. No hover text (design call 2026-11-13).
 /// What is in use now, as the capsule's icons: the screen shared, the camera, the microphone.
 pub fn glyphs(app: &App) -> Vec<Icon> {
     let mut g = Vec::new();

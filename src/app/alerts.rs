@@ -33,6 +33,7 @@ impl App {
         if self.notifications.len() > 50 {
             self.notifications.remove(0);
         }
+        self.notes_changed();
     }
 
     pub(crate) fn notify(&mut self, e: notifications::Event) -> Task<Message> {
@@ -128,9 +129,16 @@ impl App {
     }
 
     /// After every change to the list, however it came (an app, a panel, the 50 limit): the
-    /// panel forgets what was about ones now gone.
+    /// panel forgets what was about ones now gone, and the server is told which ids are still
+    /// shown, so a new one never reuses them.
     fn notes_changed(&mut self) {
         self.panels.notifications.keep(&self.notifications);
+        notifications::shown(
+            self.notifications
+                .iter()
+                .map(|n| n.id)
+                .chain(self.toasts.iter().map(|t| t.id)),
+        );
     }
 
     /// A change to the list asked by a panel or a banner (`panels::action::Note`).
@@ -168,15 +176,7 @@ impl App {
             }
         };
         self.notes_changed();
-        // The last one gone while the list is open: the list closes at once, in this same
-        // update (closing a frame later drew it empty first: a flicker).
-        let open = self
-            .panel
-            .as_ref()
-            .is_some_and(|p| p.open && p.kind == PanelKind::Notifications);
-        if self.notifications.is_empty() && open {
-            return Task::batch([task, self.close()]);
-        }
+        // The last one gone while the list is open: the list closes (`app::update`).
         task
     }
 
@@ -205,13 +205,35 @@ impl App {
                 path.into(),
             )));
         }
+        // The file is read or copied off the UI thread (a screenshot is megabytes).
         if let Some(path) = key.strip_prefix("kestrel-copy:") {
-            copy_file(path);
-        } else if let Some(path) = key.strip_prefix("kestrel-save:")
-            && let Some(saved) = save_picture(path)
-            // The entry now points at the saved file.
-            && let Some(n) = self.notifications.iter_mut().find(|n| n.id == id)
-        {
+            let path = path.to_string();
+            return Task::future(async move {
+                let _ = tokio::task::spawn_blocking(move || copy_file(&path)).await;
+            })
+            .discard();
+        }
+        if let Some(path) = key.strip_prefix("kestrel-save:") {
+            let from = path.to_string();
+            return Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || save_picture(&from))
+                        .await
+                        .ok()
+                        .flatten()
+                },
+                move |saved| match saved {
+                    Some(to) => Message::PictureSaved(id, to),
+                    None => Message::Batch(Vec::new()),
+                },
+            );
+        }
+        Task::none()
+    }
+
+    /// A kept picture was saved: its entry now points at the saved file.
+    pub(crate) fn picture_saved(&mut self, id: u32, saved: &std::path::Path) {
+        if let Some(n) = self.notifications.iter_mut().find(|n| n.id == id) {
             n.body = format!(
                 "Saved in {}",
                 saved
@@ -220,7 +242,6 @@ impl App {
             );
             n.actions = vec![(format!("kestrel-open:{}", saved.display()), "Open".into())];
         }
-        Task::none()
     }
 
     /// Low battery: warned once as UPower's level rises on battery (low, then critical, urgent),
@@ -290,11 +311,11 @@ impl App {
             self.toast_w.snap(pill_w);
             self.toast_sheet.h.snap(tok::BAR - 6.0);
         }
-        self.toast_w.to(TOAST_WIDTH, Spring::OPEN);
+        self.toast_w.to(TOAST_WIDTH, tok::SPRING_OPEN);
         if self.toast_sheet.natural > 0.0 {
             self.toast_sheet
                 .h
-                .to(self.toast_sheet.natural, Spring::OPEN);
+                .to(self.toast_sheet.natural, tok::SPRING_OPEN);
         }
         self.clock.reset();
     }
@@ -308,8 +329,8 @@ impl App {
                 .focused_output()
                 .and_then(|o| self.output(o))
                 .map_or(120.0, |o| o.island_w.value + 2.0 * crate::theme::tok::L);
-            self.toast_w.to(pill_w, Spring::CLOSE);
-            self.toast_sheet.h.to(tok::BAR - 6.0, Spring::CLOSE);
+            self.toast_w.to(pill_w, tok::SPRING_CLOSE);
+            self.toast_sheet.h.to(tok::BAR - 6.0, tok::SPRING_CLOSE);
             self.clock.reset();
         }
     }
@@ -324,7 +345,7 @@ impl App {
             value,
             text: None,
             sub: None,
-            until: Instant::now() + Duration::from_millis(OSD_MS),
+            until: Instant::now() + tok::HOLD_OSD,
             // A click opens the control centre, where the level is set.
             action: Some(Message::Ipc("toggle control".into())),
         });
@@ -343,7 +364,7 @@ impl App {
             text: Some(title),
             // No second line when there is nothing to say on it.
             sub: (!sub.is_empty()).then_some(sub),
-            until: Instant::now() + Duration::from_millis(OSD_MS * 2),
+            until: Instant::now() + tok::HOLD_EVENT,
             action: Some(Message::Ipc("toggle control".into())),
         });
         if self.osd_sheet.natural > 0.0 {
@@ -387,7 +408,7 @@ impl App {
         use services::clipboard::Copied;
         let mut action = Some(Message::Ipc("toggle clipboard".into()));
         let (icon, title, detail, thumb) = match c {
-            // Just "Copied" (his call 2026-11-13): the copied text itself was noise.
+            // Just "Copied" (design call 2026-11-13): the copied text itself was noise.
             Copied::Text(_) => (Icon::Clipboard, "Copied".to_string(), String::new(), None),
             // Words only: what it was, no picture or size.
             Copied::Image {
@@ -453,7 +474,7 @@ impl App {
             title,
             detail,
             thumb,
-            until: Instant::now() + Duration::from_millis(FLASH_MS),
+            until: Instant::now() + tok::HOLD_FLASH,
             action,
         });
         self.clock.reset();

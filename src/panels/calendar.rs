@@ -76,7 +76,7 @@ pub fn month<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, Message> {
         theme::MEDIUM,
     ))
     .padding([tok::XS, tok::M])
-    .radius(tok::R_CONTROL)
+    .radius(tok::R_CONTROL())
     .kind(s, crate::ui::control::Kind::Ghost)
     .on_press(Message::Today);
 

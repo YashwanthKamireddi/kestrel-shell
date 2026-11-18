@@ -412,7 +412,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                 .padding([tok::XXS, tok::M])
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(tok::FILL).into()),
-                    border: iced::Border::default().rounded(tok::R_CONTROL),
+                    border: iced::Border::default().rounded(tok::R_CONTROL()),
                     ..container::Style::default()
                 }),
         );
@@ -542,7 +542,7 @@ pub fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                     .add_stop(1.0, base)
                     .into()
             }),
-            border: iced::Border::default().rounded(crate::theme::tok::R_PANEL),
+            border: iced::Border::default().rounded(crate::theme::tok::R_PANEL()),
             ..container::Style::default()
         })
         .into()
@@ -603,6 +603,12 @@ mod logo_tests {
         }
         assert!(!super::is_browser_logo(&photo));
     }
+}
+
+/// Whether play or pause was asked for and its answer is awaited (tests).
+#[cfg(test)]
+pub(crate) fn asked(st: &State) -> bool {
+    st.want.is_some()
 }
 
 /// Space plays or pauses the player in front; the arrows go to the previous or next track.

@@ -164,7 +164,7 @@ pub fn field_style(s: Scheme) -> iced::widget::container::Style {
             color: s.ink.scale_alpha(0.06 * s.opacity),
             width: 1.0,
             // A capsule, like the bar's pills: a rounded box inside the panel's rounded box
-            // never matched its corners (his call 2026-11-13).
+            // never matched its corners (design call 2026-11-13).
             radius: 22.0.into(),
         },
         ..iced::widget::container::Style::default()
@@ -240,7 +240,7 @@ pub fn icon_button_in<'a, M: Clone + 'static>(
 
 /// The card that groups related controls inside a panel.
 /// A group of content in a panel. Flat: no grey box, no outline; groups are told apart by
-/// space alone (his call, 2026-11-12).
+/// space alone (design call, 2026-11-12).
 pub fn card<'a, M: 'a>(_s: Scheme, content: impl Into<Element<'a, M>>) -> Element<'a, M> {
     container(content)
         .padding(tok::PANEL_PAD)
@@ -415,7 +415,7 @@ pub fn list_row<'a, M: Clone + 'static>(
     .padding([0, 12])
     .height(44)
     .width(Length::Fill)
-    .radius(tok::R_ROW)
+    .radius(tok::R_ROW())
     // No box behind a row: the selected one (the network in use) is told by its name in the
     // accent; the pointer only lifts a row faintly.
     .colors(Color::TRANSPARENT, s.hover(), s.raised_press)
@@ -458,7 +458,7 @@ pub fn level_bar<'a, M: 'a>(
 ) -> Element<'a, M> {
     use iced::widget::{Space, stack};
     // Up to 100 % the plain 0–100 bar; only a boosted level rescales it to `top`, the part past
-    // 100 % in red (his call 2026-11-15: no notch cutting the bar).
+    // 100 % in red (design call 2026-11-15: no notch cutting the bar).
     let top = if value > 1.0 { top.max(1.0) } else { 1.0 };
     let r = height / 2.0;
     let piece = move |w: f32, c: Color, radius: iced::border::Radius| {
@@ -536,7 +536,7 @@ pub fn section<'a, M: 'a>(
 
 /// Where a list would be when it is empty *because of what was typed or chosen* (a search, a
 /// path, a filter): says why, centred, where the first rows would start. Not for a list that is
-/// simply empty: that shows `empty` (an icon, no words: his first rule, 2026-11-13).
+/// simply empty: that shows `empty` (an icon, no words: the first design rule).
 pub fn empty_reason<'a, M: 'a>(s: Scheme, why: String, height: f32) -> Element<'a, M> {
     container(label(why, theme::text::BODY, s.ink_dim))
         .center_x(Length::Fill)
@@ -550,7 +550,7 @@ pub fn empty_reason<'a, M: 'a>(s: Scheme, why: String, height: f32) -> Element<'
 
 /// Muted centred message for empty lists.
 /// Where a list or picture would be and there is nothing (yet): only a faint icon of what
-/// belongs there. No words: "Nothing here" labels were his first rule (2026-11-13).
+/// belongs there. No words: "Nothing here" labels were the first design rule.
 pub fn empty<'a, M: 'static>(s: Scheme, i: Icon) -> Element<'a, M> {
     container(icon(i, crate::theme::tok::ICON_XL, s.ink_faint))
         .center_x(Length::Fill)

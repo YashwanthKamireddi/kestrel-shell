@@ -43,7 +43,7 @@ impl Action {
             Self::ShutDown => "Shut down",
         }
     }
-    /// The armed row asks, in red ("Click again to …" was hint text: his rules).
+    /// The armed row asks, in red ("Click again to …" was hint text: the design rules).
     fn confirm(self) -> Option<&'static str> {
         match self {
             Self::LogOut => Some("Log out?"),
@@ -115,7 +115,7 @@ pub fn view<'a>(st: &State, cx: &Cx<'a>) -> Element<'a, Message> {
         .padding([tok::NONE, tok::L])
         .height(40)
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(s, kind)
         .on_press(Message::Press(a))
         .into()

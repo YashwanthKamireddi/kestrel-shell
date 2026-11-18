@@ -6,7 +6,7 @@
 
 use super::dbus;
 use futures::{SinkExt, Stream, StreamExt};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use zbus::zvariant::OwnedValue;
 use zbus::{Connection, MatchRule, MessageStream};
 
@@ -76,17 +76,22 @@ fn s(m: &HashMap<String, OwnedValue>, k: &str) -> Option<String> {
 
 /// What is known of one player, as read from it. Read whole when it appears and again, whole,
 /// whenever it signals a change (the signal only says "look again": truth over events,
-/// docs/ROADMAP-v2.md rule 1). Only the player that signalled is read: before, any signal from
+/// docs/ARCHITECTURE.md, Stability: truth over events). Only the player that signalled is read: before, any signal from
 /// any player re-listed the bus and re-read every player (~6 calls per player per signal).
 #[derive(Clone, Debug, Default)]
-struct Known {
+pub(crate) struct Known {
     /// Its unique name (`:1.42`): its signals come from it.
-    owner: String,
-    player: HashMap<String, OwnedValue>,
-    root: HashMap<String, OwnedValue>,
+    pub(crate) owner: String,
+    /// None while its properties cannot be read: a player can take its name before its object
+    /// is ready. It is not shown, and its owner is kept, so its next signal reads it again.
+    /// Before, it was forgotten, its signals then came from no one known, and the player
+    /// stayed missing until it left the bus and came back.
+    pub(crate) player: Option<HashMap<String, OwnedValue>>,
+    pub(crate) root: HashMap<String, OwnedValue>,
 }
 
 /// Reads a player that appeared: who owns the name, and every property, in one call each.
+/// Nothing when the name has no owner (it is gone).
 async fn learn(c: &Connection, bus: &str) -> Option<Known> {
     let name = zbus::names::BusName::try_from(bus.to_string()).ok()?;
     let owner = zbus::fdo::DBusProxy::new(c)
@@ -98,7 +103,7 @@ async fn learn(c: &Connection, bus: &str) -> Option<Known> {
         .to_string();
     Some(Known {
         owner,
-        player: dbus::get_all(c, bus, PATH, PLAYER).await.ok()?,
+        player: dbus::get_all(c, bus, PATH, PLAYER).await.ok(),
         root: dbus::get_all(c, bus, PATH, ROOT).await.unwrap_or_default(),
     })
 }
@@ -110,8 +115,9 @@ fn flag(m: &HashMap<String, OwnedValue>, k: &str) -> bool {
 }
 
 fn player(bus: &str, k: &Known) -> Player {
-    let meta: HashMap<String, OwnedValue> = k
-        .player
+    let unread = HashMap::new();
+    let props = k.player.as_ref().unwrap_or(&unread);
+    let meta: HashMap<String, OwnedValue> = props
         .get("Metadata")
         .and_then(|v| HashMap::try_from(v.clone()).ok())
         .unwrap_or_default();
@@ -149,11 +155,11 @@ fn player(bus: &str, k: &Known) -> Player {
         artist,
         album: s(&meta, "xesam:album").unwrap_or_default(),
         art,
-        playing: s(&k.player, "PlaybackStatus").as_deref() == Some("Playing"),
+        playing: s(props, "PlaybackStatus").as_deref() == Some("Playing"),
         length,
-        can_next: flag(&k.player, "CanGoNext"),
-        can_prev: flag(&k.player, "CanGoPrevious"),
-        can_seek: flag(&k.player, "CanSeek"),
+        can_next: flag(props, "CanGoNext"),
+        can_prev: flag(props, "CanGoPrevious"),
+        can_seek: flag(props, "CanSeek"),
         pid,
     }
 }
@@ -301,9 +307,15 @@ fn richness(p: &Player) -> u8 {
     u8::from(p.art.is_some()) * 2 + u8::from(!p.artist.is_empty()) + u8::from(p.length > 0)
 }
 
-/// The players to show, from what is known of each.
-fn build(known: &HashMap<String, Known>) -> State {
-    let mut all: Vec<Player> = known.iter().map(|(bus, k)| player(bus, k)).collect();
+/// The players to show, from what is known of each. Taken in name order: joining and merging
+/// keep the first of equals, so in a HashMap's order the player shown (and the one commands
+/// went to) could change with nothing changed on the bus but the map's layout.
+fn build(known: &BTreeMap<String, Known>) -> State {
+    let mut all: Vec<Player> = known
+        .iter()
+        .filter(|(_, k)| k.player.is_some())
+        .map(|(bus, k)| player(bus, k))
+        .collect();
     join_browser_players(&mut all);
     let mut players: Vec<Player> = Vec::new();
     for p in all {
@@ -330,7 +342,7 @@ fn build(known: &HashMap<String, Known>) -> State {
     State { players }
 }
 
-fn same_media(a: &Player, b: &Player) -> bool {
+pub(crate) fn same_media(a: &Player, b: &Player) -> bool {
     let norm = |t: &str| {
         t.trim()
             .trim_end_matches(" - YouTube")
@@ -388,38 +400,105 @@ pub async fn position(bus: String) -> Option<i64> {
 }
 
 /// A player's name worth following (playerctld only mirrors the others).
-fn followed(name: &str) -> bool {
+pub(crate) fn followed(name: &str) -> bool {
     name.starts_with(PREFIX) && !name.ends_with(".playerctld")
 }
 
-/// One signal: a player that said something changed is marked to be read again (`dirty`, its
-/// unique name); a player appearing is read, one leaving goes.
-async fn apply(
-    c: &Connection,
-    known: &mut HashMap<String, Known>,
-    dirty: &mut HashSet<String>,
-    m: &zbus::Message,
-) {
-    let h = m.header();
-    match h.member().map(|m| m.as_str()) {
-        Some("PropertiesChanged") => {
-            if let Some(sender) = h.sender() {
-                dirty.insert(sender.to_string());
+/// What the bus said, as far as the players' state is concerned.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Event {
+    /// A player's properties changed (`PropertiesChanged`, from its unique name).
+    Changed { sender: String },
+    /// A player's name changed hands (`NameOwnerChanged`); `new` is empty when it left.
+    Owner { name: String, new: String },
+}
+
+impl Event {
+    fn from_message(m: &zbus::Message) -> Option<Event> {
+        let h = m.header();
+        match h.member().map(|m| m.as_str()) {
+            Some("PropertiesChanged") => Some(Event::Changed {
+                sender: h.sender()?.to_string(),
+            }),
+            Some("NameOwnerChanged") => {
+                let (name, _old, new) = m.body().deserialize::<(String, String, String)>().ok()?;
+                Some(Event::Owner { name, new })
             }
+            _ => None,
         }
-        Some("NameOwnerChanged") => {
-            let Ok((name, _old, new)) = m.body().deserialize::<(String, String, String)>() else {
-                return;
-            };
-            if !followed(&name) {
-                return;
+    }
+}
+
+/// The players' state kept from the bus's signals, with no I/O: it says which player to read
+/// and takes what was read (`learned`). `stream` is its driver on the real bus; the simulation
+/// tests (`crate::sim::mpris`) drive it against a simulated one.
+#[derive(Default)]
+pub(crate) struct Tracker {
+    known: BTreeMap<String, Known>,
+    /// Unique names that signalled since the last `take_stale`.
+    dirty: BTreeSet<String>,
+}
+
+impl Tracker {
+    /// One signal. Returns the player to read now (one that appeared or changed hands); one
+    /// that left goes, and one that said something changed is only marked, to be read once at
+    /// the end of the burst (`take_stale`).
+    pub(crate) fn event(&mut self, e: Event) -> Option<String> {
+        match e {
+            Event::Changed { sender } => {
+                self.dirty.insert(sender);
+                None
             }
-            match (new.is_empty(), learn(c, &name).await) {
-                (false, Some(k)) => known.insert(name, k),
-                _ => known.remove(&name),
-            };
+            Event::Owner { name, .. } if !followed(&name) => None,
+            Event::Owner { name, new } if new.is_empty() => {
+                self.known.remove(&name);
+                None
+            }
+            Event::Owner { name, .. } => Some(name),
         }
-        _ => {}
+    }
+
+    /// What reading `name` gave: nothing means it is gone.
+    pub(crate) fn learned(&mut self, name: String, k: Option<Known>) {
+        match k {
+            Some(k) => self.known.insert(name, k),
+            None => self.known.remove(&name),
+        };
+    }
+
+    /// The players that signalled since the last call, to be read again (each once, however
+    /// many signals it sent).
+    pub(crate) fn take_stale(&mut self) -> Vec<String> {
+        let dirty = std::mem::take(&mut self.dirty);
+        self.known
+            .iter()
+            .filter(|(_, k)| dirty.contains(&k.owner))
+            .map(|(bus, _)| bus.clone())
+            .collect()
+    }
+
+    pub(crate) fn state(&self) -> State {
+        build(&self.known)
+    }
+
+    /// Each followed name with its owner and the player read from it, in name order.
+    #[cfg(test)]
+    pub(crate) fn snapshot(&self) -> Vec<(String, String, Player)> {
+        let mut v: Vec<_> = self
+            .known
+            .iter()
+            .map(|(bus, k)| (bus.clone(), k.owner.clone(), player(bus, k)))
+            .collect();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
+    }
+}
+
+/// One message from the bus, given to the tracker; a player it asks for is read at once.
+async fn feed(c: &Connection, t: &mut Tracker, m: &zbus::Message) {
+    if let Some(name) = Event::from_message(m).and_then(|e| t.event(e)) {
+        let k = learn(c, &name).await;
+        t.learned(name, k);
     }
 }
 
@@ -452,15 +531,14 @@ pub fn stream() -> impl Stream<Item = State> {
             return;
         };
         let mut events = Box::pin(futures::stream::select(a, b).filter_map(|m| async { m.ok() }));
-        let mut known: HashMap<String, Known> = HashMap::new();
+        let mut t = Tracker::default();
         let names = match zbus::fdo::DBusProxy::new(&c).await {
             Ok(d) => d.list_names().await.unwrap_or_default(),
             Err(_) => Vec::new(),
         };
         for n in names.iter().map(|n| n.to_string()).filter(|n| followed(n)) {
-            if let Some(k) = learn(&c, &n).await {
-                known.insert(n, k);
-            }
+            let k = learn(&c, &n).await;
+            t.learned(n, k);
         }
         // Signals that come together (a new track: title, art, length) are shown together.
         const QUIET: std::time::Duration = std::time::Duration::from_millis(60);
@@ -471,7 +549,7 @@ pub fn stream() -> impl Stream<Item = State> {
         const GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
         let mut hold_until: Option<tokio::time::Instant> = None;
         loop {
-            let s = build(&known);
+            let s = t.state();
             let lost = last
                 .as_ref()
                 .is_some_and(|l| !l.players.is_empty() && s.players.len() < l.players.len());
@@ -500,23 +578,16 @@ pub fn stream() -> impl Stream<Item = State> {
                 }
             }
             let Some(m) = first else { continue };
-            let mut dirty = HashSet::new();
-            apply(&c, &mut known, &mut dirty, &m).await;
-            while let Ok(m) = tokio::time::timeout(QUIET, events.next()).await {
+            feed(&c, &mut t, &m).await;
+            let start = tokio::time::Instant::now();
+            while let Some(m) = crate::stream::in_burst(&mut events, start, QUIET).await {
                 let Some(m) = m else { return };
-                apply(&c, &mut known, &mut dirty, &m).await;
+                feed(&c, &mut t, &m).await;
             }
             // Each player that signalled, read again whole (once, however many signals).
-            let stale: Vec<String> = known
-                .iter()
-                .filter(|(_, k)| dirty.contains(&k.owner))
-                .map(|(bus, _)| bus.clone())
-                .collect();
-            for bus in stale {
-                match learn(&c, &bus).await {
-                    Some(k) => known.insert(bus, k),
-                    None => known.remove(&bus),
-                };
+            for bus in t.take_stale() {
+                let k = learn(&c, &bus).await;
+                t.learned(bus, k);
             }
         }
     })

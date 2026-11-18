@@ -7,6 +7,17 @@ pub(super) fn setting(table: &[&str], key: &str, value: toml_edit::Item) -> Acti
     Act::Change(Change::Settings(vec![config::Edit::new(table, key, value)]))
 }
 
+/// Settings is a window, not a panel: its "close" closes that window. `Act::Close` means the
+/// open panel to the shell, so a page that closed Settings after handing over to another app
+/// (Storage's Open) closed whatever panel was open instead, and Settings stayed.
+pub fn own_window(a: Action) -> Action {
+    match a {
+        Act::Close => Act::Command("close settings".into()),
+        Act::Many(v) => Act::Many(v.into_iter().map(own_window).collect()),
+        a => a,
+    }
+}
+
 /// What a message asks of the shell (settings, the power mode, joining, files, terminals),
 /// and everything else as Settings' own work.
 pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
@@ -86,21 +97,28 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             })))
         }
         Message::OpenFile(path) => {
-            // A file not made yet is made empty (a folder, made), so it opens.
-            if !path.exists() {
-                if path.extension().is_none() {
-                    let _ = std::fs::create_dir_all(&path);
-                } else {
-                    if let Some(d) = path.parent() {
-                        let _ = std::fs::create_dir_all(d);
+            // A file not made yet is made empty (a folder, made), so it opens: by the disk
+            // writer, then opened.
+            run(Task::perform(
+                crate::disk::run(move || {
+                    if !path.exists() {
+                        if path.extension().is_none() {
+                            let _ = std::fs::create_dir_all(&path);
+                        } else {
+                            if let Some(d) = path.parent() {
+                                let _ = std::fs::create_dir_all(d);
+                            }
+                            let _ = std::fs::write(&path, "");
+                        }
                     }
-                    let _ = std::fs::write(&path, "");
-                }
-            }
-            Act::Dispatch(crate::services::compositor::Action::Open(
-                path.to_string_lossy().into(),
+                    path
+                }),
+                |p| p.map_or(Message::Batch(Vec::new()), Message::OpenMade),
             ))
         }
+        Message::OpenMade(path) => Act::Dispatch(crate::services::compositor::Action::Open(
+            path.to_string_lossy().into(),
+        )),
         Message::FirmwareUpdate(id) => {
             // The device id is fwupd's hex: nothing else reaches the shell.
             let id: String = id.chars().filter(char::is_ascii_hexdigit).collect();
@@ -284,79 +302,26 @@ pub fn update(st: &mut State, m: Message, cx: &Cx<'_>) -> Action {
             Message::ReadPlugins,
         ),
         Message::BarMove(id, d) => {
-            let mut l = layout(cx);
-            if let Some((sec, at)) = find_in(&l, &id) {
-                let to = at as i32 + d;
-                if to >= 0 && (to as usize) < l[sec].len() {
-                    l[sec].swap(at, to as usize);
-                    return save_layout(&l);
-                }
-            }
-            Act::None
+            moved(&layout(cx), &id, d).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarSection(id, d) => {
-            let mut l = layout(cx);
-            if let Some((sec, at)) = find_in(&l, &id) {
-                let to = sec as i32 + d;
-                if (0..3).contains(&to) {
-                    let m = l[sec].remove(at);
-                    // Into the near end of the next section (right: its start; left: its end).
-                    if d > 0 {
-                        l[to as usize].insert(0, m);
-                    } else {
-                        l[to as usize].push(m);
-                    }
-                    return save_layout(&l);
-                }
-            }
-            Act::None
+            to_section(&layout(cx), &id, d).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarRemove(id) => {
             if st.bar_pick.as_deref() == Some(id.as_str()) {
                 st.bar_pick = None;
             }
-            let mut l = layout(cx);
-            for list in &mut l {
-                list.retain(|m| *m != id);
-            }
-            save_layout(&l)
+            save_layout(&removed(&layout(cx), &id))
         }
         Message::BarAddTo(lane, id) => {
             st.bar_adding = None;
-            let mut l = layout(cx);
-            if find_in(&l, &id).is_some() || lane > 2 {
-                return Act::None;
-            }
-            // The right side's end is the power button's place: added before it.
-            let at = if lane == 2 {
-                l[2].iter().position(|m| m == "power").unwrap_or(l[2].len())
-            } else {
-                l[lane].len()
-            };
-            l[lane].insert(at, id);
-            save_layout(&l)
+            added(&layout(cx), lane, &id).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarDrop => {
-            let (Some(id), target) = (st.bar_drag.take(), st.bar_target.take()) else {
+            let (Some(id), Some((lane, to))) = (st.bar_drag.take(), st.bar_target.take()) else {
                 return Act::None;
             };
-            let Some((lane, mut to)) = target else {
-                return Act::None;
-            };
-            let mut l = layout(cx);
-            let Some((sec, from)) = find_in(&l, &id) else {
-                return Act::None;
-            };
-            // Back where it was: nothing to save.
-            if sec == lane && (to == from || to == from + 1) {
-                return Act::None;
-            }
-            l[sec].remove(from);
-            if sec == lane && from < to {
-                to -= 1;
-            }
-            l[lane].insert(to.min(l[lane].len()), id);
-            save_layout(&l)
+            dropped(&layout(cx), &id, lane, to).map_or(Act::None, |l| save_layout(&l))
         }
         Message::BarReset => {
             if !st.bar_reset_armed {

@@ -32,7 +32,7 @@ pub(super) fn mouse_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Mess
     .collect()
 }
 
-/// "pixart-dell-ms116-usb-optical-mouse" as "Pixart Dell Ms116 Usb Optical Mouse"; a
+/// "logitech-m185-usb-optical-mouse" as "Logitech M185 USB Optical Mouse"; a
 /// touchpad as "Touchpad".
 pub(super) fn device_name(n: &str) -> String {
     if n.ends_with("touchpad") {
@@ -41,7 +41,7 @@ pub(super) fn device_name(n: &str) -> String {
     n.split('-')
         .filter(|w| !w.is_empty())
         .map(|w| {
-            // Model numbers and USB in capitals ("MS116"), words capitalised.
+            // Model numbers and USB in capitals ("M185"), words capitalised.
             if w == "usb" || w.chars().any(|c| c.is_ascii_digit()) {
                 return w.to_uppercase();
             }

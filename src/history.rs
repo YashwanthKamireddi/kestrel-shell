@@ -26,6 +26,9 @@ struct Saved {
 }
 
 fn file() -> Option<std::path::PathBuf> {
+    if cfg!(test) {
+        return Some(crate::config::state_dir().join("notifications.json"));
+    }
     let base = std::env::var_os("XDG_STATE_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| {
@@ -89,7 +92,8 @@ pub fn save(list: &[Notification]) {
     let (Some(f), Ok(bytes)) = (file(), serde_json::to_vec(&saved)) else {
         return;
     };
-    std::thread::spawn(move || {
+    // In order with the other writes: a thread per save could finish an older save last.
+    crate::disk::write(move || {
         if let Some(d) = f.parent() {
             let _ = std::fs::create_dir_all(d);
         }

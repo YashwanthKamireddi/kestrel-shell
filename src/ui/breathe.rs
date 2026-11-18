@@ -46,10 +46,16 @@ pub fn icon_or<'a, M: 'a>(i: Icon, size: f32, color: Color, pulse: bool) -> Elem
     }
 }
 
+/// How strong the icon is now: one breath every `tok::BREATH` (as `[motion]` plays it);
+/// full and still when there is no motion.
 fn strength() -> f32 {
     static EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+    let period = crate::motion::secs(crate::theme::tok::BREATH);
+    if period <= 0.0 {
+        return 1.0;
+    }
     let t = EPOCH.elapsed().as_secs_f32();
-    0.775 + 0.225 * (t * std::f32::consts::TAU / 1.6).sin()
+    0.775 + 0.225 * (t * std::f32::consts::TAU / period).sin()
 }
 
 impl<M> Widget<M, iced::Theme, iced::Renderer> for Breathe<'_, M> {
@@ -83,9 +89,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Breathe<'_, M> {
         shell: &mut Shell<'_, M>,
         _viewport: &Rectangle,
     ) {
-        // Every frame asks for the next one a step later (game mode: still).
+        // Every frame asks for the next one a step later (no motion: still).
         if let Event::Window(window::Event::RedrawRequested(now)) = event
-            && !crate::motion::still()
+            && !crate::motion::instant()
         {
             shell.request_redraw_at(*now + STEP);
         }
@@ -100,11 +106,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Breathe<'_, M> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let a = if crate::motion::still() {
-            1.0
-        } else {
-            strength()
-        };
+        let a = strength();
         let style = renderer::Style {
             text_color: self.color.scale_alpha(a),
         };

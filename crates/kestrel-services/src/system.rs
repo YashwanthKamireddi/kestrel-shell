@@ -212,65 +212,173 @@ fn meminfo() -> ((u64, u64), (u64, u64)) {
     ((mt.saturating_sub(ma), mt), (st.saturating_sub(sf), st))
 }
 
-/// The monitor's readings every 1.5 s while polled (the system monitor is open).
+type Cores = Vec<(u64, u64)>;
+type Procs = std::collections::HashMap<u32, (String, u64, u64, bool)>;
+
+/// What happened between two readings `secs` apart: each core's load, the busiest processes,
+/// what the cores did that no process seen twice accounts for.
+fn between(cores: &Cores, procs: &Procs, c2: &Cores, p2: &Procs, secs: f32) -> Detail {
+    let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as f32;
+    let load: Vec<u8> = cores
+        .iter()
+        .zip(c2)
+        .map(|((t0, i0), (t1, i1))| {
+            // No ticks between the readings (an offline core, a counter that went back): no
+            // load. It read as 100 % (no time and no idle time came out as fully busy).
+            let dt = t1.saturating_sub(*t0);
+            if dt == 0 {
+                return 0;
+            }
+            let dt = dt as f32;
+            ((1.0 - i1.saturating_sub(*i0) as f32 / dt) * 100.0)
+                .round()
+                .clamp(0.0, 100.0) as u8
+        })
+        .collect();
+    let mut top: Vec<Proc> = p2
+        .iter()
+        .map(|(pid, (name, ticks, rss, own))| {
+            let before = procs.get(pid).map_or(*ticks, |p| p.1);
+            let cpu = ticks.saturating_sub(before) as f32 / hz / secs * 100.0;
+            Proc {
+                pid: *pid,
+                name: name.clone(),
+                cpu,
+                rss: *rss,
+                own: *own,
+            }
+        })
+        .collect();
+    let busy: f32 = load.iter().map(|&l| f32::from(l)).sum();
+    let seen: f32 = top.iter().map(|p| p.cpu).sum();
+    let other = (busy - seen).max(0.0);
+    top.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
+    top.truncate(10);
+    let (mem, swap) = meminfo();
+    Detail {
+        cores: load,
+        mem,
+        swap,
+        top,
+        other,
+    }
+}
+
+/// How far apart the first two readings are: short, so the monitor opens complete at once
+/// (it waited 1.5 s on "Reading…"); one clock tick is 10 ms, so a process's share is already
+/// within a few percent.
+const FIRST: Duration = Duration::from_millis(100);
+/// Then a reading every so often while it is open.
+const STEP: Duration = Duration::from_millis(1500);
+
+/// A reading now, over the last `FIRST`: what the monitor opens with.
+pub async fn first_detail() -> Detail {
+    let (c, p) = tokio::task::spawn_blocking(|| (core_times(), processes()))
+        .await
+        .unwrap_or_default();
+    tokio::time::sleep(FIRST).await;
+    tokio::task::spawn_blocking(move || {
+        let (c2, p2) = (core_times(), processes());
+        between(&c, &p, &c2, &p2, FIRST.as_secs_f32())
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// Readings every `STEP` while polled.
 pub fn detail() -> impl Stream<Item = Detail> {
     crate::stream::channel(1, async |mut out| {
-        const STEP: Duration = Duration::from_millis(1500);
-        let hz = unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as f32;
-        let mut cores = core_times();
-        let mut procs = processes();
+        let (mut cores, mut procs) = tokio::task::spawn_blocking(|| (core_times(), processes()))
+            .await
+            .unwrap_or_default();
         loop {
             tokio::time::sleep(STEP).await;
             let (c2, p2) = tokio::task::spawn_blocking(|| (core_times(), processes()))
                 .await
                 .unwrap_or_default();
-            let load: Vec<u8> = cores
-                .iter()
-                .zip(&c2)
-                .map(|((t0, i0), (t1, i1))| {
-                    let dt = t1.saturating_sub(*t0).max(1) as f32;
-                    ((1.0 - i1.saturating_sub(*i0) as f32 / dt) * 100.0)
-                        .round()
-                        .clamp(0.0, 100.0) as u8
-                })
-                .collect();
-            let secs = STEP.as_secs_f32();
-            let mut top: Vec<Proc> = p2
-                .iter()
-                .map(|(pid, (name, ticks, rss, own))| {
-                    let before = procs.get(pid).map_or(*ticks, |p| p.1);
-                    let cpu = ticks.saturating_sub(before) as f32 / hz / secs * 100.0;
-                    Proc {
-                        pid: *pid,
-                        name: name.clone(),
-                        cpu,
-                        rss: *rss,
-                        own: *own,
-                    }
-                })
-                .collect();
-            // What the cores did that no process seen twice accounts for.
-            let busy: f32 = load.iter().map(|&l| f32::from(l)).sum();
-            let seen: f32 = top.iter().map(|p| p.cpu).sum();
-            let other = (busy - seen).max(0.0);
-            top.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss.cmp(&a.rss)));
-            top.truncate(10);
-            let (mem, swap) = meminfo();
+            let d = between(&cores, &procs, &c2, &p2, STEP.as_secs_f32());
             cores = c2;
             procs = p2;
-            if out
-                .send(Detail {
-                    cores: load,
-                    mem,
-                    swap,
-                    top,
-                    other,
-                })
-                .await
-                .is_err()
-            {
+            if out.send(d).await.is_err() {
                 return;
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hz() -> u64 {
+        unsafe { libc::sysconf(libc::_SC_CLK_TCK) }.max(1) as u64
+    }
+
+    #[test]
+    fn core_load_is_the_share_not_idle() {
+        // (total, idle) ticks per core, before and after.
+        let before = vec![(1000, 800), (1000, 1000), (5, 5)];
+        let after = vec![(1100, 825), (1100, 1100), (5, 5)];
+        let d = between(&before, &Procs::new(), &after, &Procs::new(), 1.0);
+        assert_eq!(
+            d.cores,
+            [75, 0, 0],
+            "a core with no ticks between is idle, not NaN"
+        );
+    }
+
+    #[test]
+    fn a_counter_that_went_backwards_reads_as_nothing() {
+        let d = between(
+            &vec![(1000, 900)],
+            &Procs::new(),
+            &vec![(900, 950)],
+            &Procs::new(),
+            1.0,
+        );
+        assert_eq!(
+            d.cores,
+            [0],
+            "no time between the readings: no load, never wrapped round"
+        );
+    }
+
+    #[test]
+    fn busiest_processes_first_and_what_none_explains() {
+        let hz = hz();
+        let p = |name: &str, ticks: u64, rss: u64| (name.to_string(), ticks, rss, true);
+        let before: Procs = [(1, p("a", 0, 1)), (2, p("b", 0, 5)), (3, p("c", 0, 9))].into();
+        // In one second: a used half a core, b a whole one, c nothing; d is new.
+        let after: Procs = [
+            (1, p("a", hz / 2, 1)),
+            (2, p("b", hz, 5)),
+            (3, p("c", 0, 9)),
+            (4, p("d", 3 * hz, 2)),
+        ]
+        .into();
+        let cores = vec![(0, 0), (0, 0)];
+        let cores2 = vec![(100, 0), (100, 0)];
+        let d = between(&cores, &before, &cores2, &after, 1.0);
+        let names: Vec<&str> = d.top.iter().map(|p| p.name.as_str()).collect();
+        // A process not seen before counts nothing yet; equal shares go by memory.
+        assert_eq!(names, ["b", "a", "c", "d"]);
+        assert!((d.top[0].cpu - 100.0).abs() < 0.01);
+        assert!((d.top[1].cpu - 50.0).abs() < 0.01);
+        // Two busy cores (200 %), 150 % accounted for.
+        assert!((d.other - 50.0).abs() < 0.01, "{}", d.other);
+    }
+
+    #[test]
+    fn at_most_ten_processes() {
+        let before: Procs = (0..30)
+            .map(|i| (i, ("p".to_string(), 0, 0, false)))
+            .collect();
+        let after: Procs = (0..30)
+            .map(|i| (i, ("p".to_string(), u64::from(i), 0, false)))
+            .collect();
+        let d = between(&vec![], &before, &vec![], &after, 2.0);
+        assert_eq!(d.top.len(), 10);
+        assert_eq!(d.top[0].pid, 29);
+        assert_eq!(d.other, 0.0, "never below nothing");
+    }
 }

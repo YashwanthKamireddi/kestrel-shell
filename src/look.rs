@@ -5,7 +5,7 @@
 //! - fonts: gsettings (GTK 4 / libadwaita), gtk-3.0 and gtk-4.0 settings.ini, and Qt through
 //!   kdeglobals and qt6ct (written by `apptheme` from the same config);
 //! - icons: gsettings, settings.ini, kdeglobals `[Icons] Theme` (qt6ct follows it);
-//! - cursor ("one cursor everywhere", his env.lua): gsettings, settings.ini, the default theme
+//! - cursor ("one cursor everywhere", the default env.lua): gsettings, settings.ini, the default theme
 //!   (~/.local/share/icons/default), XCURSOR_THEME in settings.lua, and Hyprland's setcursor.
 //!
 //! The choices live in config.toml `[look]`; nothing is set until one is made.

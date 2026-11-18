@@ -10,7 +10,7 @@ use serde::Deserialize;
 pub struct Display {
     /// Connector ("HDMI-A-1", "eDP-1").
     pub name: String,
-    /// What people call it ("DELL E2216HV", "Built-in display").
+    /// What people call it ("LG 27UL850", "Built-in display").
     pub label: String,
     pub enabled: bool,
     pub width: u32,
@@ -208,7 +208,7 @@ mod tests {
     fn hdmi() -> Display {
         Display {
             name: "HDMI-A-1".into(),
-            label: "DELL".into(),
+            label: "LG".into(),
             enabled: true,
             width: 1920,
             height: 1080,

@@ -94,6 +94,10 @@ fn path() -> PathBuf {
 static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| Mutex::new(load()));
 
 fn load() -> State {
+    // Tests keep it in memory only: never the user's file, never a file at all.
+    if cfg!(test) {
+        return State::default();
+    }
     match std::fs::read_to_string(path()) {
         Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
             log::warn!("state.toml: {e}; starting fresh");
@@ -149,6 +153,9 @@ fn migrate() -> State {
 }
 
 fn save(s: &State) {
+    if cfg!(test) {
+        return;
+    }
     let p = path();
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
@@ -181,7 +188,8 @@ pub fn get<T>(f: impl FnOnce(&State) -> T) -> T {
     f(&s)
 }
 
-/// Changes it and writes it out (only when something really changed).
+/// Changes it and writes it out (only when something really changed). The change is seen at
+/// once; the file is written by the disk writer (`crate::disk`), in order, off the UI thread.
 pub fn update(f: impl FnOnce(&mut State)) {
     let mut s = STATE
         .lock()
@@ -189,7 +197,8 @@ pub fn update(f: impl FnOnce(&mut State)) {
     let before = s.clone();
     f(&mut s);
     if *s != before {
-        save(&s);
+        let now = s.clone();
+        crate::disk::write(move || save(&now));
     }
 }
 

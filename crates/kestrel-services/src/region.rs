@@ -3,7 +3,7 @@
 //! first (locale.gen, locale-gen) and only used once it is there: a locale.conf naming a
 //! locale that does not exist breaks apps (it happened here once).
 
-/// One region: its locale name ("en_IN", "en_GB.UTF-8"), the locale.gen line that makes it,
+/// One region: its locale name ("en_NZ", "en_GB.UTF-8"), the locale.gen line that makes it,
 /// and what people call it ("English (New Zealand)").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Region {
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn script_parses_as_shell() {
         for (loc, line) in [
-            ("en_IN", "en_IN UTF-8"),
+            ("en_NZ", "en_NZ UTF-8"),
             ("en_GB.UTF-8", "en_GB.UTF-8 UTF-8"),
         ] {
             let r = Region {

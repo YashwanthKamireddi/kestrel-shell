@@ -181,7 +181,7 @@ pub(super) fn main_page<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
             .spacing(tok::M),
         );
     }
-    // Notifications live at the island now (their own panel under it, his call 2026-11-16).
+    // Notifications live at the island now (their own panel under it, design call 2026-11-16).
     page.into()
 }
 

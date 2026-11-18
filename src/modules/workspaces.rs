@@ -11,7 +11,7 @@ use iced::widget::{Space, container, pin, row, stack};
 /// Workspaces: the one you are on is an accent circle that stretches toward the next as you
 /// move (its two edges are separate springs: the leading edge goes first, the trailing one
 /// follows) and settles round on it. Open workspaces show their app's icon, empty ones a quiet
-/// number. No shape behind occupied ones (his call 2026-11-16: the bar's pill already groups
+/// number. No shape behind occupied ones (design call 2026-11-16: the bar's pill already groups
 /// them; a second layer inside it was not needed).
 pub fn view<'a>(
     app: &'a App,
@@ -69,7 +69,7 @@ fn slots<'a>(app: &'a App, o: &'a Output, s: Scheme) -> Element<'a, Message> {
     .spacing(SLOT_GAP);
     let width = n as f32 * stride - SLOT_GAP;
     let layers = stack![].width(width).height(SLOT);
-    // Small and see-through (his call 2026-11-13: the full-size bright circle took over the
+    // Small and see-through (design call 2026-11-13: the full-size bright circle took over the
     // workspace it marked): the accent at part strength, just behind the icon or number.
     let active = container(Space::new())
         .width(cap_r - cap_l - (SLOT - DOT))

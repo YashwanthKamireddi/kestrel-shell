@@ -1,4 +1,4 @@
-//! The dashboard the island and the clock open (one panel, not two: his call 2026-11-16): the
+//! The dashboard the island and the clock open (one panel, not two: design call 2026-11-16): the
 //! day, the weather and music when they have no pill of their own, and the month. Each section appears only when it has something to say.
 
 use super::cx::Cx;
@@ -17,7 +17,7 @@ pub fn view<'a>(
 ) -> Element<'a, super::Message> {
     let s = cx.scheme;
     // No clock and no date heading: the bar shows both (repeated here they said nothing new;
-    // his call 2026-11-16). What has no pill of its own (the weather as the weather panel draws
+    // design call 2026-11-16). What has no pill of its own (the weather as the weather panel draws
     // it, what's playing), then the month, today marked.
     let mut col = column![].spacing(tok::L);
     if !cx.config.bar.contains("weather")

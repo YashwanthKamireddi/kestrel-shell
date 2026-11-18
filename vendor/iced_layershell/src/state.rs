@@ -34,6 +34,10 @@ use crate::settings::{OutputEvent, OutputId, OutputInfo, SurfaceId};
 pub(crate) enum Role {
     Layer(LayerSurface),
     Window(smithay_client_toolkit::shell::xdg::window::Window),
+    /// kestrel patch: a session lock surface (ext-session-lock-v1), one per output while the
+    /// session is locked. Never committed without a buffer: the compositor treats that as a
+    /// protocol error and drops the client (the session then stays locked, unusable).
+    Lock(smithay_client_toolkit::session_lock::SessionLockSurface),
 }
 
 impl Role {
@@ -41,13 +45,17 @@ impl Role {
         match self {
             Role::Layer(l) => l.wl_surface(),
             Role::Window(w) => w.wl_surface(),
+            Role::Lock(l) => l.wl_surface(),
         }
     }
     pub fn layer(&self) -> Option<&LayerSurface> {
         match self {
             Role::Layer(l) => Some(l),
-            Role::Window(_) => None,
+            Role::Window(_) | Role::Lock(_) => None,
         }
+    }
+    pub fn is_lock(&self) -> bool {
+        matches!(self, Role::Lock(_))
     }
 }
 
@@ -87,6 +95,13 @@ pub(crate) struct WaylandState {
     pub layer_shell: LayerShell,
     /// xdg-shell, for ordinary windows (kestrel patch); None if the compositor has none.
     pub xdg_shell: Option<smithay_client_toolkit::shell::xdg::XdgShell>,
+    /// ext-session-lock-v1's manager (kestrel patch); asking it for a lock fails cleanly where
+    /// the compositor has none.
+    pub session_lock_state: Option<smithay_client_toolkit::session_lock::SessionLockState>,
+    /// The session lock this client holds, from the request until it is unlocked or finished.
+    pub session_lock: Option<smithay_client_toolkit::session_lock::SessionLock>,
+    /// The connection, to flush an unlock before the process ends (kestrel patch).
+    pub conn: Connection,
     pub seat: SeatState,
     pub output: OutputState,
 
@@ -158,6 +173,9 @@ impl WaylandState {
             compositor,
             layer_shell,
             xdg_shell: None,
+            session_lock_state: None,
+            session_lock: None,
+            conn: conn.clone(),
             seat,
             output,
             surfaces: HashMap::new(),

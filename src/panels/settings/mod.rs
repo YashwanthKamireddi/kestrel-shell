@@ -318,7 +318,7 @@ pub struct State {
     privacy: Option<(Option<bool>, bool, i32)>,
     /// Firmware updates fwupd offers.
     /// Firmware updates, once checked this session (None: not asked; fwupd is a daemon that
-    /// stays once started, so it is asked only when he presses Check).
+    /// stays once started, so it is asked only when the user presses Check).
     firmware: Option<Vec<crate::services::updates::Firmware>>,
     firmware_checking: bool,
     /// Developer: Restart was pressed once.
@@ -523,6 +523,9 @@ pub const KEEP_SECS: u64 = 15;
 pub enum Message {
     Page(Page),
     Query(String),
+    /// The window's first frame: its widgets exist, so its search can take the focus (asked
+    /// for with the window's creation, the focus found no widget and went nowhere).
+    Shown,
     Style(BarStyle),
     Workspaces(i64),
     ThemeApps(bool),
@@ -631,7 +634,7 @@ pub enum Message {
     Record(bool),
     /// Keys pressed while recording ("SUPER + T").
     Recorded(String),
-    /// Change one of his binds (its keys now): record the new keys for it.
+    /// Change one of the user's binds (its keys now): record the new keys for it.
     Rebind(String),
     NewName(String),
     NewCommand(String),
@@ -686,6 +689,8 @@ pub enum Message {
     /// Developer: open a file of kestrel's in the default app for it; restart the shell (the
     /// first press asks).
     OpenFile(std::path::PathBuf),
+    /// That file is there now: open it.
+    OpenMade(std::path::PathBuf),
     Restart,
     /// Firmware updates (fwupd), read; one to install (fwupd's own updater, in the terminal).
     Firmware(Vec<crate::services::updates::Firmware>),
@@ -761,6 +766,8 @@ pub enum Message {
     /// Read config.toml's module options, or the installed plugins, again (after a change).
     ReadDoc,
     ReadPlugins,
+    /// config.toml's module options and the installed plugins, as read.
+    Doc(toml::Table, Vec<(String, String, String, bool)>),
     /// A change to the system (a radio, the sound, a device), asked of the shell.
     Change(crate::app::Change),
     /// Several, in order.

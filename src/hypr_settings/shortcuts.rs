@@ -1,4 +1,4 @@
-//! His own keyboard shortcuts (kept in config.toml) and changing an existing binding's keys.
+//! The user's own keyboard shortcuts (kept in config.toml) and changing an existing binding's keys.
 
 use super::*;
 
@@ -106,7 +106,7 @@ pub(super) fn keys_norm(keys: &str) -> Vec<String> {
     v
 }
 
-/// Changes a bind's keys in his own Hyprland config: the one `hl.bind("<keys>", …)` whose keys
+/// Changes a bind's keys in the user's own Hyprland config: the one `hl.bind("<keys>", …)` whose keys
 /// are `old` gets `new` instead (nothing else on the line changes), then Hyprland reloads.
 /// Refused when that bind is not written out as keys (made in a loop), is written more than
 /// once, or `new` is already a bind there.

@@ -1,5 +1,5 @@
 //! Cloudflare WARP and Tailscale, both started only on demand: the toggle starts the system
-//! service (allowed without a password by the machine's polkit rule) and stops it again.
+//! service (a local polkit rule may allow that without a password) and stops it again.
 
 use super::dbus;
 use futures::{SinkExt, Stream, StreamExt};
@@ -393,4 +393,29 @@ pub fn stream() -> impl Stream<Item = State> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn warp_output_becomes_pairs() {
+        let text = "Status update: Connected\n\
+                    (user set) Mode: WarpWithDnsOverHttps\n\
+                    Reason:\n\
+                    : orphan value\n\
+                    Endpoint: 162.159.193.1:2408\n\
+                    not a pair\n";
+        assert_eq!(
+            pairs(text),
+            [
+                ("Status update".to_string(), "Connected".to_string()),
+                ("Mode".to_string(), "WarpWithDnsOverHttps".to_string()),
+                // Only the first colon splits: an address keeps its port.
+                ("Endpoint".to_string(), "162.159.193.1:2408".to_string()),
+            ]
+        );
+        assert!(pairs("").is_empty());
+    }
 }

@@ -2,7 +2,7 @@
 //! Hyprland options. A choice is applied at once (`hl.config` through Hyprland's eval) and kept in
 //! kestrel's config.toml under `[hyprland]`, nested as `hl.config` nests them; kestrel writes
 //! that table out as `~/.config/hypr/conf/settings.lua`, which hyprland.lua loads after
-//! conf/input.lua, so the choices survive a restart and his own files are never rewritten.
+//! conf/input.lua, so the choices survive a restart and the user's own files are never rewritten.
 //! Only what was changed here goes in that file.
 
 mod options;
@@ -155,7 +155,7 @@ pub async fn read(opts: Vec<Opt>) -> HashMap<&'static str, Value> {
         } else if let Some(n) = v.get("float").and_then(serde_json::Value::as_f64) {
             Value::Num(n as f32)
         } else if let Some(css) = v.get("css").and_then(serde_json::Value::as_str) {
-            // Gaps ("5 5 5 5"): one number when every side is the same; sides set apart in his
+            // Gaps ("5 5 5 5"): one number when every side is the same; sides set apart in the user's
             // own config are not offered (a slider would flatten them).
             let sides: Vec<f32> = css
                 .split_whitespace()
@@ -279,7 +279,7 @@ pub fn write_lua() {
         return;
     };
     let hypr = std::path::Path::new(&home).join(".config/hypr");
-    // Only alongside a Hyprland config of his own (its conf/ folder made if missing).
+    // Only alongside a Hyprland config of the user's own (its conf/ folder made if missing).
     if !hypr.is_dir() {
         return;
     }

@@ -23,6 +23,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod alerts;
+mod bar_keys;
 mod change;
 mod commands;
 mod dispatch;
@@ -32,7 +33,9 @@ mod panel_flow;
 mod reload;
 mod surfaces;
 mod system;
-mod wallpaper;
+#[cfg(test)]
+mod tests;
+pub(crate) mod wallpaper;
 #[allow(unused_imports)]
 use alerts::*;
 pub use change::Change;
@@ -83,6 +86,9 @@ pub struct Output {
     reserves: Vec<SurfaceId>,
     /// Size, input region and keyboard mode last applied to the bar surface.
     plan: Option<Plan>,
+    /// The bar's own surface, and whether it was last given the keyboard (`App::bar_keys`).
+    pub bar: SurfaceId,
+    bar_keyboard: bool,
     /// Workspace pill position and width.
     /// The current-workspace highlight's left and right edges (separate springs: the edge
     /// facing the move leads, the other follows, so it stretches and settles like liquid).
@@ -117,9 +123,9 @@ impl Panel {
     pub fn alpha(&self, natural: f32) -> f32 {
         let p = self.progress(natural);
         if self.open {
-            range(p, 0.05, 0.55)
+            range(p, tok::FADE_IN.0, tok::FADE_IN.1)
         } else {
-            range(p, 0.4, 0.9)
+            range(p, tok::FADE_LATE.0, tok::FADE_LATE.1)
         }
     }
 }
@@ -165,7 +171,6 @@ pub struct Flash {
     pub action: Option<Message>,
 }
 
-const FLASH_MS: u64 = 2200;
 /// In `panel_surface`'s keyboard byte: the surface was just made and not yet laid out.
 const FRESH: u8 = 0x80;
 
@@ -186,7 +191,11 @@ impl Sheet {
         if self.natural <= 0.0 {
             0.0
         } else {
-            range(self.h.value / self.natural, 0.4, 0.9)
+            range(
+                self.h.value / self.natural,
+                tok::FADE_LATE.0,
+                tok::FADE_LATE.1,
+            )
         }
     }
     pub fn visible(&self) -> bool {
@@ -196,7 +205,6 @@ impl Sheet {
 
 pub const TOAST_WIDTH: f32 = 380.0;
 pub const OSD_WIDTH: f32 = 248.0;
-const OSD_MS: u64 = 1400;
 
 pub struct Wallpaper {
     pub handle: iced::widget::image::Handle,
@@ -211,6 +219,8 @@ pub struct App {
     roles: HashMap<SurfaceId, (OutputId, Role)>,
     /// Settings, an ordinary window (moved, tiled, closed like any app) while open.
     pub settings_window: Option<SurfaceId>,
+    /// What is left of a volume scroll short of a whole notch (`commands::notches`).
+    pub volume_scroll: f32,
     pub hypr: hyprland::State,
     pub now: chrono::DateTime<chrono::Local>,
     pub wallpaper: Option<Arc<Wallpaper>>,
@@ -227,7 +237,7 @@ pub struct App {
     /// The in-use capsule: what it last showed, and its strength (1 shown; on the way to 0 it
     /// fades and narrows away instead of vanishing).
     pub privacy_glyphs: Vec<Icon>,
-    /// A Bluetooth mode switch he asked for (card, mode, when): until that card's output is
+    /// A Bluetooth mode switch the user asked for (card, mode, when): until that card's output is
     /// back and in use, the Sound page keeps showing it (see `audio_changed`).
     pub mode_switch: Option<(u32, String, Instant)>,
     pub privacy_fade: Spring,
@@ -303,6 +313,9 @@ pub struct App {
     pub pods_fresh: bool,
     /// The open panel was opened from the keyboard, so it takes the keys.
     pub panel_keys: bool,
+    /// The bar has the keyboard on this output (`kestrel focus bar`): the arrows move along
+    /// its buttons, Enter opens one, Esc gives the keyboard back.
+    pub bar_keys: Option<OutputId>,
     /// Each player's artwork as shown (settled), and as it last reported it.
     pub settled_art: HashMap<String, Option<String>>,
     pub reported_art: HashMap<String, Option<String>>,
@@ -310,6 +323,10 @@ pub struct App {
     pub config_error: Option<String>,
     /// `[plugins]` in config.toml as last seen (plugins reload when it changes).
     pub plugin_settings: String,
+    /// config.toml reads asked for, and the newest one applied: a read that answers after a
+    /// newer one is dropped.
+    pub config_reads: u64,
+    pub config_applied: u64,
     /// The tray's hidden apps are slid out in the bar.
     pub tray_expanded: bool,
     /// The Lua layer: its bar layout and what each of its widgets shows.
@@ -351,6 +368,8 @@ pub enum Message {
     Trim,
     /// Open (or close, if already open) a panel under the given button.
     Toggle(PanelKind, OutputId, Rectangle),
+    /// A key while the bar has the keyboard: the arrows and Tab move along it, Esc leaves.
+    BarKey(Option<panels::Key>),
     /// A bar button for one part of the control centre: opens it on that page (or closes it,
     /// when it is open there already).
     ControlAt(panels::control::Page, OutputId, Rectangle),
@@ -359,6 +378,8 @@ pub enum Message {
     /// Opens Settings > Windows on the rule for an app (its window class).
     RuleFor(String),
     Close,
+    /// Esc, in this window: closes the open panel, unless typed in Settings (its own).
+    Escape(iced::window::Id),
     Measured(PanelKind, Size),
     Dispatch(crate::services::compositor::Action),
     /// A device connected, disconnected, paired or forgotten as asked, or why not.
@@ -405,12 +426,16 @@ pub enum Message {
     Pods(Option<services::airpods::Pods>),
     /// config.toml or init.lua was saved.
     ConfigFile(crate::subs::ConfigFile),
+    /// config.toml as read off the UI thread (after every change queued before it).
+    ConfigRead(Box<ConfigRead>),
     Lua(crate::lua::Event),
     LuaClick(String),
     Copied(services::clipboard::Copied),
     Meters(crate::services::meters::Meters),
     Ddc(Vec<services::ddc::Display>),
     DdcLevel(u32, Option<f32>),
+    /// A kept picture (a screenshot's notification) was saved there.
+    PictureSaved(u32, std::path::PathBuf),
     /// A player's new artwork has stayed put long enough to show.
     ArtSettled(String, Option<String>),
     /// An app asks which program should open something ("Open with…").
@@ -442,7 +467,7 @@ impl std::fmt::Debug for Wallpaper {
 
 pub fn boot() -> (App, Task<Message>) {
     let config = config::load();
-    crate::theme::set_glass(config.material != config::Material::Black);
+    crate::theme::apply(&config);
     let mut app = App {
         scheme: Scheme::default(),
         seed: crate::theme::Seed::default(),
@@ -452,6 +477,7 @@ pub fn boot() -> (App, Task<Message>) {
         now: chrono::Local::now(),
         night_auto: None,
         settings_window: None,
+        volume_scroll: 0.0,
         quiet_auto: None,
         saved_recording: None,
         started_recording: None,
@@ -501,10 +527,13 @@ pub fn boot() -> (App, Task<Message>) {
         pods: None,
         pods_fresh: false,
         panel_keys: true,
+        bar_keys: None,
         settled_art: HashMap::new(),
         reported_art: HashMap::new(),
         config_error: None,
         plugin_settings: config::plugin_settings(),
+        config_reads: 0,
+        config_applied: 0,
         tray_expanded: false,
         lua_bar: crate::lua::Bar::default(),
         chips: HashMap::new(),
@@ -581,17 +610,22 @@ impl App {}
 /// The bar surface's height: the bar and room for the frame's corners under it.
 const BAR_SURFACE: f32 = tok::BAR + 32.0;
 
+/// Handles one message. Every update is measured: one that keeps the UI thread long enough to
+/// delay a frame is logged by its message's kind (`guard::timed`), so a handler that does slow
+/// work in place shows in the journal.
 pub fn update(app: &mut App, msg: Message) -> Task<Message> {
+    let kind = crate::guard::Kind::of(&msg);
+    log::debug!("msg {}", kind.as_str());
+    crate::guard::timed(&kind, || update_measured(app, msg))
+}
+
+fn update_measured(app: &mut App, msg: Message) -> Task<Message> {
     // A part that failed while drawing is reported once.
     for failure in crate::guard::take_unreported() {
         app.notify(notifications::Event::Added(own_notification(
             "Part of kestrel stopped",
             &format!("{failure}. The rest keeps working; restart kestrel to try it again."),
         )));
-    }
-    if log::log_enabled!(log::Level::Debug) {
-        let name = format!("{msg:?}");
-        log::debug!("msg {}", name.split(['(', ' ', '{']).next().unwrap_or(""));
     }
     let (cam_before, mic_before) = (app.camera_apps.clone(), app.audio.recording.clone());
     let was_animating = app.animating();
@@ -625,11 +659,25 @@ pub fn update(app: &mut App, msg: Message) -> Task<Message> {
     if app.toasts.len() != before || app.toasts.is_empty() {
         app.settle_toasts();
     }
+    // The list of notifications is never shown empty: with the last one gone, however it went
+    // (dismissed here, or closed by its app: that path left the open list empty), it closes in
+    // this same update (a frame later drew it empty first: a flicker).
+    let empty_list = app.notifications.is_empty()
+        && app
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.open && p.kind == PanelKind::Notifications);
+    let task = if empty_list {
+        Task::batch([task, app.close()])
+    } else {
+        task
+    };
     // The open panel's own surface follows the state after every update, whatever path opened,
     // moved or ended the panel (paths that set `panel = None` left their surface behind).
     let panel_surface = app.sync_panel_surface();
     let surfaces = app.sync_surfaces();
-    Task::batch([task, panel_surface, surfaces])
+    let bar_keyboard = app.sync_bar_keyboard();
+    Task::batch([task, panel_surface, surfaces, bar_keyboard])
 }
 
 pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {

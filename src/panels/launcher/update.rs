@@ -31,6 +31,12 @@ pub fn update(st: &mut State, m: Message) -> Act {
                 );
             }
         }
+        Message::Procs(name, v) => {
+            // Results for an older query are dropped.
+            if st.query.trim().strip_prefix('!').map(str::trim) == Some(name.as_str()) {
+                st.procs = (name, v);
+            }
+        }
         Message::Files(q, v) => {
             // Results for an older query are dropped.
             if st.query.trim() == q {
@@ -51,6 +57,12 @@ pub fn update(st: &mut State, m: Message) -> Act {
                 let (q2, term) = (q.trim().to_string(), term.trim().to_string());
                 return Act::Run(Task::perform(find_files(term), move |v| {
                     Message::Files(q2.clone(), v)
+                }));
+            }
+            if let Some(name) = q.trim().strip_prefix('!') {
+                let name = name.trim().to_string();
+                return Act::Run(Task::perform(find_processes(name.clone()), move |v| {
+                    Message::Procs(name.clone(), v)
                 }));
             }
             if wants_clips {
@@ -131,7 +143,9 @@ pub fn update(st: &mut State, m: Message) -> Act {
                     unsafe {
                         libc::kill(pid as i32, libc::SIGTERM);
                     }
+                    // Read again (it went, or is going).
                     let q = st.query.clone();
+                    st.procs.1.retain(|p| p.0 != pid);
                     return Act::Run(Task::done(Message::Query(q)));
                 }
                 Some(Entry::Calc(v)) => {

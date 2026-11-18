@@ -26,7 +26,7 @@ pub(super) fn level<'a>(
     row![
         control(icon(
             if muted { mute_icon.1 } else { mute_icon.0 },
-            16.0,
+            tok::ICON,
             if muted { s.bad } else { s.ink_dim }
         ))
         .padding(tok::S)
@@ -77,58 +77,29 @@ pub(super) fn level_meter<'a>(s: Scheme, value: f32) -> Element<'a, Message> {
     .into()
 }
 
-/// A chooser: what is chosen now and an arrow; a click lists the choices under its row.
+/// A chooser (`dropdown`) whose list is the Sound page's `key`.
 pub(super) fn chooser<'a>(s: Scheme, now: String, key: &str, open: bool) -> Element<'a, Message> {
-    control(
-        row![
-            label(now, text::SMALL, s.ink),
-            icon(
-                if open {
-                    Icon::ChevronUp
-                } else {
-                    Icon::ChevronDown
-                },
-                14.0,
-                s.ink_dim
-            )
-        ]
-        .spacing(tok::S)
-        .align_y(Alignment::Center),
+    dropdown_text(
+        s,
+        now,
+        open,
+        Message::SoundPick((!open).then(|| key.to_string())),
     )
-    .padding([tok::XS, tok::L])
-    .radius(tok::FULL)
-    .kind(s, crate::ui::control::Kind::Ghost)
-    .on_press(Message::SoundPick((!open).then(|| key.to_string())))
-    .into()
 }
 
-/// One choice in an open chooser, a check on the one in use.
+/// One choice in an open chooser; choosing closes the list.
 pub(super) fn choice_row<'a>(
     s: Scheme,
     name: String,
     on: bool,
     m: Message,
 ) -> Option<Element<'a, Message>> {
-    Some(
-        control(
-            row![
-                label(name, text::BODY, if on { s.accent } else { s.ink }).width(Length::Fill),
-                if on {
-                    Element::from(icon(Icon::Check, tok::ICON, s.accent))
-                } else {
-                    iced::widget::Space::new().into()
-                }
-            ]
-            .align_y(Alignment::Center),
-        )
-        .padding([tok::NONE, tok::INDENT])
-        .height(36)
-        .width(Length::Fill)
-        .kind(s, crate::ui::control::Kind::Ghost)
-        .no_press_scale()
-        .on_press(Message::Batch(vec![m, Message::SoundPick(None)]))
-        .into(),
-    )
+    Some(choice_text(
+        s,
+        name,
+        on,
+        Message::Batch(vec![m, Message::SoundPick(None)]),
+    ))
 }
 
 /// Settings > Sound, laid out like the other pages (and like Windows' Sound settings): Output,

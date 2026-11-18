@@ -1,7 +1,6 @@
 //! Settings › power: its page.
 
 use super::*;
-use crate::theme::tok;
 
 /// "30 min", "1 hour", "1 h 30 min".
 pub(super) fn idle_time(secs: u64) -> String {
@@ -129,19 +128,12 @@ pub(super) fn power_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Mess
             s,
             name,
             None,
-            control(
-                row![
-                    label(idle_time(*secs), text::SMALL, s.ink),
-                    icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
-                ]
-                .spacing(tok::S)
-                .align_y(Alignment::Center),
-            )
-            .padding([tok::XS, tok::L])
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(Message::IdleOpen((!open).then_some(*step)))
-            .into(),
+            dropdown_text(
+                s,
+                idle_time(*secs),
+                open,
+                Message::IdleOpen((!open).then_some(*step)),
+            ),
         ));
         if open {
             let mut times: Vec<u64> = TIMES.to_vec();
@@ -150,28 +142,12 @@ pub(super) fn power_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, Mess
                 times.sort_unstable();
             }
             for t in times {
-                let on = t == *secs;
-                rows.push(Some(
-                    control(
-                        row![
-                            label(idle_time(t), text::BODY, if on { s.accent } else { s.ink })
-                                .width(Length::Fill),
-                            if on {
-                                Element::from(icon(Icon::Check, tok::ICON, s.accent))
-                            } else {
-                                iced::widget::Space::new().into()
-                            }
-                        ]
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([tok::NONE, tok::INDENT])
-                    .height(34)
-                    .width(Length::Fill)
-                    .kind(s, crate::ui::control::Kind::Ghost)
-                    .no_press_scale()
-                    .on_press(Message::Idle(*step, t))
-                    .into(),
-                ));
+                rows.push(Some(choice_text(
+                    s,
+                    idle_time(t),
+                    t == *secs,
+                    Message::Idle(*step, t),
+                )));
             }
         }
     }

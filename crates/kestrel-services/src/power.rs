@@ -531,7 +531,7 @@ pub async fn lid() -> Option<Lid> {
 /// The drop-in kestrel writes for `l`.
 pub fn lid_conf(l: &Lid) -> String {
     format!(
-        "# Written by kestrel (Settings > Power). Loaded after 20-lid-clamshell.conf, so it wins.\n\
+        "# Written by kestrel (Settings > Power). Loaded after the other drop-ins, so it wins.\n\
          [Login]\n\
          HandleLidSwitch={}\n\
          HandleLidSwitchExternalPower={}\n\

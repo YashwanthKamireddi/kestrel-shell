@@ -42,6 +42,10 @@ pub struct State {
     pub sound: Sound,
     /// Seconds left of a countdown under way.
     left: u32,
+    /// Which countdown is the current one: Go again (from the panel reopened meanwhile)
+    /// starts a new one, and the old one's seconds stop counting (two ran side by side,
+    /// twice as fast, and both ended in a capture).
+    countdown: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -51,8 +55,8 @@ pub enum Message {
     Delay(u32),
     Sound(Sound),
     Go,
-    /// A second of the countdown has passed.
-    Tick,
+    /// A second of countdown `n` has passed.
+    Tick(u32),
 }
 
 type Act = super::action::Action<Message>;
@@ -100,10 +104,10 @@ fn run(st: &State) -> Act {
     Act::Dispatch(crate::services::compositor::Action::Exec(command(st)))
 }
 
-fn second() -> Act {
+fn second(n: u32) -> Act {
     Act::Run(Task::perform(
         tokio::time::sleep(std::time::Duration::from_secs(1)),
-        |()| Message::Tick,
+        move |()| Message::Tick(n),
     ))
 }
 
@@ -120,21 +124,23 @@ pub fn update(st: &mut State, m: Message) -> Act {
         Message::Delay(d) => st.delay = d,
         Message::Sound(v) => st.sound = v,
         Message::Go => {
+            st.countdown = st.countdown.wrapping_add(1);
             if st.delay == 0 {
                 return Act::Close.and(run(st));
             }
             st.left = st.delay;
             // The panel goes first (its closing must not hide the first number).
-            return Act::Close.and(Act::Run(Task::done(Message::Tick)));
+            return Act::Close.and(Act::Run(Task::done(Message::Tick(st.countdown))));
         }
-        Message::Tick => {
+        Message::Tick(n) if n != st.countdown => {}
+        Message::Tick(n) => {
             // After "1" has had its second: the number goes, then the capture.
             if st.left == 0 {
                 return Act::HideNotice.and(run(st));
             }
             let shown = show_left(st);
             st.left -= 1;
-            return shown.and(second());
+            return shown.and(second(n));
         }
     }
     Act::None
@@ -155,7 +161,7 @@ fn choice<'a>(s: Scheme, i: Icon, name: &'a str, on: bool, m: Message) -> Elemen
     )
     .padding([tok::L, tok::NONE])
     .width(Length::Fill)
-    .radius(tok::R_CARD)
+    .radius(tok::R_CARD())
     .kind(
         s,
         if on {
@@ -301,4 +307,57 @@ pub fn key(st: &mut State, k: super::Key) -> Act {
         return update(st, Message::Go);
     }
     Act::None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// How many captures an action starts, and whether it waits for another second.
+    fn outcome(a: &Act) -> (usize, bool) {
+        match a {
+            Act::Dispatch(_) => (1, false),
+            Act::Run(_) => (0, true),
+            Act::Many(v) => v
+                .iter()
+                .map(outcome)
+                .fold((0, false), |(n, w), (m, x)| (n + m, w || x)),
+            _ => (0, false),
+        }
+    }
+
+    #[test]
+    fn go_again_during_a_countdown_takes_one_capture() {
+        // A second's wait is a tokio timer, made (not awaited) in `update`.
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let _rt = rt.enter();
+        let mut st = State {
+            delay: 3,
+            ..State::default()
+        };
+        // The seconds waiting to come (each countdown's next one), as the runtime would send.
+        let mut due = Vec::new();
+        let _ = update(&mut st, Message::Go);
+        due.push(st.countdown);
+        let mut taken = 0;
+        let step = |st: &mut State, due: &mut Vec<u32>| {
+            let n = due.remove(0);
+            let (shots, again) = outcome(&update(st, Message::Tick(n)));
+            if again {
+                due.push(n);
+            }
+            shots
+        };
+        // A second in, the panel is opened again and Go pressed: a new countdown.
+        taken += step(&mut st, &mut due);
+        let _ = update(&mut st, Message::Go);
+        due.push(st.countdown);
+        while !due.is_empty() {
+            taken += step(&mut st, &mut due);
+        }
+        assert_eq!(taken, 1);
+    }
 }

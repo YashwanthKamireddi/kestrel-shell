@@ -45,7 +45,7 @@ fn pods<'a>(
         // the wallpaper (a ring on the very edge melted into a wallpaper of the same colour).
         ui::control(stack![
             // Slim: the charge in a 2 px arc over a barely-there track (a 3 px ring on a bright
-            // track read as a heavy outline: his call 2026-11-15).
+            // track read as a heavy outline: design call 2026-11-15).
             container(ui::ring::ring_on(
                 value,
                 d - crate::modules::island::BUBBLE_INSET,

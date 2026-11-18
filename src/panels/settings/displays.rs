@@ -142,7 +142,7 @@ pub(super) fn displays_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
             .padding([tok::L, tok::XL])
             .style(move |_| container::Style {
                 background: Some(s.accent.scale_alpha(0.14 * s.opacity).into()),
-                border: iced::Border::default().rounded(tok::R_CARD),
+                border: iced::Border::default().rounded(tok::R_CARD()),
                 ..container::Style::default()
             })
             .into(),
@@ -171,19 +171,12 @@ pub(super) fn displays_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
                 s,
                 "Resolution",
                 None,
-                control(
-                    row![
-                        label(format!("{} × {}", d.width, d.height), text::SMALL, s.ink),
-                        icon(Icon::ChevronDown, tok::ICON_S, s.ink_dim)
-                    ]
-                    .spacing(tok::S)
-                    .align_y(Alignment::Center),
-                )
-                .padding([tok::XS, tok::L])
-                .radius(tok::FULL)
-                .kind(s, crate::ui::control::Kind::Ghost)
-                .on_press(Message::ModeOpen((!open).then_some(i)))
-                .into(),
+                dropdown_text(
+                    s,
+                    format!("{} × {}", d.width, d.height),
+                    open,
+                    Message::ModeOpen((!open).then_some(i)),
+                ),
             ));
             if open {
                 for (w, h) in d.sizes() {
@@ -196,31 +189,12 @@ pub(super) fn displays_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
                         .find(|r| (r - d.refresh).abs() < 0.5)
                         .or_else(|| rates.first().copied())
                         .unwrap_or(d.refresh);
-                    rows.push(Some(
-                        control(
-                            row![
-                                label(
-                                    format!("{w} × {h}"),
-                                    text::BODY,
-                                    if on { s.accent } else { s.ink }
-                                )
-                                .width(Length::Fill),
-                                if on {
-                                    Element::from(icon(Icon::Check, tok::ICON, s.accent))
-                                } else {
-                                    iced::widget::Space::new().into()
-                                }
-                            ]
-                            .align_y(Alignment::Center),
-                        )
-                        .padding([tok::NONE, tok::INDENT])
-                        .height(34)
-                        .width(Length::Fill)
-                        .kind(s, crate::ui::control::Kind::Ghost)
-                        .no_press_scale()
-                        .on_press(Message::Display(i, DisplayChange::Mode(w, h, hz)))
-                        .into(),
-                    ));
+                    rows.push(Some(choice_text(
+                        s,
+                        format!("{w} × {h}"),
+                        on,
+                        Message::Display(i, DisplayChange::Mode(w, h, hz)),
+                    )));
                 }
             }
             // Refresh rates at this size, when there is a choice.

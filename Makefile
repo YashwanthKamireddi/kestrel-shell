@@ -1,4 +1,4 @@
-# kestrel quality gate and install. Builds run at full speed (his call 2026-11-14: never low priority).
+# kestrel quality gate and install. Builds run at full speed (design call 2026-11-14: never low priority).
 SCOPE =
 
 .PHONY: check build install restart dev

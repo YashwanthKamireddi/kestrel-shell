@@ -1,6 +1,6 @@
 //! Overview (Super+Tab): where everything is open. The workspaces that have windows (and the
 //! one you are on), each a plain card with its windows drawn where they are, as live
-//! pictures; the panel is only as wide as its cards (no search, no title line: his call).
+//! pictures; the panel is only as wide as its cards (no search, no title line: design call).
 //! Nothing is marked until you choose: a thin ring shows the window under the pointer (gone
 //! when it leaves) or the one Tab and the arrows reached; Enter or a click goes there. Nothing fades or glides.
 
@@ -65,7 +65,7 @@ type Act = super::action::Action<Message>;
 
 pub fn open(st: &mut State) -> Act {
     // Nothing marked until the pointer or a key chooses (a ring on the current window
-    // before you did anything read as a heavy border: his call).
+    // before you did anything read as a heavy border: design call).
     st.selected = None;
     // The pictures were taken just before it opened (`prepare`); the live stream keeps them
     // moving. Positions change without an event (resizing): read them fresh.
@@ -88,7 +88,7 @@ pub fn prepare(
     const WAIT: std::time::Duration = std::time::Duration::from_millis(90);
     // Every window has a picture already (taken when it opened, kept fresh while shown): open at
     // once and refresh them behind it. Waiting for fresh ones every time put ~40 ms between the
-    // key and the overview (his "delay").
+    // key and the overview (it read as a delay).
     let complete = hypr
         .windows
         .iter()
@@ -102,13 +102,7 @@ pub fn prepare(
         };
         let jobs = live_jobs(hypr);
         let fresh = Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    crate::services::previews::snapshot(&jobs, WAIT)
-                })
-                .await
-                .unwrap_or_default()
-            },
+            crate::services::previews::snapshot(jobs, WAIT),
             Message::Live,
         );
         return open.and(Act::Run(fresh));
@@ -118,11 +112,7 @@ pub fn prepare(
     st.pending = Some((token, output, at));
     let jobs = live_jobs(hypr);
     Act::Run(Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || crate::services::previews::snapshot(&jobs, WAIT))
-                .await
-                .unwrap_or_default()
-        },
+        crate::services::previews::snapshot(jobs, WAIT),
         move |frames| Message::Fresh(token, frames),
     ))
 }
@@ -148,13 +138,7 @@ fn snapshot(jobs: Vec<crate::services::previews::Job>) -> Act {
         return Act::None;
     }
     Act::Run(Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                crate::services::previews::snapshot(&jobs, std::time::Duration::from_millis(250))
-            })
-            .await
-            .unwrap_or_default()
-        },
+        crate::services::previews::snapshot(jobs, std::time::Duration::from_millis(250)),
         Message::Live,
     ))
 }
@@ -460,7 +444,7 @@ fn card<'a>(
         control(Space::new().width(width).height(height))
             .width(width)
             .height(height)
-            .radius(tok::R_CARD)
+            .radius(tok::R_CARD())
             .kind(
                 s,
                 if current {
@@ -500,7 +484,7 @@ fn card<'a>(
                 .center_y(bh)
                 .style(move |_| container::Style {
                     background: Some(s.ink.scale_alpha(tok::FILL * alpha * s.opacity).into()),
-                    border: iced::Border::default().rounded(tok::R_CONTROL),
+                    border: iced::Border::default().rounded(tok::R_CONTROL()),
                     ..container::Style::default()
                 })
                 .into(),
@@ -516,7 +500,7 @@ fn card<'a>(
                         border: iced::Border {
                             color: s.ink.scale_alpha(tok::RING * s.opacity),
                             width: 1.5,
-                            radius: tok::R_CONTROL.into(),
+                            radius: tok::R_CONTROL().into(),
                         },
                         ..container::Style::default()
                     }),
@@ -525,7 +509,7 @@ fn card<'a>(
         let tile = control(tile)
             .width(bw)
             .height(bh)
-            .radius(tok::R_CONTROL)
+            .radius(tok::R_CONTROL())
             .no_press_scale()
             .on_enter(Message::Hover(w.address.clone()))
             .on_exit(Message::Unhover(w.address.clone()))
@@ -551,7 +535,7 @@ fn card<'a>(
         .padding([tok::HAIR, tok::M])
         .style(move |_| container::Style {
             background: Some(s.fade(s.accent).into()),
-            border: iced::Border::default().rounded(tok::R_CONTROL),
+            border: iced::Border::default().rounded(tok::R_CONTROL()),
             ..container::Style::default()
         })
         .into()

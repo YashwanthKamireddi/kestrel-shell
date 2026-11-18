@@ -88,7 +88,7 @@ Features that ashell doesn't need are intentionally omitted:
 
 - Drag and drop
 - Popups / xdg-popup
-- Session lock surfaces
+- Session lock surfaces (kestrel patch 13 adds them: see the vendor README one level up)
 - Subsurfaces
 - Window actions (minimize, maximize, resize, etc.)
 

@@ -31,6 +31,8 @@ pub(super) fn own(st: &mut State, m: Message, cx: &Cx<'_>) -> Task<Message> {
                 )),
             ]);
         }
+        // Typing searches at once.
+        Message::Shown => return Task::Iced(iced::widget::focus(SEARCH_ID.clone())),
         Message::About(a) => st.about = Some(a),
         Message::Time(t) => st.time = Some(t),
         Message::Ntp(on) => {
@@ -698,6 +700,7 @@ pub(super) fn own(st: &mut State, m: Message, cx: &Cx<'_>) -> Task<Message> {
         | Message::NotifyRule(..)
         | Message::PickPicture
         | Message::OpenFile(..)
+        | Message::OpenMade(..)
         | Message::FirmwareUpdate(..)
         | Message::InTerminal(..)
         | Message::EditorSet(..)
@@ -762,8 +765,11 @@ pub(super) fn own(st: &mut State, m: Message, cx: &Cx<'_>) -> Task<Message> {
             st.bar_target = None;
         }
         Message::BarAddOpen(lane) => st.bar_adding = lane,
-        Message::ReadDoc => st.doc = read_doc(),
-        Message::ReadPlugins => st.plugins = crate::lua::installed(),
+        Message::ReadDoc | Message::ReadPlugins => return read_doc(),
+        Message::Doc(doc, plugins) => {
+            st.doc = doc;
+            st.plugins = plugins;
+        }
     }
     Task::none()
 }

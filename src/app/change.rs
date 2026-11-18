@@ -178,7 +178,7 @@ impl App {
                 self.vpn.tailscale = Some(on);
                 Task::future(async move {
                     vpn::set_tailscale(on).await;
-                    // Timing guess (docs/ROADMAP-v2.md): the tailnet reads as it was for a
+                    // Timing guess: the tailnet reads as it was for a
                     // moment after `tailscale up`.
                     tokio::time::sleep(Duration::from_millis(800)).await;
                 })
@@ -221,7 +221,7 @@ impl App {
                 Task::none()
             }
             Change::Sink(name) => {
-                // Choosing an output ends any mode switch's hold: his choice is what shows.
+                // Choosing an output ends any mode switch's hold: the user's choice is what shows.
                 self.mode_switch = None;
                 self.audio.default_sink = name.clone();
                 audio::command(audio::Command::DefaultSink(name));
@@ -309,18 +309,15 @@ impl App {
                 self.dim = v.max(toggles::MIN_GAMMA as f32 / 100.0);
                 Task::future(toggles::set_dim(v)).discard()
             }
+            // Written and read back by the disk writer, in order (a slider's steps land as
+            // they were made); applied when the read is in.
             Change::Settings(edits) => {
-                for e in edits {
-                    e.write();
-                }
-                match config::read() {
-                    Ok(c) => {
-                        self.config_error = None;
-                        apply_config(self, c)
+                crate::disk::write(move || {
+                    for e in edits {
+                        e.write();
                     }
-                    // A hand-made mistake elsewhere in the file: the watcher says where.
-                    Err(_) => Task::none(),
-                }
+                });
+                self.read_config(ConfigFrom::Settings)
             }
             Change::Join(ssid, cmd) => {
                 self.connecting = Some(panels::cx::Connecting::new(ssid.clone(), true));

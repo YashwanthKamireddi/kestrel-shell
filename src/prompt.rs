@@ -2,7 +2,7 @@
 //! authentication agent, NetworkManager secret agent and BlueZ pairing agent, with their window,
 //! apart from the shell. A shell that crashes, freezes or restarts never cancels a password,
 //! Wi-Fi or pairing question, and a question never waits on the shell
-//! (docs/ROADMAP-v2.md, rule 3).
+//! (docs/ARCHITECTURE.md, Stability).
 //!
 //! It shows panels::auth (the same component the shell shows when there is no prompt process)
 //! in a window of its own, under the bar's centre, made when a question arrives and gone when
@@ -40,7 +40,7 @@ pub enum Message {
 }
 
 /// The shell's colours and material as they are now.
-fn look() -> (Scheme, bool) {
+pub(crate) fn look() -> (Scheme, bool) {
     let l = crate::state::read_fresh().look;
     let seed = if l.chroma == 0.0 && l.source.is_none() {
         Seed::default()
@@ -52,8 +52,9 @@ fn look() -> (Scheme, bool) {
             source: l.source,
         }
     };
-    let frosted = crate::config::load().material != crate::config::Material::Black;
-    crate::theme::set_glass(frosted);
+    let config = crate::config::load();
+    crate::theme::apply(&config);
+    let frosted = config.material != crate::config::Material::Black;
     (Scheme::dark(seed), frosted)
 }
 
@@ -224,13 +225,13 @@ pub fn view(app: &App, id: SurfaceId) -> Element<'_, Message> {
             } else {
                 s.base.into()
             }),
-            border: iced::Border::default().rounded(tok::R_PANEL),
+            border: iced::Border::default().rounded(tok::R_PANEL()),
             ..container::Style::default()
         });
     let card: Element<'_, Message> = if frosted {
         iced::blur_container(card)
             .style(move |_| container::Style {
-                border: iced::Border::default().rounded(tok::R_PANEL),
+                border: iced::Border::default().rounded(tok::R_PANEL()),
                 ..container::Style::default()
             })
             .into()

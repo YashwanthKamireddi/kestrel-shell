@@ -81,7 +81,7 @@ pub(super) fn group<'a>(
         .width(Length::Fill)
         .style(move |_| container::Style {
             background: Some(s.ink.scale_alpha(tok::TONAL * s.opacity).into()),
-            border: iced::Border::default().rounded(tok::R_CARD),
+            border: iced::Border::default().rounded(tok::R_CARD()),
             ..container::Style::default()
         });
     Some(match title {
@@ -136,13 +136,15 @@ pub fn on_sound(st: &State) -> bool {
 /// Settings as its own window: the same view on the shell's solid surface colour.
 pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
     let s = cx.scheme.faded(1.0);
-    let body = container(view(st, &cx.with_scheme(s)))
+    // The keyboard keeps its place when its control goes, forgotten on another page.
+    let page = st.page as u64;
+    let body = container(crate::ui::focus::keep(view(st, &cx.with_scheme(s)), page))
         .id(ROOT.clone())
         .width(Length::Fill)
         .height(Length::Fill);
     // The shell's look: Black is solid; Frosted is the panels' own glass (the compositor's
     // blur of what is behind, under the same dark tint).
-    if crate::theme::glass() {
+    let look: Element<'a, Message> = if crate::theme::glass() {
         iced::blur_container(body)
             .style(move |_| container::Style {
                 background: Some(s.base.scale_alpha(0.42).into()),
@@ -155,7 +157,12 @@ pub fn window<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             ..container::Style::default()
         })
         .into()
-    }
+    };
+    // Its first frame says so: the search takes the focus then (iced's own sensor, at the
+    // root so it fires once per window).
+    iced::widget::sensor(look)
+        .on_show(|_| Message::Shown)
+        .into()
 }
 
 fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
@@ -237,7 +244,7 @@ fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
             .padding([tok::NONE, tok::L])
             .height(36)
             .width(Length::Fill)
-            .radius(tok::R_ROW)
+            .radius(tok::R_ROW())
             .kind(
                 s,
                 if on {
@@ -318,7 +325,7 @@ fn view<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Message> {
                     .padding([tok::NONE, tok::L])
                     .height(40)
                     .width(Length::Fill)
-                    .radius(tok::R_ROW)
+                    .radius(tok::R_ROW())
                     .kind(s, crate::ui::control::Kind::Tonal)
                     .no_press_scale()
                     .on_press(Message::Page(p)),
@@ -520,13 +527,99 @@ pub(super) fn pick_search<'a>(
 pub(super) fn pick_row<'a>(s: Scheme, name: String, on: bool, m: Message) -> Element<'a, Message> {
     control(label(name, text::BODY, if on { s.accent } else { s.ink }))
         .padding([tok::NONE, tok::L])
-        .height(34)
+        .height(CHOICE_H)
         .width(Length::Fill)
-        .radius(tok::R_ROW)
+        .radius(tok::R_ROW())
         .kind(s, crate::ui::control::Kind::Ghost)
         .no_press_scale()
         .on_press(m)
         .into()
+}
+
+/// A list's row height: a chooser's choices and a pick list's entries.
+const CHOICE_H: f32 = 36.0;
+
+/// A chooser in a row: what is chosen now and an arrow (up while its list is open); a click
+/// opens or closes the list of `choice`s under its row. The one chooser every page uses.
+pub(super) fn dropdown<'a>(
+    s: Scheme,
+    shown: impl Into<Element<'a, Message>>,
+    open: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    control(
+        row![
+            shown.into(),
+            icon(
+                if open {
+                    Icon::ChevronUp
+                } else {
+                    Icon::ChevronDown
+                },
+                tok::ICON_S,
+                s.ink_dim
+            )
+        ]
+        .spacing(tok::S)
+        .align_y(Alignment::Center),
+    )
+    .padding([tok::XS, tok::L])
+    .radius(tok::FULL)
+    .kind(s, crate::ui::control::Kind::Ghost)
+    .on_press(m)
+    .into()
+}
+
+/// A chooser's words: what is chosen now.
+pub(super) fn dropdown_text<'a>(
+    s: Scheme,
+    now: impl iced::widget::text::IntoFragment<'a>,
+    open: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    dropdown(s, label(now, text::SMALL, s.ink), open, m)
+}
+
+/// One choice in an open chooser, indented under its row, a check on the one in use.
+pub(super) fn choice<'a>(
+    s: Scheme,
+    content: impl Into<Element<'a, Message>>,
+    on: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    control(
+        row![
+            container(content).width(Length::Fill),
+            if on {
+                Element::from(icon(Icon::Check, tok::ICON, s.accent))
+            } else {
+                iced::widget::Space::new().into()
+            }
+        ]
+        .align_y(Alignment::Center),
+    )
+    .padding([tok::NONE, tok::INDENT])
+    .height(CHOICE_H)
+    .width(Length::Fill)
+    .kind(s, crate::ui::control::Kind::Ghost)
+    .no_press_scale()
+    .on_press(m)
+    .into()
+}
+
+/// A choice that is words (the chosen one in the accent).
+pub(super) fn choice_text<'a>(
+    s: Scheme,
+    name: impl iced::widget::text::IntoFragment<'a>,
+    on: bool,
+    m: Message,
+) -> Element<'a, Message> {
+    choice(
+        s,
+        label(name, text::BODY, if on { s.accent } else { s.ink }),
+        on,
+        m,
+    )
 }
 
 /// A row for one Hyprland input option: a switch, a choice, or a slider with its value.

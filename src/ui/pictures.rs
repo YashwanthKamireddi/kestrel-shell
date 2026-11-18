@@ -149,11 +149,7 @@ pub fn sharp_file(path: &std::path::Path, size: f32) -> Option<iced::widget::ima
         // SVG path held every parsed icon for good (a panel full of app icons left ~8 MB).
         svg_pixels(path, size)
     } else {
-        ::image::ImageReader::open(path)
-            .ok()
-            .and_then(|r| r.with_guessed_format().ok())
-            .and_then(|r| r.decode().ok())
-            .map(|i| sharp_image(&i.to_rgba8(), size))
+        decode_shrunk(path, size, size, Fit::Inside).map(|i| sharp_image(&i, size))
     };
     if let Ok(mut m) = CACHE.lock() {
         if m.len() > 512 {
@@ -272,15 +268,10 @@ pub fn rounded_file(
     if let Some(hit) = ROUNDED.lock().ok()?.get(&key) {
         return hit.clone();
     }
-    let made = ::image::ImageReader::open(path)
-        .ok()
-        .and_then(|r| r.with_guessed_format().ok())
-        .and_then(|r| r.decode().ok())
-        .filter(|img| img.width() > 0 && img.height() > 0)
-        .map(|img| {
-            let r = rounded_cover(&img.into_rgba8(), w, h, radius);
-            iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
-        });
+    let made = decode_shrunk(path, w, h, Fit::Cover).map(|img| {
+        let r = rounded_cover(&img, w, h, radius);
+        iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw())
+    });
     let mut cache = ROUNDED.lock().ok()?;
     // Capped by size: ~24 MB of pictures at most, then it starts over.
     let bytes: u64 = cache
@@ -328,23 +319,25 @@ pub fn fitted_file(
     if let Some(hit) = CACHE.lock().ok()?.get(&key) {
         return hit.clone();
     }
-    let made = ::image::ImageReader::open(path)
-        .ok()
-        .and_then(|r| r.with_guessed_format().ok())
-        .and_then(|r| r.decode().ok())
-        .filter(|img| img.width() > 0 && img.height() > 0)
-        .map(|img| {
-            let (iw, ih) = (img.width() as f32, img.height() as f32);
-            let k = (max_w / iw).min(max_h / ih);
-            // At least a few pixels each way, so a thin strip stays visible.
-            let (w, h) = ((iw * k).round().max(4.0), (ih * k).round().max(4.0));
-            let r = rounded_cover(&img.into_rgba8(), w, h, radius.min(w / 2.0).min(h / 2.0));
-            (
-                iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
-                w,
-                h,
-            )
-        });
+    // Already being made by another job: that one fills the cache. Before, every list update
+    // started a job for every picture not yet ready, so a scrolled folder of wallpapers
+    // decoded the same files on dozens of threads at once (10 GB, every core, 2026-11-18).
+    let _making = Making::start(&key)?;
+    // One background decode at a time, whole shell: a picture's full size is in memory only
+    // while it is shrunk, and only one is.
+    let _turn = DECODE_TURN.lock();
+    let made = decode_shrunk(path, max_w, max_h, Fit::Inside).map(|img| {
+        let (iw, ih) = (img.width() as f32, img.height() as f32);
+        let k = (max_w / iw).min(max_h / ih);
+        // At least a few pixels each way, so a thin strip stays visible.
+        let (w, h) = ((iw * k).round().max(4.0), (ih * k).round().max(4.0));
+        let r = rounded_cover(&img, w, h, radius.min(w / 2.0).min(h / 2.0));
+        (
+            iced::widget::image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
+            w,
+            h,
+        )
+    });
     let mut cache = CACHE.lock().ok()?;
     // Capped by size, not count: a clipboard preview is up to ~1 MB, a row thumbnail ~10 KB.
     // At most ~24 MB of pictures; then it starts over (pictures are cheap to make again).
@@ -358,4 +351,69 @@ pub fn fitted_file(
     }
     cache.insert(key, made.clone());
     made
+}
+
+/// How a picture is to be shown: whole inside the box, or filling it (cropped).
+#[derive(Clone, Copy)]
+enum Fit {
+    Inside,
+    Cover,
+}
+
+/// Taken by background picture jobs for the length of one decode (see `fitted_file`).
+static DECODE_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// The pictures being made right now, so a second job for the same one does nothing.
+static MAKING: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<FittedKey>>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// One picture marked as being made, until dropped (even by a panic).
+struct Making(FittedKey);
+
+impl Making {
+    fn start(key: &FittedKey) -> Option<Making> {
+        MAKING
+            .lock()
+            .ok()?
+            .insert(key.clone())
+            .then(|| Making(key.clone()))
+    }
+}
+
+impl Drop for Making {
+    fn drop(&mut self) {
+        if let Ok(mut m) = MAKING.lock() {
+            m.remove(&self.0);
+        }
+    }
+}
+
+/// `path` decoded and, before anything else is done with it, shrunk to twice what a `w` × `h`
+/// (logical px) box needs, so the full-size picture is never copied: an 8K wallpaper is
+/// ~200 MB decoded, and converting it to RGBA or resizing it whole doubled that per picture.
+/// The final, smooth resize (and the rounding) is done on the small copy.
+fn decode_shrunk(path: &std::path::Path, w: f32, h: f32, fit: Fit) -> Option<::image::RgbaImage> {
+    let img = ::image::ImageReader::open(path)
+        .ok()?
+        .with_guessed_format()
+        .ok()?
+        .decode()
+        .ok()
+        .filter(|i| i.width() > 0 && i.height() > 0)?;
+    let (iw, ih) = (img.width() as f32, img.height() as f32);
+    let (bw, bh) = (2.0 * w * PICTURE_SCALE, 2.0 * h * PICTURE_SCALE);
+    let k = match fit {
+        Fit::Inside => (bw / iw).min(bh / ih),
+        Fit::Cover => (bw / iw).max(bh / ih),
+    };
+    let img = if k < 1.0 {
+        let (nw, nh) = (
+            (iw * k).ceil().max(1.0) as u32,
+            (ih * k).ceil().max(1.0) as u32,
+        );
+        img.thumbnail(nw, nh)
+    } else {
+        img
+    };
+    Some(img.into_rgba8())
 }

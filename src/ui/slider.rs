@@ -217,7 +217,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
                     state.shown = self.value;
                 } else {
                     // Exponential approach: ~90 % of the way in 120 ms.
-                    let k = 1.0 - (-dt * 19.0).exp();
+                    let k = crate::motion::glide(dt, crate::theme::tok::GLIDE_SLIDER);
                     state.shown += (self.value - state.shown) * k;
                 }
                 if (state.shown - self.value).abs() > 1e-3 {
@@ -260,7 +260,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Slider<'_, M> {
         let at = |v: f32| b.height + (b.width - b.height) * v;
         let fill_w = at(state.shown);
         // Past 100 % the whole fill is the danger colour, one piece (a red end stuck onto the
-        // blue read as misaligned, his call 2026-11-16).
+        // blue read as misaligned, design call 2026-11-16).
         let colour = match self.boost {
             Some((mark, over)) if state.shown > mark + 1e-4 => over,
             _ => self.fill,

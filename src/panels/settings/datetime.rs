@@ -87,7 +87,7 @@ pub(super) fn datetime_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
                 .padding([tok::NONE, tok::L])
                 .height(34)
                 .width(Length::Fill)
-                .radius(tok::R_ROW)
+                .radius(tok::R_ROW())
                 .kind(s, crate::ui::control::Kind::Ghost)
                 .no_press_scale()
                 .on_press(Message::Zone(z.clone())),
@@ -109,27 +109,12 @@ pub(super) fn datetime_page<'a>(st: &'a State, cx: &Cx<'a>) -> Vec<Element<'a, M
             s,
             "Formats",
             Some("Dates, numbers and money in apps, from the next login"),
-            control(
-                row![
-                    label(name_of(formats), text::SMALL, s.ink),
-                    icon(
-                        if st.region_open {
-                            Icon::ChevronUp
-                        } else {
-                            Icon::ChevronDown
-                        },
-                        14.0,
-                        s.ink_dim
-                    )
-                ]
-                .spacing(tok::S)
-                .align_y(Alignment::Center),
-            )
-            .padding([tok::XS, tok::L])
-            .radius(tok::FULL)
-            .kind(s, crate::ui::control::Kind::Ghost)
-            .on_press(Message::RegionOpen(!st.region_open))
-            .into(),
+            dropdown_text(
+                s,
+                name_of(formats),
+                st.region_open,
+                Message::RegionOpen(!st.region_open),
+            ),
         )];
         if st.region_open {
             let q = st.region_query.trim().to_lowercase();

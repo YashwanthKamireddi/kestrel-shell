@@ -1,5 +1,6 @@
 //! `kestrel <command>` talks to the running shell over `$XDG_RUNTIME_DIR/kestrel.sock`.
-//! Commands are single lines: `toggle <panel>`, `close`, `reload`.
+//! Commands are single lines: `toggle <panel>`, `close`, `reload`, `health` (answered with the
+//! services' health table instead of "ok").
 
 use iced::Subscription;
 use iced::futures::{SinkExt, Stream};
@@ -26,7 +27,7 @@ pub fn send(cmd: &str) -> bool {
     let mut reply = String::new();
     let _ = s.read_to_string(&mut reply);
     if !reply.trim().is_empty() && reply.trim() != "ok" {
-        eprintln!("{}", reply.trim());
+        println!("{}", reply.trim_end());
     }
     true
 }
@@ -54,13 +55,18 @@ fn listen() -> impl Stream<Item = String> {
             };
             let (r, mut w) = stream.into_split();
             let mut line = String::new();
+            let mut reply = String::from("ok\n");
             if BufReader::new(r).read_line(&mut line).await.is_ok() {
                 let cmd = line.trim().to_string();
-                if !cmd.is_empty() {
+                // `health` is answered here, on the socket, from the services' own registry:
+                // it changes nothing in the app and must answer even while the app is busy.
+                if cmd == "health" {
+                    reply = crate::services::health::table();
+                } else if !cmd.is_empty() {
                     let _ = out.send(cmd).await;
                 }
             }
-            let _ = w.write_all(b"ok\n").await;
+            let _ = w.write_all(reply.as_bytes()).await;
         }
     })
 }

@@ -246,7 +246,7 @@ pub(super) fn tailscale_page<'a>(st: &'a State, cx: &Cx<'a>) -> Element<'a, Mess
                 label(net.ip.clone(), text::SMALL, s.ink),
             ])
             .padding([tok::XS, tok::S])
-            .radius(tok::R_CONTROL)
+            .radius(tok::R_CONTROL())
             .kind(s, crate::ui::control::Kind::Ghost)
             .on_press(Message::CopyIp(net.ip.clone())),
         );

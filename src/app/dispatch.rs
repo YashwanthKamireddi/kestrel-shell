@@ -30,6 +30,7 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::Copied { .. }
         | Message::Hypr { .. }
         | Message::Notification { .. }
+        | Message::PictureSaved { .. }
         | Message::VolumeStep { .. }
         | Message::Level { .. }
         | Message::VisTick { .. }) => services::handle(app, m),
@@ -54,10 +55,12 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::Expire { .. }
         | Message::ReloadWallpaper) => outputs::handle(app, m),
         m @ (Message::Toggle { .. }
+        | Message::BarKey { .. }
         | Message::ControlAt { .. }
         | Message::SettingsAt { .. }
         | Message::RuleFor { .. }
         | Message::Close
+        | Message::Escape { .. }
         | Message::TrayExpand
         | Message::TrayMenu { .. }
         | Message::Panel { .. }
@@ -72,8 +75,9 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
             crate::watchdog::notify("WATCHDOG=1");
             Task::none()
         }
-        m @ (Message::ConfigFile { .. } | Message::Lua { .. } | Message::LuaClick { .. }) => {
-            config::handle(app, m)
-        }
+        m @ (Message::ConfigFile { .. }
+        | Message::ConfigRead { .. }
+        | Message::Lua { .. }
+        | Message::LuaClick { .. }) => config::handle(app, m),
     }
 }

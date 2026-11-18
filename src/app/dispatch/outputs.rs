@@ -115,7 +115,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             app.toast_sheet.natural = sz.height;
             // Grows to it (the island swelling), unless already there.
             if !app.toasts.is_empty() {
-                app.toast_sheet.h.to(sz.height, Spring::OPEN);
+                app.toast_sheet.h.to(sz.height, tok::SPRING_OPEN);
                 app.clock.reset();
             }
             Task::none()
@@ -136,7 +136,7 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
                 } else {
                     // A glide, not a snap: the island and its neighbours move together smoothly
                     // when what it shows changes (a 70 ms snap read as a shake).
-                    o.island_w.to(w, Spring::OPEN);
+                    o.island_w.to(w, tok::SPRING_OPEN);
                 }
                 app.clock.reset();
             }

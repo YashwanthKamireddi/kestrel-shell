@@ -3,6 +3,7 @@
 //! the background fades in on hover, the whole control dips to 0.96 on press and springs back.
 
 use crate::motion::Spring;
+use crate::theme::tok;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
 use iced::advanced::widget::{Tree, Widget, tree};
@@ -11,11 +12,6 @@ use iced::event::Event;
 use iced::{Border, Color, Element, Length, Padding, Rectangle, Size, Transformation, window};
 use std::time::Instant;
 
-/// How long a hover highlight takes to leave.
-/// The state layer eases in and out (docs/DESIGN.md): quick enough to read as instant, slow
-/// enough that a clear-at-rest button grows its shape instead of flashing it.
-const HOVER_IN_SECS: f32 = crate::theme::tok::HOVER_IN;
-const HOVER_OUT_SECS: f32 = crate::theme::tok::HOVER_OUT;
 const PRESSED_SCALE: f32 = 0.96;
 
 /// What kind of small pill button (`Control::pill`).
@@ -97,7 +93,7 @@ pub fn control<'a, M>(content: impl Into<Element<'a, M>>) -> Control<'a, M> {
         padding: Padding::ZERO,
         width: Length::Shrink,
         height: Length::Shrink,
-        radius: crate::theme::tok::R_CONTROL,
+        radius: crate::theme::tok::R_CONTROL(),
         corners: None,
         rest: Color::TRANSPARENT,
         hover: Color::TRANSPARENT,
@@ -189,13 +185,13 @@ impl<'a, M> Control<'a, M> {
         self.press = press;
         self
     }
-    /// A bar item: never a fill (his call 2026-11-13: grey highlights looked cheap). At rest
+    /// A bar item: never a fill (design call 2026-11-13: grey highlights looked cheap). At rest
     /// the content sits a little dimmed under a veil of the bar's own black; under the pointer,
     /// and while its panel is open, the veil is gone and it shows at full white. A press
     /// changes nothing (dimming on press flickered as the panel opened).
     pub fn bar(mut self, s: crate::theme::Scheme, active: bool) -> Self {
         // Frosted: no film and no boxes at all (a dark film showed as a patch on the frost,
-        // and light boxes looked random inside the pills, his call 2026-11-13).
+        // and light boxes looked random inside the pills, design call 2026-11-13).
         if crate::theme::glass() {
             self.rest = Color::TRANSPARENT;
             self.hover = Color::TRANSPARENT;
@@ -422,8 +418,12 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
         let state = tree.state.downcast_mut::<State>();
         let over = interactive && cursor.is_over(bounds);
 
-        // Any click takes the keyboard focus away (it is the keyboard's place only).
-        if state.focused && matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))) {
+        // Any click takes the keyboard focus away (it is the keyboard's place only), and so
+        // does no longer being pressable: the focus walk passes over it, so a focus it kept
+        // would come back lit later beside the one the keyboard is really on.
+        if state.focused
+            && (!pressable || matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_))))
+        {
             state.focused = false;
             shell.request_redraw();
         }
@@ -458,7 +458,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                         state.pressed = true;
                         shell.request_redraw();
                         if self.press_scale {
-                            state.scale.to(PRESSED_SCALE, Spring::CLOSE);
+                            state.scale.to(PRESSED_SCALE, tok::SPRING_CLOSE);
                         }
                         if let Some(f) = &self.on_press_at {
                             shell.publish(f(bounds));
@@ -505,7 +505,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             || matches!(event, Event::Mouse(mouse::Event::CursorLeft));
         if up && state.pressed {
             state.pressed = false;
-            state.scale.to(1.0, Spring::CLOSE);
+            state.scale.to(1.0, tok::SPRING_CLOSE);
             // Redrawn now: without this the pressed look stayed on screen until something
             // else redrew, seconds later.
             shell.request_redraw();
@@ -530,7 +530,7 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
                 shell.publish(m.clone());
             }
             if !over && state.pressed {
-                state.scale.to(1.0, Spring::SNAP);
+                state.scale.to(1.0, tok::SPRING_SNAP);
             }
             shell.request_redraw();
         }
@@ -541,13 +541,19 @@ impl<M: Clone> Widget<M, iced::Theme, iced::Renderer> for Control<'_, M> {
             });
             state.last = Some(*now);
             let want = if state.hovered { 1.0 } else { 0.0 };
-            // In over 70 ms, out over 120 ms (eased in `draw`). Game mode: no fade at all.
-            state.hover_t = if crate::motion::still() {
+            // The state layer eases in and out (docs/DESIGN.md, `tok::HOVER_IN` / `HOVER_OUT`,
+            // eased in `draw`): quick enough to read as instant, slow enough that a
+            // clear-at-rest button grows its shape instead of flashing it. No motion: no fade.
+            let (fade_in, fade_out) = (
+                crate::motion::secs(tok::HOVER_IN),
+                crate::motion::secs(tok::HOVER_OUT),
+            );
+            state.hover_t = if fade_in <= 0.0 || fade_out <= 0.0 {
                 want
             } else if state.hover_t < want {
-                (state.hover_t + dt / HOVER_IN_SECS).min(want)
+                (state.hover_t + dt / fade_in).min(want)
             } else {
-                (state.hover_t - dt / HOVER_OUT_SECS).max(want)
+                (state.hover_t - dt / fade_out).max(want)
             };
             state.scale.step(dt);
             if state.animating() {

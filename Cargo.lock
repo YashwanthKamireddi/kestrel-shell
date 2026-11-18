@@ -2140,6 +2140,7 @@ dependencies = [
  "toml_edit",
  "ttf-parser",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]

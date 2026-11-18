@@ -241,12 +241,45 @@ pub(super) async fn search_below(dir: PathBuf, q: String, hidden: bool) -> Vec<P
         .unwrap_or_default()
 }
 
+/// A shell pattern (`*`, `?`, and `[…]` classes with ranges and `!`/`^`), any case. Classes
+/// matter: Chromium sends every extension as one (`*.[jJ][pP][gG]`), and without them its
+/// "*.jpg" filter showed a folder of pictures as empty.
 pub(super) fn glob(pattern: &str, name: &str) -> bool {
+    /// The class at the start of `p` (just past its `[`): whether `c` is in it, and its
+    /// length up to and including the `]`. `None`: no closing `]`, so `[` is a plain character.
+    fn class(p: &[char], c: char) -> Option<(bool, usize)> {
+        let not = matches!(p.first(), Some('!' | '^'));
+        let mut i = usize::from(not);
+        let mut hit = false;
+        let mut first = true;
+        loop {
+            let a = *p.get(i)?;
+            if a == ']' && !first {
+                return Some((hit != not, i + 1));
+            }
+            first = false;
+            if p.get(i + 1) == Some(&'-') && p.get(i + 2).is_some_and(|&b| b != ']') {
+                let b = p[i + 2];
+                let lc = c.to_ascii_lowercase();
+                hit |= (a.to_ascii_lowercase()..=b.to_ascii_lowercase()).contains(&lc)
+                    || (a.to_ascii_uppercase()..=b.to_ascii_uppercase())
+                        .contains(&c.to_ascii_uppercase());
+                i += 3;
+            } else {
+                hit |= a.eq_ignore_ascii_case(&c);
+                i += 1;
+            }
+        }
+    }
     fn m(p: &[char], n: &[char]) -> bool {
         match (p.first(), n.first()) {
             (None, None) => true,
             (Some('*'), _) => m(&p[1..], n) || (!n.is_empty() && m(p, &n[1..])),
             (Some('?'), Some(_)) => m(&p[1..], &n[1..]),
+            (Some('['), Some(&b)) => match class(&p[1..], b) {
+                Some((hit, len)) => hit && m(&p[1 + len..], &n[1..]),
+                None => b == '[' && m(&p[1..], &n[1..]),
+            },
             (Some(a), Some(b)) => a.eq_ignore_ascii_case(b) && m(&p[1..], &n[1..]),
             _ => false,
         }

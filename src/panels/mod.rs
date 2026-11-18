@@ -62,6 +62,10 @@ pub enum PanelKind {
 }
 
 impl PanelKind {
+    /// The panel `kestrel toggle <name>` opens. The file picker, "Open with" and the password
+    /// prompt have no name: they show only while an app or the system asks something (a
+    /// `toggle files` opened the picker with no question in it, an empty panel that took the
+    /// keyboard until Esc).
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
             "control" | "control-centre" | "control-center" | "sound" | "mixer" | "bluetooth"
@@ -81,7 +85,6 @@ impl PanelKind {
             "emoji" => Self::Emoji,
             "weather" => Self::Weather,
             "airpods" | "pods" => Self::Pods,
-            "files" => Self::Files,
             "tray" => Self::Tray,
             "privacy" => Self::Privacy,
             _ => return None,
@@ -236,10 +239,14 @@ pub enum Message {
     Files(files::Message),
     OpenWith(open_with::Message),
     Auth(auth::Message),
-    /// A navigation key while a panel is open (Esc is the shell's).
-    Key(Key),
+    /// A navigation key while a panel is open (Esc is the shell's), and the window it was
+    /// typed in.
+    Key(iced::window::Id, Key),
     /// Tab or Shift+Tab in a window of its own (Settings): its id, and which.
     WindowKey(iced::window::Id, Key),
+    /// A key combination pressed while Settings records a shortcut, and the window it was
+    /// typed in (only Settings' own is recorded).
+    Combo(iced::window::Id, String),
     /// Left click on a tray icon.
     TrayActivate(tray_service::Item),
 }
@@ -283,8 +290,44 @@ pub fn refocus(app: &App, kind: PanelKind) -> Task<AppMessage> {
     Task::Iced(iced::widget::focus(id))
 }
 
+/// A panel was asked to open. One that opens only once what it shows is in (the monitor's
+/// first reading) starts reading it here and opens itself when it arrives (`Action::Open`):
+/// `Some` is that work. `None`: open it now.
+pub fn prepare(
+    app: &mut App,
+    kind: PanelKind,
+    output: iced::OutputId,
+    at: iced::Rectangle,
+) -> Option<Task<AppMessage>> {
+    // Others open at once; the monitor too when it is open already (moved to another screen):
+    // it has its reading.
+    if kind != PanelKind::Monitor
+        || app
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.open && p.kind == PanelKind::Monitor)
+    {
+        return None;
+    }
+    let a = monitor::prepare(&mut app.panels.monitor, output, at);
+    Some(action::perform(app, a, |m| {
+        AppMessage::Panel(Message::Monitor(m))
+    }))
+}
+
+/// A panel asked for but still waiting for its content does not open after all (closed, or
+/// another panel opened meanwhile).
+pub fn cancel(app: &mut App) {
+    monitor::cancel(&mut app.panels.monitor);
+}
+
 /// A panel was just opened: reset its transient state and load what it needs.
 pub fn opened(app: &mut App, kind: PanelKind) -> Task<AppMessage> {
+    // Another panel opened (by any route): a monitor still waiting for its reading does not
+    // open over it.
+    if kind != PanelKind::Monitor {
+        cancel(app);
+    }
     match kind {
         PanelKind::Calendar => app.panels.calendar = calendar::State::default(),
         PanelKind::Island => app.panels.calendar = calendar::State::default(),
@@ -402,7 +445,7 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         }
         Message::Settings(m) => {
             let (p, cx) = cx::split(app);
-            let a = settings::update(&mut p.settings, m, &cx);
+            let a = settings::own_window(settings::update(&mut p.settings, m, &cx));
             action::perform(app, a, |m| AppMessage::Panel(Message::Settings(m)))
         }
         Message::Files(m) => {
@@ -417,7 +460,11 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
             auth::Outcome::Close => Task::done(AppMessage::Close),
             auth::Outcome::Stay => Task::none(),
         },
-        Message::Key(k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
+        // Typed in Settings' window: its own (a panel opened with the mouse leaves the keyboard
+        // with the app in front; Space in Settings' search played or paused the music panel,
+        // the arrows changed its track).
+        Message::Key(w, _) if in_settings(app, w) => Task::none(),
+        Message::Key(_, k) => match app.panel.as_ref().filter(|p| p.open).map(|p| p.kind) {
             Some(PanelKind::Launcher) => {
                 let a = launcher::key(&mut app.panels.launcher, k);
                 action::perform(app, a, |m| AppMessage::Panel(Message::Launcher(m)))
@@ -483,17 +530,26 @@ pub fn update(app: &mut App, msg: Message) -> Task<AppMessage> {
         Message::TrayActivate(item) => {
             Task::future(tray_service::activate(item.bus, item.path, false)).discard()
         }
+        // Recorded only when typed in Settings: Shift+A typed into the launcher while a
+        // shortcut waited for its keys rebound the user's shortcut to it.
+        Message::Combo(w, k) if in_settings(app, w) => {
+            update(app, Message::Settings(settings::Message::Recorded(k)))
+        }
+        Message::Combo(..) => Task::none(),
         Message::WindowKey(w, k) => {
-            if app
-                .settings_window
-                .is_some_and(|id| iced::window::Id::from(id) == w)
-            {
+            if in_settings(app, w) {
                 focus_step(settings::ROOT.clone(), k)
             } else {
                 Task::none()
             }
         }
     }
+}
+
+/// Whether window `w` is Settings' (its keys are its own, never the open panel's).
+pub fn in_settings(app: &App, w: iced::window::Id) -> bool {
+    app.settings_window
+        .is_some_and(|id| iced::window::Id::from(id) == w)
 }
 
 pub fn subscription(app: &App) -> Subscription<Message> {
@@ -503,20 +559,19 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if open == Some(PanelKind::Monitor) {
         subs.push(
             iced::Subscription::run(|| {
-                crate::services::stream::forever(crate::services::system::detail)
+                crate::services::stream::forever("monitor", crate::services::system::detail)
             })
             .map(|d| Message::Monitor(monitor::Message::Detail(d))),
         );
     }
     // Recording a shortcut's keys in Settings: the next combination pressed.
     if settings::recording(&app.panels.settings) {
-        subs.push(iced::event::listen_with(|e, _status, _id| match e {
+        subs.push(iced::event::listen_with(|e, _status, w| match e {
             iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key,
                 modifiers,
                 ..
-            }) => settings::combo(&key, modifiers)
-                .map(|k| Message::Settings(settings::Message::Recorded(k))),
+            }) => settings::combo(&key, modifiers).map(|k| Message::Combo(w, k)),
             _ => None,
         }));
     }
@@ -554,7 +609,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         subs.push(
             Subscription::run_with(overview::live_jobs(&app.hypr), |j| {
                 let j = j.clone();
-                crate::services::stream::forever(move || crate::services::previews::live(j.clone()))
+                crate::services::stream::forever("previews", move || {
+                    crate::services::previews::live(j.clone())
+                })
             })
             .map(|f| Message::Overview(overview::Message::Live(f))),
         );
@@ -636,7 +693,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     if open.is_some() {
         // Seen even when a text field has the keyboard (it would swallow Delete and Tab).
-        subs.push(iced::event::listen_with(|e, _status, _id| {
+        subs.push(iced::event::listen_with(|e, _status, w| {
             use iced::keyboard::key::Named as N;
             let iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(k),
@@ -664,7 +721,7 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 N::Space => Key::Space,
                 _ => return None,
             };
-            Some(Message::Key(key))
+            Some(Message::Key(w, key))
         }));
     }
     Subscription::batch(subs)
@@ -672,11 +729,26 @@ pub fn subscription(app: &App) -> Subscription<Message> {
 
 pub fn view(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
     // A panel that panics shows nothing (and stays off); the shell carries on.
-    crate::guard::run(
+    let content = crate::guard::run(
         &format!("panel {kind:?}"),
         || view_unguarded(app, kind, s),
         || iced::widget::Space::new().into(),
-    )
+    );
+    // The keyboard's root (`ROOT`), wherever the panel is drawn (its own surface, or the
+    // overlay in the full bar style, which had none, so Tab and the arrows went nowhere
+    // there), keeping its place when its control goes (`ui::focus::keep`).
+    let key = {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        kind.hash(&mut h);
+        if kind == PanelKind::Control {
+            std::mem::discriminant(&app.panels.control.page).hash(&mut h);
+        }
+        h.finish()
+    };
+    iced::widget::container(crate::ui::focus::keep(content, key))
+        .id(ROOT.clone())
+        .into()
 }
 
 fn view_unguarded(app: &App, kind: PanelKind, s: Scheme) -> Element<'_, AppMessage> {
@@ -739,6 +811,8 @@ pub fn closed(app: &mut App, kind: PanelKind) {
         PanelKind::Files => files::closed(&mut app.panels.files),
         PanelKind::OpenWith => open_with::closed(&mut app.panels.open_with),
         PanelKind::Auth => app.panels.auth.closed(),
+        // Its numbers go with it: opened again, it reads afresh, never shows old ones.
+        PanelKind::Monitor => app.panels.monitor = monitor::State::default(),
         _ => {}
     }
 }

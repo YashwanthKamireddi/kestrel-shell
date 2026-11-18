@@ -29,10 +29,21 @@ pub(super) fn thumbs_dir() -> PathBuf {
         .join("clips3")
 }
 
+/// Where an image entry's thumbnail is kept: named by what was copied (its content hash), not
+/// by its place in the history. Numbered by id, a thumbnail outlived its entry: after the
+/// history was cleared (or another kestrel with the same /run used the numbers), a new entry
+/// showed an old picture, even beside text.
+fn thumb_path(entry: &crate::services::clips::Entry) -> PathBuf {
+    thumbs_dir().join(format!("{:016x}.png", entry.hash))
+}
+
 /// A small thumbnail of an image entry (kept in memory-backed /run).
 pub(super) async fn thumbnail(key: &str) -> Option<PathBuf> {
     let id = entry_id(key)?;
-    let path = thumbs_dir().join(format!("{id}.png"));
+    let entry = crate::services::clips::list()
+        .into_iter()
+        .find(|e| e.id == id && e.is_image())?;
+    let path = thumb_path(&entry);
     if path.is_file() {
         return Some(path);
     }
@@ -66,11 +77,12 @@ pub async fn clip_list() -> Vec<Clip> {
         crate::services::clips::list()
             .into_iter()
             .map(|entry| {
-                let cached = thumbs_dir().join(format!("{}.png", entry.id));
+                // Only a picture has a thumbnail.
+                let cached = entry.is_image().then(|| thumb_path(&entry));
                 Clip {
                     key: entry.id.to_string(),
                     preview: entry.preview.clone(),
-                    thumb: cached.is_file().then_some(cached),
+                    thumb: cached.filter(|p| p.is_file()),
                     entry,
                 }
             })

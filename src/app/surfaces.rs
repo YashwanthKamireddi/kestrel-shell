@@ -142,6 +142,8 @@ impl App {
             surfaces,
             reserves,
             plan: None,
+            bar,
+            bar_keyboard: false,
             pill_x: Spring::new(0.0),
             pill_r: Spring::new(0.0),
             island_w: Spring::new(0.0),
@@ -450,13 +452,16 @@ impl App {
             } else if (x - o.pill_x.target).abs() > 0.5 {
                 // ii's stretch: the edge facing the move leads, the other follows, so the
                 // circle reaches out and gathers itself. Both critically damped: no overshoot.
-                // Settled in ~0.11 s / ~0.15 s (was 0.17 / 0.28: it trailed a fast scroll, his
+                // Settled in ~0.11 s / ~0.15 s (was 0.17 / 0.28: it trailed a fast scroll, the
                 // "sluggish", 2026-11-15).
-                const LEAD: (f32, f32) = (60.0, 1.0);
-                const TRAIL: (f32, f32) = (45.0, 1.0);
-                let right = x > o.pill_x.target;
-                o.pill_r.to(r, if right { LEAD } else { TRAIL });
-                o.pill_x.to(x, if right { TRAIL } else { LEAD });
+                let (lead, trail) = (tok::SPRING_LEAD, tok::SPRING_TRAIL);
+                let (right_edge, left_edge) = if x > o.pill_x.target {
+                    (lead, trail)
+                } else {
+                    (trail, lead)
+                };
+                o.pill_r.to(r, right_edge);
+                o.pill_x.to(x, left_edge);
             }
         }
         self.clock.reset();
