@@ -164,7 +164,7 @@ async fn list(dir: PathBuf) -> Vec<(PathBuf, u64)> {
 /// stuttered as it opened).
 async fn thumbs(files: Vec<PathBuf>) -> Vec<(PathBuf, image::Handle)> {
     tokio::task::spawn_blocking(move || {
-        let out = files
+        files
             .into_iter()
             .filter_map(|f| {
                 let t = thumbnail(&f)?;
@@ -180,11 +180,7 @@ async fn thumbs(files: Vec<PathBuf>) -> Vec<(PathBuf, image::Handle)> {
                     image::Handle::from_rgba(r.width(), r.height(), r.into_raw()),
                 ))
             })
-            .collect();
-        unsafe {
-            libc::malloc_trim(0);
-        }
-        out
+            .collect()
     })
     .await
     .unwrap_or_default()

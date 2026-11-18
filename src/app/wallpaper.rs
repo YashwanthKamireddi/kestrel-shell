@@ -113,11 +113,6 @@ pub(crate) fn load_wallpaper(path: Option<String>) -> Task<Message> {
                 let rgba = img.into_rgba8();
                 let (w, h) = rgba.dimensions();
                 let handle = iced::widget::image::Handle::from_rgba(w, h, rgba.into_raw());
-                // Give the decoder's large temporary buffers back to the system.
-                // Safety: malloc_trim only releases free heap memory.
-                unsafe {
-                    libc::malloc_trim(0);
-                }
                 Some((seed, Arc::new(Wallpaper { handle })))
             })
             .await

@@ -66,13 +66,6 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             app.wallpaper = Some(wall);
             app.recolour()
         }
-        Message::Trim => {
-            // Safety: malloc_trim only releases free heap memory.
-            unsafe {
-                libc::malloc_trim(0);
-            }
-            Task::none()
-        }
         Message::WallpaperLoaded(None) => {
             // Unreadable: the plain background shows instead of nothing.
             app.wallpaper_pending = false;

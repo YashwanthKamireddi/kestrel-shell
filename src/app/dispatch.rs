@@ -46,7 +46,6 @@ pub(crate) fn update_inner(app: &mut App, msg: Message) -> Task<Message> {
         | Message::Minute
         | Message::Frame { .. }
         | Message::WallpaperLoaded { .. }
-        | Message::Trim
         | Message::Measured { .. }
         | Message::MeasuredToasts { .. }
         | Message::MeasuredOsd { .. }

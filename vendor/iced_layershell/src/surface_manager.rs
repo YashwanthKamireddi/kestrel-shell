@@ -280,7 +280,7 @@ pub(crate) fn apply_blur_region(
     }
     // kestrel patch: no commit here. It applied the new region over the old buffer, a frame
     // before the picture it belongs to: a panel opened as a blurred empty block for one frame
-    // (the user's recordings 2026-11-15). The present that follows commits region and buffer together.
+    // (screen recordings 2026-11-15). The present that follows commits region and buffer together.
     let _ = &wl;
 
     // Cached only once the request is out, so a failed region is retried.

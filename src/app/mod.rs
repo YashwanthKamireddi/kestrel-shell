@@ -364,8 +364,6 @@ pub enum Message {
     Second,
     Frame(Instant),
     WallpaperLoaded(Option<(Seed, Arc<Wallpaper>)>),
-    /// Give freed memory back to the system (after big pictures were let go).
-    Trim,
     /// Open (or close, if already open) a panel under the given button.
     Toggle(PanelKind, OutputId, Rectangle),
     /// A key while the bar has the keyboard: the arrows and Tab move along it, Esc leaves.

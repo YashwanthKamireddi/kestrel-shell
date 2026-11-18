@@ -30,6 +30,7 @@ mod watchdog;
 use iced::{KeyboardInteractivity, Layer, LayerShellSettings};
 
 fn main() -> anyhow::Result<()> {
+    memory_policy();
     // TLS (weather, updates) through ring, installed once before any request.
     let _ = rustls::crypto::ring::default_provider().install_default();
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -162,4 +163,23 @@ fn env_logger() {
     };
     let _ = log::set_boxed_logger(Box::new(L(level)));
     log::set_max_level(level);
+}
+
+/// How freed memory goes back to the system, set once before any thread starts.
+///
+/// glibc gives every thread that allocates its own arena, and after a large buffer is freed
+/// it raises its mmap threshold, so later large buffers (decoded pictures, image scaling)
+/// are carved from those arenas and stay there once freed. 2026-11-18 the live shell held
+/// 475 MB in 12 arenas with 41 MB in use, after thumbnails had been made on background
+/// threads; `malloc_trim` after each job got little of it back.
+/// - Two arenas at most: threads share them instead of each keeping its own.
+/// - A fixed 1 MiB mmap threshold: every buffer that size or larger is its own mapping,
+///   returned to the system the moment it is freed. (Fixing it also stops glibc raising it.)
+fn memory_policy() {
+    // SAFETY: mallopt only changes the allocator's tuning; called first in main, before any
+    // other thread exists.
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+        libc::mallopt(libc::M_MMAP_THRESHOLD, 1 << 20);
+    }
 }

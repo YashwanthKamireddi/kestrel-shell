@@ -56,15 +56,8 @@ pub(crate) fn handle(app: &mut App, msg: Message) -> Task<Message> {
             // After the page's own scroll to its top: the rule is at the end.
             Task::batch([close, opened, page, rule]).chain(panels::settings::to_end())
         }
-        Message::Close => {
-            // What a panel decoded while open (icons, thumbnails, pictures shrunk from large
-            // files) is freed by now or soon; hand it back to the system shortly after (glibc
-            // keeps freed heap otherwise).
-            let trim = Task::perform(tokio::time::sleep(Duration::from_millis(400)), |()| {
-                Message::Trim
-            });
-            Task::batch([app.close(), trim])
-        }
+        // Freed pictures go back to the system by themselves (main.rs, memory_policy).
+        Message::Close => app.close(),
         // Esc in Settings' window is Settings' (a list to close, a drag to cancel), never the
         // open panel's.
         Message::Escape(w) if panels::in_settings(app, w) => Task::none(),
