@@ -92,11 +92,15 @@ pub fn view<'a>(cx: &Cx<'a>) -> Element<'a, Message> {
     let nothing = p.headset.is_none() && p.left.is_none() && p.right.is_none() && p.case.is_none();
     if nothing {
         // No battery heard yet: say so, instead of empty bars.
-        list = list.push(label(
-            "Battery not reported yet. Take a bud out or open the case near the laptop.",
-            text::SMALL,
-            s.ink_dim,
-        ));
+        // Wrapped: on one line it ran past the panel's edge.
+        list = list.push(
+            label(
+                "Battery not reported yet. Take a bud out or open the case near the laptop.",
+                text::SMALL,
+                s.ink_dim,
+            )
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+        );
     } else if let Some(h) = p.headset {
         list = list.push(part(s, Icon::Headphones, "Headphones", Some(h)));
     } else {
