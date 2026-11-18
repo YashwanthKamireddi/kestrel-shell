@@ -22,6 +22,10 @@ system's own interfaces.
 
 <table>
   <tr>
+    <td width="50%"><img src="docs/screenshots/control.webp" alt="Control centre" width="100%"><br><sub><b>Control centre</b> · Wi-Fi, Bluetooth, modes, sliders</sub></td>
+    <td width="50%"><img src="docs/screenshots/emoji.webp" alt="Emoji" width="100%"><br><sub><b>Emoji</b> · search and categories</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/media.webp" alt="Music" width="100%"><br><sub><b>Music</b> · cover, controls, live visualiser</sub></td>
     <td width="50%"><img src="docs/screenshots/notifications.webp" alt="Notifications" width="100%"><br><sub><b>Notifications</b> · grouped, with history</sub></td>
   </tr>
